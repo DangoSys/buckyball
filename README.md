@@ -57,7 +57,7 @@ bbdev verilator --run '--jobs 16 --chip toy --binary toy-toy-ctest-relu_i32_16x1
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--chip toy --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace --banktrace'
+bbdev bebop-verilator --run '--chip toy --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace'
 ```
 
 ## Tutorial

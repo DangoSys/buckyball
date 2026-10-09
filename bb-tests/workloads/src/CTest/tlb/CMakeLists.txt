@@ -1,7 +1,7 @@
 add_custom_target(tlb-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET tlb-ctests-build)
 
-foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_TARGETS)
+foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_CPU_TARGETS)
   add_buckyball_ctests(
     tlb_bare_mode_test.c
     tlb_repeated_sfence_test.c

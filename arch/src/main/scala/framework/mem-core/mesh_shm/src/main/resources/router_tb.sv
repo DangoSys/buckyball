@@ -4,8 +4,8 @@ module router_tb;
   logic clock = 0;
   logic reset;
   always #5 clock = ~clock;
-  axis_if #(128, 8, 4, 40) source_if[5] (clock);
-  axis_if #(128, 8, 4, 40) sink_if[5] (clock);
+  axis_if #(128, 8, 4, 45) source_if[5] (clock);
+  axis_if #(128, 8, 4, 45) sink_if[5] (clock);
   assign reset = source_if[0].reset;
   MeshRouter dut (
       .clock(clock),
@@ -93,9 +93,9 @@ module router_tb;
   );
   for (genvar i = 0; i < 5; i++) begin
     initial begin
-      uvm_config_db#(virtual axis_if #(128, 8, 4, 40))::set(null, "uvm_test_top*", $sformatf(
+      uvm_config_db#(virtual axis_if #(128, 8, 4, 45))::set(null, "uvm_test_top*", $sformatf(
                                                             "source%0d", i), source_if[i]);
-      uvm_config_db#(virtual axis_if #(128, 8, 4, 40))::set(null, "uvm_test_top*", $sformatf(
+      uvm_config_db#(virtual axis_if #(128, 8, 4, 45))::set(null, "uvm_test_top*", $sformatf(
                                                             "sink%0d", i), sink_if[i]);
     end
   end

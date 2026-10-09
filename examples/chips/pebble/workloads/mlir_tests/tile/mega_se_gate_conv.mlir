@@ -63,11 +63,11 @@ func.func @main() -> i8 {
   linalg.fill ins(%i8_0 : i8) outs(%output : memref<1x14x14x40xi8>)
   scf.for %iteration = %c0 to %c2 step %c1 {
     tile.mega_kernel %input %output : memref<1x14x14x96xi8> memref<1x14x14x40xi8> {
-    tile.mega_global_avg_pool %input %gap {inputScale = 1.0 : f32, outputScale = 1.0 : f32} : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
-    tile.mega_conv2d %gap %w1 %b1 %s1 %none %h1 {activation = 1 : i64, kernel = 1 : i64, outputScale = 1.0 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x96xi8> memref<2x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
-    tile.mega_conv2d %h1 %w2 %b2 %s2 %lut %gate {activation = 2 : i64, kernel = 1 : i64, outputScale = 1.0 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x24xi8> memref<6x24x16x16xi8, strided<[6144, 256, 16, 1], offset: 16>> memref<96xi32> memref<96xf32> memref<256xi8> memref<1x1x1x96xi8>
-    tile.mega_int8_mul %gate %input %mul {activation = 0 : i64, lhsScale = 0.1 : f32, outputScale = 1.0 : f32, rhsScale = 1.0 : f32} : memref<1x1x1x96xi8> memref<1x14x14x96xi8> memref<1x14x14x96xi8>
-    tile.mega_conv2d %mul %w3 %b3 %s3 %none %output {activation = 0 : i64, kernel = 1 : i64, outputScale = 1.0 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x14x14x96xi8> memref<3x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<40xi32> memref<40xf32> memref<1xi8> memref<1x14x14x40xi8>
+    tile.mega_global_avg_pool %input %gap <inputScale = 1.0, outputScale = 1.0> : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
+    tile.mega_conv2d %gap %w1 %b1 %s1 %none %h1 <activation = 1, kernel = 1, outputScale = 1.0, padHigh = 0, padLow = 0, stride = 1> : memref<1x1x1x96xi8> memref<2x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
+    tile.mega_conv2d %h1 %w2 %b2 %s2 %lut %gate <activation = 2, kernel = 1, outputScale = 1.0, padHigh = 0, padLow = 0, stride = 1> : memref<1x1x1x24xi8> memref<6x24x16x16xi8, strided<[6144, 256, 16, 1], offset: 16>> memref<96xi32> memref<96xf32> memref<256xi8> memref<1x1x1x96xi8>
+    tile.mega_int8_mul %gate %input %mul <activation = 0, lhsScale = 0.1, outputScale = 1.0, rhsScale = 1.0> : memref<1x1x1x96xi8> memref<1x14x14x96xi8> memref<1x14x14x96xi8>
+    tile.mega_conv2d %mul %w3 %b3 %s3 %none %output <activation = 0, kernel = 1, outputScale = 1.0, padHigh = 0, padLow = 0, stride = 1> : memref<1x14x14x96xi8> memref<3x96x16x16xi8, strided<[24576, 256, 16, 1], offset: 16>> memref<40xi32> memref<40xf32> memref<1xi8> memref<1x14x14x40xi8>
     }
   }
   func.call @check_result(%output) : (memref<1x14x14x40xi8>) -> ()

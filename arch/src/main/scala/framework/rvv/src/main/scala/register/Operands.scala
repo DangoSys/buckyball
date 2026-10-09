@@ -7,14 +7,14 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Operands(val b: GlobalConfig) extends Module {
-  private val p                = b.rvv
-  private val wordsPerRegister = p.vLen / 64
-  private val bankCount        = math.min(p.laneNumber, wordsPerRegister)
-  private val bankBits         = log2Ceil(bankCount)
-  private val addressBits      = log2Ceil(32 * wordsPerRegister)
-  private val count            = math.max(p.laneNumber, p.memoryPorts)
-  private val snapshotWords    = 8 * wordsPerRegister
-  private val snapshotBits     = log2Ceil(snapshotWords)
+  val p                = b.rvv
+  val wordsPerRegister = p.wordsPerRegister
+  val bankCount        = p.registerBanks
+  val bankBits         = log2Ceil(bankCount)
+  val addressBits      = log2Ceil(32 * wordsPerRegister)
+  val count            = math.max(p.laneNumber, p.memoryPorts)
+  val snapshotWords    = 8 * wordsPerRegister
+  val snapshotBits     = log2Ceil(snapshotWords)
 
   @public val io = IO(new Bundle {
     val initialize = Input(Bool())
@@ -28,15 +28,15 @@ class Operands(val b: GlobalConfig) extends Module {
       }
     )))
 
-    val readResult = Decoupled(Vec(count, UInt(64.W)))
+    val readResult = Decoupled(Vec(count, UInt(p.wordBits.W)))
 
     val write = Flipped(Decoupled(Vec(
       p.laneNumber,
       new Bundle {
         val valid   = Bool()
         val address = UInt(addressBits.W)
-        val data    = UInt(64.W)
-        val mask    = UInt(64.W)
+        val data    = UInt(p.wordBits.W)
+        val mask    = UInt(p.wordBits.W)
       }
     )))
 
@@ -53,16 +53,16 @@ class Operands(val b: GlobalConfig) extends Module {
   val writeFrame                                                                        = Reg(chiselTypeOf(io.write.bits))
   val readComplete                                                                      = Reg(Vec(count, Bool()))
   val writeComplete                                                                     = Reg(Vec(p.laneNumber, Bool()))
-  val results                                                                           = Reg(Vec(count, UInt(64.W)))
+  val results                                                                           = Reg(Vec(count, UInt(p.wordBits.W)))
   val pending                                                                           = RegInit(VecInit(Seq.fill(bankCount)(false.B)))
   val readGroups                                                                        = Reg(Vec(bankCount, Vec(count, Bool())))
   val writeGroups                                                                       = Reg(Vec(bankCount, Vec(p.laneNumber, Bool())))
 
-  val scratch        = SyncReadMem(snapshotWords, UInt(64.W))
+  val scratch        = SyncReadMem(snapshotWords, UInt(p.wordBits.W))
   val scratchEnable  = WireDefault(false.B)
   val scratchWrite   = WireDefault(false.B)
   val scratchAddress = WireDefault(0.U(snapshotBits.W))
-  val scratchData    = WireDefault(0.U(64.W))
+  val scratchData    = WireDefault(0.U(p.wordBits.W))
   val scratchRead    = scratch.readWrite(scratchAddress, scratchData, scratchEnable && !io.initialize, scratchWrite)
   val scratchPending = RegInit(false.B)
   val scratchGroup   = Reg(Vec(count, Bool()))

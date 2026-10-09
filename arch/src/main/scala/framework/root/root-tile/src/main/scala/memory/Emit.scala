@@ -445,11 +445,11 @@ object Emit extends App {
   val compositionMemory = p.copy(agents = 10)
 
   val compositionPlacements = Seq(
-    CorePlacement(BigInt(0), RnfParams(chi, nodeId = 1, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Controller),
-    CorePlacement(BigInt(1), RnfParams(chi, nodeId = 2, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
-    CorePlacement(BigInt(2), RnfParams(chi, nodeId = 3, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
-    CorePlacement(BigInt(3), RnfParams(chi, nodeId = 4, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
-    CorePlacement(BigInt(4), RnfParams(chi, nodeId = 5, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute)
+    CorePlacement(RnfParams(chi, nodeId = 1, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Controller),
+    CorePlacement(RnfParams(chi, nodeId = 2, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
+    CorePlacement(RnfParams(chi, nodeId = 3, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
+    CorePlacement(RnfParams(chi, nodeId = 4, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute),
+    CorePlacement(RnfParams(chi, nodeId = 5, cacheLines = 8, banks = 2), compositionCpu, CoreRole.Compute)
   )
 
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(

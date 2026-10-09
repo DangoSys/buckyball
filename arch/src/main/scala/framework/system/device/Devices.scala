@@ -1,6 +1,7 @@
 package framework.system.device
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import chisel3.util._
 import hier.tile.memory.CoreInterrupts
 import memcore.memory.cpu.{CpuMemParams, UncachedRequest, UncachedResponse}
@@ -9,17 +10,19 @@ import memcore.memory.cpu.{CpuMemParams, UncachedRequest, UncachedResponse}
 case class DeviceParams(
   clint:   ClintParams = ClintParams(),
   plic:    PlicParams = PlicParams(),
-  bootrom: Option[BootRomParams] = None)
+  bootrom: Option[BootRomParams] = None,
+  scu:     sims.scu.SCUParams = sims.scu.SCUParams())
 
 /**
  * Chip device decode for the per-core uncached device ports. CLINT and PLIC are served inside;
  * every other device address leaves on the same core's external port. Each core port carries one
  * outstanding request, and the internal register blocks take one access per cycle in round robin.
  */
+@instantiable
 class Devices(p: DeviceParams, cp: CpuMemParams, hartIds: Seq[Int]) extends Module {
-  private val n = hartIds.size
+  val n = hartIds.size
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val request          = Vec(n, Flipped(Decoupled(new UncachedRequest(cp))))
     val response         = Vec(n, Decoupled(new UncachedResponse(cp)))
     val externalRequest  = Vec(n, Decoupled(new UncachedRequest(cp)))
@@ -29,8 +32,8 @@ class Devices(p: DeviceParams, cp: CpuMemParams, hartIds: Seq[Int]) extends Modu
     val time             = Output(UInt(64.W))
   })
 
-  val clint = Module(new Clint(p.clint, hartIds))
-  val plic  = Module(new Plic(p.plic, hartIds))
+  val clint = Instantiate(new Clint(p.clint, hartIds))
+  val plic  = Instantiate(new Plic(p.plic, hartIds))
   io.time         := clint.io.time
   plic.io.sources := io.sources
   for (i <- 0 until n) {
@@ -67,12 +70,10 @@ class Devices(p: DeviceParams, cp: CpuMemParams, hartIds: Seq[Int]) extends Modu
     port.access.bits.size  := access.size
     port.access.bits.data  := access.data
   }
-  // Device registers have no atomics: such an access faults without touching the register.
-  val plain = access.atomic === 0.U
-  clint.io.port.access.valid := granted && plain && VecInit(inClint)(grant)
-  plic.io.port.access.valid  := granted && plain && VecInit(inPlic)(grant)
+  clint.io.port.access.valid := granted && VecInit(inClint)(grant)
+  plic.io.port.access.valid := granted && VecInit(inPlic)(grant)
   val internalRead  = Mux(VecInit(inClint)(grant), clint.io.port.read, plic.io.port.read)
-  val internalError = Mux(VecInit(inClint)(grant), clint.io.port.error, plic.io.port.error) || !plain
+  val internalError = Mux(VecInit(inClint)(grant), clint.io.port.error, plic.io.port.error)
 
   for (i <- 0 until n) {
     val request  = io.request(i)

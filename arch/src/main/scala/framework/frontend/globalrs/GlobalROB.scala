@@ -17,7 +17,9 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   val robDepth          = b.frontend.rob_entries
   val idWidth           = log2Up(robDepth)
-  val scoreBankNum      = b.memDomain.virtualBankCount + robDepth
+  val resourceCount     = b.memDomain.virtualBankCount + (if (b.rvv.enable) 2 else 0)
+  val scoreBankNum      = resourceCount + robDepth
+  require(scoreBankNum <= (1 << b.frontend.bank_id_len), "Bank resource IDs and ROB aliases exceed bank_id_len")
   val sharedHashCount   = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
   val physicalBankCount = b.memDomain.bankNum + sharedHashCount
 
@@ -34,11 +36,6 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     val complete   = Flipped(new DecoupledIO(UInt(idWidth.W)))
     val allocation = Valid(new RobAllocation(b))
     val retired    = Output(UInt(robDepth.W))
-
-    val kernelWriteBank = Flipped(Valid(new Bundle {
-      val rob_id = UInt(idWidth.W)
-      val bank   = UInt(16.W)
-    }))
 
     val empty          = Output(Bool())
     val full           = Output(Bool())
@@ -68,7 +65,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val bat: Instance[BankAliasTable] = Instantiate(
     new BankAliasTable(
       bankIdLen = b.frontend.bank_id_len,
-      vbankUpper = b.memDomain.virtualBankCount - 1,
+      vbankUpper = resourceCount - 1,
       robEntries = robDepth
     )
   )
@@ -115,23 +112,16 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       None
     }
 
-  val kernelWriteBanks = if (b.sim.diffTest) Some(Reg(Vec(robDepth, UInt(16.W)))) else None
-  if (b.sim.diffTest) {
-    when(io.kernelWriteBank.valid) {
-      kernelWriteBanks.get(io.kernelWriteBank.bits.rob_id) := io.kernelWriteBank.bits.bank
-    }
-  }
-
   io.inst_ids := instIds
 
-  val headPtr                = RegInit(0.U(idWidth.W))
-  val tailPtr                = RegInit(0.U(idWidth.W))
-  val issuedCount            = RegInit(0.U(log2Up(robDepth + 1).W))
-  private val bankColWidth   = b.memDomain.groupCountWidth
-  val bankCols               = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(bankColWidth.W))))
+  val headPtr        = RegInit(0.U(idWidth.W))
+  val tailPtr        = RegInit(0.U(idWidth.W))
+  val issuedCount    = RegInit(0.U(log2Up(robDepth + 1).W))
+  val bankColWidth   = b.memDomain.groupCountWidth
+  val bankCols       = RegInit(VecInit(Seq.fill(b.memDomain.virtualBankCount)(0.U(bankColWidth.W))))
   // In-flight ownership is tracked in the architectural vbank namespace.
-  private val vbankMaskWidth = b.memDomain.virtualBankCount
-  val vbankBusy              = RegInit(0.U(vbankMaskWidth.W))
+  val vbankMaskWidth = resourceCount
+  val vbankBusy      = RegInit(0.U(vbankMaskWidth.W))
 
   // Dependency state is maintained incrementally instead of rebuilding all
   // older-entry comparisons every cycle. A bit in slot k names the ROB slot
@@ -149,11 +139,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   def robIdx(v:  UInt): UInt = v(idWidth - 1, 0)
 
   def isMappingConfig(entry: GlobalRobEntry): Bool =
-    entry.cmd.domain_id === DomainId.MEM &&
-      (entry.cmd.cmd.funct === MSET_BITPAT)
-
-  def isKernelRun(entry: GlobalRobEntry): Bool =
-    entry.cmd.domain_id === DomainId.BALL && entry.cmd.cmd.funct === RUN_KERNEL_BITPAT
+    entry.cmd.cmd.funct === MSET_BITPAT
 
   def accessUsesBank(access: BankAccessInfo, bank: UInt): Bool =
     (access.rd_bank_0_valid && access.rd_bank_0_id === bank) ||
@@ -162,7 +148,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
   // Build one architectural-vbank mask per ROB slot once, then hazard checks
   // become mask intersections instead of repeating ID comparisons.
-  private val hazardBankCount = b.memDomain.virtualBankCount
+  val hazardBankCount = resourceCount
 
   def rawReadMask(access: BankAccessInfo): UInt = {
     val rd0 = Mux(
@@ -202,7 +188,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val commitKeep = Wire(Vec(robDepth + 1, Bool()))
 
   val headNeedsTrace = instIds(headPtr) =/= 0.U && !isMappingConfig(robEntries(headPtr)) &&
-    (robEntries(headPtr).cmd.bankAccess.wr_bank_valid || isKernelRun(robEntries(headPtr)))
+    robEntries(headPtr).cmd.bankAccess.wr_bank_valid && robEntries(
+      headPtr
+    ).cmd.bankAccess.wr_bank_id < b.memDomain.virtualBankCount.U
+
   commitKeep(0) := true.B
   for (i <- 0 until robDepth) {
     val ptr = robIdx(wrapPtr(headPtr + i.U))
@@ -212,7 +201,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val hasCommit = commitScan.asUInt.orR
   val tailAlias = Wire(UInt(b.frontend.bank_id_len.W))
   tailAlias :=
-    b.memDomain.virtualBankCount.U(b.frontend.bank_id_len.W) + tailPtr
+    resourceCount.U(b.frontend.bank_id_len.W) + tailPtr
 
   val tailAliasLive = WireDefault(false.B)
   for (i <- 0 until robDepth) {
@@ -238,13 +227,10 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val entryRawReads  = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
   val entryRawWrites = Wire(Vec(robDepth, UInt(hazardBankCount.W)))
   val entryIsConfig  = Wire(Vec(robDepth, Bool()))
-  val entryIsKernel  = Wire(Vec(robDepth, Bool()))
   for (slot <- 0 until robDepth) {
     entryRawReads(slot)  := rawReadMask(robEntries(slot).cmd.bankAccess)
     entryRawWrites(slot) := rawWriteMask(robEntries(slot).cmd.bankAccess)
     entryIsConfig(slot)  := isMappingConfig(robEntries(slot))
-    entryIsKernel(slot)  := (robEntries(slot).cmd.cmd.funct === MVIN_KERNEL_BITPAT) ||
-      (robEntries(slot).cmd.cmd.funct === RUN_KERNEL_BITPAT)
   }
 
   // A newly allocated entry is always younger than all currently valid ROB
@@ -252,10 +238,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // dependencies once here; issue no longer repeats pairwise comparisons.
   val allocReadMask       = rawReadMask(io.alloc.bits.bankAccess)
   val allocWriteMask      = rawWriteMask(io.alloc.bits.bankAccess)
-  val allocIsConfig       = io.alloc.bits.domain_id === DomainId.MEM &&
-    (io.alloc.bits.cmd.funct === MSET_BITPAT)
-  val allocIsKernel       = (io.alloc.bits.cmd.funct === MVIN_KERNEL_BITPAT) ||
-    (io.alloc.bits.cmd.funct === RUN_KERNEL_BITPAT)
+  val allocIsConfig       = io.alloc.bits.cmd.funct === MSET_BITPAT
   val allocIsBall         = io.alloc.bits.domain_id === DomainId.BALL
   val allocDependencyBits = Wire(Vec(robDepth, Bool()))
   for (older <- 0 until robDepth) {
@@ -271,7 +254,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     // commit. RAW conflicts and same-Ball commands release at completion.
     allocDependencyBits(older) :=
       (robValid(older) && !robComplete(older) && (rawConflict || sameBall)) ||
-        (robValid(older) && (configConflict || allocIsKernel || entryIsKernel(older)))
+        (robValid(older) && configConflict)
   }
   val allocDependencies = allocDependencyBits.asUInt
   val allocUsesInstId = io.alloc.bits.cmd.pc =/= 0.U
@@ -316,7 +299,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
 
     val incomingAccess    = robEntries(io.complete.bits).cmd.bankAccess
     val incomingNeedsHash = instIds(io.complete.bits) =/= 0.U && !isMappingConfig(robEntries(io.complete.bits)) &&
-      (incomingAccess.wr_bank_valid || isKernelRun(robEntries(io.complete.bits)))
+      incomingAccess.wr_bank_valid && incomingAccess.wr_bank_id < b.memDomain.virtualBankCount.U
     io.complete.ready := !incomingNeedsHash || (hashReady && hashCid === io.complete.bits)
 
     when(!collecting && !hashReady && io.complete.valid && incomingNeedsHash) {
@@ -326,11 +309,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
       currentHash  := 0.U
     }
 
-    val vbank       = Mux(
-      isKernelRun(robEntries(collectCid)),
-      kernelWriteBanks.get(collectCid),
-      robEntries(collectCid).cmd.bankAccess.wr_bank_id
-    )
+    val vbank       = robEntries(collectCid).cmd.bankAccess.wr_bank_id
     val matches     = VecInit(io.bank_hashes.get.map { state =>
       state.valid && state.hartId === io.hart_id && state.vbankId === vbank && state.groupId === collectGroup
     })
@@ -440,17 +419,17 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   val issuePayload  = Wire(new GlobalRobEntry(b))
   issuePayload             := robEntries(issuePtr)
   issuePayload.cmd.op1_col := Mux(
-    issuePayload.cmd.bankAccess.rd_bank_0_valid,
+    issuePayload.cmd.bankAccess.rd_bank_0_valid && issuePayload.cmd.bankAccess.rd_bank_0_id < b.memDomain.virtualBankCount.U,
     bankCols(issuePayload.cmd.bankAccess.rd_bank_0_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
   issuePayload.cmd.op2_col := Mux(
-    issuePayload.cmd.bankAccess.rd_bank_1_valid,
+    issuePayload.cmd.bankAccess.rd_bank_1_valid && issuePayload.cmd.bankAccess.rd_bank_1_id < b.memDomain.virtualBankCount.U,
     bankCols(issuePayload.cmd.bankAccess.rd_bank_1_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
   issuePayload.cmd.wr_col  := Mux(
-    issuePayload.cmd.bankAccess.wr_bank_valid,
+    issuePayload.cmd.bankAccess.wr_bank_valid && issuePayload.cmd.bankAccess.wr_bank_id < b.memDomain.virtualBankCount.U,
     bankCols(issuePayload.cmd.bankAccess.wr_bank_id(b.memDomain.vbankIdWidth - 1, 0)),
     0.U
   )
@@ -514,26 +493,6 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     }
     commitMask(i) := hits.reduce(_ || _)
     when(commitMask(i)) {
-      when(robEntries(i).cmd.domain_id === DomainId.MEM && robEntries(i).cmd.cmd.funct === MSET_BITPAT) {
-        val bankId = robEntries(i).cmd.bankAccess.wr_bank_id
-        val bank   = bankId(b.memDomain.vbankIdWidth - 1, 0)
-        val col    = robEntries(i).cmd.cmd.rs2Data(9, 5)
-        when(robEntries(i).cmd.cmd.rs2Data(10)) {
-          val fullCol =
-            if (b.memDomain.sharedEnable) {
-              Mux(
-                bankId >= b.frontend.shared_bank_id_base.U && bankId < b.memDomain.virtualBankCount.U,
-                SharedMemLayout.totalBank(b).U(bankColWidth.W),
-                b.memDomain.bankNum.U(bankColWidth.W)
-              )
-            } else {
-              b.memDomain.bankNum.U(bankColWidth.W)
-            }
-          bankCols(bank) := Mux(col === 0.U, fullCol, col)
-        }.otherwise {
-          bankCols(bank) := 0.U
-        }
-      }
       robValid(i)    := false.B
       robIssued(i)   := false.B
       robComplete(i) := false.B
@@ -545,11 +504,7 @@ class GlobalROB(val b: GlobalConfig) extends Module {
     trace.valid        := hasCommit && headNeedsTrace
     trace.bits.instId  := instIds(headPtr)
     trace.bits.hartId  := io.hart_id
-    trace.bits.w0Vbank := Mux(
-      isKernelRun(robEntries(headPtr)),
-      kernelWriteBanks.get(headPtr),
-      robEntries(headPtr).cmd.bankAccess.wr_bank_id
-    )
+    trace.bits.w0Vbank := robEntries(headPtr).cmd.bankAccess.wr_bank_id
     trace.bits.w0Hash  := statusHashes.get(headPtr)
 
     val produced = RegInit(0.U(64.W))
@@ -562,21 +517,48 @@ class GlobalROB(val b: GlobalConfig) extends Module {
   // only at commit; all other dependencies clear at complete. This is the
   // union-mask form of the former separate RAW/config masks.
   val configEntryMask = entryIsConfig.asUInt
-  val kernelEntryMask = entryIsKernel.asUInt
   for (slot <- 0 until robDepth) {
     val isAllocatedSlot = io.alloc.fire && tailPtr === slot.U
     val slotIsConfig    = Mux(isAllocatedSlot, allocIsConfig, entryIsConfig(slot))
     // Each dependency bit names the older entry that blocks this slot. Keep a
     // config-related edge through completion when either endpoint is config.
-    val slotIsKernel    = Mux(isAllocatedSlot, allocIsKernel, entryIsKernel(slot))
-    // Kernels have a dynamic bank footprint. Drain all preceding operations,
-    // including a Ball's SubROB, and hold successors until kernel retirement.
-    val configRelated   = configEntryMask | kernelEntryMask | Fill(robDepth, slotIsConfig || slotIsKernel)
+    val configRelated   = configEntryMask | Fill(robDepth, slotIsConfig)
     val clearMask       = commitMask.asUInt | (completedBitMask & ~configRelated)
     when(isAllocatedSlot) {
       dependencyMask(slot) := allocDependencies & ~clearMask
     }.otherwise {
       dependencyMask(slot) := dependencyMask(slot) & ~clearMask
+    }
+  }
+
+  val mappingCommits = VecInit((0 until robDepth).map(i =>
+    commitMask(i) && robEntries(i).cmd.domain_id === DomainId.MEM &&
+      robEntries(i).cmd.cmd.funct === MSET_BITPAT
+  ))
+
+  assert(PopCount(mappingCommits) <= 1.U, "Mapping dependency permits one configuration commit")
+  val mapping         = robEntries(PriorityEncoder(mappingCommits.asUInt)).cmd
+  val destination     = mapping.bankAccess.wr_bank_id
+  val source          = mapping.bankAccess.rd_bank_0_id
+  val transferColumns = bankCols(destination(b.memDomain.vbankIdWidth - 1, 0)) +
+    bankCols(source(b.memDomain.vbankIdWidth - 1, 0))
+
+  val fullColumns =
+    if (b.memDomain.sharedEnable) {
+      Mux(destination >= b.frontend.shared_bank_id_base.U, SharedMemLayout.totalBank(b).U, b.memDomain.bankNum.U)
+    } else b.memDomain.bankNum.U
+
+  val allocatedColumns = Mux(mapping.cmd.rs2Data(9, 5) === 0.U, fullColumns, mapping.cmd.rs2Data(9, 5))
+  for (bank <- 0 until b.memDomain.virtualBankCount) {
+    when(mappingCommits.asUInt.orR) {
+      when(destination === bank.U) {
+        bankCols(bank) := Mux(
+          mapping.cmd.rs2Data(12),
+          transferColumns,
+          Mux(mapping.cmd.rs2Data(10), allocatedColumns, 0.U)
+        )
+      }
+      when(mapping.cmd.rs2Data(12) && source === bank.U)(bankCols(bank) := 0.U)
     }
   }
 

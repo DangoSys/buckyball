@@ -9,4 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 [dependencies]
 rvv = { path = "../../../../../../../../bebop/src/nodes/bemu/rvv" }
 
+[build-dependencies]
+serde_json = "1"
+
 [workspace]

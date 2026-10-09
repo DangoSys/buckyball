@@ -1,7 +1,7 @@
 add_custom_target(base-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET base-ctests-build)
 
-foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_TARGETS)
+foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_CPU_TARGETS)
   set(_params "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h")
   foreach(_name BANK_NUM BANK_WIDTH BANK_LINES BB_PRIVATE_VBANK_MAX)
     file(STRINGS "${_params}" _line REGEX "^#define ${_name} ")
@@ -16,7 +16,11 @@ foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_TARGETS)
     message(FATAL_ERROR
       "base DMA tests require 4 banks for ACC, vbank2, >=24 rows for 2D, and 64..2048-bit rows divisible by 32; ${BUCKYBALL_CTEST_TARGET}: banks=${_BANK_NUM}, privateMax=${_BB_PRIVATE_VBANK_MAX}, lines=${_BANK_LINES}, width=${_BANK_WIDTH}")
   endif()
+  if(_BB_PRIVATE_VBANK_MAX GREATER_EQUAL 4)
+    add_buckyball_ctest(mset_transfer_test.c)
+  endif()
   add_buckyball_ctests(
+    mvin_mvout_group_test.c
     mvin_2d_test.c
     mvin_2d_pixel_stride_test.c
     mvin_mvout_acc_test.c

@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "fw_payload-v1-t1-pebble-pk.hex",
+  "fw_payload-h1-pebble-pk.hex",
 ]

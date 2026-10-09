@@ -21,7 +21,7 @@ func.func @main() -> i8 {
   %loaded_scales = buckyball.bank_mvin %scales %scale_bank %depth %stride
       : memref<4x4xf32> i64 i64 i64
   buckyball.int32_to_fp32
-      %loaded_input, %loaded_scales, %output_bank, %depth {relu = true} : i64
+      %loaded_input, %loaded_scales, %output_bank, %depth <relu = true> : i64
   %stored = buckyball.bank_mvout %output %output_bank %depth %stride
       : memref<4x4xf32> i64 i64 i64
   buckyball.fence

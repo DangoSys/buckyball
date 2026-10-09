@@ -1,0 +1,9 @@
+ballNum = 1
+
+ballIdMappings = [
+  { ballId = 0, ballName = "F32AddBall", ballClass = "examples.balls.f32add.F32AddBall", config = "../../../../balls/f32add/configs/default.toml", inBW = 2, outBW = 1 }
+]
+
+ballISA = [
+  { mnemonic = "F32ADD", funct7 = 76, bid = 0 }
+]

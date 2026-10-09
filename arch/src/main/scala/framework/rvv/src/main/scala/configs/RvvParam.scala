@@ -1,6 +1,6 @@
 package framework.rvv.configs
 
-import chisel3.util.isPow2
+import chisel3.util.{isPow2, log2Ceil}
 import upickle.default._
 
 case class RvvParam(
@@ -11,11 +11,18 @@ case class RvvParam(
   iBufWords:   Int,
   memoryPorts: Int) {
   require(laneNumber > 0)
-  require(vLen >= eLen && isPow2(vLen))
+  require(vLen >= 128 && vLen >= eLen && isPow2(vLen))
   require(eLen == 32 || eLen == 64)
   require(iBufWords > 0 && isPow2(iBufWords))
   require(memoryPorts > 0)
   require(laneNumber <= memoryPorts)
+
+  val wordBits:         Int = eLen
+  val wordOffsetBits:   Int = log2Ceil(wordBits)
+  val maxSew:           Int = log2Ceil(eLen / 8)
+  val wordsPerRegister: Int = vLen / wordBits
+  val registerBanks:    Int = math.min(laneNumber, wordsPerRegister)
+  require(isPow2(registerBanks), "RVV register bank count must be a power of two")
 
   val elementsPerRegister: Int = vLen / eLen
   val constBytes:          Int = 4096
@@ -28,7 +35,7 @@ object RvvParam {
     enable = false,
     laneNumber = 4,
     vLen = 1024,
-    eLen = 64,
+    eLen = 32,
     iBufWords = 1024,
     memoryPorts = 4
   )

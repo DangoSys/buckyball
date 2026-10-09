@@ -4,8 +4,6 @@ set(BUCKYBALL_CTEST_TARGET attention)
 add_subdirectory(ctests)
 
 
-buckyball_add_ball_workload_subdirs(ctests)
-
 add_custom_target(chip-ctests-build DEPENDS poly-ctests-build)
 
 add_custom_target(chip-workloads-build ALL

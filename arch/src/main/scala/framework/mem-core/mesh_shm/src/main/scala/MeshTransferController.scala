@@ -42,8 +42,8 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
     val target = input.targetCore(p.coreBits - 1, 0)
     when(input.sourceCore >= p.cores.size.U || input.targetCore >= p.cores.size.U ||
       !endpoints(source) || !endpoints(target) || input.rows === 0.U ||
-      (input.sourceAddr +& input.rows) > p.entriesPerBank.U ||
-      (input.targetAddr +& input.rows) > p.entriesPerBank.U ||
+      (input.sourceAddr +& input.rows) > 65536.U ||
+      (input.targetAddr +& input.rows) > 65536.U ||
       (input.sourceCore === input.targetCore && input.sourceBank === input.targetBank &&
         input.sourceAddr =/= input.targetAddr &&
         input.sourceAddr < (input.targetAddr +& input.rows) &&

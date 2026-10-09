@@ -13,6 +13,8 @@ import framework.top.GlobalConfig
  */
 @instantiable
 class SramBank(val b: GlobalConfig) extends Module {
+  require(b.memDomain.bankEntries >= 2 && b.memDomain.bankEntries <= 65536)
+  val indexBits = log2Ceil(b.memDomain.bankEntries)
   val mask_len  = b.memDomain.bankMaskLen
   val mask_elem = UInt((b.memDomain.bankWidth / mask_len).W)
 
@@ -55,8 +57,19 @@ class SramBank(val b: GlobalConfig) extends Module {
   val ren = io.sramRead.req.fire
   val wen = clearing || io.sramWrite.req.fire
 
+  when(io.sramRead.req.fire) {
+    assert(io.sramRead.req.bits.addr < b.memDomain.bankEntries.U, "SRAM read exceeds bank depth")
+  }
+  when(io.sramWrite.req.fire) {
+    assert(io.sramWrite.req.bits.addr < b.memDomain.bankEntries.U, "SRAM write exceeds bank depth")
+  }
+
   val rdata = mem.readWrite(
-    Mux(clearing, clearRow, Mux(wen, io.sramWrite.req.bits.addr, io.sramRead.req.bits.addr)),
+    Mux(
+      clearing,
+      clearRow,
+      Mux(wen, io.sramWrite.req.bits.addr(indexBits - 1, 0), io.sramRead.req.bits.addr(indexBits - 1, 0))
+    ),
     Mux(clearing, 0.U.asTypeOf(Vec(mask_len, mask_elem)), io.sramWrite.req.bits.data.asTypeOf(Vec(mask_len, mask_elem))),
     Mux(clearing, VecInit(Seq.fill(mask_len)(true.B)), io.sramWrite.req.bits.mask),
     ren || wen,

@@ -1,0 +1,53 @@
+controllerCore = 0
+factory = "examples.chips.omni.omni_tile.OmniTile"
+# One system controller and four tile-local Ant contexts with Goban operators.
+
+coreDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 56
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
+memBallChannelNum = 6
+
+[tss]
+base = 0x20000
+bytes = 16384
+dataBits = 128
+
+[sharedMem]
+bankWidth = 128
+bankEntries = 1024
+enable = true
+virtualBankCount = 64
+entries = 16384
+inputChannels = 28
+defaultGroupCount = 1
+memCycles = 10
+
+[[cores]]
+core_id = 0
+name = "controller"
+include = "../../../../../cores/rocket/configs/default.toml"
+
+[[cores]]
+core_id = 1
+name = "goban"
+include = "../../../../../cores/goban/configs/ant.toml"
+
+[[cores]]
+core_id = 2
+name = "goban"
+include = "../../../../../cores/goban/configs/ant.toml"
+
+[[cores]]
+core_id = 3
+name = "goban"
+include = "../../../../../cores/goban/configs/ant.toml"
+
+[[cores]]
+core_id = 4
+name = "goban"
+include = "../../../../../cores/goban/configs/ant.toml"

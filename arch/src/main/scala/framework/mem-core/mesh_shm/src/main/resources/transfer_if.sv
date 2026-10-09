@@ -9,7 +9,7 @@ interface transfer_if (
   logic [16:0] rows;
   logic [4:0] request_valid, request_ready, response_valid, response_ready, write, response_error;
   logic [ 9:0] bank[5];
-  logic [10:0] row [5];
+  logic [15:0] row [5];
   logic [127:0] data[5], response_data[5];
   logic [15:0] keep[5];
   logic [7:0] request_tag[5], response_tag[5];
@@ -23,9 +23,9 @@ interface transfer_if (
       else if (request_valid[i] && request_ready[i]) begin
         response_valid[i] <= 1;
         response_tag[i]   <= request_tag[i];
-        response_error[i] <= bank[i] >= 16;
+        response_error[i] <= bank[i] >= 16 || row[i] >= 2048;
         response_data[i]  <= 0;
-        if (bank[i] < 16) begin
+        if (bank[i] < 16 && row[i] < 2048) begin
           if (write[i]) begin
             for (int byte_index = 0; byte_index < 16; byte_index++)
             if (keep[i][byte_index])

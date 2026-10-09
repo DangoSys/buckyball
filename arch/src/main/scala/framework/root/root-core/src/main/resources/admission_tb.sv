@@ -204,7 +204,7 @@ module admission_tb;
       cancelled_count = 0,
       old_pte_waits = 0;
   logic [`ADMIT_URESP_WIDTH-1:0] uncached_result;
-  int uncached_due = 0, uncached_ptes = 0;
+  int uncached_due = 0;
   int external_ptes = 0, pte_stalls = 0, grants = 0, dma_done_count = 0, blocked_cmo = 0;
   bit live_tags[`ADMIT_ENTRIES];
   logic [`ADMIT_COMMAND_WIDTH-1:0] snapshots[2];
@@ -321,21 +321,10 @@ module admission_tb;
         uncached_result = '0;
         `AF(uncached_result, URESP, TAG) = `AF(uncached_req.bits, UNCACHED, TAG);
         uncached_due = cycle + 11;
-        if (`AF(uncached_req.bits, UNCACHED, ADDR) inside {64'ha0000000, 64'ha0000008}) begin
-          check(!`AF(uncached_req.bits, UNCACHED, WRITE) && `AF(uncached_req.bits, UNCACHED, NORMAL)
-                && `AF(uncached_req.bits, UNCACHED, ATOMIC) == 0 &&
-                `AF(uncached_req.bits, UNCACHED, SIZE) == 3, "external normal PTE request shape");
-          uncached_ptes++;
-          `AF(uncached_result, URESP, DATA) = 64'hfedcba98765432c1;
-          if (`AF(uncached_req.bits, UNCACHED, ADDR) == 64'ha0000008)
-            `AF(uncached_result, URESP, ERROR) = 1;
-          else `AF(uncached_result, URESP, ERROR) = 0;
-        end else begin
-          check(`AF(uncached_req.bits, UNCACHED, WRITE) && `AF(uncached_req.bits, UNCACHED, ADDR)
-                == 64'h10000000, "unexpected device/PTE side effect");
-          check(`AF(uncached_req.bits, UNCACHED, DATA) == 0, "firmware reported admission failure");
-          exit_seen = 1;
-        end
+        check(`AF(uncached_req.bits, UNCACHED, WRITE) && `AF(uncached_req.bits, UNCACHED, ADDR)
+              == 64'h10000000, "unexpected device/PTE side effect");
+        check(`AF(uncached_req.bits, UNCACHED, DATA) == 0, "firmware reported admission failure");
+        exit_seen = 1;
         uncached_active = 1;
       end
     end
@@ -395,7 +384,7 @@ module admission_tb;
           "rs2 snapshot changed");
     check(`AF(packet, COMMAND, SATP) == (second ? 64'h8000300000080009 : 64'h8000000000080006),
           "satp snapshot changed");
-    check(`AF(packet, COMMAND, EFFECTIVEPRIVILEGE) == (second ? 3 : 1) && `AF(packet, COMMAND, SUM)
+    check(`AF(packet, COMMAND, EFFECTIVEPRIVILEGE) == 1 && `AF(packet, COMMAND, SUM)
           == !second && `AF(packet, COMMAND, MXR) == !second, "privilege/SUM/MXR snapshot changed");
     check(`AF(packet, COMMAND, PMP_0_ADDR) == (second ? 64'h20800000 : 64'h20400000) &&
           `AF(packet, COMMAND, PMP_0_CFG_A) == 1 && `AF(packet, COMMAND, PMP_0_CFG_R) &&
@@ -513,14 +502,14 @@ module admission_tb;
     external_pte(64'h10000000, 0, 1);
     @(negedge clock);
     pte_req.bits = '0;
-    `AF(pte_req.bits, PTE, ADDR) = 44'ha0000000;
+    `AF(pte_req.bits, PTE, ADDR) = 44'h80006008;
     pte_req.valid = 1;
     do @(posedge clock); while (!pte_req.ready);
     @(negedge clock);
     pte_req.valid = 0;
     wait (pte_resp.valid);
     check(!`AF(pte_resp.bits, PTERESP, ERROR) && `AF(pte_resp.bits, PTERESP, DATA)
-          == 64'hfedcba98765432c1, "external PTE did not return the uncached normal RAM value");
+          == 64'h20001c01, "external PTE did not return the coherent cached value");
     use_tracker_maintenance = 1;
     info.bits = `AF(snapshots[0], COMMAND, TAG);
     info.valid = 1;
@@ -580,7 +569,7 @@ module admission_tb;
           "memory responses not drained");
     check(
         cmo_requests == 3 && cmo_acks == 3 && cmo_drain_waits > 0 && cmo_late_rsp_waits >= 8 &&
-          external_ptes==4 && uncached_ptes==2 && pte_stalls>=8 && grants==1 && dma_done_count==1 && blocked_cmo>0,
+          external_ptes==4 && pte_stalls>=8 && grants==1 && dma_done_count==1 && blocked_cmo>0,
         $sformatf(
         "CMO requirements req%0d ack%0d oldwait%0d latewait%0d pte%0d stalls%0d grant%0d done%0d blocked%0d",
         cmo_requests,

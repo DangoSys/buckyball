@@ -46,8 +46,8 @@ func.func @main() -> i8 {
       : memref<12x16xi8> i64 i64 i64
   buckyball.quant_i32_to_i8
       %loaded_input, %loaded_scales, %loaded_output, %depth16, %output_base, %zero64
-      {outputHeight = 2 : i64,
-       outputStride = 4 : i64, outputWidth = 2 : i64, relu = true} : i64 i64 i64
+      <outputHeight = 2,
+       outputStride = 4, outputWidth = 2, relu = true> : i64 i64 i64
   %stored = buckyball.bank_mvout %output %loaded_output %depth12 %stride
       : memref<12x16xi8> i64 i64 i64
   buckyball.fence

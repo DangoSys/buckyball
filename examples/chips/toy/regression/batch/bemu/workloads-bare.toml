@@ -1,5 +1,10 @@
 [workloads]
 tests = [
+  "toy-toy-mlirtest-base_dma_group-baremetal",
+  "toy-toy-mlirtest-base_mset_transfer-baremetal",
+  "toy-toy-ctest-mvin_mvout_group_test-baremetal",
+  "toy-toy-ctest-mset_transfer_test-baremetal",
+  "toy-toy-ctest-rvv_ball-baremetal",
   "toy-toy-ctest-rvv_kernel-baremetal",
   "toy-toy-mlirtest-ball_mxquant-baremetal",
   "toy-toy-mlirtest-bank_mxquant-baremetal",

@@ -23,11 +23,11 @@ func.func @main() -> i8 {
     }
   }
 
-  buckyball.mset %bank {row = 1 : i64, col = 1 : i64} : i64
+  buckyball.mset %bank <row = 1, col = 1> : i64
   buckyball.mvin %input %bank %depth %stride : memref<16x16xi8> i64 i64 i64
   buckyball.mvout %output %bank %depth %stride : memref<16x16xi8> i64 i64 i64
   buckyball.fence
-  buckyball.mset %bank {alloc = false, row = 0 : i64, col = 0 : i64} : i64
+  buckyball.mset %bank <alloc = false, row = 0, col = 0> : i64
 
   func.call @check_result(%output) : (memref<16x16xi8>) -> ()
   memref.dealloc %input : memref<16x16xi8>

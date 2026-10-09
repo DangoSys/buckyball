@@ -6,15 +6,16 @@ import memcore.memory.bank.BankSetParams
 case class MeshCoreAttachment(bankIds: Seq[Int])
 
 case class MeshSharedMemParams(
-  rows:           Int,
-  cols:           Int,
-  entriesPerBank: Int,
-  dataBits:       Int,
-  tagBits:        Int,
-  cores:          Seq[MeshCoreAttachment],
-  maxInFlight:    Int = 4,
-  localBankBits:  Int = 10,
-  visibleBanks:   Int = 0) {
+  rows:             Int,
+  cols:             Int,
+  entriesPerBank:   Int,
+  dataBits:         Int,
+  tagBits:          Int,
+  cores:            Seq[MeshCoreAttachment],
+  maxInFlight:      Int = 4,
+  localBankBits:    Int = 10,
+  visibleBanks:     Int = 0,
+  externalChannels: Int = 0) {
   require(rows > 0 && cols > 0)
   require(entriesPerBank <= 65536)
   require(entriesPerBank >= 2 && (entriesPerBank & (entriesPerBank - 1)) == 0)
@@ -22,6 +23,7 @@ case class MeshSharedMemParams(
   require(tagBits > 0 && localBankBits > 0 && cores.nonEmpty)
   require(cores.forall(c => c.bankIds.forall(id => id >= 0 && id < rows * cols)))
 
+  require(externalChannels >= 0)
   require(maxInFlight > 0 && maxInFlight <= (1 << tagBits))
   val bankParams = BankSetParams(dataBits, 1, entriesPerBank, tagBits)
   val bankCount:        Int             = rows * cols
@@ -34,8 +36,8 @@ case class MeshSharedMemParams(
   val rowBits:          Int             = math.max(1, log2Ceil(rows))
   val colBits:          Int             = math.max(1, log2Ceil(cols))
   val bankBits:         Int             = math.max(1, log2Ceil(bankCount))
-  val addressBits:      Int             = log2Ceil(entriesPerBank)
-  val channelBits:      Int             = math.max(1, log2Ceil(totalChannels + 1))
+  val addressBits:      Int             = 16
+  val channelBits:      Int             = math.max(1, log2Ceil(totalChannels + 1 + externalChannels))
   val coreBits:         Int             = math.max(1, log2Ceil(cores.size))
 
   val coreLocations: Seq[(Int, Int)] = cores.map { core =>
@@ -61,7 +63,7 @@ object MeshSharedMemParams {
   val prototype: MeshSharedMemParams = MeshSharedMemParams(
     rows = 3,
     cols = 4,
-    entriesPerBank = 2048,
+    entriesPerBank = 1024,
     dataBits = 128,
     tagBits = 8,
     cores = Seq(

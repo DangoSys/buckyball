@@ -2,13 +2,17 @@
 #include "math/math.h"
 
 extern "C" void rvv_rope(float *output, const float *input,
-                         const float *frequencies, const int64_t *positions,
+                         const float *frequencies, const int32_t *positions,
                          size_t rows, size_t headDimAndHeads) {
-  const size_t headDim = headDimAndHeads & 65535, heads = headDimAndHeads >> 16;
+  const size_t headDim = headDimAndHeads & 65535;
+  const size_t heads = (headDimAndHeads >> 16) & 65535;
+  const uint32_t scaleBits = headDimAndHeads >> 32;
+  const float scale = __riscv_vfmv_f_s_f32m1_f32(
+      __riscv_vreinterpret_f32m1(__riscv_vmv_v_x_u32m1(scaleBits, 1)));
   const size_t half = headDim / 2;
   for (size_t row = 0; row < rows; ++row) {
-    auto integer = __riscv_vle64_v_i64m2(positions + row, 1);
-    auto converted = __riscv_vfncvt_f_x_w_f32m1(integer, 1);
+    auto integer = __riscv_vle32_v_i32m1(positions + row, 1);
+    auto converted = __riscv_vfcvt_f_x_v_f32m1(integer, 1);
     const float position = __riscv_vfmv_f_s_f32m1_f32(converted);
     for (size_t offset = 0; offset < half;) {
       const size_t vl = __riscv_vsetvl_e32m1(half - offset);
@@ -16,6 +20,7 @@ extern "C" void rvv_rope(float *output, const float *input,
       auto angle = __riscv_vfmul_vf_f32m1(frequency, position, vl);
       angle = __riscv_vfadd_vf_f32m1(angle, 0, vl);
       auto cosine = rvv_cos(angle, vl);
+      cosine = __riscv_vfmul_vf_f32m1(cosine, scale, vl);
       for (size_t head = 0; head < heads; ++head) {
         const float *source = input + (head * rows + row) * headDim;
         float *destination = output + (head * rows + row) * headDim;
@@ -30,6 +35,7 @@ extern "C" void rvv_rope(float *output, const float *input,
       angle = __riscv_vfmul_vf_f32m1(frequency, position, vl);
       angle = __riscv_vfadd_vf_f32m1(angle, 0, vl);
       auto sine = rvv_sin(angle, vl);
+      sine = __riscv_vfmul_vf_f32m1(sine, scale, vl);
       for (size_t head = 0; head < heads; ++head) {
         const float *source = input + (head * rows + row) * headDim;
         float *destination = output + (head * rows + row) * headDim;
@@ -55,7 +61,7 @@ extern "C" void rvv_rope(float *output, const float *input,
 
 extern "C" void rvv_rope_launch(float *output, const float *input,
                                 const float *frequencies,
-                                const int64_t *positions, size_t rows,
+                                const int32_t *positions, size_t rows,
                                 size_t headDimAndHeads, uint32_t *flags,
                                 uint32_t rounding) {
   asm volatile("csrw fcsr, %0" ::"r"(rounding) : "memory");

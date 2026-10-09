@@ -7,7 +7,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class Execution(val b: GlobalConfig) extends Module {
-  private val p = b.rvv
+  val p = b.rvv
 
   @public
   val io = IO(new Bundle {
@@ -15,6 +15,8 @@ class Execution(val b: GlobalConfig) extends Module {
     val launch         = Flipped(Decoupled(new KernelLaunch))
     val done           = Decoupled(new KernelCompletion)
     val busy           = Output(Bool())
+    val ballRequest    = Decoupled(new RvvBallCommand)
+    val ballResponse   = Flipped(Decoupled(UInt(64.W)))
     val memoryRequest  = Vec(p.memoryPorts, Decoupled(new VectorMemoryRequest))
     val memoryResponse = Vec(p.memoryPorts, Flipped(Decoupled(new VectorMemoryResponse)))
   })
@@ -22,28 +24,33 @@ class Execution(val b: GlobalConfig) extends Module {
   val iBuf:      Seq[Instance[IBuf]]       = Seq.fill(2)(Instantiate(new IBuf(b)))
   val registers: Instance[ScalarRF]        = Instantiate(new ScalarRF)
   val scalar:    Instance[ScalarExecution] = Instantiate(new ScalarExecution)
-  val floating:  Instance[ScalarFloating]  = Instantiate(new ScalarFloating)
+  val floating:  Instance[ScalarFloating]  = Instantiate(new ScalarFloating(p.eLen))
   val vector:    Instance[VectorCore]      = Instantiate(new VectorCore(b))
 
-  val idle :: fetch :: fetchWait :: execute :: vectorWait :: scalarWait :: floatWait :: memorySend :: memoryWait :: completed :: Nil =
-    Enum(10)
+  val idle :: fetch :: fetchWait :: execute :: vectorWait :: scalarWait :: floatWait :: memorySend :: memoryWait :: ballSend :: ballWait :: completed :: Nil =
+    Enum(12)
 
-  val state          = RegInit(idle)
-  val activeBuffer   = RegInit(false.B)
-  val end            = Reg(UInt(32.W))
-  val pc             = Reg(UInt(32.W))
-  val instruction    = RegInit(0.U(32.W))
-  val cycles         = RegInit(0.U(64.W))
-  val fault          = RegInit(false.B)
-  val cause          = RegInit(0.U(32.W))
-  val tval           = RegInit(0.U(32.W))
-  val fflags         = RegInit(0.U(5.W))
-  val frm            = RegInit(0.U(3.W))
-  val vxrm           = RegInit(0.U(2.W))
-  val vxsat          = RegInit(false.B)
-  val scalarTarget   = Reg(UInt(5.W))
-  val scalarNextPc   = Reg(UInt(32.W))
-  val scalarDivide   = instruction(6, 0) === "h33".U && instruction(31, 25) === 1.U && instruction(14, 12) >= 4.U
+  val state        = RegInit(idle)
+  val activeBuffer = RegInit(false.B)
+  val end          = Reg(UInt(32.W))
+  val pc           = Reg(UInt(32.W))
+  val instruction  = RegInit(0.U(32.W))
+  val cycles       = RegInit(0.U(64.W))
+  val fault        = RegInit(false.B)
+  val cause        = RegInit(0.U(32.W))
+  val tval         = RegInit(0.U(64.W))
+  val fflags       = RegInit(0.U(5.W))
+  val frm          = RegInit(0.U(3.W))
+  val vxrm         = RegInit(0.U(2.W))
+  val vxsat        = RegInit(false.B)
+  val scalarTarget = Reg(UInt(5.W))
+  val scalarNextPc = Reg(UInt(32.W))
+
+  val scalarDivide = (instruction(6, 0) === "h33".U || instruction(6, 0) === "h3b".U) && instruction(
+    31,
+    25
+  ) === 1.U && instruction(14, 12) >= 4.U
+
   val memory         = Reg(new VectorMemoryRequest)
   val memoryFloating = Reg(Bool())
   val memoryUnsigned = Reg(Bool())
@@ -54,6 +61,13 @@ class Execution(val b: GlobalConfig) extends Module {
     cause := code
     tval  := value
   }
+
+  io.ballRequest.valid            := state === ballSend
+  io.ballRequest.bits.funct7      := instruction(31, 25)
+  io.ballRequest.bits.rs1         := registers.io.xReadData1
+  io.ballRequest.bits.rs2         := registers.io.xReadData2
+  io.ballResponse.ready           := state === ballWait
+  when(io.ballRequest.fire)(state := ballWait)
 
   val running = state =/= idle && state =/= completed
   io.busy                  := state =/= idle
@@ -96,7 +110,7 @@ class Execution(val b: GlobalConfig) extends Module {
   scalar.io.divRequest.valid          := false.B
   scalar.io.divRequest.bits.a         := registers.io.xReadData1
   scalar.io.divRequest.bits.b         := registers.io.xReadData2
-  scalar.io.divRequest.bits.sew       := 2.U
+  scalar.io.divRequest.bits.sew       := Mux(instruction(6, 0) === "h3b".U, 2.U, 3.U)
   scalar.io.divRequest.bits.signed    := !instruction(12)
   scalar.io.divRequest.bits.remainder := instruction(13)
   scalar.io.divResponse.ready         := state === scalarWait && !io.launch.fire
@@ -128,10 +142,20 @@ class Execution(val b: GlobalConfig) extends Module {
     io.memoryRequest(i) <> vector.io.memoryRequest(i)
     vector.io.memoryResponse(i) <> io.memoryResponse(i)
   }
+  when(io.ballResponse.fire) {
+    registers.io.xWrite.valid     := instruction(11, 7) =/= 0.U
+    registers.io.xWrite.bits.data := io.ballResponse.bits
+    pc                            := pc + 4.U
+    state                         := fetch
+  }
   when(state === scalarWait && scalar.io.divResponse.fire) {
     registers.io.xWrite.valid        := true.B
     registers.io.xWrite.bits.address := scalarTarget
-    registers.io.xWrite.bits.data    := scalar.io.divResponse.bits
+    registers.io.xWrite.bits.data    := Mux(
+      instruction(6, 0) === "h3b".U,
+      Cat(Fill(32, scalar.io.divResponse.bits(31)), scalar.io.divResponse.bits(31, 0)),
+      scalar.io.divResponse.bits
+    )
     pc                               := scalarNextPc
     state                            := fetch
   }
@@ -153,7 +177,7 @@ class Execution(val b: GlobalConfig) extends Module {
   val store               = opcode === "h23".U || opcode === "h27".U
   val csrAddress          = instruction(31, 20)
   val csrKnown            = WireDefault(true.B)
-  val csrValue            = WireDefault(0.U(32.W))
+  val csrValue            = WireDefault(0.U(64.W))
   switch(csrAddress) {
     is("h001".U)(csrValue := fflags)
     is("h002".U)(csrValue := frm)
@@ -205,7 +229,9 @@ class Execution(val b: GlobalConfig) extends Module {
   }
   when(state === fetchWait) { instruction := fetchedInstruction; state := execute }
   when(state === execute) {
-    when(vectorInstruction) {
+    when(opcode === "h7b".U && funct3 === 3.U) {
+      state := ballSend
+    }.elsewhen(vectorInstruction) {
       vector.io.issue.valid            := true.B
       when(vector.io.issue.fire)(state := vectorWait)
     }.elsewhen(floatingInstruction) {
@@ -219,13 +245,13 @@ class Execution(val b: GlobalConfig) extends Module {
       val size      = Mux(fp, Mux(funct3 === 3.U, 3.U, 2.U), funct3(1, 0))
       val legal     = Mux(
         fp,
-        funct3 === 2.U || funct3 === 3.U,
-        Mux(store, funct3 <= 2.U, funct3 <= 2.U || funct3 === 4.U || funct3 === 5.U)
+        funct3 === 2.U || (p.eLen == 64).B && funct3 === 3.U,
+        Mux(store, funct3 <= 3.U, funct3 <= 6.U)
       )
       val immediate = Mux(
         store,
-        Cat(Fill(20, instruction(31)), instruction(31, 25), instruction(11, 7)),
-        Cat(Fill(20, instruction(31)), instruction(31, 20))
+        Cat(Fill(52, instruction(31)), instruction(31, 25), instruction(11, 7)),
+        Cat(Fill(52, instruction(31)), instruction(31, 20))
       )
       val address   = registers.io.xReadData1 + immediate
       memory.address     := address
@@ -262,6 +288,7 @@ class Execution(val b: GlobalConfig) extends Module {
         state                         := fetch
       }
     }.elsewhen(!scalar.io.legal)(finish(true.B, 2.U, instruction))
+      .elsewhen(scalar.io.nextPc(63, 32).orR)(finish(true.B, 1.U, scalar.io.nextPc))
       .elsewhen(scalar.io.nextPc(1, 0).orR)(finish(true.B, 0.U, scalar.io.nextPc))
       .elsewhen(scalarDivide) {
         scalar.io.divRequest.valid := true.B
@@ -288,9 +315,10 @@ class Execution(val b: GlobalConfig) extends Module {
             registers.io.fWrite.bits.data := Mux(memory.size === 2.U, Cat("hffffffff".U(32.W), data(31, 0)), data)
           }.otherwise {
             registers.io.xWrite.valid     := true.B
-            registers.io.xWrite.bits.data := MuxLookup(memory.size, data(31, 0))(Seq(
-              0.U -> Cat(Fill(24, !memoryUnsigned && data(7)), data(7, 0)),
-              1.U -> Cat(Fill(16, !memoryUnsigned && data(15)), data(15, 0))
+            registers.io.xWrite.bits.data := MuxLookup(memory.size, data)(Seq(
+              0.U -> Cat(Fill(56, !memoryUnsigned && data(7)), data(7, 0)),
+              1.U -> Cat(Fill(48, !memoryUnsigned && data(15)), data(15, 0)),
+              2.U -> Cat(Fill(32, !memoryUnsigned && data(31)), data(31, 0))
             ))
           }
         }
@@ -304,7 +332,7 @@ class Execution(val b: GlobalConfig) extends Module {
         registers.io.fWrite.valid     := floating.io.floatWrite
         registers.io.fWrite.bits.data := floating.io.result
         registers.io.xWrite.valid     := floating.io.integerWrite
-        registers.io.xWrite.bits.data := floating.io.result(31, 0)
+        registers.io.xWrite.bits.data := floating.io.result
         fflags                        := fflags | floating.io.flags
         pc                            := pc + 4.U
         state                         := fetch

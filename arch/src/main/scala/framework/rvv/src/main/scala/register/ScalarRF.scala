@@ -13,12 +13,12 @@ class ScalarRF extends Module {
 
     val xReadAddress1 = Input(UInt(5.W))
     val xReadAddress2 = Input(UInt(5.W))
-    val xReadData1    = Output(UInt(32.W))
-    val xReadData2    = Output(UInt(32.W))
+    val xReadData1    = Output(UInt(64.W))
+    val xReadData2    = Output(UInt(64.W))
 
     val xWrite = Flipped(Valid(new Bundle {
       val address = UInt(5.W)
-      val data    = UInt(32.W)
+      val data    = UInt(64.W)
     }))
 
     val fReadAddress1 = Input(UInt(5.W))
@@ -35,7 +35,7 @@ class ScalarRF extends Module {
 
   })
 
-  val x = RegInit(VecInit(Seq.fill(32)(0.U(32.W))))
+  val x = RegInit(VecInit(Seq.fill(32)(0.U(64.W))))
   val f = RegInit(VecInit(Seq.fill(32)(0.U(64.W))))
 
   io.xReadData1 := x(io.xReadAddress1)

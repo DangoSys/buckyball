@@ -13,8 +13,8 @@ class KernelLaunch extends Bundle {
   val iBuffer = Bool()
   val entry   = UInt(32.W)
   val end     = UInt(32.W)
-  val stack   = UInt(32.W)
-  val args    = Vec(8, UInt(32.W))
+  val stack   = UInt(64.W)
+  val args    = Vec(8, UInt(64.W))
 }
 
 class KernelCompletion extends Bundle {
@@ -23,13 +23,13 @@ class KernelCompletion extends Bundle {
   val instruction = UInt(32.W)
   val cycles      = UInt(64.W)
   val cause       = UInt(32.W)
-  val tval        = UInt(32.W)
+  val tval        = UInt(64.W)
   val fflags      = UInt(5.W)
   val vxsat       = Bool()
 }
 
 class VectorMemoryRequest extends Bundle {
-  val address = UInt(32.W)
+  val address = UInt(64.W)
   val write   = Bool()
   val data    = UInt(64.W)
   val mask    = UInt(8.W)
@@ -43,17 +43,17 @@ class VectorMemoryResponse extends Bundle {
 
 class VectorIssue extends Bundle {
   val instruction = UInt(32.W)
-  val scalar1     = UInt(32.W)
-  val scalar2     = UInt(32.W)
+  val scalar1     = UInt(64.W)
+  val scalar2     = UInt(64.W)
   val floating    = UInt(64.W)
 }
 
 class VectorResult extends Bundle {
   val fault       = Bool()
   val cause       = UInt(32.W)
-  val tval        = UInt(32.W)
+  val tval        = UInt(64.W)
   val scalarWrite = Bool()
-  val scalarData  = UInt(32.W)
+  val scalarData  = UInt(64.W)
   val floatWrite  = Bool()
   val floatData   = UInt(64.W)
   val flags       = UInt(5.W)
@@ -72,4 +72,17 @@ class ImageResult extends Bundle {
   val entry      = UInt(32.W)
   val textBytes  = UInt(32.W)
   val constBytes = UInt(32.W)
+}
+
+class RvvBallCommand extends Bundle {
+  val funct7 = UInt(7.W)
+  val rs1    = UInt(64.W)
+  val rs2    = UInt(64.W)
+}
+
+class BankLayout(b: framework.top.GlobalConfig) extends Bundle {
+  val readBank    = UInt(b.memDomain.vbankIdWidth.W)
+  val writeBank   = UInt(b.memDomain.vbankIdWidth.W)
+  val readGroups  = UInt(b.memDomain.groupCountWidth.W)
+  val writeGroups = UInt(b.memDomain.groupCountWidth.W)
 }

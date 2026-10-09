@@ -8,7 +8,8 @@
 #include <params.h>
 
 namespace {
-constexpr unsigned outputBank = 1, inputBank = 2, upBank = 3;
+constexpr unsigned readBank = 4, writeBank = 5;
+constexpr unsigned programBank = VIRTUAL_BANK_NUM;
 constexpr uint32_t bankBytes = BANK_LINES * (BANK_WIDTH / 8);
 static_assert(bankBytes >= 4096 && bankBytes <= 65536 && bankBytes % 16 == 0);
 } // namespace
@@ -31,15 +32,26 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
       b.sizes[axis] != inner || out.sizes[axis] != rows ||
       out.sizes[axis + 1] != cols ||
       (axis && (a.sizes[0] != batches || b.sizes[0] != batches))) {
-    fputs("RVV matmul shape mismatch\n", stderr);
+    fprintf(stderr,
+            "RVV matmul shape mismatch: output=[%lld,%lld,%lld], "
+            "lhs=[%lld,%lld,%lld], rhs=[%lld,%lld,%lld]\n",
+            (long long)(axis ? out.sizes[0] : 1), (long long)out.sizes[axis],
+            (long long)out.sizes[axis + 1], (long long)(axis ? a.sizes[0] : 1),
+            (long long)a.sizes[axis], (long long)a.sizes[axis + 1],
+            (long long)(axis ? b.sizes[0] : 1), (long long)b.sizes[axis],
+            (long long)b.sizes[axis + 1]);
     abort();
   }
   alignas(16) float aTile[bankBytes / sizeof(float)];
   alignas(16) float bTile[bankBytes / sizeof(float)];
   alignas(16) float cTile[16 * 16];
-  for (unsigned bank = 0; bank <= upBank; ++bank)
+  for (unsigned bank = 0; bank < 4; ++bank)
     bb_mem_alloc(bank, 1, 1);
-  mvin_kernel(images::matmul.bytes, images::matmul.size, 0);
+  bb_mem_transfer(2, readBank);
+  bb_mem_transfer(3, readBank);
+  bb_mem_transfer(0, writeBank);
+  bb_mem_transfer(1, writeBank);
+  mvin_kernel(images::matmul.bytes, images::matmul.size, programBank);
   for (int64_t batch = 0; batch < batches; ++batch) {
     const float *aSource =
         a.data + a.offset + (axis ? batch * a.strides[0] : 0);
@@ -58,14 +70,14 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
             out.strides[axis + 1] == 1 && (m == 1 || out.strides[axis] == n) &&
             count % 4 == 0 && (reinterpret_cast<uintptr_t>(cDirect) & 15) == 0;
         if (directC) {
-          bb_mvin((uintptr_t)cDirect, outputBank, count / 4, 1);
+          bb_mvin_group((uintptr_t)cDirect, writeBank, 1, count / 4, 1);
         } else {
           for (uint32_t r = 0; r < m; ++r)
             for (uint32_t c = 0; c < n; ++c)
               cTile[r * n + c] = cSource[(row + r) * out.strides[axis] +
                                          (col + c) * out.strides[axis + 1]];
           std::fill(cTile + count, cTile + (count + 3) / 4 * 4, 0.0f);
-          bb_mvin((uintptr_t)cTile, outputBank, (count + 3) / 4, 1);
+          bb_mvin_group((uintptr_t)cTile, writeBank, 1, (count + 3) / 4, 1);
         }
         const int64_t tileK = bankBytes / sizeof(float) / std::max(m, n);
         for (int64_t begin = 0; begin < inner; begin += tileK) {
@@ -83,7 +95,7 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
                                k * n % 4 == 0 &&
                                (reinterpret_cast<uintptr_t>(bDirect) & 15) == 0;
           if (directA) {
-            bb_mvin((uintptr_t)aDirect, inputBank, m * k / 4, 1);
+            bb_mvin_group((uintptr_t)aDirect, readBank, 0, m * k / 4, 1);
           } else {
             for (uint32_t r = 0; r < m; ++r) {
               const float *source = aSource + (row + r) * a.strides[axis] +
@@ -95,10 +107,10 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
                   aTile[r * k + i] = source[i * a.strides[axis + 1]];
             }
             std::fill(aTile + m * k, aTile + (m * k + 3) / 4 * 4, 0.0f);
-            bb_mvin((uintptr_t)aTile, inputBank, (m * k + 3) / 4, 1);
+            bb_mvin_group((uintptr_t)aTile, readBank, 0, (m * k + 3) / 4, 1);
           }
           if (directB) {
-            bb_mvin((uintptr_t)bDirect, upBank, k * n / 4, 1);
+            bb_mvin_group((uintptr_t)bDirect, readBank, 1, k * n / 4, 1);
           } else {
             for (uint32_t i = 0; i < k; ++i) {
               const float *source = bSource + (begin + i) * b.strides[axis] +
@@ -110,24 +122,23 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
                   bTile[i * n + c] = source[c * b.strides[axis + 1]];
             }
             std::fill(bTile + k * n, bTile + (k * n + 3) / 4 * 4, 0.0f);
-            bb_mvin((uintptr_t)bTile, upBank, (k * n + 3) / 4, 1);
+            bb_mvin_group((uintptr_t)bTile, readBank, 1, (k * n + 3) / 4, 1);
           }
-          kernel_launch call{
-              images::matmul.entry,
-              images::matmul.text_bytes,
-              0x80002000,
-              {outputBank << 16, inputBank << 16, upBank << 16, m, n, k},
-              0};
-          bb_mvin((uintptr_t)&call, 0, sizeof(call) / 16, 1);
+          kernel_launch call{images::matmul.entry,
+                             images::matmul.text_bytes,
+                             0x40002000,
+                             {uint64_t(3) << 32, 0, uint64_t(1) << 32, m, n, k},
+                             0};
+          bb_mvin_group((uintptr_t)&call, writeBank, 0, sizeof(call) / 16, 1);
           bb_fence();
-          run_kernel(0, 0);
+          run_kernel(readBank, programBank, writeBank, 0);
           bb_fence();
         }
         if (directC) {
-          bb_mvout((uintptr_t)cDirect, outputBank, count / 4, 1);
+          bb_mvout_group((uintptr_t)cDirect, writeBank, 1, count / 4, 1);
           bb_fence();
         } else {
-          bb_mvout((uintptr_t)cTile, outputBank, (count + 3) / 4, 1);
+          bb_mvout_group((uintptr_t)cTile, writeBank, 1, (count + 3) / 4, 1);
           bb_fence();
           for (uint32_t r = 0; r < m; ++r)
             for (uint32_t c = 0; c < n; ++c)
@@ -137,6 +148,69 @@ extern "C" void _mlir_ciface_rvv_matmul(UnrankedMemRefType<float> *output,
       }
     }
   }
-  for (unsigned bank = 0; bank <= upBank; ++bank)
-    bb_mem_release(bank);
+  bb_mem_release(readBank);
+  bb_mem_release(writeBank);
+  release_kernel(programBank);
+}
+
+extern "C" void
+_mlir_ciface_rvv_matmul_transpose_rhs(UnrankedMemRefType<float> *output,
+                                      UnrankedMemRefType<float> *lhs,
+                                      UnrankedMemRefType<float> *rhs) {
+  DynamicMemRefType<float> b(*rhs);
+  if (b.rank == 2) {
+    StridedMemRefType<float, 2> view{b.basePtr,
+                                     b.data,
+                                     b.offset,
+                                     {b.sizes[1], b.sizes[0]},
+                                     {b.strides[1], b.strides[0]}};
+    UnrankedMemRefType<float> transposed{2, &view};
+    _mlir_ciface_rvv_matmul(output, lhs, &transposed);
+  } else if (b.rank == 3) {
+    StridedMemRefType<float, 3> view{
+        b.basePtr,
+        b.data,
+        b.offset,
+        {b.sizes[0], b.sizes[2], b.sizes[1]},
+        {b.strides[0], b.strides[2], b.strides[1]}};
+    UnrankedMemRefType<float> transposed{3, &view};
+    _mlir_ciface_rvv_matmul(output, lhs, &transposed);
+  } else {
+    fputs("RVV transposed matmul requires rank-two or rank-three RHS\n",
+          stderr);
+    abort();
+  }
+}
+
+namespace {
+void broadcastMatmul(UnrankedMemRefType<float> *output,
+                     UnrankedMemRefType<float> *lhs,
+                     UnrankedMemRefType<float> *rhs, bool transpose) {
+  DynamicMemRefType<float> out(*output), b(*rhs);
+  if (out.rank != 3 || b.rank != 4 || b.sizes[0] != 1 || b.sizes[1] != 1) {
+    fputs("RVV broadcast matmul requires one rank-four RHS head\n", stderr);
+    abort();
+  }
+  StridedMemRefType<float, 3> view{
+      b.basePtr,
+      b.data,
+      b.offset,
+      {out.sizes[0], b.sizes[transpose ? 3 : 2], b.sizes[transpose ? 2 : 3]},
+      {0, b.strides[transpose ? 3 : 2], b.strides[transpose ? 2 : 3]}};
+  UnrankedMemRefType<float> repeated{3, &view};
+  _mlir_ciface_rvv_matmul(output, lhs, &repeated);
+}
+} // namespace
+
+extern "C" void
+_mlir_ciface_rvv_matmul_broadcast_rhs(UnrankedMemRefType<float> *output,
+                                      UnrankedMemRefType<float> *lhs,
+                                      UnrankedMemRefType<float> *rhs) {
+  broadcastMatmul(output, lhs, rhs, false);
+}
+
+extern "C" void _mlir_ciface_rvv_matmul_broadcast_transpose_rhs(
+    UnrankedMemRefType<float> *output, UnrankedMemRefType<float> *lhs,
+    UnrankedMemRefType<float> *rhs) {
+  broadcastMatmul(output, lhs, rhs, true);
 }

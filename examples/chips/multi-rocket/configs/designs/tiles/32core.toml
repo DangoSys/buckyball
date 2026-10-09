@@ -9,6 +9,8 @@ pgLevels = 3
 nPMPs = 8
 
 [sharedMem]
+bankWidth = 128
+bankEntries = 16
 enable = false
 entries = 16384
 inputChannels = 32

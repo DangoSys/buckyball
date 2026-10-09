@@ -29,7 +29,9 @@ class TaskAdmission(tracking: TrackingParams, pmps: Int)(implicit val cpuParams:
   val state                                  = RegInit(idle)
   val tag                                    = Reg(UInt(tracking.idBits.W))
   val satp                                   = Reg(UInt(64.W))
-  val finishTask                             = io.command.bits.instruction.funct === 2.U
+  val operation                              = io.command.bits.instruction.funct
+  val finishTask                             = operation === 2.U || operation === 14.U ||
+    (operation >= 16.U && operation <= 19.U)
   val eligible                               = state === idle && (!finishTask || io.workDrained) && !reset.asBool
   io.task.cmd.valid            := io.command.valid && eligible
   io.task.cmd.bits             := io.command.bits.instruction

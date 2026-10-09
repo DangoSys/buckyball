@@ -7,7 +7,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class ImageLoader(val b: GlobalConfig) extends Module {
-  private val p = b.rvv
+  val p = b.rvv
 
   @public
   val io = IO(new Bundle {
@@ -81,7 +81,7 @@ class ImageLoader(val b: GlobalConfig) extends Module {
       result.cause := 2.U
       result.tval  := fields(5)
       state        := completed
-    }.elsewhen(fields(3) =/= "h80000000".U || fields(4) > p.constBytes.U) {
+    }.elsewhen(fields(3) =/= "h40000000".U || fields(4) > p.constBytes.U) {
       result.fault := true.B
       result.cause := 2.U
       result.tval  := fields(3)

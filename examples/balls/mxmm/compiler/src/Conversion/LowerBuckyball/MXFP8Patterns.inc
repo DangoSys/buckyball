@@ -19,15 +19,21 @@ public:
     int64_t M = oTy.getShape()[0], K = op.getReductionK(),
             N = oTy.getShape()[1];
     int64_t rows = M == 1 ? 1 : op.getTileM(), columns = op.getTileN();
-    int64_t chunk = op.getTileK();
+    int64_t chunk = op.getTileK(), activationChunk = op.getActivationTileK();
+    bool windowInput = activationChunk != chunk;
     if (rows <= 0 || (rows != 1 && rows % 16) || columns <= 0 || columns % 16 ||
         chunk <= 0 || chunk % 32 || chunk >= 4096)
       return op.emitError(
           "MXFP8 tile_k must be a positive multiple of 32 below 4096");
     int64_t chunks = (K + chunk - 1) / chunk;
     int64_t stride = op.getBankBytes();
+    if (windowInput && (activationChunk != K || K > 65535 ||
+                        (rows * K * 33 / 32 + 15) / 16 * 16 > stride))
+      return op.emitError("MXFP8 activation window must hold the complete row");
+    int64_t activationChunks = windowInput ? 1 : chunks;
     if (M <= 0 || K <= 0 || N <= 0 || K % 32 ||
-        aTy.getShape()[0] != ((M + rows - 1) / rows) * chunks * stride ||
+        aTy.getShape()[0] !=
+            ((M + rows - 1) / rows) * activationChunks * stride ||
         wTy.getShape()[0] != ((N + columns - 1) / columns) * chunks * stride)
       return op.emitError("MXFP8 matrix or packed weight shape mismatch");
     const auto &target = buckyball_target::getBuckyballTarget();
@@ -55,10 +61,10 @@ public:
     };
     Value aBank = allocBank(b, loc, 1, 1), wBank = allocBank(b, loc, 1, 1),
           cBank = allocBank(b, loc, 1, 1);
-    bool residentInput = chunks + 2 <= target.bankNum;
+    bool residentInput = activationChunks + 2 <= target.bankNum;
     SmallVector<Value> banks{aBank};
     if (residentInput)
-      for (int64_t part = 1; part < chunks; ++part)
+      for (int64_t part = 1; part < activationChunks; ++part)
         banks.push_back(allocBank(b, loc, 1, 1));
     banks.push_back(wBank);
     banks.push_back(cBank);
@@ -78,17 +84,17 @@ public:
     cBank = rowBlocks.getRegionIterArgs()[banks.size() - 1];
     Value rowPanel = b.create<arith::DivUIOp>(loc, m, rowStep);
     if (residentInput) {
-      for (int64_t part = 0; part < chunks; ++part) {
+      for (int64_t part = 0; part < activationChunks; ++part) {
         Value offset = b.create<arith::MulIOp>(
             loc,
             b.create<arith::AddIOp>(
                 loc,
                 b.create<arith::MulIOp>(
                     loc, rowPanel,
-                    b.create<arith::ConstantIndexOp>(loc, chunks)),
+                    b.create<arith::ConstantIndexOp>(loc, activationChunks)),
                 b.create<arith::ConstantIndexOp>(loc, part)),
             b.create<arith::ConstantIndexOp>(loc, stride));
-        int64_t count = std::min(chunk, K - part * chunk);
+        int64_t count = windowInput ? K : std::min(chunk, K - part * chunk);
         int64_t aBytes = (rows * count * 33 / 32 + 15) / 16 * 16;
         inputBanks[part] = mvinBank(b, loc, bankView(packed, offset, stride),
                                     inputBanks[part], aBytes / 16);
@@ -129,11 +135,23 @@ public:
                          aBytes / 16);
       wBank = mvinBank(b, loc, bankView(op.getWeight(), wOffset, bBytes), wBank,
                        bBytes / 16);
-      state = b.create<BankMXFP8Op>(
-          loc, b.getI64Type(), residentInput ? inputBanks[part] : aBank, wBank,
-          state, createI64Const(b, loc, matrixRs2(rows, columns, count)),
-          createI1Const(b, loc, part == 0),
-          createI1Const(b, loc, part == chunks - 1), createI64Const(b, loc, 0));
+      if (windowInput)
+        state = b.create<BankMXFP8WindowOp>(
+            loc, b.getI64Type(), aBank, wBank, state,
+            createI64Const(b, loc, rows), createI64Const(b, loc, columns),
+            createI64Const(b, loc, count), createI64Const(b, loc, K),
+            createI64Const(b, loc, part * chunk),
+            createI1Const(b, loc, part == 0),
+            createI1Const(b, loc, part == chunks - 1),
+            createI64Const(b, loc, 0));
+      else
+        state = b.create<BankMXFP8Op>(
+            loc, b.getI64Type(), residentInput ? inputBanks[part] : aBank,
+            wBank, state,
+            createI64Const(b, loc, matrixRs2(rows, columns, count)),
+            createI1Const(b, loc, part == 0),
+            createI1Const(b, loc, part == chunks - 1),
+            createI64Const(b, loc, 0));
     }
     cBank = mvoutBank(b, loc, outPack, state, rows * columns / 4);
     b.create<FenceOp>(loc);

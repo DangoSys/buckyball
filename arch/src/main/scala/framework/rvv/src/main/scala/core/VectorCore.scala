@@ -7,17 +7,17 @@ import framework.top.GlobalConfig
 
 @instantiable
 class VectorCore(val b: GlobalConfig) extends Module {
-  private val p = b.rvv
+  val p = b.rvv
 
   @public
   val io = IO(new Bundle {
     val initialize     = Input(Bool())
     val roundingMode   = Input(UInt(3.W))
     val vxrm           = Input(UInt(2.W))
-    val vstartWrite    = Flipped(Valid(UInt(32.W)))
+    val vstartWrite    = Flipped(Valid(UInt(64.W)))
     val vl             = Output(UInt(32.W))
-    val vtype          = Output(UInt(32.W))
-    val vstart         = Output(UInt(32.W))
+    val vtype          = Output(UInt(64.W))
+    val vstart         = Output(UInt(64.W))
     val issue          = Flipped(Decoupled(new VectorIssue))
     val result         = Decoupled(new VectorResult)
     val memoryRequest  = Vec(p.memoryPorts, Decoupled(new VectorMemoryRequest))
@@ -31,19 +31,19 @@ class VectorCore(val b: GlobalConfig) extends Module {
   val resultValid                                             = RegInit(false.B)
   val result                                                  = RegInit(0.U.asTypeOf(new VectorResult))
   val instruction                                             = Reg(UInt(32.W))
-  val scalar1                                                 = Reg(UInt(32.W))
-  val scalar2                                                 = Reg(UInt(32.W))
+  val scalar1                                                 = Reg(UInt(64.W))
+  val scalar2                                                 = Reg(UInt(64.W))
   val floatScalar                                             = Reg(UInt(64.W))
   val vl                                                      = RegInit(0.U(32.W))
-  val vtype                                                   = RegInit("h80000000".U(32.W))
-  val vstart                                                  = RegInit(0.U(32.W))
+  val vtype                                                   = RegInit("h8000000000000000".U(64.W))
+  val vstart                                                  = RegInit(0.U(64.W))
   val base                                                    = Reg(UInt(32.W))
   val readPortCount                                           = math.max(p.laneNumber, p.memoryPorts)
-  val wordsPerRegister                                        = p.vLen / 64
-  val maskWords                                               = Reg(Vec(readPortCount, UInt(64.W)))
-  val operandWords                                            = Reg(Vec(readPortCount, UInt(64.W)))
-  val sourceWords                                             = Reg(Vec(readPortCount, UInt(64.W)))
-  val destinationWords                                        = Reg(Vec(readPortCount, UInt(64.W)))
+  val wordsPerRegister                                        = p.wordsPerRegister
+  val maskWords                                               = Reg(Vec(readPortCount, UInt(p.wordBits.W)))
+  val operandWords                                            = Reg(Vec(readPortCount, UInt(p.wordBits.W)))
+  val sourceWords                                             = Reg(Vec(readPortCount, UInt(p.wordBits.W)))
+  val destinationWords                                        = Reg(Vec(readPortCount, UInt(p.wordBits.W)))
   val readPhase                                               = RegInit(0.U(3.W))
   val readSent                                                = RegInit(false.B)
   val snapshotSent                                            = RegInit(false.B)
@@ -51,21 +51,21 @@ class VectorCore(val b: GlobalConfig) extends Module {
   val writeSent                                               = RegInit(false.B)
   val resumeState                                             = Reg(UInt(3.W))
   val finishRequested                                         = WireDefault(false.B)
-  val accumulator                                             = Reg(UInt(64.W))
+  val accumulator                                             = Reg(UInt(p.wordBits.W))
   val count                                                   = Reg(UInt(32.W))
   val offered                                                 = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
   val issued                                                  = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
   val received                                                = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
-  val memoryData                                              = Reg(Vec(p.memoryPorts, UInt(64.W)))
+  val memoryData                                              = Reg(Vec(p.memoryPorts, UInt(p.wordBits.W)))
   val memoryFailed                                            = RegInit(VecInit(Seq.fill(p.memoryPorts)(false.B)))
   val divBatchValid                                           = RegInit(false.B)
   val divActive                                               = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
   val divStarted                                              = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
   val divDone                                                 = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val divData                                                 = Reg(Vec(p.laneNumber, UInt(64.W)))
+  val divData                                                 = Reg(Vec(p.laneNumber, UInt(p.wordBits.W)))
   val fpStarted                                               = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
   val fpDone                                                  = RegInit(VecInit(Seq.fill(p.laneNumber)(false.B)))
-  val fpData                                                  = Reg(Vec(p.laneNumber, UInt(64.W)))
+  val fpData                                                  = Reg(Vec(p.laneNumber, UInt(p.wordBits.W)))
   val fpFlags                                                 = Reg(Vec(p.laneNumber, UInt(5.W)))
   val fpLegal                                                 = Reg(Vec(p.laneNumber, Bool()))
 
@@ -149,14 +149,14 @@ class VectorCore(val b: GlobalConfig) extends Module {
   )
 
   def element(word: UInt, index: UInt, width: UInt): UInt = {
-    val shift = (index << (width.pad(3) + 3.U))(5, 0)
-    val mask  = MuxLookup(width, "hffffffffffffffff".U(64.W))(
+    val shift = (index << (width.pad(3) + 3.U))(p.wordOffsetBits - 1, 0)
+    val mask  = MuxLookup(width, Fill(p.wordBits, 1.U(1.W)))(
       Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
     )
-    (word >> shift) & mask
+    ((word >> shift) & mask)(p.eLen - 1, 0)
   }
 
-  def maskElement(word: UInt, index: UInt): Bool = (word >> index(5, 0))(0)
+  def maskElement(word: UInt, index: UInt): Bool = (word >> index(p.wordOffsetBits - 1, 0))(0)
 
   def wordAddress(
     register: UInt,
@@ -167,7 +167,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     val shift   = Mux(maskBit, index, index << (width.pad(3) + 3.U))
     val address = Mux(maskBit, register, register + (shift >> log2Ceil(p.vLen)))(4, 0)
     val within  = shift.pad(log2Ceil(p.vLen))(log2Ceil(p.vLen) - 1, 0)
-    address * wordsPerRegister.U + (within >> 6)
+    address * wordsPerRegister.U + (within >> p.wordOffsetBits)
   }
 
   def groupLegal(register: UInt, width: UInt): Bool = {
@@ -228,15 +228,15 @@ class VectorCore(val b: GlobalConfig) extends Module {
     val within    = bitOffset.pad(log2Ceil(p.vLen))(log2Ceil(p.vLen) - 1, 0)
     val mask      = Mux(
       maskBit,
-      1.U(64.W),
-      MuxLookup(width, "hffffffffffffffff".U(64.W))(
+      1.U(p.wordBits.W),
+      MuxLookup(width, Fill(p.wordBits, 1.U(1.W)))(
         Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
       )
     )
     writes(lane).valid := true.B
     writes(lane).address := wordAddress(rd, index, width, maskBit)
-    writes(lane).mask    := (mask << within(5, 0))(63, 0)
-    writes(lane).data    := (data << within(5, 0))(63, 0)
+    writes(lane).mask    := (mask << within(p.wordOffsetBits - 1, 0))(p.wordBits - 1, 0)
+    writes(lane).data    := (data << within(p.wordOffsetBits - 1, 0))(p.wordBits - 1, 0)
   }
 
   def finish(
@@ -305,12 +305,12 @@ class VectorCore(val b: GlobalConfig) extends Module {
   }
 
   val instructionLegal = Wire(Bool())
-  val alu:  Seq[Instance[IALU]] = Seq.fill(p.laneNumber)(Instantiate(new IALU))
-  val falu: Seq[Instance[FALU]] = Seq.fill(p.laneNumber)(Instantiate(new FALU))
-  val laneA        = Wire(Vec(p.laneNumber, UInt(64.W)))
-  val laneB        = Wire(Vec(p.laneNumber, UInt(64.W)))
+  val alu:  Seq[Instance[IALU]] = Seq.fill(p.laneNumber)(Instantiate(new IALU(p.eLen)))
+  val falu: Seq[Instance[FALU]] = Seq.fill(p.laneNumber)(Instantiate(new FALU(p.eLen)))
+  val laneA        = Wire(Vec(p.laneNumber, UInt(p.wordBits.W)))
+  val laneB        = Wire(Vec(p.laneNumber, UInt(p.wordBits.W)))
   val laneSelected = Wire(Vec(p.laneNumber, Bool()))
-  val laneValue    = Wire(Vec(p.laneNumber, UInt(64.W)))
+  val laneValue    = Wire(Vec(p.laneNumber, UInt(p.wordBits.W)))
   val laneFlags    = Wire(Vec(p.laneNumber, UInt(5.W)))
   val laneLegal    = Wire(Vec(p.laneNumber, Bool()))
   val fpComplete   = Wire(Vec(p.laneNumber, Bool()))
@@ -322,7 +322,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
 
   val operandReads = (0 until readPortCount).map { port =>
     val index          = base + port.U
-    val scalar         = Mux(kind === 3.U, Cat(Fill(59, rs1(4)), rs1), Cat(Fill(32, scalar1(31)), scalar1))
+    val scalar         = Mux(kind === 3.U, Cat(Fill(59, rs1(4)), rs1), scalar1)
     val floatingScalar = Mux(sew === 2.U && !floatScalar(63, 32).andR, "h7fc00000".U, floatScalar)
     val b              =
       Mux(
@@ -366,7 +366,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
       Seq(
         0.U -> wordAddress(0.U, index, sew, true.B),
         1.U -> wordAddress(rs1, index, Mux(gather && op === 14.U, 1.U, sew), maskLogical),
-        2.U -> Mux(permuteRead, shift >> 6, wordAddress(rs2, sourceIndex, sourceWidth, maskSource)),
+        2.U -> Mux(permuteRead, shift >> p.wordOffsetBits, wordAddress(rs2, sourceIndex, sourceWidth, maskSource)),
         3.U -> wordAddress(rd, index, Mux(fp, sew, destinationSew))
       )
     )
@@ -381,7 +381,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
       is(2.U)(sourceWords      := registers.io.readResult.bits)
       is(3.U)(destinationWords := registers.io.readResult.bits)
       is(4.U) {
-        accumulator := registers.io.readResult.bits(0) & MuxLookup(sew, "hffffffffffffffff".U(64.W))(
+        accumulator := registers.io.readResult.bits(0) & MuxLookup(sew, Fill(p.eLen, 1.U(1.W)))(
           Seq(0.U -> 255.U, 1.U -> 65535.U, 2.U -> "hffffffff".U)
         )
         firstBatch  := false.B
@@ -398,7 +398,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     val scalar         = Mux(
       kind === 3.U,
       Cat(Fill(59, rs1(4)), rs1),
-      Cat(Fill(32, scalar1(31)), scalar1)
+      scalar1
     )
     val floatingScalar =
       Mux(sew === 2.U && !floatScalar(63, 32).andR, "h7fc00000".U, floatScalar)
@@ -543,38 +543,34 @@ class VectorCore(val b: GlobalConfig) extends Module {
     .map(n => op === n.U)
     .reduce(_ || _)
 
-  val ordinaryLegal = !vtype(31) && sourceSew <= (if (p.eLen == 64) 3.U
-                                                  else
-                                                    2.U) && destinationSew <= 3.U &&
-    destinationSew <= (if (p.eLen == 64) 3.U
-                       else
-                         2.U) && destinationGroupLegal && sourceGroupLegal && operandGroupLegal &&
-    (!(intWide || floatWide || intNarrow || floatNarrow || extension) ||
-      overlapLegal(rd, destinationSew, rs2, sourceSew) &&
-      (!vectorOperand || op === 18.U || overlapLegal(
-        rd,
-        destinationSew,
-        rs1,
-        sew
-      ))) &&
-    (vm || rd =/= 0.U || compare || maskLogical || population || first || reduction) &&
-    (!merge || !vm || rs2 === 0.U) && (!maskLogical || vm) &&
-    (!carryOperation || carryMask || !vm) &&
-    (!(reduction || population || first) || vstart === 0.U) &&
-    (!fp || sew >= 2.U && fpOperationLegal && io.roundingMode <= 4.U &&
-      (scalarMoveOut || scalarMoveIn || merge || falu(0).io.legal) &&
-      (op =/= 16.U || scalarMoveOut || scalarMoveIn) &&
-      (op =/= 18.U && op =/= 19.U || kind === 1.U) && (!merge || kind === 5.U)) &&
-    (!integer || aluLegal)
+  val ordinaryLegal =
+    !vtype(
+      63
+    ) && sourceSew <= p.maxSew.U && destinationSew <= p.maxSew.U && destinationGroupLegal && sourceGroupLegal && operandGroupLegal &&
+      (!(intWide || floatWide || intNarrow || floatNarrow || extension) ||
+        overlapLegal(rd, destinationSew, rs2, sourceSew) &&
+        (!vectorOperand || op === 18.U || overlapLegal(
+          rd,
+          destinationSew,
+          rs1,
+          sew
+        ))) &&
+      (vm || rd =/= 0.U || compare || maskLogical || population || first || reduction) &&
+      (!merge || !vm || rs2 === 0.U) && (!maskLogical || vm) &&
+      (!carryOperation || carryMask || !vm) &&
+      (!(reduction || population || first) || vstart === 0.U) &&
+      (!fp || sew >= 2.U && fpOperationLegal && io.roundingMode <= 4.U &&
+        (scalarMoveOut || scalarMoveIn || merge || falu(0).io.legal) &&
+        (op =/= 16.U || scalarMoveOut || scalarMoveIn) &&
+        (op =/= 18.U && op =/= 19.U || kind === 1.U) && (!merge || kind === 5.U)) &&
+      (!integer || aluLegal)
 
   val wholeMoveLegal = vm && vstart === 0.U && Seq(0, 1, 3, 7)
     .map(n => rs1 === n.U)
     .reduce(_ || _) &&
     (rd & rs1) === 0.U && (rs2 & rs1) === 0.U && rd +& rs1 < 32.U && rs2 +& rs1 < 32.U
 
-  val memoryLegal = memWidth <= (if (p.eLen == 64) 3.U
-                                 else 2.U) && memSew <= (if (p.eLen == 64) 3.U
-                                                         else 2.U) && Seq(
+  val memoryLegal = memWidth <= p.maxSew.U && memSew <= p.maxSew.U && Seq(
     0,
     5,
     6,
@@ -589,7 +585,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
           31,
           29
         ) < 32.U && (!store || memWidth === 0.U),
-      !vtype(31) && instruction(
+      !vtype(63) && instruction(
         31,
         29
       ) === 0.U && (memMode =/= 0.U || rs2 === 0.U) &&
@@ -608,7 +604,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
   instructionLegal := legal
 
   val required  = Wire(Vec(p.memoryPorts, Bool()))
-  val addresses = Wire(Vec(p.memoryPorts, UInt(32.W)))
+  val addresses = Wire(Vec(p.memoryPorts, UInt(64.W)))
   val canceled  = Wire(Vec(p.memoryPorts, Bool()))
   for (port <- 0 until p.memoryPorts) {
     val index = base + port.U
@@ -620,7 +616,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     ))
     addresses(port) := scalar1 + Mux(
       indexed && !wholeMemory,
-      operandReads(port)._1(31, 0),
+      operandReads(port)._1,
       Mux(memMode === 2.U, index * scalar2, index << memSew)
     )
     val earlierFailure = (0 until port)
@@ -691,9 +687,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
       val requestedSew  = requested(5, 3)
       val requestedLmul = requested(2, 0)
       val typeLegal     =
-        requested(31, 8) === 0.U && requestedSew <= (if (p.eLen == 64) 3.U
-                                                     else
-                                                       2.U) && requestedLmul =/= 4.U &&
+        requested(63, 8) === 0.U && requestedSew <= p.maxSew.U && requestedLmul =/= 4.U &&
           (!requestedLmul(
             2
           ) || (8.U << requestedSew) <= (p.eLen.U >> (8.U - requestedLmul)))
@@ -713,7 +707,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
         )
         val length = Mux(typeLegal, Mux(avl < newMaximum, avl, newMaximum), 0.U)
         vl                 := length
-        vtype              := Mux(typeLegal, requested, "h80000000".U)
+        vtype              := Mux(typeLegal, requested, "h8000000000000000".U)
         result.scalarWrite := rd =/= 0.U
         result.scalarData  := length
         finish()
@@ -731,10 +725,11 @@ class VectorCore(val b: GlobalConfig) extends Module {
         )
       }.otherwise {
         result.scalarWrite := rd =/= 0.U
-        result.scalarData  := MuxLookup(sew, value(31, 0))(
+        result.scalarData  := MuxLookup(sew, value)(
           Seq(
-            0.U -> Cat(Fill(24, value(7)), value(7, 0)),
-            1.U -> Cat(Fill(16, value(15)), value(15, 0))
+            0.U -> Cat(Fill(56, value(7)), value(7, 0)),
+            1.U -> Cat(Fill(48, value(15)), value(15, 0)),
+            2.U -> Cat(Fill(32, value(31)), value(31, 0))
           )
         )
       }
@@ -750,14 +745,14 @@ class VectorCore(val b: GlobalConfig) extends Module {
           0,
           0.U,
           sew,
-          Mux(fp, scalar, Cat(Fill(32, scalar1(31)), scalar1))
+          Mux(fp, scalar, scalar1)
         )
       }
       finish()
     }.elsewhen(base >= limit) {
       when(population || first) {
         result.scalarWrite := rd =/= 0.U
-        result.scalarData  := Mux(first, "hffffffff".U, count)
+        result.scalarData  := Mux(first, "hffffffffffffffff".U, count)
       }
       finish()
     }.elsewhen(memory) {
@@ -811,25 +806,34 @@ class VectorCore(val b: GlobalConfig) extends Module {
         state     := capture
       }
     }.elsewhen(intReduction) {
-      var reduced: UInt = accumulator
-      for (lane <- 0 until p.laneNumber) {
-        val a     = laneA(lane)
-        val width = 8.U(7.W) << sew
-        val sa    = (a << (64.U - width))(63, 0).asSInt
-        val sb    = (reduced << (64.U - width))(63, 0).asSInt
-        val value = MuxLookup(op, reduced + a)(
-          Seq(
-            1.U -> (reduced & a),
-            2.U -> (reduced | a),
-            3.U -> (reduced ^ a),
-            4.U -> Mux(a < reduced, a, reduced),
-            5.U -> Mux(sa < sb, a, reduced),
-            6.U -> Mux(a > reduced, a, reduced),
-            7.U -> Mux(sa > sb, a, reduced)
-          )
-        )
-        reduced = Mux(laneSelected(lane), value, reduced)
+      // All integer reductions are associative at the destination width. Keep
+      // the original leaf order and ignore masked lanes instead of serializing them.
+      def combine(left: (Bool, UInt), right: (Bool, UInt)): (Bool, UInt) = {
+        val (leftValid, a)  = left
+        val (rightValid, b) = right
+        val width           = 8.U(7.W) << sew
+        val sa              = (a << (p.eLen.U - width))(p.eLen - 1, 0).asSInt
+        val sb              = (b << (p.eLen.U - width))(p.eLen - 1, 0).asSInt
+        val value           = MuxLookup(op, a + b)(Seq(
+          1.U -> (a & b),
+          2.U -> (a | b),
+          3.U -> (a ^ b),
+          4.U -> Mux(b < a, b, a),
+          5.U -> Mux(sb < sa, b, a),
+          6.U -> Mux(b > a, b, a),
+          7.U -> Mux(sb > sa, b, a)
+        ))
+        (leftValid || rightValid, Mux(!leftValid, b, Mux(!rightValid, a, value)))
       }
+      def tree(values: Seq[(Bool, UInt)]): (Bool, UInt) = {
+        if (values.size == 1) values.head
+        else {
+          val (left, right) = values.splitAt(values.size / 2)
+          combine(tree(left), tree(right))
+        }
+      }
+      val reduced = tree(Seq(true.B -> accumulator) ++
+        (0 until p.laneNumber).map(lane => laneSelected(lane) -> laneA(lane)))._2
       accumulator := reduced
       when(base + p.laneNumber.U >= vl)(writeElement(0, 0.U, sew, reduced))
       nextBatch(p.laneNumber.U)
@@ -903,7 +907,7 @@ class VectorCore(val b: GlobalConfig) extends Module {
     readPhase            := 0.U
     resultValid          := false.B
     vl                   := 0.U
-    vtype                := "h80000000".U
+    vtype                := "h8000000000000000".U
     vstart               := 0.U
     divBatchValid        := false.B
     divStarted.foreach(_ := false.B)

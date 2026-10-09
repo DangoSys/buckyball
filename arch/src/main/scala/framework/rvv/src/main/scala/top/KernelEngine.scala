@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
-  private val p = b.rvv
+  val p = b.rvv
   require(p.enable, "RVV must be explicitly enabled")
 
   @public
@@ -29,7 +29,7 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   val imageBytes        = Reg(Vec(2, UInt(32.W)))
   val imageConstants    = Reg(Vec(2, UInt(32.W)))
   val buffer            = Reg(Bool())
-  val descriptor        = Reg(Vec(12, UInt(32.W)))
+  val descriptor        = Reg(Vec(12, UInt(64.W)))
   val word              = Reg(UInt(4.W))
   val terminalSeen      = RegInit(false.B)
   val terminalFailed    = RegInit(false.B)
@@ -37,19 +37,22 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   val result            = RegInit(0.U.asTypeOf(new KernelCompletion))
 
   io.cmdReq.ready                                  := state === idle
-  io.cmdResp.valid                                 := state === completed && (command.cmd.funct7 =/= 12.U || result.fault || terminalSeen)
+  io.cmdResp.valid                                 := state === completed && (command.cmd.funct7 =/= 44.U || result.fault || terminalSeen)
   io.cmdResp.bits.rob_id                           := command.rob_id
-  io.cmdResp.bits.write_bank                       := Mux(command.cmd.funct7 === 15.U && !result.fault, descriptor(3)(31, 16), 0.U)
+  io.cmdResp.bits.write_bank                       := Mux(command.cmd.funct7 === 79.U && !result.fault, command.cmd.rs1(29, 20), 0.U)
   io.result                                        := result
   io.status.idle                                   := state === idle
   io.status.running                                := state =/= idle
   when(state =/= idle && io.channelReady)(channels := true.B)
 
-  loader.io.start.valid       := io.cmdReq.fire && io.cmdReq.bits.cmd.funct7 === 12.U && !io.cmdReq.bits.cmd.rs1(63, 33).orR
-  loader.io.start.bits.buffer := io.cmdReq.bits.cmd.rs1(32)
-  loader.io.start.bits.bytes  := io.cmdReq.bits.cmd.rs1(31, 0)
+  val loadBank      = io.cmdReq.bits.cmd.rs1(29, 20)
+  val loadBankValid = loadBank >= b.memDomain.virtualBankCount.U && loadBank < (b.memDomain.virtualBankCount + 2).U
+  val loadBuffer    = loadBank - b.memDomain.virtualBankCount.U
+  loader.io.start.valid       := io.cmdReq.fire && io.cmdReq.bits.cmd.funct7 === 44.U && loadBankValid
+  loader.io.start.bits.buffer := loadBuffer(0)
+  loader.io.start.bits.bytes  := io.cmdReq.bits.cmd.rs1(63, 30)
   loader.io.image <> io.image
-  io.imageTerminal.ready      := state =/= idle && command.cmd.funct7 === 12.U && !terminalSeen
+  io.imageTerminal.ready      := state =/= idle && command.cmd.funct7 === 44.U && !terminalSeen
   val terminalError = io.imageTerminal.fire && io.imageTerminal.bits.error =/= 0.U
   loader.io.abort                  := terminalError
   when(io.imageTerminal.fire) {
@@ -61,16 +64,18 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
       when(!result.fault) {
         result.fault := true.B
         result.cause := 5.U
-        result.tval  := io.imageTerminal.bits.address(31, 0)
+        result.tval  := io.imageTerminal.bits.address
       }
     }
   }
   loader.io.done.ready             := state === loading
+  io.ballRequest <> execution.io.ballRequest
+  execution.io.ballResponse <> io.ballResponse
   execution.io.program <> loader.io.program
   execution.io.launch.valid        := state === launch
   execution.io.launch.bits.iBuffer := buffer
-  execution.io.launch.bits.entry   := descriptor(0)
-  execution.io.launch.bits.end     := descriptor(1)
+  execution.io.launch.bits.entry   := descriptor(0)(31, 0)
+  execution.io.launch.bits.end     := descriptor(1)(31, 0)
   execution.io.launch.bits.stack   := descriptor(2)
   for (i <- 0 until 8) (execution.io.launch.bits.args(i) := descriptor(i + 3))
   execution.io.done.ready := state === executing
@@ -81,9 +86,13 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   for (i <- 0 until p.memoryPorts) {
     io.bankRead(i) <> ports(i).io.read
     io.bankWrite(i) <> ports(i).io.write
-    ports(i).io.robId  := command.rob_id
-    ports(i).io.ballId := command.cmd.bid
-    val internal = execution.io.memoryRequest(i).bits.address(31)
+    ports(i).io.robId       := command.rob_id
+    ports(i).io.readBank    := command.cmd.rs1(9, 0)
+    ports(i).io.writeBank   := command.cmd.rs1(29, 20)
+    ports(i).io.readGroups  := command.read_groups
+    ports(i).io.writeGroups := command.write_groups
+    val address  = execution.io.memoryRequest(i).bits.address
+    val internal = address >= "h40000000".U && address < "h40002000".U
     ports(i).io.request.valid            := state === executing && channels && !internal && execution.io.memoryRequest(i).valid
     ports(i).io.request.bits             := execution.io.memoryRequest(i).bits
     local.io.request(i).valid            := state === executing && internal && execution.io.memoryRequest(i).valid
@@ -114,11 +123,11 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   }
   when(state === descriptorSend) {
     ports(0).io.request.valid        := channels
-    ports(0).io.request.bits.address := command.cmd.rs1(31, 0) + word * 4.U
+    ports(0).io.request.bits.address := (command.read_groups.pad(64) << 32) + command.cmd.rs2 + word * 8.U
     ports(0).io.request.bits.write   := false.B
     ports(0).io.request.bits.data    := 0.U
-    ports(0).io.request.bits.mask    := 15.U
-    ports(0).io.request.bits.size    := 2.U
+    ports(0).io.request.bits.mask    := 255.U
+    ports(0).io.request.bits.size    := 3.U
   }
   when(state === descriptorWait)(ports(0).io.response.ready := true.B)
 
@@ -130,35 +139,52 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
     terminalFailed    := false.B
     terminalCancelled := false.B
     switch(io.cmdReq.bits.cmd.funct7) {
-      is(12.U) {
-        buffer                                 := io.cmdReq.bits.cmd.rs1(32)
-        validImage(io.cmdReq.bits.cmd.rs1(32)) := false.B
-        state                                  := loading
-        when(io.cmdReq.bits.cmd.rs1(63, 33).orR) {
+      is(44.U) {
+        buffer                    := loadBuffer(0)
+        validImage(loadBuffer(0)) := false.B
+        state                     := loading
+        when(!loadBankValid || io.cmdReq.bits.cmd.rs1(19, 0).orR) {
           result.fault := true.B
           result.cause := 2.U
-          result.tval  := io.cmdReq.bits.cmd.rs1(31, 0)
+          result.tval  := io.cmdReq.bits.cmd.rs1
           state        := completed
         }
       }
-      is(15.U) {
-        buffer := io.cmdReq.bits.cmd.rs2(0)
+      is(79.U) {
+        val program      = io.cmdReq.bits.cmd.rs1(19, 10)
+        val programValid = program >= b.memDomain.virtualBankCount.U && program < (b.memDomain.virtualBankCount + 2).U
+        val slot         = program - b.memDomain.virtualBankCount.U
+        buffer := slot(0)
         word   := 0.U
         state  := descriptorSend
-        when(!validImage(io.cmdReq.bits.cmd.rs2(0))) {
+        when(!programValid || !validImage(
+          slot(0)
+        ) || io.cmdReq.bits.read_groups === 0.U || io.cmdReq.bits.write_groups === 0.U ||
+          io.cmdReq.bits.cmd.rs1(63, 30).orR || io.cmdReq.bits.cmd.rs1(9, 0) === io.cmdReq.bits.cmd.rs1(29, 20) ||
+          io.cmdReq.bits.cmd.rs2(63, 32).orR || (io.cmdReq.bits.cmd.rs2(
+            31,
+            0
+          ) +& 96.U) > (b.memDomain.bankEntries * (b.memDomain.bankWidth / 8)).U) {
           result.fault := true.B
           result.cause := 1.U
-          state        := completed
-        }.elsewhen(io.cmdReq.bits.cmd.rs1(63, 32).orR || io.cmdReq.bits.cmd.rs2(63, 1).orR ||
-          (io.cmdReq.bits.cmd.rs1(15, 0) +& 48.U) > (b.memDomain.bankEntries * (b.memDomain.bankWidth / 8)).U) {
-          result.fault := true.B
-          result.cause := 5.U
-          result.tval  := io.cmdReq.bits.cmd.rs1(31, 0)
+          result.tval  := io.cmdReq.bits.cmd.rs1
           state        := completed
         }
       }
+      is(32.U) {
+        val program = io.cmdReq.bits.cmd.rs1(9, 0)
+        val slot    = program - b.memDomain.virtualBankCount.U
+        when(program < b.memDomain.virtualBankCount.U || program >= (b.memDomain.virtualBankCount + 2).U ||
+          io.cmdReq.bits.cmd.rs1(63, 10).orR || io.cmdReq.bits.cmd.rs2.orR) {
+          result.fault := true.B
+          result.cause := 2.U
+          result.tval  := io.cmdReq.bits.cmd.rs1
+        }.otherwise(validImage(slot(0)) := false.B)
+        state := completed
+      }
+
     }
-    when(io.cmdReq.bits.cmd.funct7 =/= 12.U && io.cmdReq.bits.cmd.funct7 =/= 15.U) {
+    when(io.cmdReq.bits.cmd.funct7 =/= 44.U && io.cmdReq.bits.cmd.funct7 =/= 79.U && io.cmdReq.bits.cmd.funct7 =/= 32.U) {
       result.fault := true.B
       result.cause := 2.U
       result.tval  := io.cmdReq.bits.cmd.funct7
@@ -183,10 +209,10 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
     when(ports(0).io.response.bits.error) {
       result.fault := true.B
       result.cause := 5.U
-      result.tval  := command.cmd.rs1(31, 0) + word * 4.U
+      result.tval  := (command.read_groups.pad(64) << 32) + command.cmd.rs2 + word * 8.U
       state        := completed
     }.otherwise {
-      descriptor(word) := ports(0).io.response.bits.data(31, 0)
+      descriptor(word) := ports(0).io.response.bits.data
       word             := word + 1.U
       state            := Mux(word === 11.U, launch, descriptorSend)
     }
@@ -194,7 +220,7 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
   when(state === launch) {
     when(descriptor(0) =/= imageEntry(buffer) || descriptor(1) =/= imageBytes(buffer) || descriptor(
       11
-    ) =/= 0.U || descriptor(2) =/= "h80002000".U) {
+    ) =/= 0.U || descriptor(2) =/= "h40002000".U) {
       execution.io.launch.valid := false.B
       result.fault              := true.B
       result.cause              := 1.U
@@ -207,7 +233,7 @@ class KernelEngine(val b: GlobalConfig) extends Module with HasBallStatus {
     state  := completed
   }
   when(io.cmdResp.fire) {
-    when(command.cmd.funct7 === 12.U && !result.fault && terminalSeen && !terminalFailed) {
+    when(command.cmd.funct7 === 44.U && !result.fault && terminalSeen && !terminalFailed) {
       validImage(buffer) := true.B
     }
     state := idle

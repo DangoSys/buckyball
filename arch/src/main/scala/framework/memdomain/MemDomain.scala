@@ -33,8 +33,6 @@ class MemDomain(val b: GlobalConfig) extends Module {
 // Command Channel
     val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     val global_complete_o = Decoupled(new GlobalSchedComplete(b))
-    val kernel_command    = if (b.rvv.enable) Some(Decoupled(new GlobalSchedIssue(b))) else None
-    val kernel_complete   = if (b.rvv.enable) Some(Flipped(Decoupled(new GlobalSchedComplete(b)))) else None
     val busy              = Output(Bool())
     val inst_ids          = Input(Vec(b.frontend.rob_entries, UInt(64.W)))
     val footprints        = Output(Vec(3, new Footprint(b)))
@@ -115,10 +113,6 @@ class MemDomain(val b: GlobalConfig) extends Module {
 //===----------------------------------------------------------------------===//
   frontend.io.global_issue_i <> io.global_issue_i
   frontend.io.global_complete_o <> io.global_complete_o
-  if (b.rvv.enable) {
-    io.kernel_command.get <> frontend.io.kernel_command.get
-    frontend.io.kernel_complete.get <> io.kernel_complete.get
-  }
   io.mvover <> frontend.io.mvover
   io.busy       := frontend.io.busy
   io.footprints := frontend.io.footprints

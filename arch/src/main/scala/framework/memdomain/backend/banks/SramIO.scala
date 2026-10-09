@@ -8,7 +8,7 @@ import framework.top.GlobalConfig
  * Generic SRAM interface definitions
  */
 class SramReadReq(val b: GlobalConfig) extends Bundle {
-  val addr = UInt(log2Ceil(b.memDomain.bankEntries).W)
+  val addr = UInt(16.W)
 }
 
 class SramReadResp(val b: GlobalConfig) extends Bundle {
@@ -21,7 +21,7 @@ class SramReadIO(val b: GlobalConfig) extends Bundle {
 }
 
 class SramWriteReq(val b: GlobalConfig) extends Bundle {
-  val addr = UInt(log2Ceil(b.memDomain.bankEntries).W)
+  val addr = UInt(16.W)
   val mask = Vec(b.memDomain.bankMaskLen, Bool())
   val data = UInt(b.memDomain.bankWidth.W)
 }

@@ -2,6 +2,8 @@ package sims.verilator
 
 import _root_.circt.stage.ChiselStage
 import sims.soc.SystemTarget
+import framework.system.configloader.ChipLoader
+import java.nio.file.{Files, Paths}
 
 //===----------------------------------------------------------------------===//
 object Elaborate extends App {
@@ -28,6 +30,7 @@ object Elaborate extends App {
     }
 
   val rawFirtoolOpts = args.drop(1)
+  val mainOnly       = rawFirtoolOpts.contains("--main-only")
 
   val outDir = rawFirtoolOpts.collectFirst {
     case opt if opt.startsWith("-o=") => opt.stripPrefix("-o=")
@@ -36,12 +39,18 @@ object Elaborate extends App {
   }
 
   val firtoolOpts = rawFirtoolOpts.filterNot { opt =>
-    opt == "--split-verilog" || opt == "--difftest" || opt.startsWith("-o=")
+    opt == "--split-verilog" || opt == "--difftest" || opt == "--main-only" || opt.startsWith("-o=")
   }
 
   ChiselStage.emitSystemVerilogFile(
-    new SystemHarness(target, diffTest = rawFirtoolOpts.contains("--difftest")),
+    new SystemHarness(target, diffTest = rawFirtoolOpts.contains("--difftest"), mainOnly = mainOnly),
     firtoolOpts = firtoolOpts,
     args = Array("--target-dir", outDir, "--split-verilog")
   )
+  val hierarchy = Paths.get(outDir).resolve("hierarchy.vlt")
+  if (!mainOnly && ChipLoader.load(target.pb).tiles.exists(!_.main)) {
+    Files.writeString(hierarchy, "`verilator_config\nhier_block -module \"ComputeTile\"\n")
+  } else {
+    Files.deleteIfExists(hierarchy)
+  }
 }

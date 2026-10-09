@@ -16,9 +16,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
     b.memDomain.bankWidth == 128 && b.memDomain.dma_buswidth == 128,
     "MemStorer requires 128-bit bank and DMA beats"
   )
-  private val lineBytes = b.memDomain.bankWidth / 8
-  private val lgLine    = log2Ceil(lineBytes)
-  private val robBits   = log2Up(b.frontend.rob_entries)
+  val lineBytes = b.memDomain.bankWidth / 8
+  val lgLine    = log2Ceil(lineBytes)
+  val robBits   = log2Up(b.frontend.rob_entries)
 
   @public
   val io = IO(new Bundle {
@@ -56,6 +56,9 @@ class MemStorer(val b: GlobalConfig) extends Module {
   val readsFinished                                                                                                  = RegInit(false.B)
   val finalDescriptor                                                                                                = RegInit(false.B)
 
+  val selectedGroup = RegInit(false.B)
+  val groupBase     = RegInit(0.U(5.W))
+
   // Each accepted bank read reserves a data slot until its beat is sent.
   // Ordered last tags include requests whose synchronous response has not yet arrived.
   val lastTags = Module(new Queue(Bool(), 2, flow = true))
@@ -75,7 +78,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
     else false.B
 
   val lengthOverflow = if (descriptorBytes.getWidth > 32) (descriptorBytes >> 32).orR else false.B
-  val storageRows    = Mux(shared, b.memDomain.sharedEntries.U, b.memDomain.bankEntries.U)
+  val storageRows    = Mux(shared, b.memDomain.sharedBankEntries.U, b.memDomain.bankEntries.U)
 
   val shapeError = iterations === 0.U || iterations > storageRows ||
     groups === 0.U || groups > (BigInt(1) << b.memDomain.groupIdWidth).U || stride === 0.U ||
@@ -90,6 +93,8 @@ class MemStorer(val b: GlobalConfig) extends Module {
     subRob         := io.cmdReq.bits.sub_rob_id
     iterations     := io.cmdReq.bits.cmd.iter
     bank           := io.cmdReq.bits.cmd.bank_id
+    selectedGroup  := io.cmdReq.bits.cmd.special(63)
+    groupBase      := Mux(io.cmdReq.bits.cmd.special(63), io.cmdReq.bits.cmd.special(62, 58), 0.U)
     stride         := io.cmdReq.bits.cmd.special(57, 39)
     shared         := io.cmdReq.bits.cmd.is_shared
     baseVA         := io.cmdReq.bits.cmd.mem_addr
@@ -106,7 +111,13 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.query_is_shared          := shared && io.query_valid
   when(state === setup)(state := query)
   when(state === query)(state := queryWait)
-  when(state === queryWait) { groups := io.query_group_count; state := prepare }
+  when(state === queryWait) {
+    when(selectedGroup) {
+      assert(groupBase < io.query_group_count, "MemStorer selected group is outside bank allocation")
+    }
+    groups := Mux(selectedGroup, 1.U, io.query_group_count)
+    state  := prepare
+  }
   when(state === prepare) {
     footprintValid    := true.B
     when(shapeError) {
@@ -147,7 +158,7 @@ class MemStorer(val b: GlobalConfig) extends Module {
   io.bankRead.rob_id           := rob
   io.bankRead.bank_id          := bank
   io.bankRead.ball_id          := 0.U
-  io.bankRead.group_id         := readGroup
+  io.bankRead.group_id         := groupBase + readGroup
   io.bankRead.io.req.bits.addr := readRow
   io.is_shared                 := shared
   io.bankRead.io.req.valid     := state === stream && !readsFinished &&

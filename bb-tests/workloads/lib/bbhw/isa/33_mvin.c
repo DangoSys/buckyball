@@ -12,4 +12,13 @@
         (FIELD(mem_addr, 0, 38) | FIELD(stride, 39, 57)), BB_MVIN_FUNC7);      \
   } while (0)
 
+static inline void bb_mvin_group(uintptr_t address, uint32_t bank,
+                                 uint32_t group, uint64_t depth,
+                                 uint64_t stride) {
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK2(bank) | BB_ITER(depth),
+                            FIELD(address, 0, 38) | FIELD(stride, 39, 57) |
+                                FIELD(group, 58, 62) | (UINT64_C(1) << 63),
+                            BB_MVIN_FUNC7);
+}
+
 #endif // _BB_MVIN_H_

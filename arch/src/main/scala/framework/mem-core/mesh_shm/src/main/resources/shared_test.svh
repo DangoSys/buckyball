@@ -224,8 +224,8 @@ class protocol_test extends ip_test;
       end
     end
     access (0, 12, 0, 0, 0, 250, 3);
-    access (0, 0, 2047, 1, '1, 251, 2);
-    access (0, 0, 2047, 0, 0, 252, 2);
+    access (0, 0, 1023, 1, '1, 251, 2);
+    access (0, 0, 1023, 0, 0, 252, 2);
     concurrent_reads();
     outstanding_reads();
     reset_read();
@@ -233,8 +233,9 @@ class protocol_test extends ip_test;
     move_rows(4, 0, 2040, 1, 15, 2040, 8, 0);
     move_rows(3, 1, 0, 3, 8, 4, 4, 0);
     move_rows(250, 0, 0, 2, 0, 0, 1, 1);
-    move_rows(1, 0, 2040, 2, 0, 0, 9, 1);
-    move_rows(1, 0, 0, 2, 0, 2040, 9, 1);
+    move_rows(1, 0, 65530, 2, 0, 0, 9, 1);
+    move_rows(1, 0, 0, 2, 0, 65530, 9, 1);
+    move_rows(1, 0, 2048, 2, 0, 0, 1, 1);
     move_rows(1, 0, 0, 2, 0, 0, 0, 1);
     move_rows(1, 16, 0, 2, 0, 0, 1, 1);
     move_rows(1, 1, 3, 2, 16, 0, 1, 1);

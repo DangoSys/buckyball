@@ -4,17 +4,15 @@ import chisel3._
 import chisel3.reflect.DataMirror
 import java.nio.file.{Files, Path}
 import framework.system.memory.Memory
-import memcore.memory.uncached_ram.{Params => RamParams}
 import memcore.memory.ddr.{Params => DdrParams}
 
 object EmitMemory {
 
   def apply(output: Path, firtoolOptions: Array[String]): Unit = {
-    val ram = RamParams()
-    val ddr = DdrParams(line = ram.line, clients = ram.ports, slotsPerClient = ram.slotsPerPort)
+    val ddr = DdrParams()
     var interface: Data = null
     _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-      { val m = new Memory(ram, ddr); interface = m.io; m },
+      { val m = new Memory(ddr, dmaMasters = 1); interface = m.io; m },
       args = Array("--target-dir", output.resolve("Memory").toString, "--split-verilog"),
       firtoolOpts = firtoolOptions
     )
@@ -45,7 +43,7 @@ object EmitMemory {
     Files.writeString(
       output.resolve("memory_system_clocking.svh"),
       "clocking sample @(posedge clock);\ndefault input #1step;\ninput reset;\n" +
-        "input req_ready,rsp_valid,rsp_tag,rsp_data,rsp_error,device_valid,device_tag,device_resp_ready;\n" +
+        "" +
         "input line_ready,reply_valid,reply_id,reply_data,reply_error;\n" +
         fields.map {
           case (name, _) => s"input $name;"

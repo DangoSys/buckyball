@@ -22,14 +22,14 @@ case class RnfParams(
 
 @instantiable
 class BankedChiCache(config: RnfParams) extends Module {
-  val p                    = config.chi
-  private val nodeId       = config.nodeId
-  private val cacheLines   = config.cacheLines
-  private val banks        = config.banks
+  val p            = config.chi
+  val nodeId       = config.nodeId
+  val cacheLines   = config.cacheLines
+  val banks        = config.banks
   require(banks >= 1 && banks <= 256 && isPow2(banks))
   require(cacheLines >= 2 * banks && isPow2(cacheLines))
-  private val bankBits     = math.max(1, log2Ceil(banks))
-  private val linesPerBank = cacheLines / banks
+  val bankBits     = math.max(1, log2Ceil(banks))
+  val linesPerBank = cacheLines / banks
 
   @public
   val io = IO(new Bundle {

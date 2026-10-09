@@ -17,6 +17,12 @@ if(NOT TARGET mxfp8_pack)
   add_subdirectory(${BUCKYBALL_REPO_ROOT}/bb-tests/workloads/lib/bbsw/kernels/mxfp8
                    ${CMAKE_CURRENT_BINARY_DIR}/mxfp8)
 endif()
+if(NOT TARGET mxmm_kernels)
+  add_subdirectory(${BUCKYBALL_REPO_ROOT}/examples/balls/mxmm/workloads/kernels
+                   ${CMAKE_CURRENT_BINARY_DIR}/mxmm)
+endif()
+get_target_property(MXMM_IMAGE_DIR mxmm_kernels BINARY_DIR)
+set(MXMM_KERNEL_SOURCE ${BUCKYBALL_REPO_ROOT}/examples/balls/mxmm/workloads/kernels)
 file(STRINGS ${RUNTIME_PARAMS}/params.h ROWS_DEFINE REGEX "^#define BANK_LINES ")
 file(STRINGS ${RUNTIME_PARAMS}/params.h WIDTH_DEFINE REGEX "^#define BANK_WIDTH ")
 string(REGEX REPLACE ".* " "" BANK_ROWS "${ROWS_DEFINE}")
@@ -29,7 +35,7 @@ set(BARE_RVV_TARGET mxmm_quant_rvv_baremetal_${BUCKYBALL_MLIR_ACTIVE_TARGET})
 set(RVV_SOURCE ${BUCKYBALL_REPO_ROOT}/bb-tests/workloads/lib/bbsw/kernels/rvv)
 get_target_property(RVV_IMAGE_DIR rvv_images BINARY_DIR)
 set(BARE_RVV_FLAGS -O2 -march=rv64gc -mcmodel=medany -std=c++20
-  -I${RUNTIME_PARAMS} -I${RVV_IMAGE_DIR}
+  -I${RUNTIME_PARAMS} -I${RVV_IMAGE_DIR} -I${MXMM_IMAGE_DIR}
   -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include
   -I${BUCKYBALL_REPO_ROOT}/bb-tests/workloads/lib
   -I${BUCKYBALL_REPO_ROOT}/stack/compiler/thirdparty/buddy-mlir/llvm/mlir/include/mlir/ExecutionEngine)
@@ -37,9 +43,12 @@ add_custom_command(OUTPUT ${BARE_RVV_ARCHIVE}
   COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${RVV_SOURCE}/quant_dispatch.cpp -o quant_dispatch_bare.o
   COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${RVV_SOURCE}/../mxfp8/pack.cpp -o quant_pack_bare.o
   COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${RVV_IMAGE_DIR}/images.cpp -o quant_images_bare.o
-  COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${RVV_SOURCE}/pack_banks.cpp -o pack_banks_bare.o
-  COMMAND ${CMAKE_AR} rcs ${BARE_RVV_ARCHIVE} quant_dispatch_bare.o quant_pack_bare.o quant_images_bare.o pack_banks_bare.o
-  DEPENDS rvv-images ${RVV_SOURCE}/pack_banks.cpp ${RVV_SOURCE}/quant_dispatch.cpp ${RVV_SOURCE}/../mxfp8/pack.cpp
+  COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${MXMM_KERNEL_SOURCE}/pack_dispatch.cpp -o packmm_dispatch_bare.o
+  COMMAND ${ELF_CC} ${BARE_RVV_FLAGS} -c ${MXMM_KERNEL_SOURCE}/dispatch.cpp -o norm_window_dispatch_bare.o
+  COMMAND ${CMAKE_AR} rcs ${BARE_RVV_ARCHIVE} quant_dispatch_bare.o quant_pack_bare.o quant_images_bare.o packmm_dispatch_bare.o norm_window_dispatch_bare.o
+  DEPENDS rvv-images mxmm-images ${MXMM_KERNEL_SOURCE}/pack_dispatch.cpp
+          ${MXMM_KERNEL_SOURCE}/dispatch.cpp ${MXMM_KERNEL_SOURCE}/window.h
+          ${MXMM_KERNEL_SOURCE}/packmm.h ${RVV_SOURCE}/quant_dispatch.cpp ${RVV_SOURCE}/../mxfp8/pack.cpp
           ${RVV_SOURCE}/../mxfp8/quant.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} VERBATIM)
 add_custom_target(${BARE_RVV_TARGET}-build DEPENDS ${BARE_RVV_ARCHIVE})
@@ -53,7 +62,7 @@ add_buckyball_mlir_test(mxmm_fp32 TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET} PASSES
   -expand-strided-metadata -convert-linalg-to-loops -lower-buckyball
   -lower-affine -convert-scf-to-cf -convert-cf-to-llvm -convert-arith-to-llvm
   -convert-func-to-llvm -finalize-memref-to-llvm -reconcile-unrealized-casts
-  LIBRARIES rvv_kernels rvv_images BAREMETAL_LIBRARIES ${BARE_RVV_TARGET})
+  LIBRARIES rvv_kernels rvv_images mxmm_kernels BAREMETAL_LIBRARIES ${BARE_RVV_TARGET})
 
 set(QUANT_PASSES
   -canonicalize -cse -one-shot-bufferize=bufferize-function-boundaries

@@ -1422,13 +1422,13 @@ class RocketBB(
     def read(addr:         UInt): Bool = r(addr)
     def readBypassed(addr: UInt):      Bool  = _next(addr)
 
-    private val _r    = RegInit(0.U(n.W))
-    private val r     = if (zero) (_r >> 1 << 1) else _r
+    val _r            = RegInit(0.U(n.W))
+    val r             = if (zero) (_r >> 1 << 1) else _r
     private var _next = r
     private var ens   = false.B
-    private def mask(en: Bool, addr: UInt) = Mux(en, 1.U << addr, 0.U)
+    def mask(en: Bool, addr: UInt) = Mux(en, 1.U << addr, 0.U)
 
-    private def update(en: Bool, update: UInt) = {
+    def update(en: Bool, update: UInt) = {
       _next = update
       ens = ens || en
       when(ens)(_r := _next)
@@ -1440,8 +1440,8 @@ class RocketBB(
 
 class RegFile(n: Int, w: Int, zero: Boolean = false) {
   val rf = Reg(Vec(n, UInt(w.W)))
-  private def access(addr: UInt) = rf(~addr(log2Up(n) - 1, 0))
-  private val reads   = ArrayBuffer[(UInt, UInt)]()
+  def access(addr: UInt) = rf(~addr(log2Up(n) - 1, 0))
+  val reads           = ArrayBuffer[(UInt, UInt)]()
   private var canRead = true
 
   def read(addr: UInt) = {

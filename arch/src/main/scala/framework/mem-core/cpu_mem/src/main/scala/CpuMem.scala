@@ -32,13 +32,11 @@ class CpuMemoryResponse(p: CpuMemParams, lineBits: Int = 0) extends Bundle {
 }
 
 class UncachedRequest(p: CpuMemParams) extends Bundle {
-  val addr   = UInt(64.W)
-  val tag    = UInt(p.tagBits.W)
-  val size   = UInt(3.W)
-  val write  = Bool()
-  val data   = UInt(64.W)
-  val atomic = UInt(4.W)
-  val normal = Bool()
+  val addr  = UInt(64.W)
+  val tag   = UInt(p.tagBits.W)
+  val size  = UInt(3.W)
+  val write = Bool()
+  val data  = UInt(64.W)
 }
 
 class UncachedResponse(p: CpuMemParams) extends Bundle {
@@ -78,13 +76,15 @@ class CpuMem(p: CpuMemParams, lineBits: Int = 0) extends Module {
     assert(r.atomic <= CacheAtomic.SC.U, "CPU memory port does not accept Fence or unknown atomics")
     assert(r.atomic === CacheAtomic.None.U || (!r.write && r.size >= 2.U), "CPU atomic requires a 32 or 64 bit operand")
     val misaligned  = (r.addr & ((1.U(64.W) << r.size) - 1.U)).orR
-    val accessFault = r.addr(63, p.chi.addressBits).orR || (!r.normal && r.atomic =/= CacheAtomic.None.U)
-    command            := r
-    answer.tag         := r.tag
-    answer.data        := 0.U
-    answer.misaligned  := misaligned
-    answer.accessFault := !misaligned && accessFault
-    state              := Mux(misaligned || accessFault, respond, Mux(r.cacheable, issueCache, issueUncached))
+    val accessFault = r.addr(63, p.chi.addressBits).orR || (r.normal && !r.cacheable) ||
+      (!r.normal && (r.cacheable || r.atomic =/= CacheAtomic.None.U))
+    command                       := r
+    answer.tag                    := r.tag
+    answer.data                   := 0.U
+    if (lineBits > 0) answer.line := 0.U
+    answer.misaligned             := misaligned
+    answer.accessFault            := !misaligned && accessFault
+    state                         := Mux(misaligned || accessFault, respond, Mux(r.cacheable, issueCache, issueUncached))
   }
 
   val atomic = command.atomic =/= CacheAtomic.None.U
@@ -103,8 +103,6 @@ class CpuMem(p: CpuMemParams, lineBits: Int = 0) extends Module {
   io.uncachedRequest.bits.size        := command.size
   io.uncachedRequest.bits.write       := command.write
   io.uncachedRequest.bits.data        := command.data
-  io.uncachedRequest.bits.atomic      := command.atomic
-  io.uncachedRequest.bits.normal      := command.normal
   when(io.uncachedRequest.fire)(state := waitUncached)
   io.uncachedResponse.ready           := state === waitUncached
 
@@ -125,7 +123,7 @@ class CpuMem(p: CpuMemParams, lineBits: Int = 0) extends Module {
     answer.data                   := Mux(
       error || command.write,
       0.U,
-      Mux(atomic, Mux(state === waitUncached, io.uncachedResponse.bits.data, io.cacheResponse.bits.data), load)
+      Mux(atomic, io.cacheResponse.bits.data, load)
     )
     answer.accessFault            := error
     if (lineBits > 0) answer.line := Mux(state === waitCache && !error, io.cacheResponse.bits.line, 0.U)

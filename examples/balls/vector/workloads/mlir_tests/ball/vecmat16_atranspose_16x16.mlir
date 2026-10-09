@@ -36,7 +36,7 @@ func.func @main() -> i8 {
   }
   %ab = buckyball.bank_alloc
   %bb = buckyball.bank_alloc
-  %cb = buckyball.bank_alloc {col = 4 : i64}
+  %cb = buckyball.bank_alloc <col = 4>
   %al = buckyball.bank_mvin %at %ab %depth %stride
       : memref<16x16xi8> i64 i64 i64
   %bl = buckyball.bank_mvin %b %bb %depth %stride

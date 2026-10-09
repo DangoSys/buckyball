@@ -16,10 +16,10 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
     extends Module
     with HasCpuParameters {
   require(l1.chi == memory.chi && l1.homeId == memory.homeId && l1.homeCount == 1)
-  private val c  = memory.chi
-  private val cp = CpuMemParams(c, tagBits = 6)
+  val c  = memory.chi
+  val cp = CpuMemParams(c, tagBits = 6)
 
-  private val cores = memory.agents / 2
+  val cores = memory.agents / 2
   require(memory.agents == 2 * cores)
 
   @public
@@ -61,22 +61,22 @@ class Tile(memory: CoherenceParams, l1: RnfParams, regions: Seq[PhysicalRegion])
   val core: Seq[Instance[Core]] =
     Seq.tabulate(cores)(i => Instantiate(new Core(l1.copy(nodeId = i + 1), l1.copy(nodeId = cores + i + 1), regions)))
   for (i <- 0 until cores) {
-    core(i).io.timerInterrupt              := false.B
-    core(i).io.softwareInterrupt           := false.B
-    core(i).io.externalInterrupt           := false.B
-    core(i).io.supervisorExternalInterrupt := false.B
-    core(i).io.hartId                      := i.U
-    core(i).io.resetVector                 := io.resetVector
-    core(i).io.time                        := io.time
-    home.io.requesters(i) <> core(i).io.chi
-    home.io.requesters(cores + i) <> core(i).io.instructionChi
-    io.uncachedRequest(i) <> core(i).io.uncachedRequest
-    core(i).io.uncachedResponse <> io.uncachedResponse(i)
-    io.retired(i)                          := core(i).io.retired
-    io.retiredPc(i)                        := core(i).io.retiredPc
-    io.trapped(i)                          := core(i).io.trapped
-    io.trapCause(i)                        := core(i).io.trapCause
-    io.trapValue(i)                        := core(i).io.trapValue
-    io.trapPc(i)                           := core(i).io.trapPc
+    core(i).clink.timerInterrupt              := false.B
+    core(i).clink.softwareInterrupt           := false.B
+    core(i).clink.externalInterrupt           := false.B
+    core(i).clink.supervisorExternalInterrupt := false.B
+    core(i).clink.hartId                      := i.U
+    core(i).clink.resetVector                 := io.resetVector
+    core(i).clink.time                        := io.time
+    home.io.requesters(i) <> core(i).clink.chi
+    home.io.requesters(cores + i) <> core(i).clink.instructionChi
+    io.uncachedRequest(i) <> core(i).clink.uncachedRequest
+    core(i).clink.uncachedResponse <> io.uncachedResponse(i)
+    io.retired(i)                             := core(i).clink.retired
+    io.retiredPc(i)                           := core(i).clink.retiredPc
+    io.trapped(i)                             := core(i).clink.trapped
+    io.trapCause(i)                           := core(i).clink.trapCause
+    io.trapValue(i)                           := core(i).clink.trapValue
+    io.trapPc(i)                              := core(i).clink.trapPc
   }
 }

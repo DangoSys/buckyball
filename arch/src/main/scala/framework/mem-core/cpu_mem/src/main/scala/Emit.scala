@@ -66,7 +66,7 @@ object Emit extends App {
     "UNCACHED",
     "io_uncachedRequest_bits_",
     "uncached_request",
-    Seq("addr" -> 64, "tag" -> p.tagBits, "size" -> 3, "write" -> 1, "data" -> 64, "atomic" -> 4, "normal" -> 1)
+    Seq("addr" -> 64, "tag" -> p.tagBits, "size" -> 3, "write" -> 1, "data" -> 64)
   )
   channel(
     "URESULT",

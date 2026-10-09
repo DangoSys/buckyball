@@ -1,0 +1,2 @@
+factory = "examples.cores.ant.AntCore"
+cpu = "cpu/ant.toml"

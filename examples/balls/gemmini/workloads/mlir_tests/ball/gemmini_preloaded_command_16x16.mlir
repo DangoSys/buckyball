@@ -40,10 +40,10 @@ func.func @main() -> i8 {
   %b_bank = arith.constant 1 : i64
   %d_bank = arith.constant 2 : i64
   %c_bank = arith.constant 3 : i64
-  buckyball.mset %a_bank {row = 1 : i64, col = 1 : i64} : i64
-  buckyball.mset %b_bank {row = 1 : i64, col = 1 : i64} : i64
-  buckyball.mset %d_bank {row = 1 : i64, col = 1 : i64} : i64
-  buckyball.mset %c_bank {row = 1 : i64, col = 4 : i64} : i64
+  buckyball.mset %a_bank <row = 1, col = 1> : i64
+  buckyball.mset %b_bank <row = 1, col = 1> : i64
+  buckyball.mset %d_bank <row = 1, col = 1> : i64
+  buckyball.mset %c_bank <row = 1, col = 4> : i64
   buckyball.mvin %a %a_bank %depth16 %stride : memref<16x16xi8> i64 i64 i64
   buckyball.mvin %b %b_bank %depth16 %stride : memref<16x16xi8> i64 i64 i64
   buckyball.mvin %d %d_bank %depth16 %stride : memref<16x16xi8> i64 i64 i64
@@ -66,10 +66,10 @@ func.func @main() -> i8 {
   buckyball.mvout %c %c_bank %depth16 %stride : memref<16x16xi32> i64 i64 i64
   buckyball.fence
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
-  buckyball.mset %a_bank {alloc = false, row = 0 : i64, col = 0 : i64} : i64
-  buckyball.mset %b_bank {alloc = false, row = 0 : i64, col = 0 : i64} : i64
-  buckyball.mset %d_bank {alloc = false, row = 0 : i64, col = 0 : i64} : i64
-  buckyball.mset %c_bank {alloc = false, row = 0 : i64, col = 0 : i64} : i64
+  buckyball.mset %a_bank <alloc = false, row = 0, col = 0> : i64
+  buckyball.mset %b_bank <alloc = false, row = 0, col = 0> : i64
+  buckyball.mset %d_bank <alloc = false, row = 0, col = 0> : i64
+  buckyball.mset %c_bank <alloc = false, row = 0, col = 0> : i64
   memref.dealloc %a : memref<16x16xi8>
   memref.dealloc %b : memref<16x16xi8>
   memref.dealloc %d : memref<16x16xi8>

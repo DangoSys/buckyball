@@ -135,6 +135,17 @@ endforeach()
 message(STATUS "Buckyball compiler targets: ${BUCKYBALL_TARGETS}")
 message(STATUS "Buckyball bank targets: ${BUCKYBALL_BANK_TARGETS}")
 message(STATUS "Buckyball Core workload targets: ${BUCKYBALL_CORE_TARGETS}")
+execute_process(
+  COMMAND "${Python3_EXECUTABLE}"
+    "${BUCKYBALL_REPO_ROOT}/stack/compiler/scripts/pb_to_target_registry.py"
+    --repo "${BUCKYBALL_REPO_ROOT}" --chip-pb "${BUCKYBALL_CHIP_PB}"
+    --print-cpu-targets
+  RESULT_VARIABLE _cpu_result OUTPUT_VARIABLE _cpu_targets ERROR_VARIABLE _cpu_error)
+if(NOT _cpu_result EQUAL 0)
+  message(FATAL_ERROR "failed to get CPU workload targets: ${_cpu_error}")
+endif()
+string(REPLACE "\n" ";" BUCKYBALL_CPU_TARGETS "${_cpu_targets}")
+list(REMOVE_ITEM BUCKYBALL_CPU_TARGETS "")
 
 function(buckyball_assign_physical_banks TARGET OUT)
   list(FIND BUCKYBALL_BANK_TARGETS "${TARGET}" _bank_target_index)
@@ -168,6 +179,9 @@ function(buckyball_add_ball_workload_subdirs KIND)
     message(FATAL_ERROR "unknown ball workload kind: ${KIND}")
   endif()
   foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_TARGETS)
+    if(NOT BUCKYBALL_TARGET IN_LIST BUCKYBALL_CPU_TARGETS)
+      continue()
+    endif()
     buckyball_chip_ball_dirs(_ball_dirs ${BUCKYBALL_TARGET})
     foreach(BUCKYBALL_BALL_DIR IN LISTS _ball_dirs)
       set(_src
@@ -199,6 +213,9 @@ function(buckyball_add_core_workload_subdirs KIND)
       message(FATAL_ERROR "invalid Core workload target: ${_entry}")
     endif()
     set(BUCKYBALL_CORE_WORKLOAD_TARGET "${CMAKE_MATCH_1}")
+    if(KIND STREQUAL "ctests" AND NOT BUCKYBALL_CORE_WORKLOAD_TARGET IN_LIST BUCKYBALL_CPU_TARGETS)
+      continue()
+    endif()
     set(_pkg "${CMAKE_MATCH_2}")
     set(BUCKYBALL_CORE_WORKLOAD_PROFILE "${CMAKE_MATCH_3}")
     set(_src

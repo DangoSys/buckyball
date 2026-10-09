@@ -11,6 +11,8 @@ nPMPs = 8
 memBallChannelNum = 6
 
 [sharedMem]
+bankWidth = 128
+bankEntries = 1024
 enable = false
 entries = 16384
 inputChannels = 7

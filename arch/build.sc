@@ -86,12 +86,6 @@ object preflight extends FrameworkModule {
   override def mainClass = Some("memcore.memory.preflight.Emit")
 }
 
-object uncached_ram extends FrameworkModule {
-  override def mainClass = Some("memcore.memory.uncached_ram.Emit")
-  override def moduleRoot = frameworkRoot / "mem-core" / "uncached_ram"
-  override def moduleDeps = Seq(chi, ddr)
-}
-
 object interlock extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "mem-core" / "interlock"
   override def mainClass = Some("memcore.memory.interlock.Emit")
@@ -126,12 +120,13 @@ object coherence extends FrameworkModule {
 
 object blink extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "balldomain" / "blink"
-  override def moduleDeps = Seq(rocket_bb)
+  override def moduleDeps = Seq(rocket_bb, ant, coherence, cpu_mem, ddr, interlock)
   override def ivyDeps = super.ivyDeps() ++ Agg(ivy"com.lihaoyi::upickle:3.3.1")
   override def scalacOptions = super.scalacOptions() ++ Seq("-Ymacro-annotations")
   override def sources = T.sources {
     Seq(
       PathRef(frameworkRoot / "top" / "GlobalConfig.scala"),
+      PathRef(frameworkRoot / "top" / "configs" / "DesignConfig.scala"),
       PathRef(frameworkRoot / "top" / "configs" / "SimParam.scala"),
       PathRef(frameworkRoot / "memdomain" / "configs" / "MemDomainParam.scala"),
       PathRef(frameworkRoot / "frontend" / "configs" / "FrontendParam.scala"),
@@ -155,9 +150,36 @@ object blink extends FrameworkModule {
   }
 }
 
+object arith extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "arith"
+}
+
+object spm extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "spm"
+  override def moduleDeps = Seq(bank)
+}
+
+object tss extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "tss"
+  override def moduleDeps = Seq(spm)
+  override def mainClass = Some("memcore.memory.tss.Emit")
+}
+
+object tls extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "mem-core" / "tls"
+  override def moduleDeps = Seq(spm)
+  override def mainClass = Some("memcore.memory.tls.Emit")
+}
+
+object ant extends FrameworkModule {
+  override def moduleRoot = frameworkRoot / "system" / "core" / "ant"
+  override def moduleDeps = Seq(tls, tss, arith)
+  override def mainClass = Some("framework.ant.Emit")
+}
+
 object rvv extends FrameworkModule {
   override def moduleRoot = frameworkRoot / "rvv"
-  override def moduleDeps = Seq(hardfloat, blink)
+  override def moduleDeps = Seq(hardfloat, blink, arith)
   override def sources = T.sources {
     os.walk(moduleRoot / "src" / "main" / "scala")
       .filter(path => path.ext == "scala" && path.last != "RvvParam.scala")
@@ -190,6 +212,12 @@ object root_core extends FrameworkModule {
   override def mainClass = Some("hier.core.rocket.Emit")
   override def moduleRoot = frameworkRoot / "root" / "root-core"
   override def moduleDeps = Seq(rocket_bb, fetch, cpu_mem, chi, coherence, interlock, preflight)
+  override def sources = T.sources {
+    super.sources() ++ Seq(
+      PathRef(os.pwd / os.up / "examples" / "cores" / "rocket" / "arch" / "src" / "main" / "scala" / "cpu"),
+      PathRef(frameworkRoot / "system" / "core" / "clink" / "base.scala")
+    )
+  }
 }
 
 object root_tile extends FrameworkModule {
@@ -221,9 +249,10 @@ object buckyball extends SbtModule { m =>
     mesh_shm,
     cache,
     coherence,
-    uncached_ram,
+    ddr,
     rvv,
     seed,
+    ant,
     rocket_bb,
     root_chip,
     root_core,
@@ -256,11 +285,15 @@ object buckyball extends SbtModule { m =>
       .filterNot(path => path.toString.contains("/framework/mem-core/"))
       .filterNot(path => path.toString.contains("/framework/rvv/"))
       .filterNot(path => path.toString.contains("/framework/system/core/seed/"))
+      .filterNot(path => path.toString.contains("/framework/system/core/ant/"))
+      .filterNot(path => path.toString.contains("/framework/arith/"))
       .filterNot(path => path.toString.contains("/framework/system/core/rocket/"))
+      .filterNot(path => path == frameworkRoot / "system" / "core" / "clink" / "base.scala")
       .map(PathRef(_))
-    localSources ++ archSrcs("balls") ++ archSrcs("chips") ++ configSrcs(
-      "balls"
-    ) ++ configSrcs("chips")
+    val coreSources = archSrcs("cores")
+      .filterNot(_.path.toString.contains("/cores/rocket/arch/src/main/scala/cpu/"))
+    localSources ++ archSrcs("balls") ++ coreSources ++ archSrcs("chips") ++
+      configSrcs("balls") ++ configSrcs("chips") ++ configSrcs("cores")
   }
 
   override def ivyDeps = Agg(

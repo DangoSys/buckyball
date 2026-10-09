@@ -2,6 +2,7 @@
 include = "designs/omni.toml"
 
 [sims]
+verilator = "sims.verilator.OmniVerilatorTarget"
 
 [uvm]
 balls = ["smatmul", "toint8", "int2fp", "transpose"]

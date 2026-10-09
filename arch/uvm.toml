@@ -1,7 +1,9 @@
-ips = ["uncached_ram", "preflight", "ddr", "interlock", "memdomain", "root_core", "root_tile", "fetch", "mmu", "cpu_mem", "axis", "bank", "cache", "coherence", "chi", "root_chip", "mesh_shm", "rvv"]
+ips = ["ant", "tls", "tss", "preflight", "ddr", "interlock", "memdomain", "root_core", "root_tile", "fetch", "mmu", "cpu_mem", "axis", "bank", "cache", "coherence", "chi", "root_chip", "mesh_shm", "rvv"]
 
 [paths]
-uncached_ram = "arch/src/main/scala/framework/mem-core/uncached_ram"
+ant = "arch/src/main/scala/framework/system/core/ant"
+tls = "arch/src/main/scala/framework/mem-core/tls"
+tss = "arch/src/main/scala/framework/mem-core/tss"
 preflight = "arch/src/main/scala/framework/mem-core/preflight"
 ddr = "arch/src/main/scala/framework/mem-core/ddr"
 interlock = "arch/src/main/scala/framework/mem-core/interlock"
@@ -33,3 +35,15 @@ module = "root_tile"
 directory = "arch"
 module = "memdomain_ack"
 arguments = ["--chip", "{chip}", "--targets", "{targets}"]
+
+[build.tls]
+directory = "arch"
+module = "tls"
+
+[build.tss]
+directory = "arch"
+module = "tss"
+
+[build.ant]
+directory = "arch"
+module = "ant"

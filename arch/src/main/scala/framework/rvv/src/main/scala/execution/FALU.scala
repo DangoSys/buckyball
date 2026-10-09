@@ -6,13 +6,14 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import hardfloat._
 
 @instantiable
-class FALU extends Module {
+class FALU(val maxWidth: Int) extends Module {
+  require(maxWidth == 32 || maxWidth == 64)
 
   @public
   val io = IO(new Bundle {
-    val a            = Input(UInt(64.W))
-    val b            = Input(UInt(64.W))
-    val c            = Input(UInt(64.W))
+    val a            = Input(UInt(maxWidth.W))
+    val b            = Input(UInt(maxWidth.W))
+    val c            = Input(UInt(maxWidth.W))
     val sew          = Input(UInt(2.W))
     val op           = Input(UInt(6.W))
     val subop        = Input(UInt(5.W))
@@ -20,18 +21,18 @@ class FALU extends Module {
     val roundingMode = Input(UInt(3.W))
     val ready        = Output(Bool())
     val valid        = Output(Bool())
-    val result       = Output(UInt(64.W))
+    val result       = Output(UInt(maxWidth.W))
     val flags        = Output(UInt(5.W))
     val legal        = Output(Bool())
   })
 
   val squareRoot    = io.op === 19.U && io.subop === 0.U
   val longOperation = io.op === 32.U || io.op === 33.U || squareRoot
-  val results       = Wire(Vec(2, UInt(64.W)))
-  val flags         = Wire(Vec(2, UInt(5.W)))
-  val ready         = Wire(Vec(2, Bool()))
-  val valid         = Wire(Vec(2, Bool()))
-  for ((expWidth, sigWidth, index) <- Seq((8, 24, 0), (11, 53, 1))) {
+  val results       = Wire(Vec(maxWidth / 32, UInt(maxWidth.W)))
+  val flags         = Wire(Vec(maxWidth / 32, UInt(5.W)))
+  val ready         = Wire(Vec(maxWidth / 32, Bool()))
+  val valid         = Wire(Vec(maxWidth / 32, Bool()))
+  for ((expWidth, sigWidth, index) <- Seq((8, 24, 0), (11, 53, 1)).filter { case (e, s, _) => e + s <= maxWidth }) {
     val width             = expWidth + sigWidth
     val fractionWidth     = sigWidth - 1
     val bias              = (1 << (expWidth - 1)) - 1
@@ -207,16 +208,19 @@ class FALU extends Module {
       }
     }
   }
-  val selectedResult = WireDefault(results(io.sew(0)))
-  io.flags := flags(io.sew(0))
-  io.ready := ready(io.sew(0))
-  io.valid := valid(io.sew(0))
+  val selectedResult = WireDefault(results(if (maxWidth == 32) 0.U else io.sew(0)))
+  io.flags := flags(if (maxWidth == 32) 0.U else io.sew(0))
+  io.ready := ready(if (maxWidth == 32) 0.U else io.sew(0))
+  io.valid := valid(if (maxWidth == 32) 0.U else io.sew(0))
   val conversionLegal = WireDefault(false.B)
   when(io.op === 18.U) {
     selectedResult := 0.U
     io.flags       := 0.U
   }
-  for ((srcWidth, dstWidth, baseSelector) <- Seq((32, 32, 0), (64, 64, 0), (32, 64, 8), (64, 32, 16))) {
+  for (
+    (srcWidth, dstWidth, baseSelector) <- Seq((32, 32, 0), (64, 64, 0), (32, 64, 8), (64, 32, 16))
+                                            .filter { case (src, dst, _) => src <= maxWidth && dst <= maxWidth }
+  ) {
     val (se, ss)     = if (srcWidth == 32) (8, 24) else (11, 53)
     val (de, ds)     = if (dstWidth == 32) (8, 24) else (11, 53)
     val matchesWidth = io.sew === (if (baseSelector != 0 || srcWidth == 32) 2 else 3).U
@@ -262,14 +266,17 @@ class FALU extends Module {
     Mux(io.op === 18.U, Mux(io.subop >= 16.U, false.B, Mux(io.subop >= 8.U, true.B, io.sew === 3.U)), io.sew === 3.U)
   val rawResult         = selectedResult
 
-  val finalResult = Mux(
-    destinationDouble,
-    Mux(rawResult(62, 52).andR && rawResult(51, 0).orR, "h7ff8000000000000".U, rawResult),
-    Mux(rawResult(30, 23).andR && rawResult(22, 0).orR, "h7fc00000".U, rawResult)
-  )
+  val finalResult =
+    if (maxWidth == 32) {
+      Mux(rawResult(30, 23).andR && rawResult(22, 0).orR, "h7fc00000".U, rawResult)
+    } else Mux(
+      destinationDouble,
+      Mux(rawResult(62, 52).andR && rawResult(51, 0).orR, "h7ff8000000000000".U, rawResult),
+      Mux(rawResult(30, 23).andR && rawResult(22, 0).orR, "h7fc00000".U, rawResult)
+    )
 
   io.result := Mux(floatingResult, finalResult, selectedResult)
-  io.legal  := io.sew >= 2.U && io.roundingMode <= 4.U && (
+  io.legal  := io.sew >= 2.U && io.sew <= log2Ceil(maxWidth / 8).U && io.roundingMode <= 4.U && (
     Seq(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 24, 25, 27, 28, 29, 31, 32, 33, 36, 39, 40, 41, 42, 43, 44, 45, 46, 47).map(
       n => io.op === n.U
     ).reduce(_ || _) ||

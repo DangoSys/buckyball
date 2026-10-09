@@ -24,8 +24,8 @@ import framework.top.GlobalConfig
 @instantiable
 class MmioRouter(val b: GlobalConfig) extends Module {
 
-  private val clientNum   = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
-  private val mmioBankNum = b.memDomain.mmioBankNum
+  val clientNum   = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
+  val mmioBankNum = b.memDomain.mmioBankNum
 
   @public
   val io = IO(new Bundle {

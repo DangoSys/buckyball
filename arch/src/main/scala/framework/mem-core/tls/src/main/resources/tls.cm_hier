@@ -1,0 +1,2 @@
++tree @TOP@.tiles[0].dut
++tree @TOP@.tiles[1].dut

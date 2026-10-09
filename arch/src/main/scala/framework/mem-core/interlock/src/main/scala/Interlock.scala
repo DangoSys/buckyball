@@ -25,7 +25,7 @@ class Interlock(p: Params) extends Module {
     val complete      = Decoupled(new Tag(p))
   })
 
-  private val indexBits                                                                                        = log2Ceil(p.entries)
+  val indexBits                                                                                                = log2Ceil(p.entries)
   val unknown :: ready :: preWait :: granted :: running :: postReady :: postWait :: completed :: failed :: Nil = Enum(9)
   val live                                                                                                     = RegInit(VecInit(Seq.fill(p.entries)(false.B)))
   val ids                                                                                                      = RegInit(VecInit(Seq.fill(p.entries)(0.U(p.idBits.W))))

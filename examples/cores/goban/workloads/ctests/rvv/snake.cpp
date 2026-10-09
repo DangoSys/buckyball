@@ -1,7 +1,11 @@
-#include "images.h"
-#include <bbhw/isa/isa.h>
+#include <CRunnerUtils.h>
 #include <cmath>
 #include <cstdio>
+
+extern "C" void _mlir_ciface_rvv_snake(UnrankedMemRefType<float> *,
+                                       UnrankedMemRefType<float> *,
+                                       UnrankedMemRefType<float> *,
+                                       UnrankedMemRefType<float> *);
 
 alignas(16) static float input[40], output[40];
 
@@ -10,31 +14,18 @@ int main() {
     input[i] = (int(i % 19) - 9) * 0.25f;
     output[i] = 123.0f;
   }
-  for (unsigned bank = 0; bank < 3; ++bank)
-    bb_mem_alloc(bank, 1, 1);
-  alignas(16) struct {
-    kernel_launch call;
-    float log_alpha[2];
-    float log_beta[2];
-  } descriptor{{images::snake.entry,
-                images::snake.text_bytes,
-                0x80002000,
-                {1 << 16, 2 << 16, 2, 19, 48, 56},
-                0},
-               {-0.5f, 0.5f},
-               {0.25f, -0.25f}};
-  bb_mvin((uintptr_t)input, 2, 10, 1);
-  bb_mvin((uintptr_t)output, 1, 10, 1);
-  bb_mvin((uintptr_t)&descriptor, 0, sizeof(descriptor) / 16, 1);
-  mvin_kernel(images::snake.bytes, images::snake.size, 1);
-  bb_fence();
-  run_kernel(0, 1);
-  bb_mvout((uintptr_t)output, 1, 10, 1);
-  bb_fence();
+  float logAlpha[2]{-0.5f, 0.5f}, logBeta[2]{0.25f, -0.25f};
+  StridedMemRefType<float, 2> in{input, input, 0, {2, 19}, {19, 1}};
+  StridedMemRefType<float, 2> out{output, output, 0, {2, 19}, {19, 1}};
+  StridedMemRefType<float, 1> alpha{logAlpha, logAlpha, 0, {2}, {1}};
+  StridedMemRefType<float, 1> beta{logBeta, logBeta, 0, {2}, {1}};
+  UnrankedMemRefType<float> inputRef{2, &in}, outputRef{2, &out},
+      alphaRef{1, &alpha}, betaRef{1, &beta};
+  _mlir_ciface_rvv_snake(&outputRef, &inputRef, &alphaRef, &betaRef);
   // Independent libm exp/sin reference with tolerance for RVV approximations.
   for (unsigned channel = 0; channel < 2; ++channel) {
-    float alpha = std::exp(descriptor.log_alpha[channel]);
-    float inverse = 1 / (std::exp(descriptor.log_beta[channel]) + 1e-9f);
+    float alpha = std::exp(logAlpha[channel]);
+    float inverse = 1 / (std::exp(logBeta[channel]) + 1e-9f);
     for (unsigned i = 0; i < 19; ++i) {
       unsigned index = channel * 19 + i;
       float sine = std::sin(input[index] * alpha);

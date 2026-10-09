@@ -30,7 +30,7 @@ func.func @main() -> i8 {
     %out = memref.subview %output[%base, 0] [64, @BB_BANK_I8_LANES@] [1, 1] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8> to memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>>
     %loaded_input = buckyball.bank_mvin %in %ib %depth %stride : memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>> i64 i64 i64
     %loaded_output = buckyball.bank_mvin %out %ob %depth %stride : memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>> i64 i64 i64
-    %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 {inputSide = 8 : i64, outputSide = 8 : i64, kernel = 3 : i64, stride = 1 : i64, padding = 1 : i64, startRow = 0 : i64, startCol = 0 : i64} : i64 i64 i64 i64 i64 i64
+    %result = buckyball.bank_maxpool %loaded_input %loaded_output %depth %zero64 %zero64 %side64 <inputSide = 8, outputSide = 8, kernel = 3, stride = 1, padding = 1, startRow = 0, startCol = 0> : i64 i64 i64 i64 i64 i64
     %stored = buckyball.bank_mvout %out %result %depth %stride : memref<64x@BB_BANK_I8_LANES@xi8, strided<[@BB_BANK_I8_LANES@, 1], offset: ?>> i64 i64 i64
     buckyball.fence
     scf.yield %loaded_input, %stored : i64, i64

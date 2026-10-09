@@ -25,7 +25,7 @@ class Verification(
     with HasCpuParameters {
   override def desiredName: String = topName
   require(memory.agents == 2)
-  private val cp = CpuMemParams(memory.chi, tagBits = 6)
+  val cp = CpuMemParams(memory.chi, tagBits = 6)
 
   @public
   val io = IO(new Bundle {
@@ -56,36 +56,36 @@ class Verification(
   val core:   Instance[Core]      = Instantiate(new Core(config, config.copy(nodeId = 2), regions, commands))
   val home:   Instance[Coherence] = Instantiate(new Coherence(memory))
   val fabric: Instance[Fabric]    = Instantiate(new Fabric(memory.chi, memory.agents, memory.homeId))
-  commands.foreach(_ => io.admission.get <> core.io.admission.get)
-  core.io.resetVector                 := io.resetVector
-  core.io.time                        := io.time
-  core.io.timerInterrupt              := io.timerInterrupt
-  core.io.softwareInterrupt           := io.softwareInterrupt
-  core.io.externalInterrupt           := io.externalInterrupt
-  core.io.supervisorExternalInterrupt := false.B
-  core.io.hartId                      := 0.U
-  io.uncachedRequest <> core.io.uncachedRequest
-  core.io.uncachedResponse <> io.uncachedResponse
-  io.trace                            := core.io.trace
-  io.retired                          := core.io.retired
-  io.retiredPc                        := core.io.retiredPc
-  io.trapped                          := core.io.trapped
-  io.trapCause                        := core.io.trapCause
-  io.trapValue                        := core.io.trapValue
-  io.trapPc                           := core.io.trapPc
-  io.cancelledData                    := core.io.cancelledData
-  fabric.io.active                    := true.B
-  fabric.io.blockRequesterRsp         := false.B
-  fabric.io.requesters(0) <> core.io.chi
+  commands.foreach(_ => io.admission.get <> core.clink.admission.get)
+  core.clink.resetVector                 := io.resetVector
+  core.clink.time                        := io.time
+  core.clink.timerInterrupt              := io.timerInterrupt
+  core.clink.softwareInterrupt           := io.softwareInterrupt
+  core.clink.externalInterrupt           := io.externalInterrupt
+  core.clink.supervisorExternalInterrupt := false.B
+  core.clink.hartId                      := 0.U
+  io.uncachedRequest <> core.clink.uncachedRequest
+  core.clink.uncachedResponse <> io.uncachedResponse
+  io.trace                               := core.clink.trace
+  io.retired                             := core.clink.retired
+  io.retiredPc                           := core.clink.retiredPc
+  io.trapped                             := core.clink.trapped
+  io.trapCause                           := core.clink.trapCause
+  io.trapValue                           := core.clink.trapValue
+  io.trapPc                              := core.clink.trapPc
+  io.cancelledData                       := core.clink.cancelledData
+  fabric.io.active                       := true.B
+  fabric.io.blockRequesterRsp            := false.B
+  fabric.io.requesters(0) <> core.clink.chi
   commands.foreach { _ =>
     val response      = fabric.io.requesters(0).rxRsp
     val isMaintenance = response.bits.txnId === config.banks.U
     val hold          = io.blockMaintenanceResponse.get && isMaintenance
-    core.io.chi.rxRsp.valid           := response.valid && !hold
-    response.ready                    := core.io.chi.rxRsp.ready && !hold
+    core.clink.chi.rxRsp.valid        := response.valid && !hold
+    response.ready                    := core.clink.chi.rxRsp.ready && !hold
     io.maintenanceResponsePending.get := response.valid && isMaintenance
   }
-  fabric.io.requesters(1) <> core.io.instructionChi
+  fabric.io.requesters(1) <> core.clink.instructionChi
   home.io.req <> fabric.io.req
   home.io.rxRsp <> fabric.io.rxRsp
   home.io.rxDat <> fabric.io.rxDat
@@ -94,5 +94,5 @@ class Verification(
   fabric.io.snp <> home.io.snp
   io.memoryRequest <> home.io.memoryReq
   home.io.memoryResp <> io.memoryResponse
-  io.memoryOutstanding                := home.io.outstanding
+  io.memoryOutstanding                   := home.io.outstanding
 }

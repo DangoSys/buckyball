@@ -13,8 +13,8 @@ import framework.top.GlobalConfig
 
 @instantiable
 class PrivateMemBackend(val b: GlobalConfig) extends Module {
-  private val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
-  private val requestCount   = b.memDomain.bankChannel + kernelRequests
+  val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
+  val requestCount   = b.memDomain.bankChannel + kernelRequests
 
   @public
   val io = IO(new Bundle {
@@ -29,7 +29,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(b.memDomain.bankNum, new PhysicalBankHash(b)))) else None
   })
 
-  private val requests = io.mem_req.toSeq ++ io.kernel_req.toSeq
+  val requests = io.mem_req.toSeq ++ io.kernel_req.toSeq
 
   val banks:    Seq[Instance[SramBank]] = Seq.fill(b.memDomain.bankNum)(Instantiate(new SramBank(b)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(requestCount)(Instantiate(new AccPipe(b)))
@@ -73,17 +73,17 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val group_id = UInt(b.memDomain.groupIdWidth.W)
   }
 
-  val mappingTable                = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
+  val mappingTable        = RegInit(VecInit(Seq.fill(b.memDomain.bankNum)(0.U.asTypeOf(new MappingTableEntry))))
   // The frontend contract reserves [0, vbank_id_upper_bound] for private
   // banks. Keep the direct route table at that architectural size.
-  private val privateVbankCount   = b.frontend.vbank_id_upper_bound + 1
+  val privateVbankCount   = b.frontend.vbank_id_upper_bound + 1
   require(
     privateVbankCount > 0 && privateVbankCount <= b.memDomain.virtualBankCount,
     s"private vbank table size ($privateVbankCount) exceeds virtualBankCount(${b.memDomain.virtualBankCount})"
   )
-  private val groupIndexWidth     = log2Up(b.memDomain.bankNum)
-  private val pbankIndexWidth     = log2Up(b.memDomain.bankNum)
-  private val privateVbankIdWidth = log2Up(privateVbankCount)
+  val groupIndexWidth     = log2Up(b.memDomain.bankNum)
+  val pbankIndexWidth     = log2Up(b.memDomain.bankNum)
+  val privateVbankIdWidth = log2Up(privateVbankCount)
 
   // A non-multi vbank has exactly one route, so keep that common case as a
   // small indexed table.  Multi-bank mappings retain their per-group entries
@@ -180,7 +180,30 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
   when(io.config.fire) {
     val vbank    = io.config.bits.vbank_id
     val vbankIdx = vbank(privateVbankIdWidth - 1, 0)
-    when(io.config.bits.alloc) {
+    when(io.config.bits.transfer) {
+      val source      = io.config.bits.source_bank_id
+      val sourceIdx   = source(privateVbankIdWidth - 1, 0)
+      val sourceCount = groupCountByVbank(sourceIdx)
+      val targetCount = groupCountByVbank(vbankIdx)
+      val totalCount  = targetCount +& sourceCount
+      assert(source =/= vbank && sourceCount =/= 0.U, "Private bank transfer requires a distinct allocated source")
+      assert(totalCount <= b.memDomain.bankNum.U, "Private bank transfer exceeds physical bank count")
+      for (entry <- mappingTable) {
+        when(entry.valid && entry.vbank_id === source) {
+          entry.vbank_id := vbank
+          entry.group_id := targetCount + entry.group_id
+          entry.is_multi := totalCount > 1.U
+        }
+        when(entry.valid && entry.vbank_id === vbank) {
+          entry.is_multi := totalCount > 1.U
+        }
+      }
+      singleRouteValid(sourceIdx) := false.B
+      singleRouteValid(vbankIdx)                          := totalCount === 1.U
+      when(totalCount === 1.U)(singleRoutePbank(vbankIdx) := singleRoutePbank(sourceIdx))
+      groupCountByVbank(sourceIdx)                        := 0.U
+      groupCountByVbank(vbankIdx)                         := totalCount
+    }.elsewhen(io.config.bits.alloc) {
       val freePbank = PriorityEncoder(freePbankMask)
       hashMonitors.foreach { hashes =>
         for (i <- 0 until b.memDomain.bankNum) {
@@ -330,7 +353,7 @@ class PrivateMemBackend(val b: GlobalConfig) extends Module {
     val arb = Module(new RRArbiter(
       new Bundle {
         val write = Bool()
-        val addr  = UInt(log2Ceil(b.memDomain.bankEntries).W)
+        val addr  = UInt(16.W)
         val data  = UInt(b.memDomain.bankWidth.W)
         val mask  = Vec(b.memDomain.bankMaskLen, Bool())
       },

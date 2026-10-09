@@ -14,14 +14,14 @@ def QuantF32ToI8Op : Buckyball_Op<"quant_f32_to_i8"> {
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$iter, F32:$scale);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` $iter `,` $scale "
-                       "attr-dict `:` type($inputBankId)";
+                       "prop-dict attr-dict `:` type($inputBankId)";
 }
 
 def BankQuantF32ToI8Op : Buckyball_Op<"bank_quant_f32_to_i8"> {
   let summary = "Per-tensor FP32 to INT8 quantization with virtual banks";
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, F32:$scale);
   let results = (outs I64:$outBankOut);
-  let assemblyFormat = "$inBank $outBank $iter $scale attr-dict `:` "
+  let assemblyFormat = "$inBank $outBank $iter $scale prop-dict attr-dict `:` "
                        "type($inBank) type($outBank) type($iter) type($scale)";
 }
 
@@ -38,7 +38,7 @@ def QuantI32ToI8Op : Buckyball_Op<"quant_i32_to_i8"> {
                        I64Attr:$outputStride,
                        BoolAttr:$relu);
   let assemblyFormat = "$inputBankId `,` $scaleBankId `,` $outputBankId `,` "
-                       "$iter `,` $outputBase `,` $inputBase attr-dict `:` "
+                       "$iter `,` $outputBase `,` $inputBase prop-dict attr-dict `:` "
                        "type($inputBankId) type($outputBase) type($inputBase)";
 }
 
@@ -51,7 +51,7 @@ def BankQuantI32ToI8Op : Buckyball_Op<"bank_quant_i32_to_i8"> {
                        I64Attr:$outputStride, BoolAttr:$relu);
   let results = (outs I64:$outBankOut);
   let assemblyFormat = "$inBank $scaleBank $outBank $iter $outputBase $inputBase "
-                       "attr-dict `:` type($inBank) type($scaleBank) "
+                       "prop-dict attr-dict `:` type($inBank) type($scaleBank) "
                        "type($outBank) type($iter) type($outputBase) "
                        "type($inputBase)";
 }

@@ -20,8 +20,8 @@ import framework.top.GlobalConfig
 @instantiable
 class MmioPool(val b: GlobalConfig) extends Module {
 
-  private val mmioReadPorts  = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
-  private val mmioWritePorts = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
+  val mmioReadPorts  = b.ballDomain.ballIdMappings.map(_.mmioReadBW).sum
+  val mmioWritePorts = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
 
   @public
   val io = IO(new Bundle {

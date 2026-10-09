@@ -69,7 +69,7 @@ class MemMidend(val b: GlobalConfig) extends Module {
   // drains), so maintain the reverse ownership at allocation time.  This keeps
   // readiness and pending detection from repeatedly scanning every backend
   // channel for the same port.
-  private val portSlots  = math.max(totalRead, totalWrite)
+  val portSlots          = math.max(totalRead, totalWrite)
   val readPortAllocated  = RegInit(VecInit(Seq.fill(portSlots)(false.B)))
   val writePortAllocated = RegInit(VecInit(Seq.fill(portSlots)(false.B)))
 

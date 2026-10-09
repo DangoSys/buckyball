@@ -37,8 +37,6 @@ class MemFrontend(val b: GlobalConfig) extends Module {
     val global_issue_i    = Flipped(Decoupled(new GlobalSchedIssue(b)))
     // Report completion to global RS (single channel)
     val global_complete_o = Decoupled(new GlobalSchedComplete(b))
-    val kernel_command    = if (b.rvv.enable) Some(Decoupled(new GlobalSchedIssue(b))) else None
-    val kernel_complete   = if (b.rvv.enable) Some(Flipped(Decoupled(new GlobalSchedComplete(b)))) else None
     val mvover            = new MvoverPort
 
     // Bank read/write interface - used by load/store
@@ -67,7 +65,7 @@ class MemFrontend(val b: GlobalConfig) extends Module {
     val hartid     = Input(UInt(b.tile.xLen.W))
     val footprints = Output(Vec(3, new Footprint(b)))
 
-    val kernel = if (b.rvv.enable) Some(new KernelDmaPort) else None
+    val kernel = if (b.rvv.enable) Some(new KernelDmaPort(b)) else None
 
     // Busy signal
     val busy = Output(Bool())
@@ -89,21 +87,8 @@ class MemFrontend(val b: GlobalConfig) extends Module {
   val mvoverRobId    = Reg(chiselTypeOf(io.global_issue_i.bits.rob_id))
   val mvoverIsSub    = Reg(Bool())
   val mvoverSubRobId = Reg(chiselTypeOf(io.global_issue_i.bits.sub_rob_id))
-  val isKernelLoad   = b.rvv.enable.B && io.global_issue_i.bits.cmd.cmd.funct === MVIN_KERNEL_BITPAT
-  val kernelPending  = RegInit(false.B)
-  val kernelRobId    = Reg(UInt(log2Ceil(b.frontend.rob_entries).W))
-  val kernelReady    = if (b.rvv.enable) io.kernel_command.get.ready else false.B
-  if (b.rvv.enable) {
-    io.kernel_command.get.valid                     := io.global_issue_i.valid && isKernelLoad && !kernelPending && !mvoverPending
-    io.kernel_command.get.bits                      := io.global_issue_i.bits
-    when(io.kernel_command.get.fire) {
-      kernelPending := true.B
-      kernelRobId   := io.kernel_command.get.bits.rob_id
-    }
-    when(io.kernel_complete.get.fire)(kernelPending := false.B)
-  }
 
-  io.mvover.command.valid           := io.global_issue_i.valid && isMvover && !mvoverPending && !kernelPending
+  io.mvover.command.valid           := io.global_issue_i.valid && isMvover && !mvoverPending
   io.mvover.command.bits.sourceCore := io.global_issue_i.bits.cmd.cmd.rs1Data(7, 0)
   io.mvover.command.bits.targetCore := io.global_issue_i.bits.cmd.cmd.rs1Data(15, 8)
   io.mvover.command.bits.sourceBank := io.global_issue_i.bits.cmd.cmd.rs1Data(25, 16)
@@ -117,10 +102,10 @@ class MemFrontend(val b: GlobalConfig) extends Module {
     mvoverIsSub    := io.global_issue_i.bits.is_sub
     mvoverSubRobId := io.global_issue_i.bits.sub_rob_id
   }
-  memDecoder.io.cmd_i.valid         := io.global_issue_i.valid && !isMvover && !isKernelLoad && !mvoverPending && !kernelPending
+  memDecoder.io.cmd_i.valid         := io.global_issue_i.valid && !isMvover && !mvoverPending
   memDecoder.io.cmd_i.bits          := io.global_issue_i.bits.cmd
-  io.global_issue_i.ready           := !mvoverPending && !kernelPending &&
-    Mux(isKernelLoad, kernelReady, Mux(isMvover, io.mvover.command.ready, memDecoder.io.cmd_i.ready))
+  io.global_issue_i.ready           := !mvoverPending &&
+    Mux(isMvover, io.mvover.command.ready, memDecoder.io.cmd_i.ready)
 
   // Config signal goes to backend
   io.config <> configer.io.config
@@ -195,8 +180,7 @@ class MemFrontend(val b: GlobalConfig) extends Module {
   io.footprints(2)                                                        := 0.U.asTypeOf(new Footprint(b))
   if (b.rvv.enable) {
     val kernelDma: Instance[KernelDma] = Instantiate(new KernelDma(b))
-    kernelDma.io.rob_id := kernelRobId
-    io.footprints(2)    := kernelDma.io.footprint
+    io.footprints(2) := kernelDma.io.footprint
     kernelDma.io.kernel <> io.kernel.get
     val selectKernel = kernelDma.io.request.valid
     readQueue.io.enq.valid         := kernelDma.io.request.valid || memLoader.io.dmaReq.valid
@@ -253,8 +237,7 @@ class MemFrontend(val b: GlobalConfig) extends Module {
 
   // Completion signal connected to global RS
   val mvoverComplete = mvoverPending && io.mvover.completion.valid
-  val kernelComplete = if (b.rvv.enable) kernelPending && io.kernel_complete.get.valid else false.B
-  io.global_complete_o.valid           := kernelComplete || mvoverComplete || memRs.io.complete_o.valid
+  io.global_complete_o.valid           := mvoverComplete || memRs.io.complete_o.valid
   io.global_complete_o.bits.rob_id     := Mux(mvoverComplete, mvoverRobId, memRs.io.complete_o.bits.rob_id)
   io.global_complete_o.bits.is_sub     := Mux(mvoverComplete, mvoverIsSub, memRs.io.complete_o.bits.is_sub)
   io.global_complete_o.bits.sub_rob_id := Mux(mvoverComplete, mvoverSubRobId, memRs.io.complete_o.bits.sub_rob_id)
@@ -266,18 +249,15 @@ class MemFrontend(val b: GlobalConfig) extends Module {
   when(mvoverComplete && io.mvover.completion.bits) {
     io.global_complete_o.bits.fault.error := DmaError.Bank.U
   }
-  if (b.rvv.enable) {
-    when(kernelComplete)(io.global_complete_o.bits := io.kernel_complete.get.bits)
-    io.kernel_complete.get.ready                   := kernelPending && io.global_complete_o.ready
-  }
-  memRs.io.complete_o.ready            := io.global_complete_o.ready && !mvoverComplete && !kernelComplete
-  io.mvover.completion.ready           := io.global_complete_o.ready && mvoverPending && !kernelComplete
+
+  memRs.io.complete_o.ready  := io.global_complete_o.ready && !mvoverComplete
+  io.mvover.completion.ready := io.global_complete_o.ready && mvoverPending
   when(io.mvover.completion.fire) {
     mvoverPending := false.B
   }
 
   // Busy signal
   // Simple busy signal
-  io.busy := kernelPending || mvoverPending || !memRs.io.complete_o.ready || io.kernel.map(_.busy).getOrElse(false.B) ||
+  io.busy := mvoverPending || !memRs.io.complete_o.ready || io.kernel.map(_.busy).getOrElse(false.B) ||
     readQueue.io.deq.valid || readerOwned || io.dma.readBusy || io.dma.writeBusy
 }

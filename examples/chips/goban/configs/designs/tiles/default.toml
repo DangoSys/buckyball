@@ -1,4 +1,4 @@
-# Goban main tile: Linux control hart 0 and four internal compute harts.
+# Goban main tile: five Linux-visible harts, with Buckyball on harts 1 through 4.
 
 coreDataBytes = 64
 xLen = 64
@@ -11,6 +11,8 @@ nPMPs = 8
 memBallChannelNum = 6
 
 [sharedMem]
+bankWidth = 128
+bankEntries = 1024
 enable = true
 virtualBankCount = 64
 entries = 16384

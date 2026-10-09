@@ -1,9 +1,13 @@
 # Cores
 
 Each directory in this tree describes one concrete single-core design. A Core
-owns its Rocket/frontend parameters, BallDomain, private MemDomain, and the
+owns its CPU/frontend parameters, BallDomain, MemDomain, and the
 compiler package for its ISA. It does not own a tile topology, device model,
 kernel, or regression suite.
+
+Each implemented Core has an `arch/` top implementing `HasCLink` and explicitly
+instantiating its CPU and compute IPs. The framework connects CLink to shared
+memory and control interfaces; concrete designs do not inherit another design.
 
 Every Core has a `configs/` tree and `isa/` (`ballISA.h` from balldomain).
 Buckyball Cores also have `compiler/` (buddy-mlir dialect plugin; CMake is the

@@ -7,13 +7,13 @@ import framework.top.GlobalConfig
 
 @instantiable
 class VRF(val b: GlobalConfig) extends Module {
-  private val p                = b.rvv
-  private val wordBits         = 64
-  private val wordsPerRegister = p.vLen / wordBits
-  private val bankCount        = math.min(p.laneNumber, wordsPerRegister)
-  private val bankBits         = log2Ceil(bankCount)
-  private val addressBits      = log2Ceil(32 * wordsPerRegister)
-  private val bankDepth        = 32 * wordsPerRegister / bankCount
+  val p                = b.rvv
+  val wordBits         = p.wordBits
+  val wordsPerRegister = p.vLen / wordBits
+  val bankCount        = p.registerBanks
+  val bankBits         = log2Ceil(bankCount)
+  val addressBits      = log2Ceil(32 * wordsPerRegister)
+  val bankDepth        = 32 * wordsPerRegister / bankCount
   require(isPow2(bankCount))
 
   @public

@@ -5,13 +5,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.frontend.boot.BootRom
 import framework.frontend.decoder.GlobalDecoder
-import framework.frontend.globalrs.{
-  GlobalSchedComplete,
-  GlobalSchedIssue,
-  GlobalScheduler,
-  KernelWriteBank,
-  RobAllocation
-}
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, GlobalScheduler, RobAllocation}
 import framework.top.GlobalConfig
 import framework.system.core.rocket.{RoCCCommandBB, RoCCResponseBB}
 import framework.balldomain.blink.SubRobRow
@@ -43,7 +37,8 @@ class Frontend(val b: GlobalConfig) extends Module {
     // Complete from domains
     val ball_complete_i   = Flipped(Decoupled(new GlobalSchedComplete(b)))
     val mem_complete_i    = Flipped(Decoupled(new GlobalSchedComplete(b)))
-    val kernel_write_bank = Flipped(Valid(new KernelWriteBank(b)))
+    val kernel_issue_o    = if (b.rvv.enable) Some(Decoupled(new GlobalSchedIssue(b))) else None
+    val kernel_complete_i = if (b.rvv.enable) Some(Flipped(Decoupled(new GlobalSchedComplete(b)))) else None
 
     // Ball -> SubROB request passthrough
     val ball_subrob_req_i = Flipped(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
@@ -89,6 +84,10 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   io.ball_issue_o <> scheduler.io.ball_issue_o
   io.mem_issue_o <> scheduler.io.mem_issue_o
+  if (b.rvv.enable) {
+    io.kernel_issue_o.get <> scheduler.io.kernel_issue_o.get
+    scheduler.io.kernel_complete_i.get <> io.kernel_complete_i.get
+  }
   io.inst_ids   := scheduler.io.inst_ids
   io.allocation := scheduler.io.allocation
   io.retired    := scheduler.io.retired
@@ -96,7 +95,6 @@ class Frontend(val b: GlobalConfig) extends Module {
 
   scheduler.io.ball_complete_i <> io.ball_complete_i
   scheduler.io.mem_complete_i <> io.mem_complete_i
-  scheduler.io.kernel_write_bank <> io.kernel_write_bank
 
   // Wire SubROB request from BallDomain through to scheduler
   for (i <- 0 until b.ballDomain.ballNum) {

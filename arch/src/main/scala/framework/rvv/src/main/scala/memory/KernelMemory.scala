@@ -7,7 +7,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class KernelMemory(val b: GlobalConfig) extends Module {
-  private val p = b.rvv
+  val p = b.rvv
 
   @public
   val io = IO(new Bundle {
@@ -57,9 +57,9 @@ class KernelMemory(val b: GlobalConfig) extends Module {
   val request          = arbiter.io.out.bits
   val bytes            = 1.U(5.W) << request.size
   val end              = request.address +& bytes
-  val constant         = request.address >= "h80000000".U && end <= (BigInt("80000000", 16) + p.constBytes).U
-  val temporary        = request.address >= "h80001000".U && end <= (BigInt("80001000", 16) + p.stackBytes).U
-  val constantReadable = constant && end <= ("h80000000".U(33.W) + io.constBytes)
+  val constant         = request.address >= "h40000000".U && end <= (BigInt("40000000", 16) + p.constBytes).U
+  val temporary        = request.address >= "h40001000".U && end <= (BigInt("40001000", 16) + p.stackBytes).U
+  val constantReadable = constant && end <= ("h40000000".U(65.W) + io.constBytes)
   val legal            = Mux(io.loading, constant && request.write, temporary || (constantReadable && !request.write))
   val crossing         = (request.address(2, 0) +& bytes) > 8.U
   val active           = Mux(state === idle, request, saved)

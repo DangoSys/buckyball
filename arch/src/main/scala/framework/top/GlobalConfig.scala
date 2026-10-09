@@ -16,7 +16,10 @@ case class GlobalConfig(
   ballDomain:    BallDomainParam,
   tile:          TileParam,
   sim:           SimParam,
-  coreSignature: BigInt = 0)
+  coreSignature: BigInt = 0,
+  systemDesign:  Option[framework.top.configs.SystemDesign] = None,
+  tileDesign:    Option[framework.top.configs.TileScope] = None,
+  coreDesign:    Option[framework.top.configs.CoreScope] = None)
     extends SerializableModuleParameter
 
 object GlobalConfig {

@@ -1,3 +1,4 @@
+factory = "examples.cores.goban.GobanCore"
 # Goban Core Configuration (default)
 
 balldomain = "balldomains/default.toml"

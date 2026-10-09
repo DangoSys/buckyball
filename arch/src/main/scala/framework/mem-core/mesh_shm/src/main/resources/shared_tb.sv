@@ -4,7 +4,7 @@ module shared_tb;
   logic clock = 0;
   logic reset;
   always #5 clock = ~clock;
-  axis_if #(128, 8, 4, 12) source_if[10] (clock);
+  axis_if #(128, 8, 4, 17) source_if[10] (clock);
   axis_if #(128, 8, 0, 2) sink_if[10] (clock);
   assign reset = source_if[0].reset;
   transfer_if transfer (clock);
@@ -256,7 +256,7 @@ module shared_tb;
   );
   for (genvar i = 0; i < 10; i++)
   initial begin
-    uvm_config_db#(virtual axis_if #(128, 8, 4, 12))::set(null, "uvm_test_top*", $sformatf(
+    uvm_config_db#(virtual axis_if #(128, 8, 4, 17))::set(null, "uvm_test_top*", $sformatf(
                                                           "source%0d", i), source_if[i]);
     uvm_config_db#(virtual axis_if #(128, 8, 0, 2))::set(null, "uvm_test_top*", $sformatf(
                                                          "sink%0d", i), sink_if[i]);

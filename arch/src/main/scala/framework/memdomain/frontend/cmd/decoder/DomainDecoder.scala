@@ -11,11 +11,13 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 // Detailed decode output for Mem domain
 class MemDecodeCmd(b: GlobalConfig) extends Bundle {
   // Shared memory access marker: raw BB_BANK0 id >= frontend.sharedBankIdBase.
-  val is_shared = Bool()
-  val is_load   = Bool()
-  val is_store  = Bool()
-  val is_config = Bool()
-  val clear     = Bool()
+  val is_shared      = Bool()
+  val is_load        = Bool()
+  val is_store       = Bool()
+  val is_config      = Bool()
+  val clear          = Bool()
+  val transfer       = Bool()
+  val source_bank_id = UInt(b.memDomain.vbankIdWidth.W)
 
   val is_mvin_mmio = Bool()
   val is_mvin_2d   = Bool()
@@ -44,7 +46,7 @@ object MemDefaultConstants {
 class MemDomainDecoder(val b: GlobalConfig) extends Module {
   import MemDefaultConstants._
 
-  private val sharedBankIdBase = b.frontend.shared_bank_id_base
+  val sharedBankIdBase = b.frontend.shared_bank_id_base
   require(sharedBankIdBase > 0, s"sharedBankIdBase($sharedBankIdBase) must be > 0")
   require(
     sharedBankIdBase < (1 << b.frontend.bank_id_len),
@@ -104,7 +106,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
 // -----------------------------------------------------------------------------
   io.mem_decode_cmd_o.valid := io.cmd_i.valid && (io.cmd_i.bits.domain_id === DomainId.MEM)
 
-  val raw_bank_id    = Mux(func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT, rs1(29, 20), rs1(9, 0))
+  val transfer       = func7 === MSET_BITPAT && rs2(12)
+  val raw_bank_id    = Mux(func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT || transfer, rs1(29, 20), rs1(9, 0))
   val shared_bank_id = b.memDomain.sharedEnable.B && raw_bank_id >= sharedBankIdBase.U
   // format: off
   // BB_BANK0 is encoded in rs1[9:0]. Keep the configured architectural ID;
@@ -113,6 +116,8 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   io.mem_decode_cmd_o.bits.is_load      := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.LD_EN.id).asBool, false.B)
   io.mem_decode_cmd_o.bits.is_store     := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.ST_EN.id).asBool, false.B)
   io.mem_decode_cmd_o.bits.is_config    := Mux(io.mem_decode_cmd_o.valid, func7 === MSET_BITPAT, false.B)
+  io.mem_decode_cmd_o.bits.transfer     := io.mem_decode_cmd_o.valid && transfer
+  io.mem_decode_cmd_o.bits.source_bank_id := rs1(bankIdLen - 1, 0)
   io.mem_decode_cmd_o.bits.clear        := io.mem_decode_cmd_o.valid && (func7 === MSET_BITPAT) && rs2(11)
   io.mem_decode_cmd_o.bits.is_mvin_mmio := Mux(io.mem_decode_cmd_o.valid, func7 === MVIN_MMIO_BITPAT, false.B)
   io.mem_decode_cmd_o.bits.is_mvin_2d   := Mux(io.mem_decode_cmd_o.valid, func7 === MVIN_2D_BITPAT, false.B)
@@ -120,9 +125,19 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   io.mem_decode_cmd_o.bits.iter         := Mux(io.mem_decode_cmd_o.valid, rs1(63, 30), 0.U(iterLen.W))
 
   when(io.cmd_i.fire && func7 === MSET_BITPAT) {
-    assert(rs1(63, 10) === 0.U, "MSET reserves rs1[63:10]")
-    assert(rs2(63, 12) === 0.U, "MSET reserves rs2[63:12]")
+    when(transfer) {
+      assert(rs1(63, 30) === 0.U && rs1(19, 10) === 0.U, "MSET transfer reserves rs1 outside BANK0/BANK2")
+      assert(rs2 === (1.U << 12), "MSET transfer reserves other rs2 bits")
+      assert(rs1(9, 0) =/= rs1(29, 20), "MSET transfer requires distinct source and target")
+      assert((rs1(9, 0) >= sharedBankIdBase.U) === (rs1(29, 20) >= sharedBankIdBase.U), "MSET transfer requires one bank namespace")
+    }.otherwise {
+      assert(rs1(63, 10) === 0.U, "MSET reserves rs1[63:10]")
+      assert(rs2(63, 12) === 0.U, "MSET reserves rs2[63:12]")
+    }
     assert(!(rs2(11) && !rs2(10)), "MSET clear requires alloc=1")
+  }
+  when(io.cmd_i.fire && (func7 === MVIN_BITPAT || func7 === MVOUT_BITPAT)) {
+    assert(rs2(63) || rs2(62, 58) === 0.U, "Whole-bank DMA reserves selected group bits")
   }
   when(io.cmd_i.fire && func7 === MVIN_2D_BITPAT) {
     val height     = rs1(63, 30)
@@ -133,7 +148,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
     assert(rs2(42, 36) =/= 0.U, "MVIN_2D pixel bytes must be non-zero")
     assert(rs2(52, 43) =/= 0.U, "MVIN_2D source width must be non-zero")
     assert(validBytes <= pixelBytes, "MVIN_2D valid bytes exceed pixel bytes")
-    assert(rs2(58, 53) + height * width <= b.memDomain.bankEntries.U, "MVIN_2D destination exceeds bank")
+    assert((rs2(58, 53) +& (height * width)) <= Mux(shared_bank_id, b.memDomain.sharedBankEntries.U, b.memDomain.bankEntries.U), "MVIN_2D destination exceeds bank")
     assert(!rs2(63), "MVIN_2D reserves rs2[63]")
   }
   when(io.cmd_i.fire && (func7 === MVIN_BITPAT || func7 === MVIN_2D_BITPAT)) {
@@ -141,7 +156,7 @@ class MemDomainDecoder(val b: GlobalConfig) extends Module {
   }
 
   val ls_bank_id = ls_decode_list(LSDecodeFields.BANK_ID.id).asUInt
-  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, ls_bank_id, 0.U(b.memDomain.vbankIdWidth.W))
+  io.mem_decode_cmd_o.bits.bank_id := Mux(io.mem_decode_cmd_o.valid, Mux(transfer, raw_bank_id, ls_bank_id), 0.U(b.memDomain.vbankIdWidth.W))
   io.mem_decode_cmd_o.bits.special := Mux(io.mem_decode_cmd_o.valid, ls_decode_list(LSDecodeFields.SPECIAL.id).asUInt, 0.U(64.W))
   // format: on
 }

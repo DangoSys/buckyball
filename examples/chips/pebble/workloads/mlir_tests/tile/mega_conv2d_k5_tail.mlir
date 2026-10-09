@@ -51,8 +51,8 @@ func.func @main() -> i8 {
   }
   tile.mega_kernel %input %output : memref<1x5x5x2xi8> memref<1x16x5x5xf32> {
     tile.mega_conv2d %input %weight %bias %scale %lut %output
-        {activation = 0 : i64, kernel = 5 : i64, outputScale = 1.0 : f32,
-         padHigh = 2 : i64, padLow = 2 : i64, stride = 1 : i64}
+        <activation = 0, kernel = 5, outputScale = 1.0,
+         padHigh = 2, padLow = 2, stride = 1>
         : memref<1x5x5x2xi8> memref<1x2x32x16xi8> memref<16xi32>
           memref<16xf32> memref<1xi8> memref<1x16x5x5xf32>
   }

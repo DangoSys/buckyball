@@ -1,0 +1,1 @@
+rtl_scopes = ["tiles[0].dut", "tiles[1].dut"]

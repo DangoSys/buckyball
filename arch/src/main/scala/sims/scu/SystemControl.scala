@@ -10,22 +10,19 @@ import memcore.memory.cpu.{CpuMemParams, UncachedRequest, UncachedResponse}
  * selected by address, so software keeps using `base + hartId * stride` regardless of port.
  * Data is right-aligned at `addr`, as on every uncached CPU port.
  */
-/** A harness-detected failure that ends the run through the same sim_exit path as software. */
-class SimAbort extends Bundle {
-  val hart = UInt(32.W)
-  val code = UInt(32.W)
-}
-
 @instantiable
 class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()) extends Module {
-  private val strideBits = log2Ceil(params.strideBytes)
+  val strideBits = log2Ceil(params.strideBytes)
 
   @public
   val io = IO(new Bundle {
     val request  = Vec(ports, Flipped(Decoupled(new UncachedRequest(p))))
     val response = Vec(ports, Decoupled(new UncachedResponse(p)))
-    val abort    = Input(Valid(new SimAbort))
+    val hartIds  = Input(Vec(ports, UInt(32.W)))
+    val failure  = Input(Vec(ports, Valid(new framework.memdomain.frontend.mem.dma.DmaStatus)))
   })
+
+  val faulted = SystemControl.observe(io.failure.toSeq, io.hartIds.toSeq)
 
   for (i <- 0 until ports) {
     val request  = io.request(i)
@@ -53,13 +50,11 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
     val uartSt   = inside && register === 0x20005.U && !wr
     val readyReg = inside && register === 0x20006.U
 
-    write.io.clock := clock
-    write.io.reset := reset.asBool
-    // Port 0 also carries the harness abort, which takes priority over a software exit.
-    val abort = if (i == 0) io.abort.valid else false.B
-    write.io.exit_hart_id := Mux(abort, io.abort.bits.hart, hart)
-    write.io.exit_valid   := (fire && exit) || abort
-    write.io.exit_code    := Mux(abort, io.abort.bits.code, request.bits.data(31, 0))
+    write.io.clock        := clock
+    write.io.reset        := reset.asBool
+    write.io.exit_hart_id := hart
+    write.io.exit_valid   := fire && exit && !faulted
+    write.io.exit_code    := request.bits.data(31, 0)
     write.io.uart_hart_id := hart
     write.io.uart_valid   := fire && uartTx
     write.io.uart_data    := request.bits.data(7, 0)
@@ -75,7 +70,7 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
     when(fire) {
       pending                    := true.B
       tag                        := request.bits.tag
-      error                      := !(exit || uartTx || uartRx || uartSt || readyReg) || request.bits.atomic =/= 0.U
+      error                      := !(exit || uartTx || uartRx || uartSt || readyReg)
       status                     := uartSt
       data                       := Mux(uartRx, read.io.rx_data, Mux(readyReg && !wr, ready, 0.U))
       when(readyReg && wr)(ready := request.bits.data(7, 0))
@@ -87,4 +82,32 @@ class SystemControl(ports: Int, p: CpuMemParams, params: SCUParams = SCUParams()
     response.bits.data          := Mux(status, "h60".U | read.io.rx_valid.asUInt, data)
     when(response.fire)(pending := false.B)
   }
+}
+
+object SystemControl {
+
+  def observe(failures: Seq[ValidIO[framework.memdomain.frontend.mem.dma.DmaStatus]], hartIds: Seq[UInt]): Bool = {
+    val failed  = RegInit(false.B)
+    val pending = VecInit(failures.map(_.valid))
+    val first   = PriorityEncoder(pending)
+    val exit    = Instantiate(new SCUWriteDPI)
+    exit.io.clock                   := Module.clock
+    exit.io.reset                   := Module.reset.asBool
+    exit.io.uart_hart_id            := 0.U
+    exit.io.uart_valid              := false.B
+    exit.io.uart_data               := 0.U
+    exit.io.exit_hart_id            := VecInit(hartIds)(first)
+    exit.io.exit_valid              := pending.asUInt.orR && !failed
+    exit.io.exit_code               := 0x200.U | VecInit(failures.map(_.bits.error))(first)
+    when(pending.asUInt.orR)(failed := true.B)
+    for ((failure, index) <- failures.zipWithIndex) {
+      when(failure.valid && !failed && first === index.U) {
+        printf(
+          cf"[SCU] hart ${hartIds(index)} NPU failure: error=${failure.bits.error} address=0x${failure.bits.address}%x\n"
+        )
+      }
+    }
+    pending.asUInt.orR || failed
+  }
+
 }

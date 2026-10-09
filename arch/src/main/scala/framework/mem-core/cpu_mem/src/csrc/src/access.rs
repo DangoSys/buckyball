@@ -7,7 +7,8 @@ pub unsafe extern "C" fn cpu_mem_ref_prepare(
     assert!(size <= 3 && atomic <= 11 && (atomic == 0 || (write == 0 && size >= 2)));
     let width = 1usize << size;
     let bad_align = addr % width as u64 != 0;
-    let bad_access = addr >= (1u64 << address_bits) || (normal == 0 && atomic != 0);
+    let bad_access = addr >= (1u64 << address_bits) || (normal != 0 && cacheable == 0)
+        || (normal == 0 && (cacheable != 0 || atomic != 0));
     *misaligned = bad_align as u32;
     *access_fault = (!bad_align && bad_access) as u32;
     *target = if bad_align || bad_access { 0 } else if cacheable != 0 { 1 } else { 2 };
@@ -34,7 +35,7 @@ pub extern "C" fn cpu_mem_ref_result(
     cacheable: u32, raw: u64, error: u32,
 ) -> u64 {
     if write != 0 || error != 0 { return 0; }
-    if atomic != 0 { return raw; } // Cache or centralized normal RAM returns architectural Word atomic values.
+    if atomic != 0 { return raw; } // Cache returns architectural Word atomic values.
     let bytes = raw.to_le_bytes();
     let start = if cacheable != 0 { (addr % 8) as usize } else { 0 };
     let length = 1usize << size;

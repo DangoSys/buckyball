@@ -19,7 +19,7 @@ def SMatMulMatmulOp : Buckyball_Op<"smatmul_matmul"> {
                        DefaultValuedAttr<I64Attr, "-1">:$dwAddr,
                        DefaultValuedAttr<I64Attr, "0">:$dwBytes,
                        DefaultValuedAttr<BoolAttr, "false">:$perChannel);
-  let assemblyFormat = [{$aMemArray $bMemArray $cMemArray attr-dict `:`
+  let assemblyFormat = [{$aMemArray $bMemArray $cMemArray prop-dict attr-dict `:`
     type($aMemArray) type($bMemArray) type($cMemArray)}];
 }
 

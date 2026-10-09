@@ -1,0 +1,7 @@
+codeBytes = 16384
+taskBits = 32
+
+[tls]
+base = 0x10000
+bytes = 16384
+dataBits = 128

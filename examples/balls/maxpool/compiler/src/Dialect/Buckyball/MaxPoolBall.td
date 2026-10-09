@@ -21,7 +21,7 @@ def MaxPoolOp : Buckyball_Op<"maxpool"> {
                        I64Attr:$startCol);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` $iter `,` "
                        "$inputBase `,` $outputBase `,` $outputStride "
-                       "attr-dict `:` type($inputBankId) type($outputBankId) "
+                       "prop-dict attr-dict `:` type($inputBankId) type($outputBankId) "
                        "type($iter) type($inputBase) type($outputBase) "
                        "type($outputStride)";
 }
@@ -36,7 +36,7 @@ def BankMaxPoolOp : Buckyball_Op<"bank_maxpool"> {
                        I64Attr:$startCol);
   let results = (outs I64:$outBankOut);
   let assemblyFormat = "$inBank $outBank $iter $inputBase $outputBase "
-                       "$outputStride attr-dict `:` type($inBank) "
+                       "$outputStride prop-dict attr-dict `:` type($inBank) "
                        "type($outBank) type($iter) type($inputBase) "
                        "type($outputBase) type($outputStride)";
 }

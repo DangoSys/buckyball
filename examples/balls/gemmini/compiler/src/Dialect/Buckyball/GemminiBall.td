@@ -16,7 +16,7 @@ def GemminiInstructionOp : Buckyball_Op<"gemmini"> {
     and GEMMINI_LOOP_CONV_WS without hard-coding funct7 values in the IR.
   }];
   let arguments = (ins StrAttr:$mnemonic, I64:$rs1, I64:$rs2);
-  let assemblyFormat = "$mnemonic $rs1 `,` $rs2 attr-dict `:` type($rs1)";
+  let assemblyFormat = "$mnemonic $rs1 `,` $rs2 prop-dict attr-dict `:` type($rs1)";
 }
 
 def BankGemminiPreloadOp : Buckyball_Op<"bank_gemmini_preload"> {
@@ -24,7 +24,7 @@ def BankGemminiPreloadOp : Buckyball_Op<"bank_gemmini_preload"> {
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$inBase,
                        I64:$outBase);
   let results = (outs I64:$outBankOut);
-  let assemblyFormat = "$inBank $outBank $iter $inBase $outBase attr-dict `:` "
+  let assemblyFormat = "$inBank $outBank $iter $inBase $outBase prop-dict attr-dict `:` "
                        "type($inBank) type($outBank) type($iter) type($inBase) type($outBase)";
 }
 
@@ -33,7 +33,7 @@ def BankGemminiComputePreloadedOp : Buckyball_Op<"bank_gemmini_compute_preloaded
   let arguments = (ins I64:$aBank, I64:$bBank, I64:$outBank, I64:$iter,
                        I64:$aBase, I64:$bBase, I64:$outBase);
   let results = (outs I64:$outBankOut);
-  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase attr-dict `:` "
+  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase prop-dict attr-dict `:` "
                        "type($aBank) type($bBank) type($outBank) type($iter) type($aBase) type($bBase) type($outBase)";
 }
 
@@ -42,7 +42,7 @@ def BankGemminiComputeAccumulatedOp : Buckyball_Op<"bank_gemmini_compute_accumul
   let arguments = (ins I64:$aBank, I64:$bBank, I64:$outBank, I64:$iter,
                        I64:$aBase, I64:$bBase, I64:$outBase);
   let results = (outs I64:$outBankOut);
-  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase attr-dict `:` "
+  let assemblyFormat = "$aBank $bBank $outBank $iter $aBase $bBase $outBase prop-dict attr-dict `:` "
                        "type($aBank) type($bBank) type($outBank) type($iter) type($aBase) type($bBase) type($outBase)";
 }
 
@@ -54,13 +54,13 @@ def GemminiConvOp : Buckyball_Op<"gemmini_conv", [
     AnyRankedTensor:$bias, I64Attr:$kh, I64Attr:$kw, I64Attr:$stride,
     I64Attr:$padding, F32Attr:$inputScale, F32Attr:$weightScale);
   let results = (outs AnyRankedTensor:$output);
-  let assemblyFormat = "$input `,` $weight `,` $bias attr-dict `:` type($input) `,` type($weight) `,` type($bias) `->` type($output)";
+  let assemblyFormat = "$input `,` $weight `,` $bias prop-dict attr-dict `:` type($input) `,` type($weight) `,` type($bias) `->` type($output)";
 }
 def GemminiMemConvOp : Buckyball_Op<"gemmini_mem_conv"> {
   let arguments = (ins AnyMemRef:$input, AnyMemRef:$weight, AnyMemRef:$bias,
     AnyMemRef:$output, I64Attr:$kh, I64Attr:$kw, I64Attr:$stride,
     I64Attr:$padding, F32Attr:$inputScale, F32Attr:$weightScale);
-  let assemblyFormat = "$input `,` $weight `,` $bias `,` $output attr-dict `:` type($input) `,` type($weight) `,` type($bias) `,` type($output)";
+  let assemblyFormat = "$input `,` $weight `,` $bias `,` $output prop-dict attr-dict `:` type($input) `,` type($weight) `,` type($bias) `,` type($output)";
 }
 
 #endif // GEMMINI_BALL_OPS

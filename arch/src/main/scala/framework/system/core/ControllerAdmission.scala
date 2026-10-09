@@ -7,7 +7,7 @@ import framework.system.core.rocket.{CpuParams, HasCpuParameters}
 import framework.system.core.rocket.RoCCIO
 import framework.memdomain.isa.{MvoverISA, MvoverPort}
 import framework.memdomain.frontend.mem.dma.{DmaError, DmaStatus}
-import hier.core.rocket.AdmissionPorts
+import hier.core.rocket.{AdmissionPorts, CommandSnapshot}
 import hier.tile.TaskAdmission
 import memcore.bus.chi.{Params => ChiParams}
 import memcore.memory.interlock.{Params => TrackingParams}
@@ -21,11 +21,12 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
 
   @public
   val io = IO(new Bundle {
-    val core      = Flipped(new AdmissionPorts(tracking, nPMPs, bus))
-    val task      = Flipped(new RoCCIO(64))
-    val taskSatp  = Output(UInt(64.W))
-    val move      = new MvoverPort
-    val moveFault = Valid(new DmaStatus)
+    val core        = Flipped(new AdmissionPorts(tracking, nPMPs, bus))
+    val task        = Flipped(new RoCCIO(64))
+    val taskSatp    = Output(UInt(64.W))
+    val taskContext = Output(new CommandSnapshot(tracking, nPMPs))
+    val move        = new MvoverPort
+    val moveFault   = Valid(new DmaStatus)
   })
 
   val idle :: task :: moving :: moveResponse :: releasing :: Nil = Enum(5)
@@ -40,6 +41,8 @@ class ControllerAdmission(tracking: TrackingParams, bus: ChiParams, moves: Boole
   val controller: Instance[TaskAdmission] = Instantiate(new TaskAdmission(tracking, nPMPs))
   controller.io.task <> io.task
   io.taskSatp                 := controller.io.satp
+  // The Ant launch handshake is the task command handshake; freeze this complete snapshot there.
+  io.taskContext              := io.core.command.bits
   controller.io.workDrained   := true.B // This endpoint has no NPU or DMA client.
   controller.io.command.valid := state === idle && io.core.command.valid && isTask
   controller.io.command.bits  := io.core.command.bits

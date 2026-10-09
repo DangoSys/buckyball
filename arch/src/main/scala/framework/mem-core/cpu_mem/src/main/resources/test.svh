@@ -33,15 +33,15 @@ class protocol_test extends ip_test;
   endfunction
   task transact(longint unsigned addr, int size, bit write, bit signed_load, longint unsigned data,
                 int atomic_op, bit cacheable, longint unsigned raw = 64'h80ff7f0181fe8000,
-                bit error = 0, bit normal_ram = 0);
+                bit error = 0, bit normal_ram = 0, bit device = 0);
     req_t packet = '0;
     int unsigned target, misaligned, access_fault, bus_mask, atomic_word;
     longint unsigned bus_addr, bus_data, expected_data;
     bit [`CPU_RESP_WIDTH-1:0] expected_response;
     int tag = checked & ((1 << `CPU_TAG_BITS) - 1);
-    cpu_mem_ref_prepare(addr, size, write, data, atomic_op, cacheable, cacheable || normal_ram,
-                        `CPU_PHYSICAL_BITS, target, misaligned, access_fault, bus_addr, bus_data,
-                        bus_mask, atomic_word);
+    cpu_mem_ref_prepare(addr, size, write, data, atomic_op, cacheable,
+                        !device && (cacheable || normal_ram), `CPU_PHYSICAL_BITS, target,
+                        misaligned, access_fault, bus_addr, bus_data, bus_mask, atomic_word);
     expected_data = target == 0 ? 0 :
         cpu_mem_ref_result(addr, size, write, signed_load, atomic_op, cacheable, raw, error);
     expected_response = '0;
@@ -57,7 +57,7 @@ class protocol_test extends ip_test;
     packet[`CPUF(REQ, DATA)] = data;
     packet[`CPUF(REQ, ATOMIC)] = atomic_op;
     packet[`CPUF(REQ, CACHEABLE)] = cacheable;
-    packet[`CPUF(REQ, NORMAL)] = cacheable || normal_ram;
+    packet[`CPUF(REQ, NORMAL)] = !device && (cacheable || normal_ram);
     @(control.cb);
     response.ready <= 0;
     cache_request.ready <= 0;
@@ -113,11 +113,7 @@ class protocol_test extends ip_test;
           `CPUF(UNCACHED, DATA)
           ] !== data || uncached_request.sample.bits[
           `CPUF(UNCACHED, TAG)
-          ] !== tag || uncached_request.sample.bits[
-          `CPUF(UNCACHED, NORMAL)
-          ] !== normal_ram || uncached_request.sample.bits[
-          `CPUF(UNCACHED, ATOMIC)
-          ] !== atomic_op || cache_request.valid)
+          ] !== tag || cache_request.valid)
         `uvm_fatal("MMIO", "Uncached access expanded or changed its address/size/data/tag")
       repeat (3) @(control.cb);
       uncached_request.ready <= 1;
@@ -172,6 +168,7 @@ class protocol_test extends ip_test;
     packet[`CPUF(REQ, SIZE)] = 3;
     packet[`CPUF(REQ, TAG)] = 63;
     packet[`CPUF(REQ, CACHEABLE)] = cacheable;
+    packet[`CPUF(REQ, NORMAL)] = cacheable;
     @(control.cb);
     request.bits <= packet;
     request.valid <= 1;
@@ -299,7 +296,15 @@ class protocol_test extends ip_test;
     transact(64'h1000, 3, 1, 0, '1, 0, 1);
     transact((64'h1 << `CPU_PHYSICAL_BITS) - 8, 3, 0, 0, 0, 0, 1);
     transact((64'h1 << `CPU_PHYSICAL_BITS) - 1, 0, 1, 0, '1, 0, 1);
-    // Central normal-RAM atomic results are already architectural; inactive cache data must be ignored.
+    // Noncacheable normal memory, including every atomic, faults without issuing traffic.
+    for (int size = 0; size < 4; size++) begin
+      transact(64'h3000, size, 0, 0, 0, 0, 0, 0, 0, 1);
+      transact(64'h3000, size, 1, 0, 1, 0, 0, 0, 0, 1);
+      transact(64'h3001, size, 0, 0, 0, 0, 0, 0, 0, 1);
+      transact(64'h60020000, size, 0, 0, 0, 0, 1, 0, 0, 0, 1);
+      transact(64'h60020000, size, 1, 0, 1, 0, 1, 0, 0, 0, 1);
+      transact(64'h60020001, size, 0, 0, 0, 0, 1, 0, 0, 0, 1);
+    end
     for (int op = 1; op <= 11; op++)
     for (int size = 2; size <= 3; size++) begin
       transact(64'h3000 + (size == 2 ? 4 : 0), size, 0, 0, 64'h76543210, op, 0,

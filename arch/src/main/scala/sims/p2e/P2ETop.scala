@@ -141,7 +141,7 @@ class P2EDdrAdapter(system: axi4.Params, base: BigInt) extends Module {
     val out = Flipped(new Ddr4AxiSlave(11))
   })
 
-  private val lanes = 1 << system.idBits
+  val lanes = 1 << system.idBits
 
   // Write lanes: W beats follow AW order, so queue each accepted burst's first lane.
   val writeLane  = Module(new Queue(Bool(), 8))
@@ -204,7 +204,7 @@ class P2EDdrAdapter(system: axi4.Params, base: BigInt) extends Module {
     readUpper(io.in.ar.bits.id) := io.in.ar.bits.addr(4)
   }
 
-  private val rid = io.out.rid(system.idBits - 1, 0)
+  val rid = io.out.rid(system.idBits - 1, 0)
   io.in.r.valid     := io.out.rvalid
   io.in.r.bits.id   := rid
   io.in.r.bits.data := Mux(readUpper(rid), io.out.rdata(255, 128), io.out.rdata(127, 0))

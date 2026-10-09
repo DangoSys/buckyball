@@ -34,11 +34,11 @@ class Admission(
   require(tracking.entries == 4 && tracking.idBits == prepared.idBits)
   require(tracking.addressBits == prepared.bus.addressBits && tracking.maxRanges == prepared.maxRanges)
   require(prepared.beatBytes == axiParams.bytes && b.memDomain.dma_buswidth == axiParams.dataBits)
-  private val parents          = tracking.entries
-  private val n                = 8
-  private val internalTracking = tracking.copy(entries = n)
-  private val internalPrepared = prepared.copy(contexts = n)
-  private val indexBits        = log2Ceil(n)
+  val parents          = tracking.entries
+  val n                = 8
+  val internalTracking = tracking.copy(entries = n)
+  val internalPrepared = prepared.copy(contexts = n)
+  val indexBits        = log2Ceil(n)
   require(tracking.idBits >= indexBits)
 
   @public

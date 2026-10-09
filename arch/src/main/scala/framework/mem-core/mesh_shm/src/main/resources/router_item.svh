@@ -4,7 +4,7 @@ class packet extends uvm_sequence_item;
   bit last;
   bit [7:0] id;
   bit [3:0] destination;
-  bit [39:0] events;
+  bit [44:0] events;
   int port;
   `uvm_object_utils_begin(packet)
     `uvm_field_int(data, UVM_ALL_ON)

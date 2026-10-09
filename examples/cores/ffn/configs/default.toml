@@ -1,3 +1,4 @@
+factory = "examples.cores.ffn.FfnCore"
 # FFN Core Configuration (default)
 
 balldomain = "balldomains/default.toml"

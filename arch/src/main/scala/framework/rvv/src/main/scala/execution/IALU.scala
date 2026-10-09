@@ -1,52 +1,57 @@
 package framework.rvv
 
+import framework.arith.{DivRem, DivRemRequest}
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 /** Element arithmetic shared by the e8/e16/e32/e64 integer vector instructions. */
 @instantiable
-class IALU extends Module {
+class IALU(val maxWidth: Int) extends Module {
+  require(maxWidth == 32 || maxWidth == 64)
+  val maxSew       = log2Ceil(maxWidth / 8)
+  val productWidth = 2 * maxWidth
 
   @public
   val io = IO(new Bundle {
-    val a             = Input(UInt(64.W))
-    val b             = Input(UInt(64.W))
-    val c             = Input(UInt(64.W))
+    val a             = Input(UInt(maxWidth.W))
+    val b             = Input(UInt(maxWidth.W))
+    val c             = Input(UInt(maxWidth.W))
     val carry         = Input(Bool())
     val vxrm          = Input(UInt(2.W))
     val selector      = Input(UInt(5.W))
     val sew           = Input(UInt(2.W))
     val funct6        = Input(UInt(6.W))
     val multiplyClass = Input(Bool())
-    val divRequest    = Flipped(Decoupled(new DivRemRequest(64)))
-    val divResponse   = Decoupled(UInt(64.W))
+    val divRequest    = Flipped(Decoupled(new DivRemRequest(maxWidth)))
+    val divResponse   = Decoupled(UInt(maxWidth.W))
     val clear         = Input(Bool())
-    val result        = Output(UInt(64.W))
+    val result        = Output(UInt(maxWidth.W))
     val saturated     = Output(Bool())
     val legal         = Output(Bool())
   })
 
-  val divider: Instance[DivRem] = Instantiate(new DivRem(64))
+  val divider: Instance[DivRem] = Instantiate(new DivRem(maxWidth))
   divider.io.request <> io.divRequest
   io.divResponse <> divider.io.response
   divider.io.clear := io.clear
 
-  val mask = MuxLookup(io.sew, "hffffffffffffffff".U(64.W))(Seq(0.U -> "hff".U, 1.U -> "hffff".U, 2.U -> "hffffffff".U))
+  val mask = MuxLookup(io.sew, Fill(maxWidth, 1.U(1.W)))(Seq(0.U -> "hff".U, 1.U -> "hffff".U, 2.U -> "hffffffff".U))
   val a    = io.a & mask
   val b    = io.b & mask
   val c    = io.c & mask
 
   val sa = MuxLookup(io.sew, a)(Seq(
-    0.U -> Cat(Fill(56, a(7)), a(7, 0)),
-    1.U -> Cat(Fill(48, a(15)), a(15, 0)),
-    2.U -> Cat(Fill(32, a(31)), a(31, 0))
+    0.U -> a(7, 0).asSInt.pad(maxWidth).asUInt,
+    1.U -> a(15, 0).asSInt.pad(maxWidth).asUInt,
+    2.U -> a(31, 0).asSInt.pad(maxWidth).asUInt
   )).asSInt
 
   val sb = MuxLookup(io.sew, b)(Seq(
-    0.U -> Cat(Fill(56, b(7)), b(7, 0)),
-    1.U -> Cat(Fill(48, b(15)), b(15, 0)),
-    2.U -> Cat(Fill(32, b(31)), b(31, 0))
+    0.U -> b(7, 0).asSInt.pad(maxWidth).asUInt,
+    1.U -> b(15, 0).asSInt.pad(maxWidth).asUInt,
+    2.U -> b(31, 0).asSInt.pad(maxWidth).asUInt
   )).asSInt
 
   val width               = 8.U(7.W) << io.sew
@@ -58,18 +63,18 @@ class IALU extends Module {
   val unsignedSum         = a +& b
   val signedSum           = sa +& sb
   val signedDifference    = sa -& sb
-  val maximum             = Cat(0.U(1.W), mask(63, 1)).asSInt
+  val maximum             = Cat(0.U(1.W), mask(maxWidth - 1, 1)).asSInt
   val minimum             = -(maximum +& 1.S)
   val signedOverflow      = signedSum > maximum || signedSum < minimum
   val differenceOverflow  = signedDifference > maximum || signedDifference < minimum
   val carrySum            = unsignedSum + io.carry
   val borrow              = a < (b +& io.carry)
-  val wideMask            = MuxLookup(io.sew, "hffffffffffffffff".U(64.W))(Seq(0.U -> "hffff".U, 1.U -> "hffffffff".U))
+  val wideMask            = MuxLookup(io.sew, Fill(maxWidth, 1.U(1.W)))(Seq(0.U -> "hffff".U, 1.U -> "hffffffff".U))
   val wideA               = io.a & wideMask
 
   val signedWideA = MuxLookup(io.sew, io.a)(Seq(
-    0.U -> Cat(Fill(48, io.a(15)), io.a(15, 0)),
-    1.U -> Cat(Fill(32, io.a(31)), io.a(31, 0))
+    0.U -> io.a(15, 0).asSInt.pad(maxWidth).asUInt,
+    1.U -> io.a(31, 0).asSInt.pad(maxWidth).asUInt
   )).asSInt
 
   val narrowShift     = io.b(5, 0) & ((width << 1) - 1.U)
@@ -85,14 +90,14 @@ class IALU extends Module {
   ))
 
   val extensionSigned = MuxLookup(extensionWidth, io.a)(Seq(
-    0.U -> Cat(Fill(56, io.a(7)), io.a(7, 0)),
-    1.U -> Cat(Fill(48, io.a(15)), io.a(15, 0)),
-    2.U -> Cat(Fill(32, io.a(31)), io.a(31, 0))
+    0.U -> io.a(7, 0).asSInt.pad(maxWidth).asUInt,
+    1.U -> io.a(15, 0).asSInt.pad(maxWidth).asUInt,
+    2.U -> io.a(31, 0).asSInt.pad(maxWidth).asUInt
   ))
 
   // All fixed-point operations share one rounding path. A signed container
   // also holds unsigned inputs, with an extra zero sign bit.
-  val roundInput  = WireDefault(0.S(129.W))
+  val roundInput  = WireDefault(0.S(productWidth.W))
   val roundShift  = WireDefault(0.U(7.W))
   when(io.multiplyClass) {
     roundShift := 1.U
@@ -103,19 +108,20 @@ class IALU extends Module {
       is(11.U)(roundInput := signedDifference)
     }
   }.otherwise {
-    roundInput := Mux(io.funct6(0), sa.pad(129), a.zext.pad(129))
+    roundInput := Mux(io.funct6(0), sa.pad(productWidth), a.zext.pad(productWidth))
     roundShift := shift
     when(io.funct6 === 39.U) {
       roundInput := signedProduct
       roundShift := width - 1.U
     }
     when(io.funct6 === 46.U || io.funct6 === 47.U) {
-      roundInput := Mux(io.funct6(0), signedWideA.pad(129), wideA.zext.pad(129))
+      roundInput := Mux(io.funct6(0), signedWideA.pad(productWidth), wideA.zext.pad(productWidth))
       roundShift := narrowShift
     }
   }
-  val shifted     = roundInput >> roundShift
-  val discardMask = ((1.U(129.W) << roundShift) - 1.U)(128, 0)
+  // Keep the element width plus its sign and one rounding carry.
+  val shifted     = (roundInput >> roundShift).asUInt(maxWidth, 0).asSInt
+  val discardMask = ((1.U(productWidth.W) << roundShift) - 1.U)(productWidth - 1, 0)
   val discarded   = (roundInput.asUInt & discardMask).orR
   val halfway     = roundShift =/= 0.U && (roundInput.asUInt >> (roundShift - 1.U))(0)
   val belowHalf   = (roundInput.asUInt & (discardMask >> 1)).orR
@@ -160,11 +166,11 @@ class IALU extends Module {
       is(62.U)(io.result                 := (reverseMixedProduct.asUInt + io.c) & wideMask)
       is(63.U)(io.result                 := (mixedProduct.asUInt + io.c) & wideMask)
     }
-    io.legal := (io.funct6 >= 8.U && io.funct6 <= 11.U) ||
+    io.legal := io.sew <= maxSew.U && ((io.funct6 >= 8.U && io.funct6 <= 11.U) ||
       (io.funct6 === 18.U && io.selector >= 2.U && io.selector <= 7.U && io.sew >= extensionRatio) ||
       (io.funct6 >= 32.U && io.funct6 <= 39.U) ||
       Seq(41, 43, 45, 47).map(n => io.funct6 === n.U).reduce(_ || _) ||
-      (io.sew < 3.U && io.funct6 >= 48.U && io.funct6 =/= 57.U)
+      (io.sew < maxSew.U && io.funct6 >= 48.U && io.funct6 =/= 57.U))
   }.otherwise {
     switch(io.funct6) {
       is(0.U)(io.result        := (a + b) & mask)
@@ -206,7 +212,7 @@ class IALU extends Module {
         io.saturated := roundedOverflow
       }
       is(40.U)(io.result       := a >> shift)
-      is(41.U)(io.result       := (sa.pad(129) >> shift).asUInt(63, 0) & mask)
+      is(41.U)(io.result       := (sa.pad(productWidth + 1) >> shift).asUInt(maxWidth - 1, 0) & mask)
       is(42.U, 43.U)(io.result := rounded.asUInt & mask)
       is(44.U)(io.result       := (wideA >> narrowShift) & mask)
       is(45.U)(io.result       := (signedWideA >> narrowShift).asUInt & mask)
@@ -219,10 +225,10 @@ class IALU extends Module {
         io.saturated := roundedOverflow
       }
     }
-    io.legal := Seq(0, 2, 3, 4, 5, 6, 7, 9, 10, 11, 16, 17, 18, 19, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
-      37, 39, 40, 41, 42, 43)
+    io.legal := io.sew <= maxSew.U && (Seq(0, 2, 3, 4, 5, 6, 7, 9, 10, 11, 16, 17, 18, 19, 23, 24, 25, 26, 27, 28, 29,
+      30, 31, 32, 33, 34, 35, 37, 39, 40, 41, 42, 43)
       .map(n => io.funct6 === n.U).reduce(_ || _) ||
-      (io.sew < 3.U && io.funct6 >= 44.U && io.funct6 <= 47.U)
+      (io.sew < maxSew.U && io.funct6 >= 44.U && io.funct6 <= 47.U))
   }
 
 }

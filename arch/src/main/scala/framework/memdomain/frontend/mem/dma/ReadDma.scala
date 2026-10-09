@@ -25,23 +25,24 @@ class ReadDma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extends
     val axi           = new axi4.Port(axiParams)
   })
 
-  val idle :: shape :: plan :: query :: offer :: receive :: respond :: drain :: failed :: Nil = Enum(9)
-  val state                                                                                   = RegInit(idle)
-  val command                                                                                 = Reg(new BBReadRequest)
-  val parent                                                                                  = Reg(UInt(prepared.idBits.W))
-  val total                                                                                   = Reg(UInt(17.W))
-  val progress                                                                                = RegInit(0.U(17.W))
-  val group                                                                                   = RegInit(0.U(6.W))
-  val column                                                                                  = RegInit(0.U(4.W))
-  val address                                                                                 = Reg(UInt(64.W))
-  val queryVA                                                                                 = Reg(UInt(64.W))
-  val physical                                                                                = Reg(UInt(axiParams.addressBits.W))
-  val candidate                                                                               = Reg(UInt(9.W))
-  val remaining                                                                               = Reg(UInt(9.W))
-  val second                                                                                  = RegInit(false.B)
-  val firstPart                                                                               = Reg(UInt(128.W))
-  val result                                                                                  = Reg(UInt(128.W))
-  val fault                                                                                   = RegInit(0.U.asTypeOf(new DmaStatus))
+  val idle :: shape :: divide :: products :: offset :: check :: plan :: query :: offer :: receive :: respond :: drain :: failed :: Nil =
+    Enum(13)
+  val state                                                                                                                            = RegInit(idle)
+  val command                                                                                                                          = Reg(new BBReadRequest)
+  val parent                                                                                                                           = Reg(UInt(prepared.idBits.W))
+  val total                                                                                                                            = Reg(UInt(17.W))
+  val progress                                                                                                                         = RegInit(0.U(17.W))
+  val group                                                                                                                            = RegInit(0.U(6.W))
+  val column                                                                                                                           = RegInit(0.U(4.W))
+  val address                                                                                                                          = Reg(UInt(64.W))
+  val queryVA                                                                                                                          = Reg(UInt(64.W))
+  val physical                                                                                                                         = Reg(UInt(axiParams.addressBits.W))
+  val candidate                                                                                                                        = Reg(UInt(9.W))
+  val remaining                                                                                                                        = Reg(UInt(9.W))
+  val second                                                                                                                           = RegInit(false.B)
+  val firstPart                                                                                                                        = Reg(UInt(128.W))
+  val result                                                                                                                           = Reg(UInt(128.W))
+  val fault                                                                                                                            = RegInit(0.U.asTypeOf(new DmaStatus))
 
   io.req.ready             := state === idle && io.decisionValid
   io.busy                  := state =/= idle
@@ -91,14 +92,46 @@ class ReadDma(b: GlobalConfig, prepared: Params, axiParams: axi4.Params) extends
     }
   }
 
-  val divisor      = Mux(command.is_2d, command.tile_width.pad(6), command.groups)
-  val rowStride    = Mux(command.is_2d, command.source_width * command.pixel_bytes, command.groups * command.stride * 16.U)
-  val columnStride = Mux(command.is_2d, command.pixel_bytes, 16.U)
-  val lastIndex    = total - 1.U
-  val lastByte     = command.vaddr.pad(66) +& ((lastIndex / divisor) * rowStride) +&
-    ((lastIndex % divisor) * columnStride) +& 15.U
+  // At most 65536 beats: divide the 16-bit last index without a combinational divider.
+  val quotient         = Reg(UInt(16.W))
+  val remainder        = Reg(UInt(6.W))
+  val divisor          = Reg(UInt(6.W))
+  val divideLeft       = Reg(UInt(5.W))
+  val rowStride        = Reg(UInt(29.W))
+  val columnStride     = Reg(UInt(10.W))
+  val rowOffset        = Reg(UInt(45.W))
+  val columnOffset     = Reg(UInt(16.W))
+  val lastOffset       = Reg(UInt(46.W))
+  val shapeDivisor     = Mux(command.is_2d, command.tile_width.pad(6), command.groups)
   when(state === shape) {
-    when((lastByte >> 64).orR)(fail(DmaError.Shape.U, command.vaddr)).otherwise(state := plan)
+    quotient     := (total - 1.U)(15, 0)
+    remainder    := 0.U
+    divisor      := shapeDivisor
+    divideLeft   := 16.U
+    rowStride    := Mux(command.is_2d, command.source_width * command.pixel_bytes, (command.groups * command.stride) << 4)
+    columnStride := Mux(command.is_2d, command.pixel_bytes, 16.U)
+    state        := Mux(shapeDivisor === 1.U, products, divide)
+  }
+  val shiftedRemainder = Cat(remainder, quotient(15))
+  val subtractDivisor  = shiftedRemainder >= divisor
+  when(state === divide) {
+    quotient                       := Cat(quotient(14, 0), subtractDivisor)
+    remainder                      := Mux(subtractDivisor, shiftedRemainder - divisor, shiftedRemainder)(5, 0)
+    divideLeft                     := divideLeft - 1.U
+    when(divideLeft === 1.U)(state := products)
+  }
+  when(state === products) {
+    rowOffset    := quotient * rowStride
+    columnOffset := remainder * columnStride
+    state        := offset
+  }
+  when(state === offset) {
+    lastOffset := rowOffset +& columnOffset +& 15.U
+    state      := check
+  }
+  val lastByte         = command.vaddr +& lastOffset
+  when(state === check) {
+    when(lastByte(64))(fail(DmaError.Shape.U, command.vaddr)).otherwise(state := plan)
   }
 
   val contiguous = Mux(

@@ -14,19 +14,25 @@ import memcore.memory.mesh_shm.{MeshCoreAttachment, MeshLocalBankPort, MeshShare
 import framework.memdomain.isa.{MvoverISA, MvoverPort}
 
 @instantiable
-class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Module {
-  val nCores               = b.memDomain.nCores
-  private val totalBanks   = SharedMemLayout.totalBank(b)
-  private val totalChannel = SharedMemLayout.totalChannel(b)
-  private val tagBits      = math.max(1, log2Ceil(b.frontend.rob_entries))
+class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false, externalPhysicalPorts: Int = 0) extends Module {
+  require(externalPhysicalPorts >= 0 && (externalPhysicalPorts == 0 || useMesh))
+  val nCores       = b.memDomain.nCores
+  val totalBanks   = SharedMemLayout.totalBank(b)
+  val totalChannel = SharedMemLayout.totalChannel(b)
+  val sharedConfig = b.copy(memDomain = b.memDomain.copy(bankEntries = b.memDomain.sharedBankEntries))
+  val tagBits      = math.max(1, log2Ceil(b.frontend.rob_entries))
 
   @public
   val io = IO(new Bundle {
-    val mem_req    = Vec(totalChannel, Flipped(new MemRequestIO(b)))
-    val mvover     = Flipped(new MvoverPort)
-    val localBanks =
+    val mem_req             = Vec(totalChannel, Flipped(new MemRequestIO(b)))
+    val lease               = Option.when(externalPhysicalPorts > 0)(Flipped(new SharedLeasePort))
+    val leaseOwnerHartId    = Option.when(externalPhysicalPorts > 0)(Input(UInt(b.tile.xLen.W)))
+    val physical            = Vec(externalPhysicalPorts, Flipped(new SharedPhysicalPort(b.memDomain.bankWidth)))
+    val physicalOwnerHartId = if (externalPhysicalPorts > 0) Some(Input(UInt(b.tile.xLen.W))) else None
+    val mvover              = Flipped(new MvoverPort)
+    val localBanks          =
       Vec(nCores, new MeshLocalBankPort(MvoverISA.AddressBits, MvoverISA.BankBits, b.memDomain.bankWidth, tagBits))
-    val config     = Flipped(Decoupled(new MemConfigerIO(b)))
+    val config              = Flipped(Decoupled(new MemConfigerIO(b)))
 
     // Query interface for frontend to get group count
     val query_valid       = Input(Vec(nCores, Bool()))
@@ -36,7 +42,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
     val bank_hashes       = if (b.sim.diffTest) Some(Output(Vec(totalBanks, new PhysicalBankHash(b)))) else None
   })
 
-  private val meshParams =
+  val meshParams =
     if (useMesh) {
       require(b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16)
       require(b.memDomain.sharedInputChannels % b.memDomain.computeCoreIds.size == 0)
@@ -47,7 +53,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
       Some(MeshSharedMemParams(
         rows = rows,
         cols = columns,
-        entriesPerBank = b.memDomain.bankEntries,
+        entriesPerBank = b.memDomain.sharedBankEntries,
         dataBits = b.memDomain.bankWidth,
         tagBits = tagBits,
         localBankBits = MvoverISA.BankBits,
@@ -56,6 +62,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
           MeshCoreAttachment(if (computeIndex < 0) Seq.empty
           else (0 until perCore).map(ch => (computeIndex * perCore + ch) % totalBanks))
         },
+        externalChannels = externalPhysicalPorts,
         visibleBanks = totalBanks
       ))
     } else None
@@ -77,10 +84,6 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
     io.mvover.completion.valid                 := network.io.transferCompletion.valid
     io.mvover.completion.bits                  := network.io.transferCompletion.bits.error
     network.io.transferCompletion.ready        := io.mvover.completion.ready
-    when(io.mvover.command.fire) {
-      assert(io.mvover.command.bits.sourceAddr < meshParams.get.entriesPerBank.U)
-      assert(io.mvover.command.bits.targetAddr < meshParams.get.entriesPerBank.U)
-    }
     for ((local, index) <- network.io.localBanks.zipWithIndex) {
       io.localBanks(index).request.valid  := local.request.valid
       io.localBanks(index).request.bits   := local.request.bits
@@ -101,18 +104,19 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
     }
   }
 
-  val banks:    Seq[Instance[SramBank]] = if (useMesh) Seq.empty else Seq.fill(totalBanks)(Instantiate(new SramBank(b)))
+  val banks:    Seq[Instance[SramBank]] =
+    if (useMesh) Seq.empty else Seq.fill(totalBanks)(Instantiate(new SramBank(sharedConfig)))
   val accPipes: Seq[Instance[AccPipe]]  = Seq.fill(totalChannel)(Instantiate(new AccPipe(b)))
 
   val hashMonitors: Option[Seq[Instance[BankHashMonitor]]] =
     if (b.sim.diffTest) {
-      Some(Seq.fill(totalBanks)(Instantiate(new BankHashMonitor(b))))
+      Some(Seq.fill(totalBanks)(Instantiate(new BankHashMonitor(sharedConfig))))
     } else {
       None
     }
 
   // Per-channel memory trace DPI-C modules to avoid losing simultaneous events
-  val mtraces = Seq.fill(totalChannel)(Module(new MTraceDPI))
+  val mtraces = Seq.fill(totalChannel + externalPhysicalPorts)(Module(new MTraceDPI))
   for (mt <- mtraces) {
     mt.io.clock      := clock
     mt.io.reset      := reset.asBool
@@ -144,6 +148,97 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
   }
 
   val mappingTable = RegInit(VecInit(Seq.fill(totalBanks)(0.U.asTypeOf(new MappingTableEntry))))
+  val leases       = Option.when(externalPhysicalPorts > 0)(RegInit(VecInit(Seq.fill(totalBanks)(0.U(32.W)))))
+  io.lease.foreach { port =>
+    val pending = RegInit(false.B)
+    val result  = Reg(UInt(64.W))
+    val matches = VecInit(mappingTable.map(entry =>
+      entry.valid &&
+        entry.hart_id === io.leaseOwnerHartId.get && entry.vbank_id === port.request.bits.vbank &&
+        entry.group_id === port.request.bits.group
+    ))
+    val index   = PriorityEncoder(matches)
+    port.request.ready               := !pending && !io.config.valid && !reset.asBool
+    port.response.valid              := pending && !reset.asBool
+    port.response.bits               := result
+    when(port.request.fire) {
+      assert(PopCount(matches) === 1.U, "Shared lease requires one allocated owner/bank/group")
+      val count = leases.get(index)
+      when(port.request.bits.release) {
+        assert(count =/= 0.U, "Shared lease release has no export")
+        count  := count - 1.U
+        result := 0.U
+      }.otherwise {
+        assert(count =/= "hffffffff".U, "Shared lease count overflow")
+        count  := count + 1.U
+        result := index * (b.memDomain.sharedBankEntries * (b.memDomain.bankWidth / 8)).U(64.W)
+      }
+      pending := true.B
+    }
+    when(port.response.fire)(pending := false.B)
+  }
+
+  mesh.foreach { network =>
+    val rowBits     = log2Ceil(b.memDomain.sharedBankEntries)
+    val bytesPerRow = b.memDomain.bankWidth / 8
+    val byteBits    = log2Ceil(bytesPerRow)
+    for (i <- 0 until externalPhysicalPorts) {
+      val physical  = io.physical(i)
+      val channel   = network.io.external(i)
+      val bank      = physical.request.bits.address >> (rowBits + byteBits)
+      val legal     = bank < totalBanks.U && physical.request.bits.address(byteBits - 1, 0) === 0.U
+      val bankIndex = bank(math.max(1, log2Ceil(totalBanks)) - 1, 0)
+      val allocated = VecInit(mappingTable.map(_.valid))(bankIndex)
+      when(physical.request.valid && !reset.asBool) {
+        assert(legal && allocated, "T2T physical access requires an allocated shared bank and aligned address")
+      }
+      channel.request.valid        := physical.request.valid && legal && allocated
+      channel.request.bits         := 0.U.asTypeOf(channel.request.bits)
+      channel.request.bits.bank    := bankIndex
+      channel.request.bits.tuser   := Cat(
+        physical.request.bits.address(rowBits + byteBits - 1, byteBits).pad(16),
+        physical.request.bits.write
+      )
+      channel.request.bits.data    := physical.request.bits.data
+      channel.request.bits.mask    := physical.request.bits.mask
+      channel.request.bits.tag     := 0.U
+      channel.request.bits.tlast   := true.B
+      physical.request.ready       := channel.request.ready && legal && allocated
+      physical.response.valid      := channel.response.valid
+      physical.response.bits.data  := channel.response.bits.data
+      physical.response.bits.error := channel.response.bits.error
+      channel.response.ready       := physical.response.ready
+    }
+  }
+  for (i <- 0 until externalPhysicalPorts) {
+    val physical = io.physical(i)
+    val held     = Reg(new SharedPhysicalRequest(b.memDomain.bankWidth))
+    val entry    = Reg(new MappingTableEntry)
+    val pending  = RegInit(false.B)
+    val bankBits = log2Ceil(b.memDomain.sharedBankEntries * (b.memDomain.bankWidth / 8))
+    when(physical.request.fire) {
+      assert(!pending, "Physical shared port accepts one outstanding request")
+      held    := physical.request.bits
+      entry   := mappingTable((physical.request.bits.address >> bankBits)(math.max(1, log2Ceil(totalBanks)) - 1, 0))
+      pending := true.B
+    }
+    when(physical.response.valid && !reset.asBool)(assert(pending))
+    when(physical.response.fire)(pending := false.B)
+    val trace    = mtraces(totalChannel + i)
+    val value    = Mux(held.write, held.data, physical.response.bits.data)
+    trace.io.is_write   := held.write.asUInt
+    trace.io.is_shared  := 1.U
+    trace.io.channel    := (totalChannel + i).U
+    trace.io.hart_id    := io.physicalOwnerHartId.get
+    trace.io.vbank_id   := entry.vbank_id
+    trace.io.pbank_id   := held.address >> bankBits
+    trace.io.group_id   := entry.group_id
+    trace.io.addr       := (held.address >> 4) & (b.memDomain.sharedBankEntries - 1).U
+    trace.io.write_mask := Mux(held.write, held.mask, 0.U)
+    trace.io.data_lo    := value(63, 0)
+    trace.io.data_hi    := value(127, 64)
+    trace.io.enable     := physical.response.fire && !physical.response.bits.error
+  }
 
   def addEntry(
     hart_id:  UInt,
@@ -164,6 +259,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
     }
 
     val entry = mappingTable(pbank_id)
+    leases.foreach(counts => assert(counts(pbank_id) === 0.U, "Shared bank allocation replaces live exports"))
     entry.valid    := true.B
     entry.hart_id  := hart_id
     entry.vbank_id := vbank_id
@@ -183,6 +279,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
   def clearVbank(hart_id: UInt, vbank_id: UInt): Unit = {
     for (i <- 0 until totalBanks) {
       when(mappingTable(i).valid && mappingTable(i).vbank_id === vbank_id && mappingTable(i).hart_id === hart_id) {
+        leases.foreach(counts => assert(counts(i) === 0.U, "Shared bank mapping changed with live exports"))
         mappingTable(i).valid := false.B
       }
     }
@@ -255,7 +352,27 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false) extends Mo
   hashMonitors.foreach(_.foreach(_.io.bind := false.B))
 
   when(io.config.fire) {
-    when(io.config.bits.alloc) {
+    when(io.config.bits.transfer) {
+      val source      = io.config.bits.source_bank_id
+      val target      = io.config.bits.vbank_id
+      val owner       = io.config.bits.hart_id
+      val sourceCount = PopCount(mappingTable.map(e => e.valid && e.hart_id === owner && e.vbank_id === source))
+      val targetCount = PopCount(mappingTable.map(e => e.valid && e.hart_id === owner && e.vbank_id === target))
+      val totalCount  = sourceCount +& targetCount
+      assert(source =/= target && sourceCount =/= 0.U, "Shared bank transfer requires a distinct allocated source")
+      assert(totalCount <= totalBanks.U, "Shared bank transfer exceeds physical bank count")
+      for ((entry, physical) <- mappingTable.zipWithIndex) {
+        when(entry.valid && entry.hart_id === owner && entry.vbank_id === source) {
+          leases.foreach(counts => assert(counts(physical) === 0.U, "Shared bank transfer source has live exports"))
+          entry.vbank_id := target
+          entry.group_id := targetCount + entry.group_id
+          entry.is_multi := totalCount > 1.U
+        }
+        when(entry.valid && entry.hart_id === owner && entry.vbank_id === target) {
+          entry.is_multi := totalCount > 1.U
+        }
+      }
+    }.elsewhen(io.config.bits.alloc) {
       when(io.config.bits.group_id === 0.U) {
         clearVbank(io.config.bits.hart_id, io.config.bits.vbank_id)
       }

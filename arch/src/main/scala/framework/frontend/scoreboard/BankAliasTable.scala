@@ -16,12 +16,12 @@ import chisel3.experimental.hierarchy.{instantiable, public}
  */
 @instantiable
 class BankAliasTable(val bankIdLen: Int, val vbankUpper: Int, val robEntries: Int) extends Module {
-  private val aliasIdLen = bankIdLen
-  private val robIdLen   = log2Up(robEntries)
-  private val vbankNum   = vbankUpper + 1
-  private val vbankIdLen = log2Up(vbankNum)
-  private val maxBankId  = (1 << bankIdLen) - 1
-  private val aliasBase  = vbankNum
+  val aliasIdLen = bankIdLen
+  val robIdLen   = log2Up(robEntries)
+  val vbankNum   = vbankUpper + 1
+  val vbankIdLen = log2Up(vbankNum)
+  val maxBankId  = (1 << bankIdLen) - 1
+  val aliasBase  = vbankNum
 
   @public
   val io = IO(new Bundle {

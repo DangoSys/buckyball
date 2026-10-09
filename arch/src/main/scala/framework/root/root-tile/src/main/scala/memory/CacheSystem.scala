@@ -12,7 +12,7 @@ import memcore.memory.coherence.configs.CoherenceParams
 @instantiable
 class CacheSystem(p: CoherenceParams) extends Module {
   require(p.agents == 2 && p.homeId == 64 && p.mshrEntries == 4)
-  private val c = p.chi
+  val c = p.chi
 
   @public
   val io = IO(new Bundle {

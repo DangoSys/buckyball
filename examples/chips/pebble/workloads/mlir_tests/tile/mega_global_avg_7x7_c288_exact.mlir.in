@@ -9,7 +9,7 @@ func.func @main() -> i8 {
   %output = memref.alloc() alignment = 64 : memref<1x1x1x288xi8>
   func.call @poison_reused_banks() : () -> ()
   tile.mega_kernel %input %output : memref<1x7x7x288xi8> memref<1x1x1x288xi8> {
-    tile.mega_global_avg_pool %input %output {inputScale = 0.0578813739 : f32, outputScale = 0.0106952852 : f32} : memref<1x7x7x288xi8> memref<1x1x1x288xi8>
+    tile.mega_global_avg_pool %input %output <inputScale = 0.0578813739, outputScale = 0.0106952852> : memref<1x7x7x288xi8> memref<1x1x1x288xi8>
   }
   func.call @check_result(%output) : (memref<1x1x1x288xi8>) -> ()
   return %zero : i8

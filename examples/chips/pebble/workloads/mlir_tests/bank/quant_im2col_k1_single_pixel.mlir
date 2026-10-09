@@ -21,7 +21,7 @@ func.func @main() -> i8 {
   %input = memref.get_global @fp_in : memref<1x16xf32>
   %output = memref.alloc() alignment = 64 : memref<16x16xi8>
 
-  %bin = buckyball.bank_alloc {col = 4 : i64}
+  %bin = buckyball.bank_alloc <col = 4>
   %bq = buckyball.bank_alloc
   %bout = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %bin %depth_in %stride
@@ -31,8 +31,8 @@ func.func @main() -> i8 {
   %base = arith.constant 0 : i64
   %lane = arith.constant 0 : i64
   %im = buckyball.bank_im2col %q %bout %input_size %ksize %stride %pad %base
-      %lane {startRow = 0 : i64, startCol = 0 : i64, windowStart = 0 : i64,
-             windowCount = 1 : i64}
+      %lane <startRow = 0, startCol = 0, windowStart = 0,
+             windowCount = 1>
       : i64 i64 i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %im %depth_out %stride
       : memref<16x16xi8> i64 i64 i64

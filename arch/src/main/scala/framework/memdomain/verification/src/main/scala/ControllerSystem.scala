@@ -19,10 +19,10 @@ import memcore.memory.bank.{Bank, BankRequest, BankSetParams}
 class ControllerSystem(b: GlobalConfig, signatures: Seq[BigInt])(implicit val cpuParams: CpuParams)
     extends Module
     with HasCpuParameters {
-  private val tracking   = TrackingParams()
-  private val bankParams =
+  val tracking   = TrackingParams()
+  val bankParams =
     BankSetParams(b.memDomain.bankWidth, 1, b.memDomain.bankEntries, math.max(1, log2Ceil(b.frontend.rob_entries)))
-  private val cores      = b.memDomain.computeCoreIds
+  val cores      = b.memDomain.computeCoreIds
 
   @public
   val io = IO(new Bundle {

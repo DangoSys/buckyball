@@ -1,6 +1,6 @@
 import math
 
-import numpy as np
+import torch
 
 
 def plan(rows, columns, reduction, bank_bytes, *, mxfp8):
@@ -39,6 +39,15 @@ def plan(rows, columns, reduction, bank_bytes, *, mxfp8):
 
 
 def pack(codes, scales, layout):
+    if (
+        not isinstance(codes, torch.Tensor)
+        or not isinstance(scales, torch.Tensor)
+        or codes.dtype != torch.int8
+        or scales.dtype != torch.int8
+    ):
+        raise ValueError("MXFP8 packing requires INT8 Tensor codes and scales")
+    if codes.ndim != 2 or scales.device != codes.device:
+        raise ValueError("MXFP8 packing requires a matrix and matching devices")
     rows, width = codes.shape
     n, k = layout["tile_n"], layout["tile_k"]
     stride = layout["panel_stride"]
@@ -48,8 +57,10 @@ def pack(codes, scales, layout):
     for begin_row in range(0, rows, n):
         for begin_k in range(0, width, k):
             count = min(k, width - begin_k)
-            plane = np.zeros((n, count), dtype=np.uint8)
-            scale = np.full((n, count // 32), 127, dtype=np.uint8)
+            plane = torch.zeros((n, count), dtype=torch.int8, device=codes.device)
+            scale = torch.full(
+                (n, count // 32), 127, dtype=torch.int8, device=codes.device
+            )
             valid = min(n, rows - begin_row)
             plane[:valid] = codes[
                 begin_row : begin_row + valid, begin_k : begin_k + count
@@ -57,11 +68,13 @@ def pack(codes, scales, layout):
             scale[:valid] = scales[
                 begin_row : begin_row + valid, begin_k // 32 : (begin_k + count) // 32
             ]
-            payload = np.concatenate((plane.ravel(), scale.ravel()))
-            if payload.size > stride:
+            payload = torch.cat((plane.flatten(), scale.flatten()))
+            if payload.numel() > stride:
                 raise ValueError("MXFP8 panel exceeds its bank window")
-            panels.append(np.pad(payload, (0, stride - payload.size)))
-    return np.concatenate(panels)
+            panels.append(
+                torch.nn.functional.pad(payload, (0, stride - payload.numel()))
+            )
+    return torch.cat(panels)
 
 
 def bank_bytes(compiler_build, target):
@@ -74,7 +87,12 @@ def bank_bytes(compiler_build, target):
     configs = {
         name: int(width) * int(depth) // 8
         for name, width, depth in re.findall(
-            r'\{"([^"]+)", "[^"]+", \d+, (\d+), (\d+), llvm::ArrayRef', text
+            r'\{"([^"]+)", "[^"]+", \d+, (\d+), (\d+), \d+, (?:true|false), llvm::ArrayRef',
+            text,
         )
     }
+    if target not in configs:
+        raise ValueError(
+            f"Target {target} has no registered bank geometry in {compiler_build}"
+        )
     return configs[target]
