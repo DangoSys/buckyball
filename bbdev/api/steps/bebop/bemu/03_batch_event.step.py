@@ -7,7 +7,6 @@ Runs bebop bemu batch regression:
 """
 
 import os
-import shutil
 import shlex
 import sys
 from motia import FlowContext, queue
@@ -102,22 +101,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    harness_args = [
+        "--",
+        "--workload-toml",
+        workload_toml,
+        "--bb-tests-root",
+        elf_root,
+        "--jobs",
+        str(input_data.get("jobs", 1)),
+    ]
     if input_data.get("clean-before", input_data.get("clean_before", False)):
-        shutil.rmtree(
-            os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts"), ignore_errors=True
-        )
-        ctx.logger.info("Cleaned previous bebop test artifacts")
-    harness = shlex.join(
-        [
-            "--",
-            "--workload-toml",
-            workload_toml,
-            "--bb-tests-root",
-            elf_root,
-            "--jobs",
-            str(input_data.get("jobs", 1)),
-        ]
-    )
+        harness_args.append("--clean-before")
+    harness = shlex.join(harness_args)
     test_cmd = f"nix develop -c cargo test --manifest-path {shlex.quote(str(bemu_cargo_manifest))} --test test_bemu {harness}"
     ctx.logger.info(f"Running bebop bemu regression: {test_cmd}")
     run_result = await stream_run_logger_async(

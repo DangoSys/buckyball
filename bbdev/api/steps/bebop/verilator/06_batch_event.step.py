@@ -5,7 +5,6 @@ Runs bebop verilator batch regression (requires prior --build).
 """
 
 import os
-import shutil
 import shlex
 import sys
 from motia import FlowContext, queue
@@ -86,10 +85,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if diff:
         manifest = f"{bbdir}/examples/chips/{chip}/generated/bebop/Cargo.toml"
         features = "verilator,bemu"
-    if input_data.get("clean-before", input_data.get("clean_before", False)):
-        artifact_dir = os.path.join(env["CARGO_TARGET_DIR"], "test-artifacts")
-        shutil.rmtree(artifact_dir, ignore_errors=True)
-        ctx.logger.info(f"Cleaned previous bebop test artifacts: {artifact_dir}")
     harness_args = [
         "--",
         "--workload-toml",
@@ -101,6 +96,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--jobs",
         str(input_data.get("jobs", 1)),
     ]
+    if input_data.get("clean-before", input_data.get("clean_before", False)):
+        harness_args.append("--clean-before")
     if diff:
         harness_args.append("--diff")
     harness = shlex.join(harness_args)
