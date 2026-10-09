@@ -348,7 +348,7 @@ class MainTilePlatform(p: TileParams) extends TileEndpoint(p.linkParams, true) {
         val bankEndpoint = enabled.indexOf(i)
         tileMemory.get.io.in(bankEndpoint) <> admission.io.axi
         accelerator.hartId     := tlink.executionIds(i)
-        accelerator.shmOwner   := tlink.executionIds(i)
+        accelerator.shmOwner   := tlink.executionIds(0)
         banks match {
           case Some(network) =>
             val port = network.io.compute(bankEndpoint)
