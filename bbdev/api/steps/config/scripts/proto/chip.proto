@@ -85,6 +85,9 @@ message BallDomain {
 }
 
 message RocketMulDivConfig {
+  uint32 div_unroll = 5;
+  uint32 div_early_out_granularity = 6;
+
   bool enable = 1;
   uint32 mul_unroll = 2;
   bool mul_early_out = 3;
@@ -92,29 +95,78 @@ message RocketMulDivConfig {
 }
 
 message RocketFpuConfig {
+  bool div_sqrt = 4;
+  uint32 sfma_latency = 5;
+  uint32 dfma_latency = 6;
+  uint32 fpmu_latency = 7;
+  uint32 ifpu_latency = 8;
+
   bool enable = 1;
   uint32 min_f_len = 2;
   uint32 f_len = 3;
 }
 
 message RocketDCacheConfig {
+  bool clock_gate = 4;
+
   uint32 n_sets = 1;
   uint32 n_ways = 2;
   uint32 n_mshrs = 3;
 }
 
 message RocketICacheConfig {
+  bool prefetch = 3;
+
   uint32 n_sets = 1;
   uint32 n_ways = 2;
 }
 
 message RocketBtbConfig {
+  uint32 n_match_bits = 4;
+  uint32 n_pages = 5;
+  bool updates_out_of_order = 6;
+  bool bht_enable = 7;
+  uint32 bht_entries = 8;
+  uint32 bht_counter_length = 9;
+  uint32 bht_history_length = 10;
+  uint32 bht_history_bits = 11;
+
   bool enable = 1;
   uint32 n_entries = 2;
   uint32 n_ras = 3;
 }
 
 message RocketCpuConfig {
+  bool mtvec_init_enable = 41;
+  bool use_user = 13;
+  bool use_supervisor = 14;
+  bool use_hypervisor = 15;
+  bool use_debug = 16;
+  bool use_atomics = 17;
+  bool use_atomics_only_for_i_o = 18;
+  bool use_compressed = 19;
+  bool use_r_v_e = 20;
+  bool use_conditional_zero = 21;
+  uint32 n_local_interrupts = 22;
+  bool use_n_m_i = 23;
+  uint32 n_breakpoints = 24;
+  bool use_b_p_watch = 25;
+  uint32 mcontext_width = 26;
+  uint32 scontext_width = 27;
+  uint32 n_perf_counters = 28;
+  bool have_basic_counters = 29;
+  bool misa_writable = 30;
+  uint64 mtvec_init = 31;
+  bool mtvec_writable = 32;
+  bool fast_load_word = 33;
+  bool fast_load_byte = 34;
+  bool branch_prediction_mode_c_s_r = 35;
+  bool clock_gate = 36;
+  uint32 mvendorid = 37;
+  uint32 mimpid = 38;
+  bool have_cease = 39;
+  bool have_sim_timeout = 40;
+
   bool use_vm = 3;
   bool use_zba = 4;
   bool use_zbb = 5;
