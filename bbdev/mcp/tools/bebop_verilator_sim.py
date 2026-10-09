@@ -17,7 +17,6 @@ def register(mcp):
         ctrace: bool = False,
         banktrace: bool = False,
         no_wave: bool = False,
-        batch: bool = False,
         diff: bool = False,
     ) -> str:
         """Run one workload on bebop-verilator. POST /bebop/verilator/sim."""
@@ -33,7 +32,6 @@ def register(mcp):
             "ctrace": ctrace,
             "banktrace": banktrace,
             "no-wave": no_wave,
-            "batch": batch,
             "diff": diff,
         }
         return fmt(submit("/bebop/verilator/sim", params))

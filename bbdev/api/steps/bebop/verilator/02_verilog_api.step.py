@@ -29,6 +29,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
     data = {"chip": chip, "diff": bool(body.get("diff", False))}
+    data["main_only"] = bool(body.get("main-only", False))
     if body.get("output-dir"):
         data["output_dir"] = body["output-dir"]
     await ctx.enqueue(

@@ -184,7 +184,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     lib_dirs = [result_lib, _gcc_lib_dir("liblz4.so"), _gcc_lib_dir("libstdc++.so")]
     ld_lib_path = ":".join(dict.fromkeys(lib_dirs))
     ctx.logger.info(f"LD_LIBRARY_PATH prefix: {ld_lib_path}")
-    sim_args = [bin_path, "+permissive", f"+elf={binary_path}"]
+    dramsim_outdir = os.path.join(run_log, "dramsim")
+    sim_args = [
+        bin_path,
+        "+permissive",
+        f"+elf={binary_path}",
+        f"+dramsim_outdir={dramsim_outdir}",
+    ]
     if batch:
         sim_args.append("+batch")
     if coverage_flag:
@@ -201,20 +207,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "+permissive-off",
         ]
     )
-    dasm_cmd = shlex.join(
-        [
-            "cargo",
-            "run",
-            "--quiet",
-            "--release",
-            "--manifest-path",
-            os.path.join(bbdir, "bebop", "Cargo.toml"),
-            "--bin",
-            "bebop",
-            "--",
-            "dasm",
-        ]
-    )
+    dasm_bin = os.path.join(bbdir, "bebop", "target", "release", "bebop")
+    if not os.path.isfile(dasm_bin):
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "dasm_not_found", "dasm": dasm_bin},
+            trace_id=origin_tid,
+        )
+        return
+    dasm_cmd = shlex.join([dasm_bin, "dasm"])
     sim_cmd = f"export LD_LIBRARY_PATH={shlex.quote(ld_lib_path)}:$LD_LIBRARY_PATH; export BDB_SIM_META={shlex.quote(meta_path)}; {shlex.join(sim_args)} 2> >({dasm_cmd} > {shlex.quote(os.path.join(run_log, 'disasm.log'))})"
     script_dir = os.path.dirname(__file__)
     result = await stream_run_logger_async(

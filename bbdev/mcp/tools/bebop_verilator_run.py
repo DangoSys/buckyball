@@ -18,7 +18,6 @@ def register(mcp):
         banktrace: bool = False,
         no_wave: bool = False,
         diff: bool = False,
-        batch: bool = False,
     ) -> str:
         """Full bebop-verilator flow. POST /bebop/verilator/run."""
         for n, v in (("binary", binary), ("chip", chip)):
@@ -38,7 +37,6 @@ def register(mcp):
                     "banktrace": banktrace,
                     "no-wave": no_wave,
                     "diff": diff,
-                    "batch": batch,
                 },
             )
         )

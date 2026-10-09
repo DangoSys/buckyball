@@ -15,8 +15,7 @@ def register(mcp):
         interactive: bool = False,
         guest_memory_mib: int = 512,
         model_storage: str = "initramfs",
-        visible_hart_count: Optional[int] = None,
-        total_hart_count: Optional[int] = None,
+        hart_count: Optional[int] = None,
     ) -> str:
         """Build RISC-V kernel + rootfs. POST /kernel/build.
 
@@ -30,9 +29,7 @@ def register(mcp):
         opt(params, chip=chip, model=model)
         if interactive:
             params["interactive"] = True
-        if visible_hart_count is not None:
-            params["visible-hart-count"] = visible_hart_count
-        if total_hart_count is not None:
-            params["total-hart-count"] = total_hart_count
+        if hart_count is not None:
+            params["hart-count"] = hart_count
         return fmt(submit("/kernel/build", params))
 

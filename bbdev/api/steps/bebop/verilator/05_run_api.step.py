@@ -12,6 +12,8 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
+    if "batch" in body:
+        return ApiResponse(status=400, body={"error": "Unsupported parameter: batch"})
     if "output_dir" in body:
         return ApiResponse(
             status=400,

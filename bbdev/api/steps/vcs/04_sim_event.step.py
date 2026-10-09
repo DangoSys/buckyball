@@ -78,6 +78,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "+batch" if input_data.get("batch", False) else "",
             wave_arg,
             f"+dramsim_ini_dir={shlex.quote(str(Path(bbdir) / 'result/share/dramsim3/configs'))}",
+            f"+dramsim_outdir={shlex.quote(str(run_log / 'dramsim'))}",
             f"+timeout-ns={shlex.quote(str(timeout_ns))}",
             "+permissive-off",
         ]

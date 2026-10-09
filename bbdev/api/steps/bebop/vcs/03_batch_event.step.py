@@ -52,7 +52,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         binary = search_workload(workloads_output_root(bbdir), name)
         if binary is None:
             continue
-        command = " ".join(("env", f"LD_LIBRARY_PATH={shlex.quote(str(Path(libc).parent))}", shlex.quote(str(simv)), f"+elf={shlex.quote(binary)}", "+batch", "+trace=none", "+no-wave", f"+dramsim_ini_dir={shlex.quote(str(Path(bbdir) / 'result/share/dramsim3/configs'))}"))
+        command = " ".join(("env", f"LD_LIBRARY_PATH={shlex.quote(str(Path(libc).parent))}", shlex.quote(str(simv)), f"+elf={shlex.quote(binary)}", "+batch", "+trace=none", "+no-wave", f"+dramsim_ini_dir={shlex.quote(str(Path(bbdir) / 'result/share/dramsim3/configs'))}", f"+dramsim_outdir={shlex.quote(str(report / 'dramsim'))}"))
         result = await stream_run_logger_async(cmd=command, logger=ctx.logger, cwd=str(simv.parent), stdout_prefix="bebop vcs batch", stderr_prefix="bebop vcs batch")
         if result.returncode == 0:
             counts[ball][0] += 1

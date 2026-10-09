@@ -11,7 +11,6 @@ def register(mcp):
     def bbdev_bemu_sim(
         chip: str,
         binary: str | None = None,
-        system: bool = False,
         dtb: str | None = None,
         initrd: str | None = None,
         memory_mib: int | None = None,
@@ -24,14 +23,16 @@ def register(mcp):
         model: str | None = None,
         reuse_simulator: bool = False,
     ) -> str:
-        """Run a logical ELF file name from the selected chip's workload/kernel outputs, or a built model recipe, on BEMU. Model runs use running-param.toml. POST /bebop/bemu/sim."""
+        """Run a workload, kernel ELF, or compiled model on BEMU.
+
+        Model runs use running-param.toml. POST /bebop/bemu/sim.
+        """
         if model is not None:
             for n, v in (("chip", chip), ("model", model)):
                 if e := need(n, v):
                     return err(e)
             if (
                 binary is not None
-                or system
                 or dtb
                 or initrd
                 or memory_mib is not None
@@ -59,7 +60,6 @@ def register(mcp):
         params: Dict[str, Any] = {
             "chip": chip,
             "binary": binary,
-            "system": system,
             "disasm": disasm,
             "tool-profile": tool_profile,
             "itrace": itrace,

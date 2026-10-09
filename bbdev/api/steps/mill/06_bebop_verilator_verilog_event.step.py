@@ -67,6 +67,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         if input_data.get("diff"):
             command += " --difftest"
+        if input_data.get("main_only"):
+            command += " --main-only"
         returncode = (
             await stream_run_logger_async(
                 cmd=command,

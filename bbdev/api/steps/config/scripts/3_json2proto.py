@@ -83,13 +83,9 @@ def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
         e.ball_id = m["ballId"]
         e.ball_name = m["ballName"]
         e.ball_class = m["ballClass"]
-        if m.get("builtin"):
-            e.builtin = m["builtin"]
-            params = m["ball_params"]
-        else:
-            e.ball_dir = _ball_dir(m["ballClass"])
-            e.config_path = _rel(bbdir, m["config"]["_file"])
-            params = m["config"]["ball"]
+        e.ball_dir = _ball_dir(m["ballClass"])
+        e.config_path = _rel(bbdir, m["config"]["_file"])
+        params = m["config"]["ball"]
         for key, value in params.items():
             e.ball_params[key] = str(value)
         e.in_bw = m["inBW"]
@@ -148,8 +144,8 @@ def _fill_boom(msg: pb.BoomCpuConfig, d: dict[str, Any]) -> None:
 
 def _check_cpu_kind(cpu: dict[str, Any], pkg: str) -> str:
     kind = cpu.get("kind")
-    if kind not in ("rocket", "boom"):
-        raise ValueError(f"{pkg}: kind must be 'rocket' or 'boom', got {kind!r}")
+    if kind not in ("rocket", "boom", "ant"):
+        raise ValueError(f"{pkg}: kind must be 'rocket', 'boom' or 'ant', got {kind!r}")
     if not isinstance(cpu.get("config"), dict):
         raise ValueError(f"{pkg}: cpu.config must reference a TOML file")
     return kind
@@ -168,9 +164,12 @@ def _fill_frontend(msg: pb.FrontendConfig, d: dict[str, Any], bbdir: Path) -> No
 
 
 def _fill_rvv(msg: pb.RvvConfig, d: dict[str, Any], bbdir: Path) -> None:
-    if type(d.get("enable", False)) is not bool:
-        raise ValueError("rvv.enable must be a boolean")
-    msg.enable = d.get("enable", False)
+    if type(d["enable"]) is not bool:
+        raise ValueError("rvv.enable must be an explicit boolean")
+    msg.enable = d["enable"]
+    for key in ("laneNumber", "vLen", "eLen", "iBufWords", "memoryPorts"):
+        if type(d[key]) is not int or d[key] <= 0:
+            raise ValueError(f"rvv.{key} must be a positive integer")
     msg.source_path = _rel(bbdir, d["_file"])
     msg.lane_number = d["laneNumber"]
     msg.v_len = d["vLen"]
@@ -189,14 +188,25 @@ def _fill_tile_params(msg: pb.TileParamConfig, d: dict[str, Any]) -> None:
     msg.n_pmps = d["nPMPs"]
 
 
+def _fill_spm(msg: pb.SpmConfig, config: dict[str, Any]) -> None:
+    msg.base = config["base"]
+    msg.bytes = config["bytes"]
+    msg.data_bits = config["dataBits"]
+
+
 def _fill_cpu(msg: pb.CpuConfig, cpu: dict[str, Any], context: str, bbdir: Path) -> str:
     kind = _check_cpu_kind(cpu, context)
     msg.kind = kind
     msg.source_path = _rel(bbdir, cpu["_file"])
     if kind == "rocket":
         _fill_rocket(msg.rocket, cpu["config"])
-    else:
+    elif kind == "boom":
         _fill_boom(msg.boom, cpu["config"])
+    else:
+        config = cpu["config"]
+        msg.ant.code_bytes = config["codeBytes"]
+        msg.ant.task_bits = config["taskBits"]
+        _fill_spm(msg.ant.tls, config["tls"])
     return kind
 
 
@@ -205,6 +215,9 @@ def _fill_core(ci: pb.CoreInstance, raw: dict[str, Any], meta: dict[str, Any], b
     ci.role = meta["role"]
     ci.pkg = meta["pkg"]
     ci.config_path = meta["config_path"]
+    if raw["factory"] != meta["factory_class"]:
+        raise ValueError("core factory differs between config and derived metadata")
+    ci.factory_class = raw["factory"]
     ci.balldomain_base_dir = meta["balldomain_base_dir"]
     kind = _fill_cpu(ci.cpu, raw["cpu"], meta["pkg"], bbdir)
     domain = normalize_ball_domain(raw)
@@ -218,15 +231,24 @@ def _fill_core(ci: pb.CoreInstance, raw: dict[str, Any], meta: dict[str, Any], b
             raise ValueError(f"{meta['pkg']}: kind=boom forbids balldomain.ballNum > 0")
     if "frontend" in raw:
         _fill_frontend(ci.frontend, raw["frontend"], bbdir)
-    if ci.balldomain.ball_num > 0:
+    if "rvv" in raw:
         _fill_rvv(ci.rvv, raw["rvv"], bbdir)
 
 
 def _fill_tile(tp: pb.TilePlacement, meta: dict[str, Any], proto: dict[str, Any]) -> None:
     tp.path = meta["path"]
-    tp.kind = pb.TILE_KIND_MAIN if meta["kind"] == "main" else pb.TILE_KIND_COMPUTE
+    if meta["kind"] == "main":
+        if "factory" in proto or meta["factory_class"]:
+            raise ValueError("main tile must not specify a factory")
+    else:
+        if proto["factory"] != meta["factory_class"]:
+            raise ValueError("tile factory differs between config and derived metadata")
+        tp.factory_class = proto["factory"]
+    tp.kind = pb.TILE_KIND_MAIN if meta["kind"] == "main" else pb.TILE_KIND_TILE
     tp.virtual_bank_count = meta["virtual_bank_count"]
     tp.core_indices.extend(meta["core_indices"])
+    if "tss" in proto:
+        _fill_spm(tp.tss, proto["tss"])
     if "controller_core_index" in meta:
         tp.controller_core_index = meta["controller_core_index"]
     tp.mem_ball_channel_num = meta["mem_ball_channel_num"]
@@ -234,6 +256,8 @@ def _fill_tile(tp: pb.TilePlacement, meta: dict[str, Any], proto: dict[str, Any]
     sm = proto["sharedMem"]
     tp.shared_mem.enable = sm["enable"]
     tp.shared_mem.entries = sm["entries"]
+    tp.shared_mem.bank_entries = sm["bankEntries"]
+    tp.shared_mem.bank_width = sm["bankWidth"]
     tp.shared_mem.input_channels = sm["inputChannels"]
     tp.shared_mem.default_group_count = sm["defaultGroupCount"]
     if "virtualBankCount" in sm:
@@ -276,7 +300,10 @@ def fill_chip(config: dict[str, Any], derived: dict[str, Any], bbdir: Path) -> p
     for index, (raw, meta) in enumerate(zip(raw_cores, meta_cores)):
         core = b.cores.add()
         _fill_core(core, raw, meta, bbdir)
-        core.hart_id = hart_ids[index]
+        if core.cpu.kind == "ant":
+            core.ant_context_id = meta["ant_context_id"]
+        else:
+            core.hart_id = hart_ids[index]
 
     raw_tiles = _derive.iter_topology_tiles(config["designs"])
     for raw, meta in zip(raw_tiles, derived["tiles"], strict=True):

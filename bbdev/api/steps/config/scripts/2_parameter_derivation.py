@@ -18,6 +18,15 @@ def _die(msg: str) -> None:
     raise ValueError(msg)
 
 
+def _factory(config: dict[str, Any], context: str) -> str:
+    value = config["factory"]
+    if not isinstance(value, str) or len(value.split(".")) < 2 or not all(
+        part.isidentifier() for part in value.split(".")
+    ):
+        _die(f"{context}: factory must be a Scala companion FQCN")
+    return value
+
+
 def _repo_rel(repo: Path, path: str | Path) -> str:
     p = Path(path)
     if not p.is_absolute():
@@ -69,7 +78,7 @@ def _require_id_list(obj: dict[str, Any], key: str, count: int, ctx: str) -> lis
 
 def _tile_cores(tile: dict[str, Any]) -> list[dict[str, Any]]:
     cores = tile.get("cores")
-    if isinstance(cores, list) and cores:
+    if isinstance(cores, list):
         out: list[dict[str, Any]] = []
         seen: set[int] = set()
         for i, core in enumerate(cores):
@@ -110,56 +119,30 @@ def _tile_cores(tile: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def iter_topology_tiles(topo: dict[str, Any]) -> list[dict[str, Any]]:
-    """The main tile is tile 0; homogeneous compute tiles follow as tiles 1..count."""
-    for legacy in ("tiles", "tileTemplate", "main_core"):
-        if legacy in topo:
-            _die(f"[{legacy}] is replaced by [main_tile] and [compute_tiles]")
-    main = topo.get("main_tile")
+    """The built-in main tile is tile 0; configured mounts follow in list order."""
+    for key in ("compute_tiles", "tileTemplate", "main_core"):
+        if key in topo:
+            _die(f"invalid topology field: {key}")
+    main = topo["main_tile"]
     if not isinstance(main, dict):
-        _die("topology must define [main_tile]")
+        _die("main_tile must be a table")
     out = [dict(main, tile_id=0, kind="main")]
-    compute = topo.get("compute_tiles")
-    if compute is not None:
-        if not isinstance(compute, dict):
-            _die("[compute_tiles] must be a table")
-        count = compute.get("count")
+    groups = topo.get("tiles", [])
+    if not isinstance(groups, list):
+        _die("tiles must be an array of tables")
+    for group in groups:
+        count = group["count"]
         if type(count) is not int or count < 1:
-            _die("[compute_tiles].count must be a positive int")
-        base = {k: v for k, v in compute.items() if k != "count"}
-        out += [dict(base, tile_id=i + 1, kind="compute") for i in range(count)]
+            _die("tile count must be a positive int")
+        base = {k: v for k, v in group.items() if k != "count"}
+        for _ in range(count):
+            out.append(dict(base, tile_id=len(out), kind="tile"))
     return out
 
 
 def iter_cores(topo: dict[str, Any]) -> Iterator[dict[str, Any]]:
     for tile in iter_topology_tiles(topo):
         yield from _tile_cores(tile)
-
-
-def _tile_signature(tile: dict[str, Any]) -> tuple[tuple[int, str, str], ...]:
-    sig = []
-    for core in _tile_cores(tile):
-        rel = core.get("_file")
-        if not isinstance(rel, str):
-            _die("core config missing _file")
-        pkg = core_pkg(rel)
-        if not pkg:
-            _die(f"unsupported core config path: {rel}")
-        role = core.get("name")
-        if role is not None and not isinstance(role, str):
-            _die("core name must be a string")
-        sig.append((core["core_id"], pkg, role or ""))
-    return tuple(sig)
-
-
-def _assert_isomorphic_tiles(topo: dict[str, Any]) -> None:
-    tiles = iter_topology_tiles(topo)
-    for tile in tiles:
-        if not _tile_signature(tile):
-            _die(f"tile_id={tile['tile_id']} has no cores")
-    compute = [t for t in tiles if t["kind"] == "compute"]
-    for tile in compute[1:]:
-        if _tile_signature(tile) != _tile_signature(compute[0]):
-            _die(f"compute tiles must be isomorphic; tile_id={tile['tile_id']} differs from tile_id=1")
 
 
 def unique_cores(topo: dict[str, Any]) -> list[str]:
@@ -256,7 +239,7 @@ def _ball_num(core: dict) -> int:
 
 def _n_tiles(topo: dict[str, Any]) -> int:
     if "top" in topo:
-        _die("[top] is retired: tile counts and hart layout follow [main_tile] and [compute_tiles]")
+        _die("invalid topology field: top")
     return len(iter_topology_tiles(topo))
 
 
@@ -285,6 +268,8 @@ def _derive_cores(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
             "core_id": core_id,
             "pkg": pkg,
             "role": role or "",
+            "cpu_kind": core["cpu"]["kind"],
+            "factory_class": _factory(core, pkg),
             "config_path": _repo_rel(repo, rel),
             "balldomain_base_dir": _balldomain_base_dir(repo, core, pkg),
             "bank_num": num,
@@ -309,13 +294,23 @@ def _derive_cores(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
                 entry["mappings"].append(
                     {
                         "ball_id": mapping.get("ballId"),
-                        "ball_dir": "" if mapping.get("builtin") else _ball_dir(ball_class),
-                        "config_path": "" if mapping.get("builtin") else _config_path(repo, mapping.get("config")),
-                        "builtin": mapping.get("builtin", ""),
+                        "ball_dir": _ball_dir(ball_class),
+                        "config_path": _config_path(repo, mapping.get("config")),
                     }
                 )
         out.append(entry)
     return out
+
+
+def _validate_spm(config: dict[str, Any]) -> None:
+    base, size, bits = (config[key] for key in ("base", "bytes", "dataBits"))
+    if any(type(value) is not int for value in (base, size, bits)):
+        _die("SPM base/bytes/dataBits must be integers")
+    if bits < 64 or bits & (bits - 1):
+        _die("SPM dataBits must be a power of two >= 64")
+    beat = bits // 8
+    if size < 2 * beat or size & (size - 1) or base < 0 or base % beat or base + size > 1 << 64:
+        _die("SPM requires an aligned base and power-of-two capacity within the 64-bit address space")
 
 
 def _derive_tiles(
@@ -330,11 +325,42 @@ def _derive_tiles(
             _die("tile missing _file")
         tile_cores = _tile_cores(tile)
         n = len(tile_cores)
-        if "controllerCore" in tile:
-            _die(f"tile_id={tile_id}: controllerCore is retired; a compute tile's controller is core 0")
-        if tile["kind"] == "compute" and n < 2:
-            _die(f"tile_id={tile_id}: a compute tile needs its controller and at least one worker")
+        controller = tile.get("controllerCore")
+        if controller is not None and (type(controller) is not int or controller not in range(n)):
+            _die(f"tile_id={tile_id}: controllerCore must name a local core")
+        if tile["kind"] == "main" and controller is not None:
+            _die("main tile has no task controller")
+        ants = [core for core in tile_cores if core["cpu"]["kind"] == "ant"]
+        if ants:
+            shared_spm = tile.get("tss")
+            if not isinstance(shared_spm, dict):
+                _die("Ant compute tile requires explicit tss geometry")
+            _validate_spm(shared_spm)
+            for core in ants:
+                params = core["cpu"]["config"]
+                tls = params["tls"]
+                _validate_spm(tls)
+                code = params["codeBytes"]
+                if type(code) is not int or code < 32 or code & (code - 1):
+                    _die("Ant codeBytes must be a power of two >= 32")
+                if not 1 <= params["taskBits"] <= 64:
+                    _die("Ant taskBits must be in [1,64]")
+                if min(tls["base"], shared_spm["base"]) < code:
+                    _die("Ant code overlaps TLS/TSS")
+                if not (tls["base"] + tls["bytes"] <= shared_spm["base"] or
+                        shared_spm["base"] + shared_spm["bytes"] <= tls["base"]):
+                    _die("Ant TLS/TSS windows overlap")
+                if tls["dataBits"] != shared_spm["dataBits"]:
+                    _die("Ant TLS/TSS access widths must match")
         shared = tile.get("sharedMem")
+        if isinstance(shared, dict):
+            if shared["bankWidth"] != 128:
+                _die("sharedMem.bankWidth must be 128 bits")
+            rows = shared["bankEntries"]
+            if type(rows) is not int or rows < 2 or rows > 65536 or rows & (rows - 1):
+                _die("sharedMem.bankEntries must be a power of two in [2,65536]")
+            if shared["enable"] and (shared["entries"] <= 0 or shared["entries"] % rows):
+                _die("sharedMem.entries must be a positive multiple of bankEntries")
         vbc = 0
         if isinstance(shared, dict):
             raw = shared.get("virtualBankCount")
@@ -352,10 +378,17 @@ def _derive_tiles(
             if not isinstance(raw, int):
                 _die("tile with Buckyball cores must define memBallChannelNum")
             mem_ball_channel_num = raw
+        if tile["kind"] == "main":
+            if "factory" in tile:
+                _die("main tile must not specify a factory")
+            factory = ""
+        else:
+            factory = _factory(tile, str(tile_path))
         placements.append(
             {
                 "tile_id": tile_id,
                 "kind": tile["kind"],
+                "factory_class": factory,
                 "path": _repo_rel(repo, tile_path),
                 "core_indices": indices,
                 "cores_per_tile": n,
@@ -363,10 +396,8 @@ def _derive_tiles(
                 "mem_ball_channel_num": mem_ball_channel_num,
             }
         )
-        if tile["kind"] == "compute" or (
-            n > 1 and has_buckyball and cores[indices[0]]["ball_num"] == 0
-        ):
-            placements[-1]["controller_core_index"] = indices[0]
+        if controller is not None:
+            placements[-1]["controller_core_index"] = indices[controller]
         offset += n
     return placements
 
@@ -389,7 +420,6 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
             and isinstance(m.get("ballId"), int)
             and isinstance(m.get("ballClass"), str)
         }
-        builtin_ids = {m["ballId"] for m in mappings if m.get("builtin")}
         pkg = core_pkg(core.get("_file", "")) or "core"
         for entry in isa:
             if not isinstance(entry, dict):
@@ -399,8 +429,6 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
             if not isinstance(funct7, int) or not isinstance(bid, int):
                 _die(f"ballISA entry must have funct7 and bid: {entry!r}")
             if funct7 in {0, 1, 16, 32, 33, 34, 35}:
-                continue
-            if bid in builtin_ids:
                 continue
             ball_class = bid_to_class.get(bid)
             if not ball_class:
@@ -428,14 +456,10 @@ def _bemu_balls(repo: Path, topo: dict[str, Any]) -> list[dict[str, str]]:
 def _bemu_paths(repo: Path, chip: str, topo: dict[str, Any]) -> tuple[str, int]:
     """The chip's own bebop-chip entry (empty for the default tile runner) and the tile it runs."""
     tiles = iter_topology_tiles(topo)
-    for kind in ("main", "compute"):
-        files = {t.get("_file") for t in tiles if t["kind"] == kind}
-        if len(files) > 1:
-            _die(f"chip {chip}: bemu requires one {kind} tile file, got {sorted(files)}")
-    compute = [t["tile_id"] for t in tiles if t["kind"] == "compute"]
+    mounted = [t["tile_id"] for t in tiles if t["kind"] == "tile"]
     main = repo / "examples" / "chips" / chip / "emu" / "src" / "main.rs"
     entry = f"examples/chips/{chip}/emu/src/main.rs" if main.is_file() else ""
-    return entry, compute[0] if compute else 0
+    return entry, mounted[0] if mounted else 0
 
 
 def _ball_ctest_dirs(repo: Path, core: dict[str, Any]) -> list[str]:
@@ -449,8 +473,6 @@ def _ball_ctest_dirs(repo: Path, core: dict[str, Any]) -> list[str]:
     for mapping in mappings:
         if not isinstance(mapping, dict):
             _die("ballIdMappings entry must be a table")
-        if mapping.get("builtin"):
-            continue
         ball_class = mapping.get("ballClass")
         if not isinstance(ball_class, str):
             _die("ballIdMappings entry missing ballClass")
@@ -506,42 +528,24 @@ def _derive_targets(
 
 
 def _derive_harts(tiles: list[dict[str, Any]], cores: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """A main tile with a task controller exposes only core 0 to Linux.
-    Physical hart IDs cover the main tile, then compute controllers and workers."""
-    main = tiles[0]
-    compute = tiles[1:]
-    m = main["cores_per_tile"]
-    workers_per_tile = compute[0]["cores_per_tile"] - 1 if compute else 0
+    """Only system CPUs receive hart IDs; Ant contexts are tile-local resources."""
     harts: list[dict[str, Any]] = []
     for tile in tiles:
-        tile_id = tile["tile_id"]
+        context = 0
         for local, core_index in enumerate(tile["core_indices"]):
             inst = cores[core_index]
             if inst["core_id"] != local:
-                _die(f"tile_id={tile_id}: core_id={inst['core_id']} != sorted slot {local}")
-            if tile["kind"] == "main":
-                hid = local
-            elif local == 0:
-                hid = m + tile_id - 1
-            else:
-                hid = m + len(compute) + (tile_id - 1) * workers_per_tile + local - 1
-            harts.append(
-                {
-                    "hart_id": hid,
-                    "tile_id": tile_id,
-                    "core_id": local,
-                    "core_index": core_index,
-                    "visible": tile["kind"] == "main" and (
-                        "controller_core_index" not in tile or local == 0
-                    ),
-                    "target": _target_name(inst["role"], inst["pkg"]),
-                    "pkg": inst["pkg"],
-                    "role": inst["role"],
-                }
-            )
-    harts.sort(key=lambda h: h["hart_id"])
-    if [h["hart_id"] for h in harts] != list(range(len(cores))):
-        _die("chip hart_ids must be exactly 0..total_harts-1")
+                _die(f"tile {tile['tile_id']}: core IDs must match ordered slots")
+            if inst["cpu_kind"] == "ant":
+                inst["ant_context_id"] = context
+                context += 1
+                continue
+            harts.append({
+                "hart_id": len(harts), "tile_id": tile["tile_id"],
+                "core_id": local, "core_index": core_index, "visible": True,
+                "target": _target_name(inst["role"], inst["pkg"]),
+                "pkg": inst["pkg"], "role": inst["role"],
+            })
     return harts
 
 
@@ -570,7 +574,6 @@ def derive(data: dict[str, Any], repo: Path, chip: str) -> dict[str, Any]:
     if not isinstance(includes_raw, list):
         _die(f"{chip}: includes must be a list")
 
-    _assert_isomorphic_tiles(topo)
     cores = _derive_cores(repo, topo)
     tiles = _derive_tiles(repo, topo, cores)
     targets = _derive_targets(repo, topo, cores)

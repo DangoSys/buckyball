@@ -114,15 +114,22 @@ def validate_run(run):
             if accuracy > 1:
                 raise ValueError("accuracy must be in [0,1]")
             nonempty(model["accuracy_metric"], "accuracy_metric")
+        counter = model["counter"]
+        if counter not in ("riscv-cycle", "x86-tsc"):
+            raise ValueError(f"unknown model counter: {counter}")
+        count_field = "cycles" if counter == "riscv-cycle" else "ticks"
+        other = "ticks" if counter == "riscv-cycle" else "cycles"
+        if other in model:
+            raise ValueError("model must not mix cycle and tick fields")
         if model["status"] == "pass":
-            number(model["cycles"], "cycles", positive=True, integer=True)
+            number(model[count_field], count_field, positive=True, integer=True)
             if model["trace_url"] is not None and not model["operators"]:
                 raise ValueError("trace attachment requires operator measurements")
             if model["error"] is not None:
                 raise ValueError("passing model cannot contain an error")
         else:
             nonempty(model["error"], "model error")
-            if model["cycles"] is not None or model["operators"]:
+            if model[count_field] is not None or model["operators"]:
                 raise ValueError(
                     "failed models cannot contain performance measurements"
                 )
@@ -135,10 +142,19 @@ def validate_run(run):
             ids.add(op["id"])
             if op["category"] not in CATEGORIES:
                 raise ValueError("unknown operator category")
-            for key in ("cycles", "start_cycle", "level"):
+            if op["counter"] != counter or other in op:
+                raise ValueError("operator counter differs from its model")
+            unit = "cycle" if counter == "riscv-cycle" else "tick"
+            opposite = "tick" if unit == "cycle" else "cycle"
+            if f"start_{opposite}" in op or f"end_{opposite}" in op:
+                raise ValueError("operator mixes cycle and tick intervals")
+            for key in (count_field, f"start_{unit}", f"end_{unit}", "level"):
                 number(op[key], key, integer=True)
             number(op["calls"], "calls", positive=True, integer=True)
-            if op["start_cycle"] + op["cycles"] > model["cycles"]:
+            if (
+                op[f"start_{unit}"] + op[count_field] > op[f"end_{unit}"]
+                or op[f"end_{unit}"] > model[count_field]
+            ):
                 raise ValueError("operator interval exceeds model trace span")
     if run["submission_errors"] != submission_errors(run):
         raise ValueError("submission status does not match the report measurements")

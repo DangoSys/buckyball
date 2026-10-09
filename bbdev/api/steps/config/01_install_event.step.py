@@ -41,7 +41,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = Path(get_buckyball_path())
     chips = bbdir / "examples" / "chips"
 
-    tops = sorted(chips.glob("*/configs/chip.toml"))
+    selected = input_data.get("chip")
+    tops = [chips / selected / "configs" / "chip.toml"] if selected else sorted(chips.glob("*/configs/chip.toml"))
+    if any(not top.is_file() for top in tops):
+        raise ValueError(f"unknown chip: {selected}")
     if not tops:
         raise ValueError(f"no configs/chip.toml under {chips}")
 

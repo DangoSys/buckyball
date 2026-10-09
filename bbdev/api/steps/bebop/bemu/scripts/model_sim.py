@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import re
 import tomllib
 from datetime import datetime
@@ -8,7 +9,16 @@ from utils.path import log_dir
 
 
 def model_run_commands(repo: str, params: dict):
-    unknown = params.keys() - {"chip", "model", "reuse-simulator", "itrace", "mtrace"}
+    unknown = params.keys() - {
+        "chip",
+        "model",
+        "reuse-simulator",
+        "itrace",
+        "mtrace",
+        "firmware",
+        "guest-memory-mib",
+        "load-manifest",
+    }
     if unknown:
         raise ValueError(f"Unknown model simulation parameters: {sorted(unknown)}")
     for key in ("chip", "model"):
@@ -39,9 +49,34 @@ def model_run_commands(repo: str, params: dict):
         python = root / "result/bin/python3"
     elif kind == "python" or (kind == "native" and "tile_indices" in settings):
         binary = f"bebop-chip-{chip}"
-        python = root / ("result/bin/python3" if kind == "native" else "stack/serving/.venv/bin/python")
+        python = root / "result/bin/python3"
     else:
         raise ValueError(f"Unknown model execution kind: {kind}")
+    firmware = None
+    endpoint = layout["execution"].get("p2e", {})
+    if endpoint.get("task_runtime") == "ant" or (
+        kind == "native" and layout["execution"]["input"] == "resource"
+    ):
+        if kind != "native" or endpoint.get("kind") != "native":
+            raise ValueError("prepared model execution must run inside the Linux guest")
+        binary = f"bebop-chip-{chip}"
+        memory = params.get("guest-memory-mib", settings["memory_mib"])
+        if memory is not None:
+            if isinstance(memory, bool) or not str(memory).isdigit() or int(memory) < 1:
+                raise ValueError("guest-memory-mib must be a positive integer")
+            memory = int(memory)
+        spec = importlib.util.spec_from_file_location(
+            "buckyball_model_guest", root / "stack/serving/guest.py"
+        )
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        firmware, guest_memory, _ = guest.firmware_profile(
+            root, chip, model, params.get("firmware"), memory
+        )
+    elif any(
+        key in params for key in ("firmware", "guest-memory-mib", "load-manifest")
+    ):
+        raise ValueError("firmware options require a packaged Linux guest model")
     target = root / "bebop/target" / chip
     stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     log = Path(log_dir(repo, chip, "verilog", stamp, "bemu", model))
@@ -80,10 +115,30 @@ def model_run_commands(repo: str, params: dict):
             str(config),
         ],
     ]
+    if firmware is not None:
+        commands[-1].extend(
+            ["--firmware", str(firmware), "--guest-memory-mib", str(guest_memory)]
+        )
+        if firmware.name.endswith("-ddr.elf"):
+            manifest = firmware.with_suffix(".load.json")
+            if (
+                "load-manifest" in params
+                and Path(params["load-manifest"]).resolve() != manifest.resolve()
+            ):
+                raise ValueError(
+                    "load-manifest does not belong to the requested firmware"
+                )
+            if not manifest.is_file():
+                raise ValueError(f"MODEL_DDR load manifest missing: {manifest}")
+            commands[-1].extend(["--load-manifest", str(manifest)])
+        elif "load-manifest" in params:
+            raise ValueError("load-manifest requires a MODEL_DDR firmware")
     if params.get("reuse-simulator", False):
         simulator = target / "release" / binary
         if not simulator.is_file():
             raise ValueError(f"Reusable model simulator missing: {simulator}")
         commands = commands[1:]
-    commands[-1].extend(f"--{flag}" for flag in ("itrace", "mtrace") if params.get(flag, False))
+    commands[-1].extend(
+        f"--{flag}" for flag in ("itrace", "mtrace") if params.get(flag, False)
+    )
     return commands, log

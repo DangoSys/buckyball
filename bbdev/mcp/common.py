@@ -394,8 +394,6 @@ def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
     missing_config = []
     bad_bw = []
     for m in mappings:
-        if m.get("builtin") == "kernel":
-            continue  # The shared normalizer validates the complete builtin contract.
         name = m.get("ballName")
         if not m.get("ballClass"):
             bad_bw.append({"ballName": name, "error": "missing ballClass"})
@@ -461,7 +459,6 @@ def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
             "ballId": m.get("ballId"),
             "ballName": m.get("ballName"),
             "ballClass": m.get("ballClass"),
-            "builtin": m.get("builtin"),
             "inBW": m.get("inBW"),
             "outBW": m.get("outBW"),
             "config": m.get("config"),

@@ -6,6 +6,7 @@ Run a guest ELF through BEMU.
 
 import os
 import shlex
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +29,7 @@ from utils.search_workload import search_workload
 from steps.bebop.bemu.scripts.model_sim import model_run_commands
 from utils.event_common import check_result, get_origin_trace_id
 from utils.process_registry import cancellation_requested
-from bemu_common import bemu_chip_binary, bemu_manifest, bemu_tile_index
+from bemu_common import bemu_chip_binary, bemu_manifest
 from steps.bebop.performance_report import performance_report
 from utils.reports import source_context
 
@@ -43,26 +44,8 @@ config = {
 
 def clean_model_trace(binary_dir: str) -> None:
     trace_dir = Path(binary_dir) / "trace"
-    for subdir in ("cycle", "tensor"):
-        target_dir = trace_dir / subdir
-        if not target_dir.exists():
-            continue
-        if not target_dir.is_dir():
-            raise NotADirectoryError(f"trace path is not a directory: {target_dir}")
-        for path in target_dir.glob("trace-*.txt"):
-            if not path.is_file():
-                raise FileNotFoundError(f"trace path is not a file: {path}")
-            path.unlink()
-        summary = target_dir / "summary.txt"
-        if summary.exists():
-            if not summary.is_file():
-                raise FileNotFoundError(f"trace summary path is not a file: {summary}")
-            summary.unlink()
-    perfetto = trace_dir / "perfetto.json"
-    if perfetto.exists():
-        if not perfetto.is_file():
-            raise FileNotFoundError(f"perfetto path is not a file: {perfetto}")
-        perfetto.unlink()
+    if trace_dir.exists():
+        shutil.rmtree(trace_dir)
 
 
 def resolve_bemu_binary(bbdir: str, chip: str, binary_name: str) -> str | None:
@@ -200,18 +183,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(bbdir, chip, "verilog", timestamp, "bemu", binary_name)
     os.makedirs(run_log, exist_ok=True)
     core_index = input_data.get("core_index")
-    system = bool(input_data.get("system", False))
-    if system and core_index is not None:
-        raise ValueError(
-            "system boot runs all chip harts; core_index cannot be supplied"
-        )
-    # The chip's tile runner by default; --core-index selects the single-core bebop-bemu.
-    if core_index is None:
-        entry = [bemu_chip_binary(chip), "--"]
-        if not system:
-            entry.extend(["--tile-index", str(bemu_tile_index(chip, bbdir))])
-    else:
-        entry = ["bebop-bemu", "--"]
+    if "system" in input_data:
+        raise ValueError("Unknown parameter: system")
+    if core_index is not None and any(
+        key in input_data for key in ("dtb", "initrd", "memory-mib", "load-manifest")
+    ):
+        raise ValueError("chip boot options cannot select a single core")
+    entry = [bemu_chip_binary(chip) if core_index is None else "bebop-bemu", "--"]
     cargo_args = [
         "cargo",
         "run",
@@ -233,13 +211,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--config",
         "profile.release.codegen-units=1",
     ]
-    if system:
-        cargo_args.append("--system")
-        for option in ("dtb", "initrd"):
-            if input_data.get(option):
-                cargo_args.extend([f"--{option}", input_data[option]])
-        if input_data.get("memory-mib") is not None:
-            cargo_args.extend(["--memory-mib", str(input_data["memory-mib"])])
+    for option in ("dtb", "initrd", "load-manifest"):
+        if input_data.get(option):
+            cargo_args.extend([f"--{option}", input_data[option]])
+    if input_data.get("memory-mib") is not None:
+        cargo_args.extend(["--memory-mib", str(input_data["memory-mib"])])
     if core_index is not None:
         cargo_args.extend(["--core-index", str(core_index)])
     if input_data.get("disasm"):
@@ -250,6 +226,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if input_data.get(trace_name, False):
             cargo_args.append(f"--{trace_name}")
     arguments = input_data.get("arguments", [])
+    if arguments and core_index is None:
+        raise ValueError("chip boot does not accept process arguments")
     if arguments:
         if not isinstance(arguments, list) or not all(
             isinstance(arg, str) for arg in arguments

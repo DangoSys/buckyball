@@ -29,18 +29,20 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(
             status=400, body={"error": "Unknown parameter: pk or host-io"}
         )
-    if body.get("system") and body.get("core_index") is not None:
+    if "system" in body:
+        return ApiResponse(status=400, body={"error": "Unknown parameter: system"})
+    if body.get("core_index") is not None and any(
+        key in body for key in ("dtb", "initrd", "memory-mib", "load-manifest")
+    ):
         return ApiResponse(
-            status=400,
-            body={
-                "error": "system boot runs all chip harts; core_index cannot be supplied"
-            },
+            status=400, body={"error": "chip boot options cannot select a single core"}
         )
-    if not body.get("system") and any(
+    if body.get("load-manifest") and any(
         key in body for key in ("dtb", "initrd", "memory-mib")
     ):
         return ApiResponse(
-            status=400, body={"error": "dtb, initrd and memory-mib require system boot"}
+            status=400,
+            body={"error": "load-manifest conflicts with dtb, initrd and memory-mib"},
         )
     chip = body.get("chip", "")
     try:

@@ -41,6 +41,8 @@ config = {
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
+    if "batch" in input_data:
+        raise ValueError("Unsupported parameter: batch")
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
@@ -139,7 +141,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     binary_name = input_data.get("binary", "")
-    binary_path = search_workload(workloads_output_root(bbdir), binary_name)
+    try:
+        binary_path = search_workload(workloads_output_root(bbdir), binary_name)
+    except ValueError as error:
+        await check_result(
+            ctx, 1, continue_run=False,
+            extra_fields={"error": "binary_resolution_error", "binary": binary_name, "message": str(error)},
+            trace_id=origin_tid,
+        )
+        return
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
         await check_result(

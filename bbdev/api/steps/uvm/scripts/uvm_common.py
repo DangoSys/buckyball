@@ -152,8 +152,17 @@ def load_ip(bbdir: str, name: str, target_name: str | None = None, chip: str | N
         metadata = resources / f"{target['name']}.toml"
         if metadata.is_file():
             settings = tomllib.loads(metadata.read_text())
-            if not settings or set(settings) - {"expected_assertion", "chips", "invalid_case"}:
+            if not settings or set(settings) - {"expected_assertion", "chips", "invalid_case", "rtl_scopes"}:
                 raise ValueError(f"Invalid IP test settings: {metadata}")
+            if "rtl_scopes" in settings:
+                scopes = settings["rtl_scopes"]
+                if not isinstance(scopes, list) or not scopes or any(
+                    not isinstance(scope, str) or not re.fullmatch(
+                        r"[A-Za-z_][A-Za-z0-9_$]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z0-9_$]*(?:\[\d+\])?)*", scope
+                    ) for scope in scopes
+                ):
+                    raise ValueError(f"Invalid RTL instance scopes: {metadata}")
+                target["rtl_scopes"] = scopes
             if "invalid_case" in settings:
                 case = settings["invalid_case"]
                 if type(case) is not int or case < 0 or "expected_assertion" not in settings:
@@ -285,7 +294,7 @@ def build_ip(bbdir: str, chip: str, name: str, ctx, target_name: str | None = No
         if declared_hier.is_file():
             scopes = [line.strip() for line in declared_hier.read_text().splitlines() if line.strip()]
             if not scopes or any(
-                not re.fullmatch(r"\+tree @TOP@\.[A-Za-z_][A-Za-z0-9_$.]*", line)
+                not re.fullmatch(r"\+tree @TOP@\.[A-Za-z_][A-Za-z0-9_$]*(?:\[\d+\])?(?:\.[A-Za-z_][A-Za-z0-9_$]*(?:\[\d+\])?)*", line)
                 for line in scopes
             ):
                 raise ValueError(f"Invalid IP coverage hierarchy: {declared_hier}")
@@ -352,7 +361,9 @@ def report_ip_coverage(
     cov_dir.mkdir(parents=True, exist_ok=True)
     exclusions = root / "src" / "main" / "resources" / f"{target['name']}.el"
     hierarchy = simv.parent / "rtl_hier.cfg"
-    hierarchy.write_text(f"+tree {target['top']}.dut\n")
+    hierarchy.write_text("".join(
+        f"+tree {target['top']}.{instance}\n" for instance in target.get("rtl_scopes", ["dut"])
+    ))
     scope = f" -hier {shlex.quote(str(hierarchy))} -metric line+cond+tgl"
     reports = [(cov_dir, ""), (cov_dir / "rtl_raw", scope)]
     if exclusions.is_file():

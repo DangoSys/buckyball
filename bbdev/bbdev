@@ -48,7 +48,7 @@ WORKFLOW_COMMANDS = {
         "build": 'Build model recipes (all chip models when --model is omitted). Args: "--chip <chip> [--model <directory-name>] [--ctrace] [--dtrace]"',
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--visible-hart-count <n>] [--total-hart-count <n>] [--guest-memory-mib <n>] [--model-storage initramfs|pmem]"; --model requires --chip',
+        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--hart-count <n>] [--guest-memory-mib <n>] [--model-storage initramfs|ddr]"; --model requires --chip',
     },
     "firesim": {
         "enumeratefpgas": 'Enumerate FPGAs. Args: "--chip <chip>"',
@@ -66,7 +66,7 @@ WORKFLOW_COMMANDS = {
     },
     "bebop-verilator": {
         "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
+        "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--diff] [--main-only] [--output-dir <dir>]"',
         "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
         "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
         "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
@@ -104,7 +104,7 @@ WORKFLOW_COMMANDS = {
         "run": 'Build and run a Ball or IP UVM simulation. Args: "--chip <chip> [--ball <name> | --ip <name> [--target <target>]]"',
     },
     "config": {
-        "install": True,
+        "install": 'Install chip configurations. Args: "[--chip <chip>]"',
     },
 }
 

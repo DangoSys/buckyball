@@ -7,82 +7,118 @@ from pathlib import Path
 
 from utils.reports import new_report, attachment, finish_report
 from utils.report_schema import number, nonempty, CATEGORIES
-from bisect import bisect_right
 
 
 def parse_trace(data, categories):
-    events = data["traceEvents"]
     groups = {}
-    for event in events:
+    for event in data["traceEvents"]:
         if event.get("ph") != "X" or event.get("cat") != "buddy.trace":
             continue
         args = event["args"]
+        counter = args["counter"]
+        if counter not in ("riscv-cycle", "x86-tsc"):
+            raise ValueError(f"invalid trace counter: {counter}")
+        unit = "cycle" if counter == "riscv-cycle" else "tick"
         path = args["id_path"]
         if not isinstance(path, list) or not path:
             raise ValueError("trace id_path must be a non-empty list")
         for part in path:
             number(part, "trace id", integer=True)
-        identity = "-".join(str(int(part)) for part in path)
-        start = number(args["start_cycle"], "start_cycle", integer=True)
-        end = number(args["end_cycle"], "end_cycle", integer=True)
-        elapsed = number(args["elapsed_cycle"], "elapsed_cycle", integer=True)
+        controller = int(number(args["controller"], "controller", integer=True))
+        core = int(number(args["core"], "core", integer=True))
+        platform = args["platform"]
+        if platform not in ("linux", "baremetal"):
+            raise ValueError(f"invalid trace platform: {platform}")
+        number(event["pid"], "pid", integer=True, positive=platform == "linux")
+        number(event["tid"], "tid", integer=True, positive=platform == "linux")
+        if platform == "baremetal" and event["pid"] != 0:
+            raise ValueError("baremetal trace requires pid=0")
+        key = (controller, core, tuple(path))
+        identity = f"controller-{controller}/core-{core}/" + "-".join(map(str, path))
+        start, end = args[f"start_{unit}"], args[f"end_{unit}"]
+        if any(
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+            or value >= 2**64
+            for value in (start, end)
+        ):
+            raise ValueError("counter boundaries must be unsigned 64-bit integers")
+        elapsed = number(args[f"elapsed_{unit}"], "elapsed_cycle", integer=True)
         if end < start or end - start != elapsed or event["dur"] != elapsed:
             raise ValueError(f"inconsistent cycle interval for {identity}")
         name = nonempty(event["name"], "operator name")
         category = categories.get(name, "Other")
         if category not in CATEGORIES:
             raise ValueError(f"unknown operator category: {category}")
-        groups.setdefault(identity, []).append(
+        groups.setdefault(key, []).append(
             {
                 "id": identity,
                 "name": name,
                 "category": category,
-                "cycles": int(elapsed),
-                "start_cycle": int(start),
+                "counter": counter,
+                "duration": int(elapsed),
+                "start": int(start),
+                "end": int(end),
                 "level": len(path) - 1,
             }
         )
     if not groups:
         raise ValueError("no buddy.trace cycle intervals found")
-    starts = {}
-    for identity, records in groups.items():
-        records.sort(key=lambda op: op["start_cycle"])
-        starts[identity] = [op["start_cycle"] for op in records]
+    if (
+        len({record["counter"] for records in groups.values() for record in records})
+        != 1
+    ):
+        raise ValueError("performance trace cannot mix counter sources")
+    for key, records in groups.items():
+        records.sort(key=lambda op: op["start"])
         for previous, current in zip(records, records[1:]):
             if previous["name"] != current["name"]:
-                raise ValueError(f"trace id has inconsistent names: {identity}")
-            if previous["start_cycle"] + previous["cycles"] > current["start_cycle"]:
-                raise ValueError(f"overlapping calls of trace {identity}")
-    for identity, records in groups.items():
-        parts = identity.split("-")
-        if len(parts) > 1:
-            parent_id = "-".join(parts[:-1])
-            if parent_id not in groups:
-                raise ValueError(f"missing parent for trace {identity}")
-            for op in records:
-                index = bisect_right(starts[parent_id], op["start_cycle"]) - 1
-                if index < 0:
-                    raise ValueError(f"nested trace outside parent: {identity}")
-                parent = groups[parent_id][index]
-                if (
-                    op["start_cycle"] + op["cycles"]
-                    > parent["start_cycle"] + parent["cycles"]
-                ):
-                    raise ValueError(f"nested trace outside parent: {identity}")
-    start = min(records[0]["start_cycle"] for records in groups.values())
+                raise ValueError(f"trace scope has inconsistent names: {key}")
+            if previous["start"] + previous["duration"] > current["start"]:
+                raise ValueError(f"overlapping calls of trace scope {key}")
+    for (controller, core, path), records in groups.items():
+        if len(path) == 1:
+            continue
+        for op in records:
+            parents = [
+                parent
+                for (owner, _, parent_path), calls in groups.items()
+                if owner == controller and parent_path == path[:-1]
+                for parent in calls
+                if parent["start"] <= op["start"]
+                and op["start"] + op["duration"] <= parent["start"] + parent["duration"]
+            ]
+            if len(parents) != 1:
+                raise ValueError(
+                    f"trace scope {controller}/{core}/{path} has {len(parents)} parents"
+                )
+    start = min(record["start"] for records in groups.values() for record in records)
     end = max(
-        records[-1]["start_cycle"] + records[-1]["cycles"]
+        record["start"] + record["duration"]
         for records in groups.values()
+        for record in records
     )
     if start == end:
         raise ValueError("trace span must be positive")
     operators = []
     for records in groups.values():
-        op = dict(records[0])
-        op["cycles"] = sum(record["cycles"] for record in records)
-        op["calls"] = len(records)
-        op["start_cycle"] -= start
-        operators.append(op)
+        first = records[0]
+        unit = "cycle" if first["counter"] == "riscv-cycle" else "tick"
+        plural = "cycles" if unit == "cycle" else "ticks"
+        operators.append(
+            {
+                "id": first["id"],
+                "name": first["name"],
+                "category": first["category"],
+                "counter": first["counter"],
+                "level": first["level"],
+                "calls": len(records),
+                plural: sum(record["duration"] for record in records),
+                f"start_{unit}": first["start"] - start,
+                f"end_{unit}": records[-1]["end"] - start,
+            }
+        )
     return int(end - start), operators
 
 
@@ -115,14 +151,27 @@ def performance_report(repo, context, trace_id, backend, log, stdout, returncode
     output = log / "report"
     report["clock_hz"] = settings.get(backend, {}).get("clock_hz")
     expected = settings.get("expected_classes")
-    correct = samples = elapsed = cycles = 0
+    counters = {record["counter"] for record in records}
+    if len(counters) != 1 or not counters <= {"riscv-cycle", "x86-tsc"}:
+        raise ValueError("benchmark records require one explicit counter source")
+    benchmark_counter = counters.pop()
+    benchmark_count_field = "cycles" if benchmark_counter == "riscv-cycle" else "ticks"
+    correct = samples = elapsed = measured = 0
     for index, record in enumerate(records):
         number(record["samples"], "samples", positive=True, integer=True)
         number(record["elapsed_ns"], "elapsed_ns", positive=True, integer=True)
-        number(record["cycles"], "cycles", positive=True, integer=True)
+        number(
+            record[benchmark_count_field],
+            benchmark_count_field,
+            positive=True,
+            integer=True,
+        )
         samples += record["samples"]
         elapsed += record["elapsed_ns"]
-        cycles += record["cycles"]
+        other = "ticks" if benchmark_count_field == "cycles" else "cycles"
+        if other in record:
+            raise ValueError("benchmark record mixes cycle and tick fields")
+        measured += record[benchmark_count_field]
         if "correct" in record:
             number(record["correct"], "correct samples", integer=True)
             if record["correct"] > record["samples"]:
@@ -156,9 +205,10 @@ def performance_report(repo, context, trace_id, backend, log, stdout, returncode
     operators = {}
     all_events = []
     trace_span = 0
+    trace_counter = None
     trace_roots = sorted(
         {
-            file.parent.parent
+            file.parents[3]
             for file in log.rglob("trace-*.txt")
             if file.parent.name == "cycle"
         }
@@ -170,25 +220,38 @@ def performance_report(repo, context, trace_id, backend, log, stdout, returncode
         perfetto = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(perfetto)
         metadata = [build / f"models/{model}/subgraph0.trace.mlir"]
-        for index, root in enumerate(trace_roots):
+        for root in trace_roots:
             data = perfetto.build_perfetto(root, recipe / "trace/trace.toml", metadata)
             span, ops = parse_trace(data, settings.get("operator_categories", {}))
+            counter = ops[0]["counter"]
+            if trace_counter is not None and trace_counter != counter:
+                raise ValueError("performance roots cannot mix counter sources")
+            if counter != benchmark_counter:
+                raise ValueError("benchmark and trace counter sources differ")
+            trace_counter = counter
+            count_field = "cycles" if counter == "riscv-cycle" else "ticks"
+            offset = trace_span
             trace_span += span
+            unit = "cycle" if counter == "riscv-cycle" else "tick"
             for op in ops:
+                op[f"start_{unit}"] += offset
+                op[f"end_{unit}"] += offset
                 if op["id"] in operators:
-                    operators[op["id"]]["cycles"] += op["cycles"]
+                    operators[op["id"]][count_field] += op[count_field]
                     operators[op["id"]]["calls"] += op["calls"]
+                    operators[op["id"]][f"end_{unit}"] = op[f"end_{unit}"]
                 else:
                     operators[op["id"]] = op
-            for event in data["traceEvents"]:
-                event["pid"] = index
             all_events.extend(data["traceEvents"])
+    counter = trace_counter if trace_roots else benchmark_counter
+    count_field = "cycles" if counter == "riscv-cycle" else "ticks"
     result = {
+        "counter": counter,
         "name": model,
         "status": "pass" if returncode == 0 else "fail",
         "workload_hash": workload.hexdigest(),
         "dataset_hash": dataset.hexdigest(),
-        "cycles": trace_span if trace_roots else cycles,
+        count_field: trace_span if trace_roots else measured,
         "accuracy": accuracy,
         "accuracy_metric": records[0].get(
             "accuracy_metric", settings["accuracy_metric"]
@@ -206,7 +269,7 @@ def performance_report(repo, context, trace_id, backend, log, stdout, returncode
     }
     if returncode != 0:
         result.update(
-            cycles=None,
+            **{count_field: None},
             accuracy=None,
             latency_ms=None,
             throughput=None,

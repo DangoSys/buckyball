@@ -32,8 +32,7 @@ config = {
 
 def hart_count_params(input_data: dict) -> dict:
     allowed = {
-        "visible-hart-count",
-        "total-hart-count",
+        "hart-count",
         "model",
         "chip",
         "interactive",
@@ -45,10 +44,10 @@ def hart_count_params(input_data: dict) -> dict:
     if unknown:
         raise ValueError(f"unknown kernel build parameter(s): {', '.join(unknown)}")
 
-    if "hidden-hart-base" in input_data:
-        raise ValueError(
-            "hidden-hart-base is not supported; hidden harts must start at visible-hart-count"
-        )
+    if "hart-count" in input_data:
+        value = input_data["hart-count"]
+        if isinstance(value, bool) or not str(value).isdigit() or int(value) < 1:
+            raise ValueError("hart-count must be a positive integer")
 
     chip = input_data.get("chip")
     if chip:
@@ -64,29 +63,16 @@ def hart_count_params(input_data: dict) -> dict:
         )
         with open(derived) as stream:
             harts = json.load(stream)["harts"]
-        visible = sum(hart["visible"] for hart in harts)
-        total = len(harts)
-        for key, expected in (
-            ("visible-hart-count", visible),
-            ("total-hart-count", total),
-        ):
-            if key in input_data and int(input_data[key]) != expected:
-                raise ValueError(f"{key} must match chip topology: {expected}")
+        count = sum(hart["visible"] for hart in harts)
+        if "hart-count" in input_data and int(input_data["hart-count"]) != count:
+            raise ValueError(f"hart-count must match chip topology: {count}")
     else:
-        visible = int(input_data.get("visible-hart-count", 64))
-        total = int(input_data.get("total-hart-count", visible))
-    hidden_base = visible
+        count = int(input_data.get("hart-count", 64))
 
-    if visible < 1:
-        raise ValueError("visible-hart-count must be at least 1")
-    if total < visible:
-        raise ValueError("total-hart-count must cover visible harts")
+    if count < 1:
+        raise ValueError("hart-count must be at least 1")
 
-    return {
-        "visible": visible,
-        "total": total,
-        "hidden_base": hidden_base,
-    }
+    return {"count": count}
 
 
 def kernel_interactive(input_data: dict) -> bool:
@@ -133,8 +119,7 @@ def kernel_build_dir(
     guest_memory_mib: int = 512,
     model_storage: str = "initramfs",
 ) -> str:
-    visible = hart_params["visible"]
-    total = hart_params["total"]
+    count = hart_params["count"]
     suffix = "" if guest_memory_mib == 512 else f"-mem{guest_memory_mib}M"
     if chip:
         suffix += f"-chip-{chip}"
@@ -142,12 +127,12 @@ def kernel_build_dir(
         suffix += f"-model-{model}"
     if interactive:
         suffix += "-interactive"
-    if model_storage == "pmem":
-        suffix += "-pmem"
-    if visible == 64 and total == 64:
+    if model_storage == "ddr":
+        suffix += "-ddr"
+    if count == 64:
         return os.path.join(bbdir, "bb-tests", "build", f"kernel{suffix}")
     return os.path.join(
-        bbdir, "bb-tests", "build", f"kernel-v{visible}-t{total}{suffix}"
+        bbdir, "bb-tests", "build", f"kernel-h{count}{suffix}"
     )
 
 
@@ -158,19 +143,18 @@ def fw_payload_name(
     guest_memory_mib: int = 512,
     model_storage: str = "initramfs",
 ) -> str:
-    visible = hart_params["visible"]
-    total = hart_params["total"]
+    count = hart_params["count"]
     name = "fw_payload"
-    if visible != 64 or total != 64:
-        name = f"{name}-v{visible}-t{total}"
+    if count != 64:
+        name = f"{name}-h{count}"
     if model:
         name = f"{name}-{model}"
     elif chip:
         name = f"{name}-{chip}-linux"
     if guest_memory_mib != 512:
         name += f"-mem{guest_memory_mib}M"
-    if model_storage == "pmem":
-        name += "-pmem"
+    if model_storage == "ddr":
+        name += "-ddr"
     return name
 
 
@@ -201,12 +185,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             )
         guest_memory_mib = int(memory_value)
         model_storage = input_data.get("model-storage", "initramfs")
-        if model_storage not in ("initramfs", "pmem"):
-            raise ValueError("model-storage must be initramfs or pmem")
-        if model_storage == "pmem" and (
+        if model_storage not in ("initramfs", "ddr"):
+            raise ValueError("model-storage must be initramfs or ddr")
+        if model_storage == "ddr" and (
             not input_data.get("model") or guest_memory_mib >= 16384
         ):
-            raise ValueError("pmem requires --model and guest-memory-mib < 16384")
+            raise ValueError("ddr requires --model and guest-memory-mib < 16384")
         hart_params = hart_count_params(input_data)
         interactive = kernel_interactive(input_data)
     except ValueError as e:
@@ -232,9 +216,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # cmake configure
     configure_cmd = (
         f"cmake -B {kernel_build} -S {kernel_src} "
-        f"-DBUCKYBALL_VISIBLE_HART_COUNT={hart_params['visible']} "
-        f"-DBUCKYBALL_TOTAL_HART_COUNT={hart_params['total']} "
-        f"-DBUCKYBALL_HIDDEN_HART_BASE={hart_params['hidden_base']} "
+        f"-DBUCKYBALL_HART_COUNT={hart_params['count']} "
         f"-DBUCKYBALL_GUEST_MEMORY_MIB={guest_memory_mib} "
         f"-DBUCKYBALL_MODEL_STORAGE={model_storage} "
         f"-DBUCKYBALL_KERNEL_MODEL={cmake_model_name} "
@@ -318,10 +300,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     storage_fields = {"model_storage": model_storage}
-    if model_storage == "pmem":
+    if model_storage == "ddr":
         manifest = os.path.join(output_dir, f"{payload_name}.load.json")
         if not os.path.isfile(manifest):
-            raise ValueError(f"Missing pmem load manifest: {manifest}")
+            raise ValueError(f"Missing ddr load manifest: {manifest}")
         storage_fields["load_manifest"] = manifest
     await check_result(
         ctx, 0, continue_run=False, extra_fields=storage_fields, trace_id=origin_tid
