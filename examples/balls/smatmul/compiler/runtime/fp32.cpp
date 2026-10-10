@@ -83,7 +83,6 @@ extern "C" void _mlir_ciface_fp32_matmul(UnrankedMemRefType<float> *lhs,
                          inner + count >= k, 0);
         }
         bb_mvout((uintptr_t)cp, 2, rows * 4, 1);
-        bb_fence();
         for (int i = 0; i < rows && row + i < m; ++i)
           if (c.strides[rank - 1] == 1)
             std::memcpy(cv + (row + i) * c.strides[rank - 2] + column,

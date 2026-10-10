@@ -117,7 +117,6 @@ class VirtualMemory(
   val cacheable                                                                                                      = Reg(Bool())
   val normal                                                                                                         = Reg(Bool())
   val pteInFlight                                                                                                    = RegInit(false.B)
-  val pteCacheable                                                                                                   = RegInit(false.B)
   val pteError                                                                                                       = RegInit(false.B)
   val pteAuthorized                                                                                                  = RegInit(false.B)
   val pteAuthorizationPending                                                                                        = RegInit(false.B)
@@ -178,7 +177,7 @@ class VirtualMemory(
   val writesData  = command.write || (isAtomic && command.atomic =/= CacheAtomic.LR.U)
 
   val permittedRegion = dataRegions.zip(regions).map { case (hit, region) =>
-    hit && (!command.execute || (region.normal && region.executable).B) &&
+    hit && (!region.normal || region.cacheable).B && (!command.execute || (region.normal && region.executable).B) &&
       (!readsData || region.readable.B) && (!writesData || region.writable.B) &&
       (!isAtomic || region.atomic.B)
   }.reduce(_ || _)
@@ -224,7 +223,7 @@ class VirtualMemory(
   val pteRegions = matches(pteFirst, pteFirst + 7.U)
 
   val pteAllowed = pteRegions.zip(regions).map { case (hit, region) =>
-    hit && (region.normal && region.readable).B
+    hit && (region.normal && region.readable && region.cacheable).B
   }.reduce(_ || _)
 
   // The Core owns a per-command PMP snapshot. Each permission decision is a
@@ -242,7 +241,6 @@ class VirtualMemory(
   when(io.authorizationRequest.fire) {
     when(walking) {
       pteAuthorizationPending := true.B
-      pteCacheable            := pteRegions.zip(regions).map { case (hit, region) => hit && region.cacheable.B }.reduce(_ || _)
     }
       .otherwise(state := waitAuthorization)
   }
@@ -259,61 +257,40 @@ class VirtualMemory(
   }
   io.cacheRequest.valid                  := Mux(
     walking,
-    walker.io.access.valid && pteAuthorized && !pteError && pteCacheable,
+    walker.io.access.valid && pteAuthorized && !pteError,
     accessing && physical.io.cacheRequest.valid
   )
   io.cacheRequest.bits                   := Mux(walking, walker.io.access.bits, physical.io.cacheRequest.bits)
-  io.uncachedRequest.valid               := Mux(
-    walking,
-    walker.io.access.valid && pteAuthorized && !pteError && !pteCacheable,
-    accessing && physical.io.uncachedRequest.valid
-  )
+  io.uncachedRequest.valid               := accessing && physical.io.uncachedRequest.valid
   io.uncachedRequest.bits                := physical.io.uncachedRequest.bits
-  when(walking) {
-    io.uncachedRequest.bits.addr   := walker.io.access.bits.addr
-    io.uncachedRequest.bits.tag    := command.tag
-    io.uncachedRequest.bits.size   := 3.U
-    io.uncachedRequest.bits.write  := false.B
-    io.uncachedRequest.bits.data   := 0.U
-    io.uncachedRequest.bits.atomic := CacheAtomic.None.U
-    io.uncachedRequest.bits.normal := true.B
-  }
   walker.io.access.ready                 := walking && pteAuthorized &&
-    Mux(pteError, true.B, Mux(pteCacheable, io.cacheRequest.ready, io.uncachedRequest.ready))
+    (pteError || io.cacheRequest.ready)
   when(walker.io.access.fire) {
     pteAuthorized := false.B
     pteInFlight   := !pteError
   }
-  val pteResponseValid = Mux(pteCacheable, io.cacheResponse.valid, io.uncachedResponse.valid)
-  val pteResponseData  = Mux(pteCacheable, io.cacheResponse.bits.data, io.uncachedResponse.bits.data)
-  val pteResponseError = Mux(pteCacheable, io.cacheResponse.bits.error, io.uncachedResponse.bits.error)
-  walker.io.result.valid             := walking && ((!pteAuthorized && pteError) || (pteInFlight && pteResponseValid))
-  walker.io.result.bits              := 0.U.asTypeOf(walker.io.result.bits)
-  walker.io.result.bits.data         := Mux(pteError || pteResponseError, 0.U, pteResponseData)
-  walker.io.result.bits.error        := pteError || pteResponseError
+  walker.io.result.valid                 := walking && ((!pteAuthorized && pteError) || (pteInFlight && io.cacheResponse.valid))
+  walker.io.result.bits                  := 0.U.asTypeOf(walker.io.result.bits)
+  walker.io.result.bits.data             := Mux(pteError || io.cacheResponse.bits.error, 0.U, io.cacheResponse.bits.data)
+  walker.io.result.bits.error            := pteError || io.cacheResponse.bits.error
   when(walker.io.result.fire) { pteError := false.B; pteInFlight := false.B }
-  physical.io.cacheRequest.ready     := accessing && io.cacheRequest.ready
-  physical.io.cacheResponse.valid    := accessing && io.cacheResponse.valid
-  physical.io.cacheResponse.bits     := io.cacheResponse.bits
-  physical.io.uncachedRequest.ready  := accessing && io.uncachedRequest.ready
-  physical.io.uncachedResponse.valid := accessing && io.uncachedResponse.valid
-  physical.io.uncachedResponse.bits  := io.uncachedResponse.bits
-  io.cacheResponse.ready             := Mux(
+  physical.io.cacheRequest.ready         := accessing && io.cacheRequest.ready
+  physical.io.cacheResponse.valid        := accessing && io.cacheResponse.valid
+  physical.io.cacheResponse.bits         := io.cacheResponse.bits
+  physical.io.uncachedRequest.ready      := accessing && io.uncachedRequest.ready
+  physical.io.uncachedResponse.valid     := accessing && io.uncachedResponse.valid
+  physical.io.uncachedResponse.bits      := io.uncachedResponse.bits
+  io.cacheResponse.ready                 := Mux(
     walking,
-    pteInFlight && pteCacheable && walker.io.result.ready,
+    pteInFlight && walker.io.result.ready,
     accessing && physical.io.cacheResponse.ready
   )
-  io.uncachedResponse.ready          := Mux(
-    walking,
-    pteInFlight && !pteCacheable && walker.io.result.ready,
-    accessing && physical.io.uncachedResponse.ready
-  )
+  io.uncachedResponse.ready              := accessing && physical.io.uncachedResponse.ready
   when(io.cacheResponse.valid) {
-    assert((walking && pteInFlight && pteCacheable) || accessing, "Virtual LSU cache result has no owner")
+    assert((walking && pteInFlight) || accessing, "Virtual LSU cache result has no owner")
   }
   when(io.uncachedResponse.valid) {
-    assert((walking && pteInFlight && !pteCacheable) || accessing, "Virtual LSU uncached result has no owner")
-    when(walking)(assert(io.uncachedResponse.bits.tag === command.tag, "Virtual LSU PTE response tag mismatch"))
+    assert(accessing, "Virtual LSU uncached result has no owner")
   }
 
   io.response.valid            := state === respond

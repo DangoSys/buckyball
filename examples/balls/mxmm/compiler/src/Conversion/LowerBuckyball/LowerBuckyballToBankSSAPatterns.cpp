@@ -15,11 +15,14 @@ using namespace ::buddy::buckyball;
 namespace {
 #include "FP32Patterns.inc"
 #include "MXFP8Patterns.inc"
+#include "SharedPanelPatterns.inc"
+#include "SharedWindowPatterns.inc"
 } // namespace
 namespace mlir::buddy {
 void populateMxmmBallLowerBuckyballToBankSSAPatterns(
     RewritePatternSet &patterns) {
-  patterns.add<MXFP8ToBanks, FP32ToBanks>(patterns.getContext());
+  patterns.add<MXFP8ToBanks, MXFP8SharedPanelToBanks, MXFP8SharedWindowToBanks,
+               FP32ToBanks>(patterns.getContext());
 }
 
 } // namespace mlir::buddy

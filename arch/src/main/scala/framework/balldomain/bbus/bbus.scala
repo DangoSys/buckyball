@@ -6,9 +6,6 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.top.GlobalConfig
 import framework.balldomain.rs.{BallRsComplete, BallRsIssue}
 import framework.balldomain.blink.HasBlink
-import framework.balldomain.kernel.KernelBall
-import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, KernelWriteBank}
-import framework.memdomain.frontend.mem.KernelMemoryBridge
 import framework.balldomain.bbus.pmc.BallCyclePMC
 import framework.balldomain.bbus.cmdrouter.CmdRouter
 import framework.balldomain.isa.BallISA
@@ -34,30 +31,28 @@ class BBus(val b: GlobalConfig) extends Module {
 
   // Rs - bbus - balls
   @public
-  val cmdReq                    = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
+  val cmdReq                   = IO(Vec(numBalls, Flipped(Decoupled(new BallRsIssue(b)))))
   @public
-  val cmdResp                   = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
+  val cmdResp                  = IO(Vec(numBalls, Decoupled(new BallRsComplete(b))))
   @public
-  val ballChannelActive         = IO(Output(Vec(numBalls, Bool())))
+  val ballChannelActive        = IO(Output(Vec(numBalls, Bool())))
   @public
-  val ballChannelReady          = IO(Input(Vec(numBalls, Bool())))
+  val ballChannelReady         = IO(Input(Vec(numBalls, Bool())))
   // balls - bbus
   @public
-  val bankRead                  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead                 = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite                 = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite                = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   @public
-  val mmioRead                  = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
+  val mmioRead                 = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
   @public
-  val mmioWrite                 = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
+  val mmioWrite                = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
   // balls - bbus - SubROB
   @public
-  val subRobReq                 = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
-  @public val kernel_command_i  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new GlobalSchedIssue(b))))) else None
-  @public val kernel_complete_o = if (b.rvv.enable) Some(IO(Decoupled(new GlobalSchedComplete(b)))) else None
-  @public val kernel            = if (b.rvv.enable) Some(IO(Flipped(new KernelMemoryBridge(b)))) else None
-  @public val kernelWriteBank   = IO(Valid(new KernelWriteBank(b)))
-  @public val kernelFault       = IO(Output(Bool()))
+  val subRobReq                = IO(Vec(numBalls, Decoupled(new SubRobRow(b))))
+  @public val kernelBanks      = if (b.rvv.enable) Some(IO(Input(new framework.rvv.BankLayout(b)))) else None
+  @public val internalCommand  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new BallRsIssue(b))))) else None
+  @public val internalComplete = if (b.rvv.enable) Some(IO(Decoupled(UInt(64.W)))) else None
 
   require(b.ballDomain.ballIdMappings.length == numBalls, "ballNum must match ballIdMappings length")
 
@@ -93,21 +88,6 @@ class BBus(val b: GlobalConfig) extends Module {
   val cmdRouter: Instance[CmdRouter]    = Instantiate(new CmdRouter(b))
   val pmc:       Instance[BallCyclePMC] = Instantiate(new BallCyclePMC(b))
 
-  val kernelBalls = balls.collect { case ball: KernelBall => ball }
-  require(kernelBalls.size == (if (b.rvv.enable) 1 else 0), "RVV enable must match generated KernelBall registration")
-  if (b.rvv.enable) {
-    val builtin = kernelBalls.head
-    builtin.kernel_command_i.get <> kernel_command_i.get
-    kernel_complete_o.get <> builtin.kernel_complete_o.get
-    kernel.get <> builtin.kernel.get
-    kernelWriteBank := builtin.kernelWriteBank
-    kernelFault     := builtin.kernelFault
-  } else {
-    kernelWriteBank.valid := false.B
-    kernelWriteBank.bits  := 0.U.asTypeOf(new KernelWriteBank(b))
-    kernelFault           := false.B
-  }
-
 // -----------------------------------------------------------------------------
 // cmd router
 // -----------------------------------------------------------------------------
@@ -117,10 +97,28 @@ class BBus(val b: GlobalConfig) extends Module {
   cmdRouter.io.cmdReq_i <> cmdReq
   cmdRouter.io.ballIdle := idle_ball
 
-  val isBallInit    = cmdRouter.io.cmdReq_o.bits.cmd.funct7 === BallISA.InitFunct.U
+  val command       = Wire(Decoupled(new BallRsIssue(b)))
+  val internal      = WireDefault(false.B)
+  val internalOwner = RegInit(VecInit(Seq.fill(numBalls)(false.B)))
+  if (b.rvv.enable) {
+    val arbiter = Module(new RRArbiter(new BallRsIssue(b), 2))
+    arbiter.io.in(0) <> cmdRouter.io.cmdReq_o
+    arbiter.io.in(1) <> internalCommand.get
+    command <> arbiter.io.out
+    internal                   := arbiter.io.chosen === 1.U
+    internalComplete.get.valid := VecInit(
+      (0 until numBalls).map(i => internalOwner(i) && balls(i).blink.cmdResp.valid)
+    ).asUInt.orR
+    internalComplete.get.bits  := 0.U
+    assert(PopCount(internalOwner) <= 1.U, "RVV issues only one outstanding Ball operation")
+  } else {
+    command <> cmdRouter.io.cmdReq_o
+  }
+
+  val isBallInit    = command.bits.cmd.funct7 === BallISA.InitFunct.U
   val initPending   = RegInit(VecInit(Seq.fill(numBalls)(false.B)))
   val initResp      = Reg(Vec(numBalls, new BallRsComplete(b)))
-  val targetMatches = VecInit(b.ballDomain.ballIdMappings.map(m => cmdRouter.io.cmdReq_o.bits.cmd.bid === m.ballId.U))
+  val targetMatches = VecInit(b.ballDomain.ballIdMappings.map(m => command.bits.cmd.bid === m.ballId.U))
 
   for (i <- 0 until numBalls) {
     val mapping = b.ballDomain.ballIdMappings(i)
@@ -128,27 +126,42 @@ class BBus(val b: GlobalConfig) extends Module {
     balls(i).blink.channelReady := ballChannelReady(i)
 
     val targetMatch = targetMatches(i)
-    balls(i).blink.cmdReq.valid := cmdRouter.io.cmdReq_o.valid && !isBallInit && targetMatch
-    balls(i).blink.cmdReq.bits  := cmdRouter.io.cmdReq_o.bits
+    balls(i).blink.cmdReq.valid := command.valid && !isBallInit && !initPending(i) && targetMatch
+    balls(i).blink.cmdReq.bits  := command.bits
 
-    cmdRouter.io.cmdResp_i(i).valid := Mux(initPending(i), true.B, balls(i).blink.cmdResp.valid)
-    cmdRouter.io.cmdResp_i(i).bits  := Mux(initPending(i), initResp(i), balls(i).blink.cmdResp.bits)
-    balls(i).blink.cmdResp.ready    := !initPending(i) && cmdRouter.io.cmdResp_i(i).ready
+    cmdRouter.io.cmdResp_i(i).valid                    := !internalOwner(i) && Mux(initPending(i), true.B, balls(i).blink.cmdResp.valid)
+    cmdRouter.io.cmdResp_i(i).bits                     := Mux(initPending(i), initResp(i), balls(i).blink.cmdResp.bits)
+    balls(i).blink.cmdResp.ready                       := !initPending(i) && Mux(
+      internalOwner(i),
+      (if (b.rvv.enable) internalComplete.get.ready else false.B),
+      cmdRouter.io.cmdResp_i(i).ready
+    )
+    when(command.fire && targetMatch)(internalOwner(i) := internal)
+    when(balls(i).blink.cmdResp.fire || initPending(i) && cmdRouter.io.cmdResp_i(i).fire) {
+      internalOwner(i) := false.B
+    }
+    if (b.rvv.enable) {
+      when(internalOwner(i) && initPending(i)) {
+        internalComplete.get.valid := true.B
+        when(internalComplete.get.fire) { initPending(i) := false.B; internalOwner(i) := false.B }
+      }
+    }
 
-    ballBootReset(i) := cmdRouter.io.cmdReq_o.fire && isBallInit && targetMatch
-    when(cmdRouter.io.cmdReq_o.fire && isBallInit && targetMatch) {
+    ballBootReset(i) := command.fire && isBallInit && targetMatch
+    when(command.fire && isBallInit && targetMatch) {
       initPending(i)         := true.B
-      initResp(i).rob_id     := cmdRouter.io.cmdReq_o.bits.rob_id
-      initResp(i).is_sub     := cmdRouter.io.cmdReq_o.bits.is_sub
-      initResp(i).sub_rob_id := cmdRouter.io.cmdReq_o.bits.sub_rob_id
+      initResp(i).rob_id     := command.bits.rob_id
+      initResp(i).is_sub     := command.bits.is_sub
+      initResp(i).sub_rob_id := command.bits.sub_rob_id
     }
     when(initPending(i) && cmdRouter.io.cmdResp_i(i).fire) {
       initPending(i) := false.B
     }
   }
 
-  val targetReady = VecInit((0 until numBalls).map(i => balls(i).blink.cmdReq.ready && targetMatches(i))).asUInt.orR
-  cmdRouter.io.cmdReq_o.ready := Mux(isBallInit, targetMatches.asUInt.orR, targetReady)
+  val targetReady =
+    VecInit((0 until numBalls).map(i => balls(i).blink.cmdReq.ready && !initPending(i) && targetMatches(i))).asUInt.orR
+  command.ready := targetReady
 
   cmdResp <> cmdRouter.io.cmdResp_o
 
@@ -156,27 +169,58 @@ class BBus(val b: GlobalConfig) extends Module {
 // PMC - Performance Monitor Counter
 // -----------------------------------------------------------------------------
   for (i <- 0 until numBalls) {
-    pmc.io.cmdReq_i(i).valid  := cmdRouter.io.cmdReq_i(i).fire
-    pmc.io.cmdReq_i(i).bits   := cmdRouter.io.cmdReq_i(i).bits
-    pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid
-    pmc.io.cmdResp_o(i).bits  := cmdRouter.io.cmdResp_o(i).bits
+    pmc.io.cmdReq_i(i).valid  := cmdRouter.io.cmdReq_i(i).fire || command.fire && internal && targetMatches(i)
+    pmc.io.cmdReq_i(i).bits   := Mux(internal, command.bits, cmdRouter.io.cmdReq_i(i).bits)
+    pmc.io.cmdResp_o(i).valid := cmdRouter.io.cmdResp_o(i).valid ||
+      internalOwner(i) && (balls(i).blink.cmdResp.fire || initPending(i) && (if (b.rvv.enable) internalComplete.get.fire
+                                                                             else false.B))
+    pmc.io.cmdResp_o(i).bits  := Mux(
+      internalOwner(i),
+      Mux(initPending(i), initResp(i), balls(i).blink.cmdResp.bits),
+      cmdRouter.io.cmdResp_o(i).bits
+    )
   }
 
 // Connect balls' bankRead and bankWrite to memrouter
   var readChannelIdx  = 0
   var writeChannelIdx = 0
 
-  for ((mapping, ball) <- b.ballDomain.ballIdMappings.zip(balls)) {
+  for (((mapping, ball), index) <- b.ballDomain.ballIdMappings.zip(balls).zipWithIndex) {
     val inBW  = mapping.inBW
     val outBW = mapping.outBW
 
     for (i <- 0 until inBW) {
       bankRead(readChannelIdx) <> ball.blink.bankRead(i)
+      if (b.rvv.enable) {
+        val local  = ball.blink.bankRead(i).bank_id
+        val layout = kernelBanks.get
+        when(internalOwner(index)) {
+          bankRead(readChannelIdx).bank_id  := Mux(local < layout.readGroups, layout.readBank, layout.writeBank)
+          bankRead(readChannelIdx).group_id := Mux(local < layout.readGroups, local, local - layout.readGroups)
+          when(ball.blink.bankRead(i).io.req.valid) {
+            assert(local < (layout.readGroups +& layout.writeGroups), "RVV Ball read bank outside launch groups")
+          }
+        }
+      }
       readChannelIdx = readChannelIdx + 1
     }
 
     for (i <- 0 until outBW) {
       bankWrite(writeChannelIdx) <> ball.blink.bankWrite(i)
+      if (b.rvv.enable) {
+        val local  = ball.blink.bankWrite(i).bank_id
+        val layout = kernelBanks.get
+        when(internalOwner(index)) {
+          bankWrite(writeChannelIdx).bank_id  := layout.writeBank
+          bankWrite(writeChannelIdx).group_id := local - layout.readGroups
+          when(ball.blink.bankWrite(i).io.req.valid) {
+            assert(
+              local >= layout.readGroups && local < (layout.readGroups +& layout.writeGroups),
+              "RVV Ball write outside write groups"
+            )
+          }
+        }
+      }
       writeChannelIdx = writeChannelIdx + 1
     }
   }
@@ -190,15 +234,12 @@ class BBus(val b: GlobalConfig) extends Module {
     }
   }
 
-  // Connect balls' subRobReq
+  // Internal RVV operations complete directly; they cannot expand into SubROB.
   for (i <- 0 until numBalls) {
-    if (b.ballDomain.ballIdMappings(i).builtin == "kernel") {
-      subRobReq(i).valid             := false.B
-      subRobReq(i).bits              := SubRobRow.tieOff(b)
-      balls(i).blink.subRobReq.ready := false.B
-    } else {
-      subRobReq(i) <> balls(i).blink.subRobReq
-    }
+    subRobReq(i).valid             := balls(i).blink.subRobReq.valid && !internalOwner(i)
+    subRobReq(i).bits              := balls(i).blink.subRobReq.bits
+    balls(i).blink.subRobReq.ready := subRobReq(i).ready && !internalOwner(i)
+    assert(!(internalOwner(i) && balls(i).blink.subRobReq.valid), "RVV Ball operation cannot issue SubROB work")
   }
 
   // Connect configurable MMIO metadata channels.

@@ -303,7 +303,7 @@ class RocketBB(
     // A scheduler needs the custom ISA even without compute Balls.
     val csrP =
       if (usingRoCC) p
-      else p.alterPartial { case BuildRoCC => Nil }
+      else p.alterPartial { case CoreRoCCCount => 0 }
 
     val csr  = Module(new CSRFile(
       perfEvents,
@@ -1253,19 +1253,18 @@ class RocketBB(
     io.rocc.cmd.valid         := wb_reg_valid && wb_ctrl.rocc && !replay_wb_common
     io.rocc.exception         := wb_xcpt && csr.io.status.xs.orR
     io.rocc.cmd.bits.raw_inst := wb_reg_inst
-    val inst_bits = wb_reg_inst.asTypeOf(new RoCCInstruction())
-    io.rocc.cmd.bits.funct   := inst_bits.funct
-    io.rocc.cmd.bits.funct3  := wb_reg_inst(14, 12)
-    io.rocc.cmd.bits.rs2     := inst_bits.rs2
-    io.rocc.cmd.bits.rs1     := inst_bits.rs1
-    io.rocc.cmd.bits.pc      := wb_reg_pc
-    io.rocc.cmd.bits.xd      := inst_bits.xd
-    io.rocc.cmd.bits.xs1     := inst_bits.xs1
-    io.rocc.cmd.bits.xs2     := inst_bits.xs2
-    io.rocc.cmd.bits.rd      := inst_bits.rd
-    io.rocc.cmd.bits.opcode  := inst_bits.opcode
-    io.rocc.cmd.bits.rs1Data := wb_reg_wdata
-    io.rocc.cmd.bits.rs2Data := wb_reg_rs2
+    io.rocc.cmd.bits.funct    := wb_reg_inst(31, 25)
+    io.rocc.cmd.bits.funct3   := wb_reg_inst(14, 12)
+    io.rocc.cmd.bits.rs2      := wb_reg_inst(24, 20)
+    io.rocc.cmd.bits.rs1      := wb_reg_inst(19, 15)
+    io.rocc.cmd.bits.pc       := wb_reg_pc
+    io.rocc.cmd.bits.xd       := wb_reg_inst(14)
+    io.rocc.cmd.bits.xs1      := wb_reg_inst(13)
+    io.rocc.cmd.bits.xs2      := wb_reg_inst(12)
+    io.rocc.cmd.bits.rd       := wb_reg_inst(11, 7)
+    io.rocc.cmd.bits.opcode   := wb_reg_inst(6, 0)
+    io.rocc.cmd.bits.rs1Data  := wb_reg_wdata
+    io.rocc.cmd.bits.rs2Data  := wb_reg_rs2
 
     // gate the clock
     val unpause =
@@ -1422,13 +1421,13 @@ class RocketBB(
     def read(addr:         UInt): Bool = r(addr)
     def readBypassed(addr: UInt):      Bool  = _next(addr)
 
-    private val _r    = RegInit(0.U(n.W))
-    private val r     = if (zero) (_r >> 1 << 1) else _r
+    val _r            = RegInit(0.U(n.W))
+    val r             = if (zero) (_r >> 1 << 1) else _r
     private var _next = r
     private var ens   = false.B
-    private def mask(en: Bool, addr: UInt) = Mux(en, 1.U << addr, 0.U)
+    def mask(en: Bool, addr: UInt) = Mux(en, 1.U << addr, 0.U)
 
-    private def update(en: Bool, update: UInt) = {
+    def update(en: Bool, update: UInt) = {
       _next = update
       ens = ens || en
       when(ens)(_r := _next)
@@ -1440,8 +1439,8 @@ class RocketBB(
 
 class RegFile(n: Int, w: Int, zero: Boolean = false) {
   val rf = Reg(Vec(n, UInt(w.W)))
-  private def access(addr: UInt) = rf(~addr(log2Up(n) - 1, 0))
-  private val reads   = ArrayBuffer[(UInt, UInt)]()
+  def access(addr: UInt) = rf(~addr(log2Up(n) - 1, 0))
+  val reads           = ArrayBuffer[(UInt, UInt)]()
   private var canRead = true
 
   def read(addr: UInt) = {

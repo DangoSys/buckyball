@@ -30,7 +30,6 @@ int main(void) {
         for (int i = 0; i < 4 + m * n; ++i)
           actual[i] = 0x5a5a5a5a;
         // Publish CPU input/output initialization once before this DMA chain.
-        bb_dma_fence();
         for (int bank = 3; bank <= 5; ++bank)
           bb_mem_alloc(bank, 1, 1);
         bb_mvin((uintptr_t)a, 3, m * K / 4, 1);
@@ -41,20 +40,17 @@ int main(void) {
         else
           bb_mxmm_f32(3, 4, 5, m, n, K, 1, 0, 1);
         bb_mvout((uintptr_t)actual, 5, 1 + m * n / 4, 1);
-        bb_fence();
         for (int i = 0; i < 4 + m * n; ++i)
           if (actual[i] != 0x5a5a5a5a)
             return 1;
         for (int i = 0; i < m * K; ++i)
           a[i] = 0;
-        bb_dma_fence();
         bb_mvin((uintptr_t)a, 3, m * K / 4, 1);
         if (fused)
           bb_mxmm_fma32(3, 4, 5, m, n, K, 0, 1, 1);
         else
           bb_mxmm_f32(3, 4, 5, m, n, K, 0, 1, 1);
         bb_mvout((uintptr_t)actual, 5, 1 + m * n / 4, 1);
-        bb_fence();
         for (int i = 0; i < 4; ++i)
           if (actual[i] != 0x5a5a5a5a)
             return 2;

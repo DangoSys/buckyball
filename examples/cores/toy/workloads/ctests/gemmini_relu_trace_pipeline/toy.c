@@ -42,7 +42,6 @@ extern "C"
     bb_relu(2, group, DIM * 4, DIM * 4);
   bdb_counter_stop(0);
   bb_mvout((uintptr_t)output, 2, DIM, 1);
-  bb_fence();
   for (int i = 0; i < DIM * DIM; ++i) {
     int row = i / DIM, col = i % DIM;
     int32_t expected = 0;

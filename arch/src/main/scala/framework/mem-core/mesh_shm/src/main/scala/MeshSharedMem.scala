@@ -10,6 +10,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
   @public
   val io = IO(new Bundle {
     val channels           = Vec(p.totalChannels, new MeshChannel(p))
+    val external           = Vec(p.externalChannels, new MeshChannel(p))
     val transferCommand    = Flipped(Decoupled(new MeshTransferCommand(p)))
     val transferCompletion = Decoupled(new MeshTransferCompletion(p))
     val localBanks         = Vec(p.cores.size, new MeshLocalBankPort(p.addressBits, p.localBankBits, p.dataBits, p.tagBits))
@@ -94,7 +95,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
 
     val attached = p.channelLocations.zipWithIndex.collect {
       case ((r, c), index) if r == row && c == col => index
-    } ++ (if (row == 0 && col == 0) Seq(p.totalChannels) else Seq.empty)
+    } ++ (if (row == 0 && col == 0) (p.totalChannels until p.totalChannels + 1 + p.externalChannels) else Seq.empty)
     if (attached.nonEmpty) {
       val arbiter            = Module(new RRArbiter(new MeshPacket(p), attached.size) {
         override lazy val lastGrant = {
@@ -112,8 +113,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
           transfer.io.mesh.response.bits  := network.bits
           localResponseReady(port)        := network.bits.channel === channel.U && transfer.io.mesh.response.ready
         } else {
-          val requestPort  = io.channels(channel).request
-          val responsePort = io.channels(channel).response
+          val client       =
+            if (channel < p.totalChannels) io.channels(channel) else io.external(channel - p.totalChannels - 1)
+          val requestPort  = client.request
+          val responsePort = client.response
           val inFlight     = RegInit(0.U(log2Ceil(p.maxInFlight + 1).W))
           val tags         = RegInit(0.U((1 << p.tagBits).W))
           val available    = inFlight < p.maxInFlight.U && !tags(requestPort.bits.tag)

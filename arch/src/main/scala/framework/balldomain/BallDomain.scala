@@ -9,8 +9,9 @@ import framework.balldomain.decoder.BallDomainDecoder
 import framework.balldomain.rs.BallReservationStation
 import framework.balldomain.blink.{BankRead, BankWrite, SubRobRow}
 import framework.balldomain.blink.mmio.{MmioRead, MmioWrite}
-import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue, KernelWriteBank}
-import framework.memdomain.frontend.mem.KernelMemoryBridge
+import framework.frontend.globalrs.{GlobalSchedComplete, GlobalSchedIssue}
+import framework.rvv.RvvBallCommand
+import framework.frontend.decoder.{DomainId, PostGDCmd}
 
 /**
  * Ball domain.
@@ -27,40 +28,53 @@ class BallDomain(val b: GlobalConfig) extends Module {
   val totalMmioWrite = b.ballDomain.ballIdMappings.map(_.mmioWriteBW).sum
 
   @public
-  val global_issue_i            = IO(Flipped(Decoupled(new GlobalSchedIssue(b))))
+  val global_issue_i           = IO(Flipped(Decoupled(new GlobalSchedIssue(b))))
   @public
-  val global_complete_o         = IO(Decoupled(new GlobalSchedComplete(b)))
+  val global_complete_o        = IO(Decoupled(new GlobalSchedComplete(b)))
   @public
-  val ballChannelActive         = IO(Output(Vec(b.ballDomain.ballNum, Bool())))
+  val ballChannelActive        = IO(Output(Vec(b.ballDomain.ballNum, Bool())))
   @public
-  val ballChannelReady          = IO(Input(Vec(b.ballDomain.ballNum, Bool())))
+  val ballChannelReady         = IO(Input(Vec(b.ballDomain.ballNum, Bool())))
   @public
-  val bankRead                  = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
+  val bankRead                 = IO(Vec(totalBallRead, Flipped(new BankRead(b))))
   @public
-  val bankWrite                 = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
+  val bankWrite                = IO(Vec(totalBallWrite, Flipped(new BankWrite(b))))
   @public
-  val mmioRead                  = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
+  val mmioRead                 = IO(Vec(totalMmioRead, Flipped(new MmioRead(b))))
   @public
-  val mmioWrite                 = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
+  val mmioWrite                = IO(Vec(totalMmioWrite, Flipped(new MmioWrite(b))))
   @public
-  val subRobReq                 = IO(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
-  @public val kernel_command_i  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new GlobalSchedIssue(b))))) else None
-  @public val kernel_complete_o = if (b.rvv.enable) Some(IO(Decoupled(new GlobalSchedComplete(b)))) else None
-  @public val kernel            = if (b.rvv.enable) Some(IO(Flipped(new KernelMemoryBridge(b)))) else None
-  @public val kernelWriteBank   = IO(Valid(new KernelWriteBank(b)))
-  @public val kernelFault       = IO(Output(Bool()))
+  val subRobReq                = IO(Vec(b.ballDomain.ballNum, Decoupled(new SubRobRow(b))))
+  @public val kernelBanks      = if (b.rvv.enable) Some(IO(Input(new framework.rvv.BankLayout(b)))) else None
+  @public val internalCommand  = if (b.rvv.enable) Some(IO(Flipped(Decoupled(new RvvBallCommand)))) else None
+  @public val internalComplete = if (b.rvv.enable) Some(IO(Decoupled(UInt(64.W)))) else None
+  @public val ownerRobId       = if (b.rvv.enable) Some(IO(Input(UInt(log2Up(b.frontend.rob_entries).W)))) else None
 
   val bbus:        Instance[BBus]                   = Instantiate(new BBus(b))
   val ballDecoder: Instance[BallDomainDecoder]      = Instantiate(new BallDomainDecoder(b))
   val ballRs:      Instance[BallReservationStation] = Instantiate(new BallReservationStation(b))
 
   if (b.rvv.enable) {
-    bbus.kernel_command_i.get <> kernel_command_i.get
-    kernel_complete_o.get <> bbus.kernel_complete_o.get
-    kernel.get <> bbus.kernel.get
+    bbus.kernelBanks.get := kernelBanks.get
+    val decoder = Instantiate(new BallDomainDecoder(b))
+    decoder.cmd_i.valid                      := internalCommand.get.valid
+    decoder.cmd_i.bits                       := 0.U.asTypeOf(new PostGDCmd(b))
+    decoder.cmd_i.bits.domain_id             := DomainId.BALL
+    decoder.cmd_i.bits.op1_col               := 1.U
+    decoder.cmd_i.bits.op2_col               := 1.U
+    decoder.cmd_i.bits.wr_col                := 1.U
+    decoder.cmd_i.bits.cmd.funct             := internalCommand.get.bits.funct7
+    decoder.cmd_i.bits.cmd.rs1Data           := internalCommand.get.bits.rs1
+    decoder.cmd_i.bits.cmd.rs2Data           := internalCommand.get.bits.rs2
+    internalCommand.get.ready                := decoder.cmd_i.ready
+    bbus.internalCommand.get.valid           := decoder.ball_decode_cmd_o.valid
+    bbus.internalCommand.get.bits.cmd        := decoder.ball_decode_cmd_o.bits
+    bbus.internalCommand.get.bits.rob_id     := ownerRobId.get
+    bbus.internalCommand.get.bits.is_sub     := false.B
+    bbus.internalCommand.get.bits.sub_rob_id := 0.U
+    decoder.ball_decode_cmd_o.ready          := bbus.internalCommand.get.ready
+    internalComplete.get <> bbus.internalComplete.get
   }
-  kernelWriteBank := bbus.kernelWriteBank
-  kernelFault     := bbus.kernelFault
 
 //===-------------------------------------------------------------------===//
 // Global RS -> Decoder

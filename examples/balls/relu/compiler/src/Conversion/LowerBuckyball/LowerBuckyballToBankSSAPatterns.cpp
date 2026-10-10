@@ -81,7 +81,6 @@ public:
           loc, bank.getType(), loaded, createI64Const(b, loc, 0),
           createI64Const(b, loc, lines), createI64Const(b, loc, lines));
       bank = mvoutBank(b, loc, outputPack, result, lines);
-      b.create<FenceOp>(loc);
 
       auto copyOut = b.create<scf::ForOp>(loc, zero, countValue, one);
       b.setInsertionPointToStart(copyOut.getBody());

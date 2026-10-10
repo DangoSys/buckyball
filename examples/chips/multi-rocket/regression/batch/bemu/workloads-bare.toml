@@ -1,5 +1,7 @@
 [workloads]
 tests = [
+  "multi-rocket-rocket-ctest-check-embench_sglib-combined-baremetal",
+  "multi-rocket-rocket-ctest-check-embench_matmult-int-baremetal",
   "multi-rocket-rocket-ctest-cpu_arithmetic-baremetal",
   "multi-rocket-rocket-ctest-benchmark-embench_aha-mont64-baremetal",
   "multi-rocket-rocket-ctest-benchmark-embench_crc32-baremetal",

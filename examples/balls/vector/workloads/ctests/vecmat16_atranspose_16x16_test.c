@@ -27,7 +27,6 @@ int main(void) {
   bb_mvin((uintptr_t)b, 1, DIM, 1);
   bb_vecmat16(0, 1, 2, DIM, 0);
   bb_mvout((uintptr_t)actual, 2, DIM, 1);
-  bb_fence();
   if (!compare_i32_matrices(actual, expected, DIM, DIM)) {
     printf("vecmat16_atranspose_16x16 FAIL\n");
     return 1;

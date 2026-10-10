@@ -20,8 +20,7 @@
 
 /* This scale factor will be changed to equalise the runtime of the
    benchmarks. */
-// #define LOCAL_SCALE_FACTOR 78  // Original value for FPGA/real hardware
-#define LOCAL_SCALE_FACTOR 3 // Reduced for Verilator simulation
+#define LOCAL_SCALE_FACTOR 1
 
 // From nettle/macros.h
 

@@ -19,7 +19,7 @@ class Coherence(p: CoherenceParams) extends Module {
   val c = p.chi
   val n = p.mshrEntries
 
-  private val states = Enum(23)
+  val states = Enum(23)
 
   val Seq(
     lookupReq,

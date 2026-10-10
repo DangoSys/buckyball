@@ -1,3 +1,4 @@
+factory = "examples.cores.pebble.PebbleCore"
 # Pebble Core Configuration (default)
 
 balldomain = "balldomains/default.toml"

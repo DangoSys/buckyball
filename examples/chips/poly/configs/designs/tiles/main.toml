@@ -1,5 +1,4 @@
-# Poly main tile: one Linux core. Add cores, Buckyball and sharedMem here as the
-# main tile grows (for example cross-tile all-reduce).
+# Poly main tile: one Linux core and shared storage for cross-tile reduction.
 
 coreDataBytes = 64
 xLen = 64
@@ -8,14 +7,18 @@ paddrBits = 56
 pgIdxBits = 12
 pgLevels = 3
 nPMPs = 8
+memBallChannelNum = 3
 
 [sharedMem]
-enable = false
+bankWidth = 128
+bankEntries = 1024
+enable = true
 entries = 16384
-inputChannels = 1
+inputChannels = 3
 defaultGroupCount = 1
+virtualBankCount = 40
 
 [[cores]]
 core_id = 0
 name = "main"
-include = "../../../../../cores/rocket/configs/default.toml"
+include = "../../../../../cores/reduce/configs/default.toml"

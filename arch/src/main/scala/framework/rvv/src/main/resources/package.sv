@@ -6,26 +6,26 @@ package rvv_pkg;
   import "DPI-C" function void rvv_model_init();
   import "DPI-C" function int unsigned rvv_case_count();
   import "DPI-C" function void rvv_case_select(int unsigned n);
-  import "DPI-C" function int unsigned rvv_case_meta(int unsigned field);
+  import "DPI-C" function longint unsigned rvv_case_meta(int unsigned field);
   import "DPI-C" function int unsigned rvv_image_bytes();
   import "DPI-C" function int unsigned rvv_program_word(int unsigned n);
   import "DPI-C" function int unsigned rvv_image_word(int unsigned n);
   import "DPI-C" function void rvv_memory_masked_write(
-    int unsigned address,
+    longint unsigned address,
     longint unsigned data,
     int unsigned mask
   );
-  import "DPI-C" function int unsigned rvv_expected_status(int unsigned field);
+  import "DPI-C" function longint unsigned rvv_expected_status(int unsigned field);
   import "DPI-C" function longint unsigned rvv_memory_read(
-    int unsigned address,
+    longint unsigned address,
     int unsigned size
   );
   import "DPI-C" function int unsigned rvv_memory_error(
-    int unsigned address,
+    longint unsigned address,
     int unsigned size
   );
   import "DPI-C" function void rvv_memory_write(
-    int unsigned address,
+    longint unsigned address,
     int unsigned size,
     longint unsigned data,
     int unsigned mask
@@ -36,7 +36,8 @@ package rvv_pkg;
   class launch_item extends uvm_sequence_item;
     bit execute;
     bit protocol_fault;
-    bit [31:0] protocol_cause, protocol_tval, protocol_pc, protocol_instruction;
+    bit [31:0] protocol_cause, protocol_pc, protocol_instruction;
+    bit [63:0] protocol_tval;
     bit [3:0] rob;
     `uvm_object_utils(launch_item)
     function new(string name = "launch_item");
@@ -47,7 +48,8 @@ package rvv_pkg;
     bit fault;
     bit [15:0] write_bank;
     bit [3:0] rob;
-    bit [31:0] pc, instruction, cause, tval;
+    bit [31:0] pc, instruction, cause;
+    bit [63:0] tval;
     `uvm_object_utils_begin(completion_item)
       `uvm_field_int(fault, UVM_DEFAULT)
       `uvm_field_int(rob, UVM_DEFAULT)
@@ -86,7 +88,7 @@ package rvv_pkg;
         expected.cause = t.protocol_cause;
         expected.tval = t.protocol_tval;
       end
-      expected.write_bank = t.execute && !expected.fault ? rvv_case_meta(4) >> 16 : 0;
+      expected.write_bank = t.execute && !expected.fault ? 1 : 0;
       expected_ap.write(expected);
     endfunction
   endclass

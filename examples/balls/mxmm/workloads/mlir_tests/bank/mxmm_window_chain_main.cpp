@@ -27,7 +27,6 @@ int main(void) {
   }
   memset(actual, 0x5a, BYTES);
   memset(expected, 0x5a, BYTES);
-  bb_dma_fence();
   for (int bank = 3; bank <= 8; ++bank)
     bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)a[0], 3, BANK_LINES, 1);
@@ -40,7 +39,6 @@ int main(void) {
       if (mode == 0) {
         memcpy(packed, a[part] + part * 32, 32);
         packed[32] = 127;
-        bb_dma_fence();
         bb_mvin((uintptr_t)packed, 5, 3, 1);
         bb_mxmm_mxfp8(5, 6, 7, 1, 16, 32, part == 0, part == 1, 1);
         bb_mvout((uintptr_t)expected, 7, BANK_LINES, 1);
@@ -49,7 +47,6 @@ int main(void) {
                             part * 32, part == 0, part == 1, 1);
         bb_mvout((uintptr_t)actual, 8, BANK_LINES, 1);
       }
-      bb_fence();
       if (part == 0)
         for (int i = 0; i < BYTES; ++i)
           if ((mode ? actual : expected)[i] != 0x5a)

@@ -277,8 +277,9 @@ public:
           Value partial = rewriter.create<memref::AllocOp>(loc, partialTy);
           rewriter.create<linalg::FillOp>(loc, zero, partial);
           rewriter.create<SMatMulMatmulOp>(loc, aTile, bTile, partial);
-          rewriter.create<linalg::AddOp>(loc, ValueRange{cTile, partial},
-                                         ValueRange{cTile});
+          rewriter.create<linalg::ElementwiseOp>(
+              loc, ValueRange{cTile, partial}, ValueRange{cTile},
+              linalg::ElementwiseKind::add);
           rewriter.create<memref::DeallocOp>(loc, partial);
           rewriter.setInsertionPointAfter(kLoop);
         }

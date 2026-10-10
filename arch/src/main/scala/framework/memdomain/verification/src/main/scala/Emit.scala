@@ -6,7 +6,9 @@ import chisel3.ActualDirection
 import framework.system.core.rocket.CpuParams
 import java.nio.file.{Files, Paths}
 import framework.system.configloader.{ChipLoader, RocketTileCore}
-import framework.memdomain.frontend.mem.{KernelDma, MemLoader, MemStorer}
+import framework.memdomain.frontend.mem.{KernelDma, MemConfiger, MemLoader, MemStorer}
+import framework.memdomain.backend.privatepath.PrivateMemBackend
+import framework.memdomain.backend.shared.SharedMemBackend
 
 object Emit extends App {
   require(
@@ -17,7 +19,14 @@ object Emit extends App {
   val targets = args(3).split(",").toSet
 
   val known = Set(
+    "mset_private",
+    "mset_shared",
+    "shared_lease",
+    "mset_configer",
+    "program_rob",
+    "program_decoder",
     "loader_ack",
+    "read_dma",
     "storer_ack",
     "kernel_dma",
     "admission_system",
@@ -31,16 +40,21 @@ object Emit extends App {
   val firtoolOptions = args.drop(4)
   require(chip == "toy" || chip == "goban", s"MemDomain gates declare Toy or Goban profiles, got $chip")
   val repo           = Paths.get("..").toAbsolutePath.normalize
-  val topology       = ChipLoader.load(repo.resolve(s"examples/chips/$chip/configs/generated/chip.pb").toString)
-  val configs        = topology.tiles.flatMap(_.cores).collect { case RocketTileCore(_, Some(config)) => config }
-  require(configs.nonEmpty, "MemDomain gate requires a configured accelerator")
-  if (chip == "toy") require(configs.size == 1, "Toy ACK gate requires exactly one compute configuration")
-  val b              = configs.head
-  require(
-    b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16,
-    "ACK gate profile requires 16-byte bank rows and byte masks"
-  )
-  val output         = repo.resolve("arch/src/main/scala/framework/memdomain/verification/build")
+  lazy val topology  = ChipLoader.load(repo.resolve(s"examples/chips/$chip/configs/generated/chip.pb").toString)
+
+  lazy val b = {
+    val configs = topology.tiles.flatMap(_.cores).collect { case RocketTileCore(_, Some(config)) => config }
+    require(configs.nonEmpty, "MemDomain gate requires a configured accelerator")
+    if (chip == "toy") require(configs.size == 1, "Toy ACK gate requires exactly one compute configuration")
+    val config  = configs.head
+    require(
+      config.memDomain.bankWidth == 128 && config.memDomain.bankMaskLen == 16,
+      "ACK gate profile requires 16-byte bank rows and byte masks"
+    )
+    config
+  }
+
+  val output = repo.resolve("arch/src/main/scala/framework/memdomain/verification/build")
   Files.createDirectories(output)
 
   def leaves(d: Data, name: String): Seq[(String, Data)] = d match {
@@ -49,12 +63,102 @@ object Emit extends App {
     case e => if (e.getWidth > 0) Seq(name -> e) else Seq.empty
   }
 
+  lazy val msetConfig = {
+    val defaults = framework.top.GlobalConfig()
+    defaults.copy(
+      memDomain = defaults.memDomain.copy(
+        bankNum = 4,
+        bankWidth = 128,
+        bankEntries = 8,
+        bankMaskLen = 16,
+        virtualBankCount = 16,
+        sharedEnable = true,
+        sharedEntries = 32,
+        sharedBankEntries = 8,
+        sharedBankNum = 4,
+        sharedInputChannels = 2,
+        sharedDefaultGroupCount = 1,
+        nCores = 2,
+        computeCoreIds = Seq(0, 1),
+        bankChannel = 2,
+        dma_buswidth = 128,
+        memAddrLen = 39
+      ),
+      frontend = defaults.frontend.copy(
+        rob_entries = 8,
+        bank_id_len = 10,
+        vbank_id_upper_bound = 7,
+        shared_bank_id_base = 8,
+        iter_len = 34,
+        sub_rob_depth = 4
+      ),
+      tile = defaults.tile.copy(xLen = 64),
+      sim = defaults.sim.copy(diffTest = true)
+    )
+  }
+
+  lazy val programConfig = msetConfig.copy(
+    rvv = msetConfig.rvv.copy(enable = true),
+    sim = msetConfig.sim.copy(diffTest = false)
+  )
+
+  for (
+    target <- Seq("mset_private", "mset_shared", "shared_lease", "mset_configer", "program_rob", "program_decoder")
+    if targets(target)
+  ) {
+    var interface: Data = null
+    val moduleName = target match {
+      case "mset_private"    => "PrivateMemBackend"
+      case "mset_shared"     => "SharedMemBackend"
+      case "shared_lease"    => "SharedMemBackend"
+      case "mset_configer"   => "MemConfiger"
+      case "program_rob"     => "GlobalROB"
+      case "program_decoder" => "GlobalDecoder"
+    }
+    _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+      target match {
+        case "mset_private"    => val m = new PrivateMemBackend(msetConfig); interface = m.io; m
+        case "mset_shared"     => val m = new SharedMemBackend(msetConfig); interface = m.io; m
+        case "shared_lease"    =>
+          val m = new SharedMemBackend(msetConfig, useMesh = true, externalPhysicalPorts = 1); interface = m.io; m
+        case "mset_configer"   => val m = new MemConfiger(msetConfig); interface = m.io; m
+        case "program_rob"     => val m = new framework.frontend.globalrs.GlobalROB(programConfig); interface = m.io; m
+        case "program_decoder" =>
+          val m = new framework.frontend.decoder.GlobalDecoder(programConfig); interface = m.io; m
+      },
+      args = Array("--target-dir", output.resolve(moduleName).toString, "--split-verilog"),
+      firtoolOpts = firtoolOptions
+    )
+    val fields     = leaves(interface, "io")
+    if (target == "shared_lease") Files.writeString(
+      output.resolve("shared_lease_clocking.svh"),
+      "clocking sample @(posedge clock);\ndefault input #1step;\ninput reset;\n" +
+        fields.map { case (n, _) => s"input $n;" }.mkString("\n") + "\nendclocking\n"
+    )
+    Files.writeString(
+      output.resolve(s"${target}_signals.svh"),
+      fields.map { case (name, data) => s"logic [${data.getWidth - 1}:0] $name;" }.mkString("\n") + "\n"
+    )
+    Files.writeString(
+      output.resolve(s"${target}_ports.svh"),
+      (Seq(".clock(clock)", ".reset(reset)") ++ fields.map { case (name, _) => s".$name($name)" }).mkString(
+        ",\n"
+      ) + "\n"
+    )
+    Files.writeString(
+      output.resolve(s"${target}_init.svh"),
+      fields.collect {
+        case (name, data) if DataMirror.directionOf(data) == ActualDirection.Input => s"$name = '0;"
+      }.mkString("\n") + "\n"
+    )
+  }
+
   for (load <- Seq(true, false) if targets(if (load) "loader_ack" else "storer_ack")) {
     var io: Data = null
     val stem = if (load) "loader_ack" else "storer_ack"
     _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
-      if (load) { val m = new MemLoader(b); io = m.io; m }
-      else { val m = new MemStorer(b); io = m.io; m },
+      if (load) { val m = new MemLoader(msetConfig); io = m.io; m }
+      else { val m = new MemStorer(msetConfig); io = m.io; m },
       args = Array("--target-dir", output.resolve(if (load) "MemLoader" else "MemStorer").toString, "--split-verilog"),
       firtoolOpts = firtoolOptions
     )
@@ -72,6 +176,41 @@ object Emit extends App {
       fs.collect { case (n, d) if DataMirror.directionOf(d) == ActualDirection.Input => s"$n = '0;" }.mkString(
         "\n"
       ) + "\n"
+    )
+  }
+
+  if (targets("read_dma")) {
+    var readIo: Data = null
+    _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
+      {
+        val m = new framework.memdomain.frontend.mem.dma.ReadDma(
+          msetConfig,
+          memcore.memory.preflight.Params(beatBytes = 16),
+          memcore.bus.axi4.Params()
+        ); readIo = m.io; m
+      },
+      args = Array("--target-dir", output.resolve("ReadDma").toString, "--split-verilog"),
+      firtoolOpts = firtoolOptions
+    )
+    val fields = leaves(readIo, "io")
+    Files.writeString(
+      output.resolve("read_dma_signals.svh"),
+      fields.map { case (n, d) => s"logic [${d.getWidth - 1}:0] $n;" }.mkString("\n") + "\n"
+    )
+    Files.writeString(
+      output.resolve("read_dma_ports.svh"),
+      (Seq(".clock(clock)", ".reset(reset)") ++ fields.map { case (n, _) => s".$n($n)" }).mkString(",\n") + "\n"
+    )
+    Files.writeString(
+      output.resolve("read_dma_init.svh"),
+      fields.collect { case (n, d) if DataMirror.directionOf(d) == ActualDirection.Input => s"$n = '0;" }.mkString(
+        "\n"
+      ) + "\n"
+    )
+    Files.writeString(
+      output.resolve("read_dma_clocking.svh"),
+      "clocking sample @(posedge clock);\ndefault input #1step;\ninput reset;\n" +
+        fields.map { case (n, _) => s"input $n;" }.mkString("\n") + "\nendclocking\n"
     )
   }
 
@@ -105,7 +244,7 @@ object Emit extends App {
   }
   if (targets("admission_system") || targets("controller_system")) {
     // Task admission and the controller belong to compute tiles; the main tile has neither.
-    val tile       = topology.computeTiles.headOption.getOrElse(
+    val tile       = topology.mountedTiles.find(_.controller.isDefined).getOrElse(
       throw new IllegalArgumentException(s"$chip: admission/controller gates need a compute tile")
     )
     val selected   = tile.cores.zipWithIndex.collectFirst { case (RocketTileCore(cpu, Some(config)), i) =>
@@ -171,7 +310,12 @@ object Emit extends App {
 
   if (targets.exists(_.startsWith("tile_system_"))) {
     require(chip == "goban", "Tile verification profile requires Goban")
-    EmitTile(topology, output, firtoolOptions)
+    val description = buckyball.config.Chip.parseFrom(
+      Files.readAllBytes(repo.resolve(s"examples/chips/$chip/configs/generated/chip.pb"))
+    )
+    val platform    = Class.forName(description.getMill.getVerilatorConfig).getDeclaredConstructor()
+      .newInstance().asInstanceOf[sims.soc.SystemTarget]
+    EmitTile(topology, output, firtoolOptions, platform.instantiate)
   }
   if (targets("memory_system")) EmitMemory(output, firtoolOptions)
 }

@@ -35,7 +35,6 @@ int main(void) {
     }
     memset(actual, 0x5a, sizeof(actual));
     memset(expected, 0x5a, sizeof(expected));
-    bb_dma_fence();
     for (int bank = 3; bank <= 7; ++bank)
       bb_mem_alloc(bank, 1, 1);
     bb_mvin((uintptr_t)a, 3, BANK_LINES, 1);
@@ -61,7 +60,6 @@ int main(void) {
                    a + m * full + row * (full / 32) + k / 32, count / 32);
           }
         }
-        bb_dma_fence();
         bb_mvin((uintptr_t)w, 6, BANK_LINES, 1);
         if (mode == 0) {
           bb_mvin((uintptr_t)packed, 4, BANK_LINES, 1);
@@ -71,7 +69,6 @@ int main(void) {
           _mlir_ciface_window_small();
           bb_mvout((uintptr_t)actual, 7, BANK_LINES, 1);
         }
-        bb_fence();
         if (k + count != full)
           for (int i = 0; i < BYTES; ++i)
             if ((mode ? actual : expected)[i] != 0x5a)

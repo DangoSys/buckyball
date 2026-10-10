@@ -21,9 +21,7 @@
 using namespace mlir;
 using namespace ::buddy::buckyball;
 
-namespace mlir::buddy {
-void registerReportCycleEstimatePass();
-}
+namespace mlir::buddy {}
 
 namespace {
 
@@ -122,7 +120,6 @@ public:
 
 void mlir::buddy::registerLowerBuckyballPass() {
   PassRegistration<LowerBuckyballToLLVMPass>();
-  registerReportCycleEstimatePass();
 }
 
 void mlir::buddy::registerLowerBankSSAToIntrinsicsPass() {

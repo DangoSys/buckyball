@@ -4,6 +4,6 @@
 [main_tile]
 include = "tiles/main.toml"
 
-[compute_tiles]
+[[tiles]]
 include = "tiles/compute.toml"
 count = 8

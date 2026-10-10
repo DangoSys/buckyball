@@ -30,7 +30,6 @@ int main(void) {
   bb_mvin((uintptr_t)b, b_bank, LINES, 1);
   bb_matadd(a_bank, b_bank, c_bank, LINES);
   bb_mvout((uintptr_t)c, c_bank, LINES, 1);
-  bb_fence();
   bb_mem_release(a_bank);
   bb_mem_release(b_bank);
   bb_mem_release(c_bank);

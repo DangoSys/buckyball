@@ -42,16 +42,16 @@ class MeshFlit(p: MeshParams) extends Bundle {
 @instantiable
 class MeshRouter(p: MeshParams, x: Int, y: Int) extends Module {
   require(x >= 0 && x < p.xNodes && y >= 0 && y < p.yNodes)
-  private val flit = new MeshFlit(p)
+  val flit = new MeshFlit(p)
 
-  private val connected = Seq(MeshDirection.Local) ++
+  val connected = Seq(MeshDirection.Local) ++
     Seq(MeshDirection.North).filter(_ => y > 0) ++
     Seq(MeshDirection.South).filter(_ => y < p.yNodes - 1) ++
     Seq(MeshDirection.East).filter(_ => x < p.xNodes - 1) ++
     Seq(MeshDirection.West).filter(_ => x > 0)
 
-  private val count     = connected.size
-  private val inputBits = math.max(1, log2Ceil(count))
+  val count     = connected.size
+  val inputBits = math.max(1, log2Ceil(count))
 
   @public
   val io = IO(new Bundle {

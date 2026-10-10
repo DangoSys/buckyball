@@ -36,7 +36,6 @@ int main(void) {
   bb_smatmul_os(1, 2, 4, 16, 16, 16, 1, 1, 0);
   bb_quant_i32_to_i8(4, 5, 6, 64, 0, 0, 4, 4, 4, 0);
   bb_mvout((uintptr_t)output, 6, 16, 1);
-  bb_fence();
 
   for (int window = 0; window < 16; ++window) {
     for (int channel = 0; channel < 16; ++channel) {

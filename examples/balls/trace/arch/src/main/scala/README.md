@@ -81,19 +81,16 @@ DPI-C trace format:
 // One matmul region
 bdb_counter_start(0, 0xA001);         // counter 0, tag=matmul
 bb_vecmat16(A, B, C, 16);
-bb_fence();
 bdb_counter_stop(0);                  // prints elapsed
 
 // Nested regions
 bdb_counter_start(0, 0xB001);         // outer: whole conv
   bdb_counter_start(1, 0xB002);       // inner: im2col
   bb_im2col(...);
-  bb_fence();
   bdb_counter_stop(1);
 
   bdb_counter_start(2, 0xB003);       // inner: matmul
   bb_vecmat16(...);
-  bb_fence();
   bdb_counter_stop(2);
 bdb_counter_stop(0);                    // outer end
 ```

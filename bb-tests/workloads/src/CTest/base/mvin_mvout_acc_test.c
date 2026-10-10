@@ -16,13 +16,11 @@ int acc_mvin_mvout_pressure_test() {
   for (int i = 0; i < 4; i++) {
     init_u32_random_matrix(expected_matrix, ROWS, COLS, i * 10 + i);
     clear_u32_matrix(output_matrix, ROWS, COLS);
-    bb_dma_fence();
 
     uint32_t acc_bank_id = 2;
     bb_mem_alloc(acc_bank_id, 1, 4);
     bb_mvin((uintptr_t)expected_matrix, acc_bank_id, ROWS, 1);
     bb_mvout((uintptr_t)output_matrix, acc_bank_id, ROWS, 1);
-    bb_fence();
     if (!compare_u32_matrices(output_matrix, expected_matrix, ROWS, COLS)) {
       printf("Test ACC mvin/mvout pressure %d FAILED\n", i);
       return 0;
@@ -39,7 +37,6 @@ int acc_mvin_mvout_pressure_test() {
       bb_mem_alloc(acc_bank_id, 1, 4);
     }
     bb_mem_release(acc_bank_id);
-    bb_fence();
     printf("Test ACC same-vbank realloc without release PASSED\n");
   }
   return 1;

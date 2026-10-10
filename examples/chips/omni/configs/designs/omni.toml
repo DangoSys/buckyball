@@ -1,9 +1,11 @@
-# Omni: a CPU main tile and 4 homogeneous compute tiles, each
-# 1 controller + 2 Attention + 8 FFN cores.
-
+# Fixed main position, four Poly tiles and one Goban-operator Omni tile.
 [main_tile]
 include = "tiles/main.toml"
 
-[compute_tiles]
-include = "tiles/compute.toml"
+[[tiles]]
+include = "tiles/poly.toml"
 count = 4
+
+[[tiles]]
+include = "tiles/omni.toml"
+count = 1

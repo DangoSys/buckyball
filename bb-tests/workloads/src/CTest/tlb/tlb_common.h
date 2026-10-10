@@ -144,11 +144,8 @@ static int tlb_dma_roundtrip(uintptr_t load_addr, elem_t *expected,
   uint32_t bank_id = 0;
   bb_mem_alloc(bank_id, 1, 1);
   clear_u8_matrix(output, TLB_DIM, TLB_DIM);
-  tlb_fence_rw();
   bb_mvin(load_addr, bank_id, TLB_DIM, 1);
   bb_mvout((uintptr_t)output, bank_id, TLB_DIM, 1);
-  bb_fence();
-  tlb_fence_rw();
   return compare_u8_matrices(output, expected, TLB_DIM, TLB_DIM);
 }
 

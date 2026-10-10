@@ -4,31 +4,11 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.top.GlobalConfig
-import framework.memdomain.backend.MemRequestIO
-import framework.memdomain.backend.shared.{SharedMemBackend, SharedMemLayout}
+import framework.system.core.clink.ShmPort
+import framework.memdomain.backend.shared.{SharedLeasePort, SharedMemBackend, SharedMemLayout, SharedPhysicalPort}
 import framework.memdomain.backend.banks.btrace.PhysicalBankHash
 import framework.memdomain.frontend.mem.MemConfigerIO
-import framework.memdomain.isa.{MvoverCommand, MvoverISA, MvoverPort}
-import memcore.memory.mesh_shm.MeshLocalBankPort
-
-class BankClientPort(b: GlobalConfig) extends Bundle {
-  val requests = Vec(SharedMemLayout.channelPerHart(b), Flipped(new MemRequestIO(b)))
-  val move     = Flipped(new MvoverPort)
-
-  val local = new MeshLocalBankPort(
-    MvoverISA.AddressBits,
-    MvoverISA.BankBits,
-    b.memDomain.bankWidth,
-    math.max(1, log2Ceil(b.frontend.rob_entries))
-  )
-
-  val config         = Flipped(Decoupled(new MemConfigerIO(b)))
-  val queryValid     = Input(Bool())
-  val queryVbank     = Input(UInt(b.memDomain.vbankIdWidth.W))
-  val queryGroups    = Output(UInt(b.memDomain.groupCountWidth.W))
-  val barrierArrive  = Input(Bool())
-  val barrierRelease = Output(Bool())
-}
+import framework.memdomain.isa.{MvoverCommand, MvoverPort}
 
 /** Shared banks and inter-core bank movement; transport and CPU command decoding stay outside. */
 @instantiable
@@ -36,27 +16,43 @@ class BankNetwork(
   b:              GlobalConfig,
   enabledCoreIds: Seq[Int],
   useMesh:        Boolean,
-  controllerMove: Boolean)
+  controllerMove: Boolean,
+  physicalPorts:  Int = 0)
     extends Module {
   require(b.memDomain.sharedEnable)
   require(enabledCoreIds.nonEmpty && enabledCoreIds == b.memDomain.computeCoreIds)
   require(enabledCoreIds.distinct.size == enabledCoreIds.size &&
     enabledCoreIds.forall(i => i >= 0 && i < b.memDomain.nCores))
-  private val nCores          = b.memDomain.nCores
-  private val channels        = SharedMemLayout.channelPerHart(b)
-  private val controllerPorts = if (controllerMove) 1 else 0
-  private val movePorts       = enabledCoreIds.size + controllerPorts
+  val nCores          = b.memDomain.nCores
+  val channels        = SharedMemLayout.channelPerHart(b)
+  val controllerPorts = if (controllerMove) 1 else 0
+  val movePorts       = enabledCoreIds.size + controllerPorts
 
   @public
   val io = IO(new Bundle {
-    val compute          = Vec(enabledCoreIds.size, new BankClientPort(b))
+    val lease            = Option.when(physicalPorts > 0)(Flipped(new SharedLeasePort))
+    val physical         = Vec(physicalPorts, Flipped(new SharedPhysicalPort(b.memDomain.bankWidth)))
+    val compute          = Vec(enabledCoreIds.size, Flipped(new ShmPort(b)))
     val hartIds          = Input(Vec(nCores, UInt(b.tile.xLen.W)))
     val controllerMvover = if (controllerMove) Some(Flipped(new MvoverPort)) else None
     val bankHashes       =
       if (b.sim.diffTest) Some(Output(Vec(SharedMemLayout.totalBank(b), new PhysicalBankHash(b)))) else None
   })
 
-  val sharedBackend: Instance[SharedMemBackend] = Instantiate(new SharedMemBackend(b, useMesh))
+  val sharedBackend: Instance[SharedMemBackend] = Instantiate(new SharedMemBackend(b, useMesh, physicalPorts))
+  io.lease.foreach { lease =>
+    sharedBackend.io.lease.get <> lease
+    val endpoint = lease.request.bits.endpoint
+    val owner    = MuxLookup(endpoint, 0.U(b.tile.xLen.W))(
+      enabledCoreIds.zipWithIndex.map { case (physical, logical) => logical.U -> io.hartIds(physical) }
+    )
+    sharedBackend.io.leaseOwnerHartId.get := owner
+    when(lease.request.valid && !reset.asBool) {
+      assert(endpoint < enabledCoreIds.size.U, "Shared lease endpoint is not a configured NPU")
+    }
+  }
+  sharedBackend.io.physical <> io.physical
+  sharedBackend.io.physicalOwnerHartId.foreach(_ := io.hartIds(0))
   io.bankHashes.foreach(_ := sharedBackend.io.bank_hashes.get)
   for ((physical, compute) <- enabledCoreIds.zipWithIndex) {
     val port = io.compute(compute)

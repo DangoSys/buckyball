@@ -25,14 +25,14 @@ pub extern "C" fn rvv_case_select(n: u32) {
     model().select(n as usize);
 }
 #[no_mangle]
-pub extern "C" fn rvv_case_meta(field: u32) -> u32 {
+pub extern "C" fn rvv_case_meta(field: u32) -> u64 {
     let m = model();
     let c = &m.cases[m.current];
     match field {
-        0 => m.current as u32 % 2,
-        1 => c.entry,
-        2 => c.program.len() as u32,
-        3 => 0x80002000,
+        0 => m.current as u64 % 2,
+        1 => u64::from(c.entry),
+        2 => c.program.len() as u64,
+        3 => 0x40002000,
         4..=11 => c.args[(field - 4) as usize],
         _ => panic!("invalid case metadata field"),
     }
@@ -45,30 +45,30 @@ pub extern "C" fn rvv_program_word(n: u32) -> u32 {
     u32::from_le_bytes(c.program[offset..offset + 4].try_into().unwrap())
 }
 #[no_mangle]
-pub extern "C" fn rvv_expected_status(field: u32) -> u32 {
+pub extern "C" fn rvv_expected_status(field: u32) -> u64 {
     let m = model();
     match field {
-        0 => u32::from(m.fault.is_some()),
+        0 => u64::from(m.fault.is_some()),
         1 => match m.fault {
-            Some(fault) => fault.pc,
-            None => m.cases[m.current].program.len() as u32,
+            Some(fault) => u64::from(fault.pc),
+            None => m.cases[m.current].program.len() as u64,
         },
-        2 => m.fault.map(|f| f.instruction).unwrap_or(0),
-        3 => m.fault.map(|f| f.cause).unwrap_or(0),
+        2 => m.fault.map(|f| u64::from(f.instruction)).unwrap_or(0),
+        3 => m.fault.map(|f| u64::from(f.cause)).unwrap_or(0),
         4 => m.fault.map(|f| f.value).unwrap_or(0),
         _ => panic!("invalid completion field"),
     }
 }
 #[no_mangle]
-pub extern "C" fn rvv_memory_read(address: u32, size: u32) -> u64 {
-    model().actual.read(address, 1usize << size).unwrap()
+pub extern "C" fn rvv_memory_read(address: u64, size: u32) -> u64 {
+    model().actual.read(u64::from(address), 1usize << size).unwrap()
 }
 #[no_mangle]
-pub extern "C" fn rvv_memory_error(address: u32, size: u32) -> u32 {
-    u32::from(model().actual.read(address, 1usize << size).is_err())
+pub extern "C" fn rvv_memory_error(address: u64, size: u32) -> u32 {
+    u32::from(model().actual.read(u64::from(address), 1usize << size).is_err())
 }
 #[no_mangle]
-pub extern "C" fn rvv_memory_write(address: u32, size: u32, data: u64, mask: u32) {
+pub extern "C" fn rvv_memory_write(address: u64, size: u32, data: u64, mask: u32) {
     let mut m = model();
     let bytes = 1usize << size;
     assert_eq!(
@@ -76,7 +76,7 @@ pub extern "C" fn rvv_memory_write(address: u32, size: u32, data: u64, mask: u32
         (1u32 << bytes) - 1,
         "RVV requests must mask their exact access width"
     );
-    m.actual.write(address, bytes, data).unwrap();
+    m.actual.write(u64::from(address), bytes, data).unwrap();
 }
 #[no_mangle]
 pub extern "C" fn rvv_compare_memory() -> u32 {
@@ -110,7 +110,7 @@ pub extern "C" fn rvv_image_word(n: u32) -> u32 {
         0x31564b52,
         c.program.len() as u32,
         c.entry,
-        0x80000000,
+        0x40000000,
         c.constants.len() as u32,
         0,
     ];
@@ -125,12 +125,12 @@ pub extern "C" fn rvv_image_word(n: u32) -> u32 {
     u32::from_le_bytes(c.constants[offset..offset + 4].try_into().unwrap())
 }
 #[no_mangle]
-pub extern "C" fn rvv_memory_masked_write(address: u32, data: u64, mask: u32) {
+pub extern "C" fn rvv_memory_masked_write(address: u64, data: u64, mask: u32) {
     let mut m = model();
-    for byte in 0..8 {
+    for byte in 0u32..8 {
         if mask & (1 << byte) != 0 {
             m.actual
-                .write(address + byte, 1, (data >> (byte * 8)) & 255)
+                .write(address + u64::from(byte), 1, (data >> (byte * 8)) & 255)
                 .unwrap();
         }
     }
@@ -141,7 +141,7 @@ pub extern "C" fn rvv_compare_image() -> u32 {
     let m = model();
     let c = &m.cases[m.current];
     u32::from(m.actual.0.iter().enumerate().all(|(offset, value)| {
-        if (2048..2096).contains(&offset) {
+        if (BANK_BYTES + 2048..BANK_BYTES + 2144).contains(&offset) {
             *value == m.expected.0[offset]
         } else {
             *value == c.initial.0[offset]

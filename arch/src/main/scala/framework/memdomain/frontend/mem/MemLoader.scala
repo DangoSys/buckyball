@@ -63,7 +63,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
   // Group counter for multi-bank writes
   val group_counter   = RegInit(0.U(b.memDomain.groupCountWidth.W))
   val group_count_reg = RegInit(0.U(b.memDomain.groupCountWidth.W))
-  val rowAddr         = RegInit(0.U(log2Ceil(b.memDomain.bankEntries).W))
+  val selected_group  = RegInit(false.B)
+  val group_base      = RegInit(0.U(5.W))
+  val rowAddr         = RegInit(0.U(16.W))
 
   // MMIO routing info (latched at cmdReq.fire, exposed to upper level)
   val is_mvin_mmio_reg = RegInit(false.B)
@@ -90,9 +92,17 @@ class MemLoader(val b: GlobalConfig) extends Module {
   val shapeEnd          = mem_addr_reg.pad(64) +& ((shapeRows - 1.U) * shapeRowStride) +&
     ((shapeColumns - 1.U) * shapeColumnStride) +& (shapeSpan - 1.U)
 
-  val shapeError = iter_cmd === 0.U || group_count_reg === 0.U || stride_reg === 0.U ||
-    (shapeBeats >> b.frontend.iter_len).orR || (shapeEnd >> b.memDomain.memAddrLen).orR ||
-    (is_mvin_2d_reg && (pixel_bytes_reg === 0.U || source_width_reg < tile_width_reg))
+  val storageRows      = Mux(is_shared_reg, b.memDomain.sharedBankEntries.U, b.memDomain.bankEntries.U)
+  val destinationRows  = iter_cmd * Mux(is_mvin_2d_reg, tile_width_reg, 1.U)
+  val destinationStart = Reg(UInt(16.W))
+  when(io.cmdReq.fire) {
+    destinationStart := Mux(io.cmdReq.bits.cmd.is_mvin_2d, io.cmdReq.bits.cmd.special(58, 53), 0.U)
+  }
+
+  val shapeError =
+    (!is_mvin_mmio_reg && (destinationStart +& destinationRows) > storageRows) || iter_cmd === 0.U || group_count_reg === 0.U || stride_reg === 0.U ||
+      (shapeBeats >> b.frontend.iter_len).orR || (shapeEnd >> b.memDomain.memAddrLen).orR ||
+      (is_mvin_2d_reg && (pixel_bytes_reg === 0.U || source_width_reg < tile_width_reg))
 
   io.footprint               := 0.U.asTypeOf(new Footprint(b))
   io.footprint.valid         := footprintValid
@@ -152,7 +162,7 @@ class MemLoader(val b: GlobalConfig) extends Module {
   io.bankWrite.rob_id   := rob_id_reg
   io.bankWrite.bank_id  := wr_bank_reg
   io.bankWrite.ball_id  := 0.U
-  io.bankWrite.group_id := group_counter(b.memDomain.groupIdWidth - 1, 0)
+  io.bankWrite.group_id := group_base + group_counter
   io.is_shared          := is_shared_reg
 
   // cmdResp (Decoupled): hold valid until accepted
@@ -186,6 +196,9 @@ class MemLoader(val b: GlobalConfig) extends Module {
     )
     is_shared_reg  := io.cmdReq.bits.cmd.is_shared
 
+    val regular = !io.cmdReq.bits.cmd.is_mvin_mmio && !io.cmdReq.bits.cmd.is_mvin_2d
+    selected_group   := regular && io.cmdReq.bits.cmd.special(63)
+    group_base       := Mux(regular && io.cmdReq.bits.cmd.special(63), io.cmdReq.bits.cmd.special(62, 58), 0.U)
     is_mvin_mmio_reg := io.cmdReq.bits.cmd.is_mvin_mmio
     is_mvin_2d_reg   := io.cmdReq.bits.cmd.is_mvin_2d
     valid_bytes_reg  := Mux(io.cmdReq.bits.cmd.special(62), 8.U(5.W), 16.U(5.W))
@@ -225,7 +238,10 @@ class MemLoader(val b: GlobalConfig) extends Module {
 
   when(state === s_query_wait) {
     assert(io.query_group_count >= 1.U, "MemLoader groups must be >= 1")
-    group_count_reg := io.query_group_count
+    when(selected_group) {
+      assert(group_base < io.query_group_count, "MemLoader selected group is outside bank allocation")
+    }
+    group_count_reg := Mux(selected_group, 1.U, io.query_group_count)
     state           := s_mul
   }
 

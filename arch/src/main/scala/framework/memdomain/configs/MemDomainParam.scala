@@ -17,6 +17,7 @@ case class MemDomainParam(
   virtualBankCount:        Int,
   sharedEnable:            Boolean,
   sharedEntries:           Int,
+  sharedBankEntries:       Int,
   sharedBankNum:           Int,
   sharedInputChannels:     Int,
   sharedDefaultGroupCount: Int,
@@ -36,6 +37,11 @@ case class MemDomainParam(
   mmioBankEntries:         Int,
   mmioBankWidth:           Int,
   mmioReadWidth:           Int) {
+
+  if (sharedEnable) {
+    require(sharedBankEntries >= 2 && sharedBankEntries <= 65536)
+    require(sharedEntries == sharedBankNum * sharedBankEntries, "Shared pool size must equal banks times rows per bank")
+  }
 
   // MMIO derived values
   val mmioBankBytes:   Int = mmioBankEntries * (mmioBankWidth / 8)
@@ -58,6 +64,7 @@ object MemDomainParam {
     virtualBankCount = 0,
     sharedEnable = false,
     sharedEntries = 0,
+    sharedBankEntries = 0,
     sharedBankNum = 0,
     sharedInputChannels = 0,
     sharedDefaultGroupCount = 0,

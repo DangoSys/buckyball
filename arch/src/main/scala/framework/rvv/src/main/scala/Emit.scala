@@ -1,13 +1,14 @@
 package framework.rvv
 
 import framework.top.GlobalConfig
-import framework.balldomain.configs.{BallDomainParam, BallIdMapping}
+import framework.rvv.configs.RvvParam
+import upickle.default.read
 
 object Emit extends App {
   val defaults = GlobalConfig()
 
   val b = defaults.copy(
-    rvv = defaults.rvv.copy(enable = true),
+    rvv = read[RvvParam](os.read(os.pwd / "src" / "main" / "resources" / "rvv.json")),
     memDomain = defaults.memDomain.copy(
       bankNum = 6,
       bankWidth = 128,
@@ -22,11 +23,6 @@ object Emit extends App {
       bank_id_len = 3,
       vbank_id_upper_bound = 5,
       iter_len = 16
-    ),
-    ballDomain = BallDomainParam(
-      1,
-      Seq(BallIdMapping(0, "KernelEngine", "framework.rvv.KernelEngine", None, 4, 4)),
-      Seq.empty
     ),
     tile = defaults.tile.copy(xLen = 64)
   )

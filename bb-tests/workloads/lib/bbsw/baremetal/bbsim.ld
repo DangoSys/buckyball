@@ -53,6 +53,10 @@ SECTIONS {
         PROVIDE(__bss_end = .);
     }
 
+    .noinit (NOLOAD) : {
+        *(.noinit .noinit.*)
+    }
+
     . = ALIGN(16);
     PROVIDE(end = .);
     PROVIDE(_end = .);

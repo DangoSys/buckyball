@@ -21,7 +21,6 @@ int main(void) {
   bb_mvin((uintptr_t)input, 0, 64, 1);
   bb_im2col(0, 1, 6, 3, 1, 0, INPUT_BASE, LANE, 0, 0, 4, 8);
   bb_mvout((uintptr_t)actual, 1, 16, 1);
-  bb_fence();
 
   for (int local = 0; local < 8; ++local) {
     int global = local + 4;

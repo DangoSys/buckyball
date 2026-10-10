@@ -1,3 +1,4 @@
+factory = "examples.cores.toy.ToyCore"
 # Toy Core Configuration (demo frontend)
 
 balldomain = "balldomains/default.toml"

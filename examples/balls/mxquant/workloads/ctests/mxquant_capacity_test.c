@@ -16,14 +16,12 @@ int main(void) {
     for (int i = 0; i < MAX_COUNT; ++i)
       input[i] = (i & 1) ? 0xbf800000u : 0x3f800000u;
     memset(actual, 0x5a, sizeof(actual));
-    bb_dma_fence();
     bb_mem_alloc(3, 1, 1);
     bb_mem_alloc(4, 1, 1);
     bb_mvin((uintptr_t)input, 3, BANK_LINES, 1);
     bb_mvin((uintptr_t)actual, 4, BANK_LINES, 1);
     bb_mxquant(3, 4, count);
     bb_mvout((uintptr_t)actual, 4, BANK_LINES, 1);
-    bb_fence();
     for (int i = 0; i < BANK_BYTES; ++i) {
       uint8_t expected = i < count                ? ((i & 1) ? 0xf8 : 0x78)
                          : i < count + count / 32 ? 119

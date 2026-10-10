@@ -96,7 +96,6 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthA));
     Value rs2A =
         packRs2MemStride(rewriter, loc, aPtr, cstI64(rewriter, loc, 1));
-    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvinIntrOp>(loc, rs1A, rs2A);
 
@@ -104,7 +103,6 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthB));
     Value rs2B =
         packRs2MemStride(rewriter, loc, bPtr, cstI64(rewriter, loc, 1));
-    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvinIntrOp>(loc, rs1B, rs2B);
 
@@ -122,13 +120,8 @@ struct SMatMulMatmulLowering : public ConvertOpToLLVMPattern<SMatMulMatmulOp> {
                                  cstI64(rewriter, loc, depthC));
     Value rs2C =
         packRs2MemStride(rewriter, loc, packedPtr, cstI64(rewriter, loc, 1));
-    emitDmaFence(rewriter, loc);
 
     rewriter.create<MvoutIntrOp>(loc, rs1C, rs2C);
-
-    Value zero = cstI64(rewriter, loc, 0);
-    rewriter.create<FenceIntrOp>(loc, zero, zero);
-    emitDmaFence(rewriter, loc);
 
     Value indexZero = rewriter.create<arith::ConstantIndexOp>(loc, 0);
     Value indexOne = rewriter.create<arith::ConstantIndexOp>(loc, 1);

@@ -55,11 +55,9 @@ int mvin_mvout_unaligned_test(void) {
   uint32_t bank_id = 0;
 
   init_inputs();
-  bb_dma_fence();
   bb_mem_alloc(bank_id, 1, 1);
   bb_mvin((uintptr_t)input_matrix, bank_id, ROWS, 1);
   bb_mvout((uintptr_t)(output_bytes + OFFSET), bank_id, ROWS, 1);
-  bb_fence();
 
   if (!check_output()) {
     printf("mvin/mvout unaligned test FAILED\n");

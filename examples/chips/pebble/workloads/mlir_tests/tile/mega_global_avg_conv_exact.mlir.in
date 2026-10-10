@@ -16,8 +16,8 @@ func.func @main() -> i8 {
   %gap = memref.alloc() alignment = 64 : memref<1x1x1x96xi8>
   %output = memref.alloc() alignment = 64 : memref<1x1x1x24xi8>
   tile.mega_kernel %input %output : memref<1x14x14x96xi8> memref<1x1x1x24xi8> {
-    tile.mega_global_avg_pool %input %gap {inputScale = 0.043821115 : f32, outputScale = 0.023039883 : f32} : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
-    tile.mega_conv2d %gap %weight %bias %scale %none %output {activation = 1 : i64, kernel = 1 : i64, outputScale = 0.0156919789 : f32, padHigh = 0 : i64, padLow = 0 : i64, stride = 1 : i64} : memref<1x1x1x96xi8> memref<2x96x16x16xi8> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
+    tile.mega_global_avg_pool %input %gap <inputScale = 0.043821115, outputScale = 0.023039883> : memref<1x14x14x96xi8> memref<1x1x1x96xi8>
+    tile.mega_conv2d %gap %weight %bias %scale %none %output <activation = 1, kernel = 1, outputScale = 0.0156919789, padHigh = 0, padLow = 0, stride = 1> : memref<1x1x1x96xi8> memref<2x96x16x16xi8> memref<24xi32> memref<24xf32> memref<1xi8> memref<1x1x1x24xi8>
   }
   func.call @check_result(%output) : (memref<1x1x1x24xi8>) -> ()
   return %zero : i8

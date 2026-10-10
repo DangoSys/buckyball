@@ -16,28 +16,34 @@ extern "C" vfloat32m1_t rvv_exp(vfloat32m1_t value, size_t vl) {
   normal = __riscv_vmand_mm_b32(normal, finite, vl);
   auto input = __riscv_vmerge_vvm_f32m1(__riscv_vfmv_v_f_f32m1(0, vl), value,
                                         normal, vl);
-  auto x = __riscv_vfwcvt_f_f_v_f64m2(input, vl);
-  constexpr double invln2 = 0x1.71547652b82fep+5;
-  auto kd = __riscv_vfmacc_vf_f64m2(__riscv_vfmv_v_f_f64m2(0x1.8p52, vl),
-                                    invln2, x, vl);
-  auto ki = __riscv_vreinterpret_u64m2(kd);
-  kd = __riscv_vfsub_vf_f64m2(kd, 0x1.8p52, vl);
-  auto r = __riscv_vfneg_v_f64m2(kd, vl);
-  r = __riscv_vfmacc_vf_f64m2(r, invln2, x, vl);
-  auto offset = __riscv_vand_vx_u64m2(ki, 31, vl);
-  offset = __riscv_vsll_vx_u64m2(offset, 3, vl);
-  auto indices = __riscv_vnsrl_wx_u32m1(offset, 0, vl);
-  auto scale = __riscv_vluxei32_v_u64m2(exp_table, indices, vl);
-  scale = __riscv_vadd_vv_u64m2(scale, __riscv_vsll_vx_u64m2(ki, 47, vl), vl);
-  auto z =
-      __riscv_vfmacc_vf_f64m2(__riscv_vfmv_v_f_f64m2(0x1.ebfce50fac4f3p-13, vl),
-                              0x1.c6af84b912394p-20, r, vl);
-  auto y = __riscv_vfmacc_vf_f64m2(__riscv_vfmv_v_f_f64m2(1, vl),
-                                   0x1.62e42ff0c52d6p-6, r, vl);
-  auto r2 = __riscv_vfmul_vv_f64m2(r, r, vl);
-  y = __riscv_vfmacc_vv_f64m2(y, z, r2, vl);
-  y = __riscv_vfmul_vv_f64m2(y, __riscv_vreinterpret_f64m2(scale), vl);
-  auto result = __riscv_vfncvt_f_f_w_f32m1(y, vl);
+  auto scaled = __riscv_vfmul_vf_f32m1(input, 0x1.715476p5f, vl);
+  auto kd = __riscv_vfadd_vf_f32m1(scaled, 0x1.8p23f, vl);
+  kd = __riscv_vfsub_vf_f32m1(kd, 0x1.8p23f, vl);
+  auto ki = __riscv_vfcvt_rtz_x_f_v_i32m1(kd, vl);
+  auto r = __riscv_vfnmsac_vf_f32m1(input, 0x1.62e4p-6f, kd, vl);
+  r = __riscv_vfnmsac_vf_f32m1(r, 0x1.7f7d1cp-25f, kd, vl);
+  auto index = __riscv_vand_vx_u32m1(__riscv_vreinterpret_u32m1(ki), 31, vl);
+  index = __riscv_vsll_vx_u32m1(index, 2, vl);
+  auto table = __riscv_vluxei32_v_f32m1(exp_table, index, vl);
+  auto exponent = __riscv_vsra_vx_i32m1(ki, 5, vl);
+  auto bounded = __riscv_vmax_vx_i32m1(exponent, -126, vl);
+  bounded = __riscv_vmin_vx_i32m1(bounded, 127, vl);
+  auto tail = __riscv_vsub_vv_i32m1(exponent, bounded, vl);
+  auto scale_bits =
+      __riscv_vsll_vx_i32m1(__riscv_vadd_vx_i32m1(bounded, 127, vl), 23, vl);
+  auto tail_bits =
+      __riscv_vsll_vx_i32m1(__riscv_vadd_vx_i32m1(tail, 127, vl), 23, vl);
+  auto polynomial = __riscv_vfmacc_vf_f32m1(__riscv_vfmv_v_f_f32m1(0.5f, vl),
+                                            1.0f / 6.0f, r, vl);
+  auto y = __riscv_vfadd_vf_f32m1(r, 1.0f, vl);
+  y = __riscv_vfmacc_vv_f32m1(y, polynomial, __riscv_vfmul_vv_f32m1(r, r, vl),
+                              vl);
+  y = __riscv_vfmul_vv_f32m1(y, table, vl);
+  y = __riscv_vfmul_vv_f32m1(
+      y, __riscv_vreinterpret_f32m1(__riscv_vreinterpret_u32m1(tail_bits)), vl);
+  auto result = __riscv_vfmul_vv_f32m1(
+      y, __riscv_vreinterpret_f32m1(__riscv_vreinterpret_u32m1(scale_bits)),
+      vl);
   auto under = __riscv_vmflt_vf_f32m1_b32(ordered, -0x1.9d1d9ep6f, vl);
   under = __riscv_vmand_mm_b32(under, finite, vl);
   auto helper = __riscv_vfmv_v_f_f32m1(0x1.4p-75f, vl);

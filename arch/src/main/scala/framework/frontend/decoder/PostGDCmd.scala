@@ -13,6 +13,5 @@ class PostGDCmd(val b: GlobalConfig) extends Bundle {
   val op1_col    = UInt(b.memDomain.groupCountWidth.W)
   val op2_col    = UInt(b.memDomain.groupCountWidth.W)
   val wr_col     = UInt(b.memDomain.groupCountWidth.W)
-  val isFence    = Bool()
   val isBarrier  = Bool()
 }

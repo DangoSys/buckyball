@@ -1,6 +1,7 @@
 package framework.system.device
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import chisel3.util._
 
 /** One register access presented for a single cycle; data is right-aligned at `addr`. */
@@ -24,11 +25,12 @@ case class ClintParams(base: BigInt = BigInt("2000000", 16), bytes: BigInt = Big
 }
 
 /** Standard CLINT layout: msip at 4*hart, mtimecmp at 0x4000 + 8*hart, mtime at 0xbff8. */
+@instantiable
 class Clint(p: ClintParams, hartIds: Seq[Int]) extends Module {
   require(hartIds.distinct.size == hartIds.size && hartIds.max < 4095)
-  private val n = hartIds.size
+  val n = hartIds.size
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val port = new DevicePort
     val msip = Output(Vec(n, Bool()))
     val mtip = Output(Vec(n, Bool()))

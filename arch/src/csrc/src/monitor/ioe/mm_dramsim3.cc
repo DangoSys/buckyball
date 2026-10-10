@@ -3,8 +3,10 @@
 #include "ioe/mm_dramsim3.h"
 #include "ioe/mm.h"
 #include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <list>
@@ -51,16 +53,22 @@ void mm_dramsim3_t::write_complete(uint64_t address) {
 mm_dramsim3_t::mm_dramsim3_t(size_t mem_base, size_t mem_sz, size_t word_sz,
                              size_t line_sz, backing_data_t &dat,
                              std::string memory_ini, std::string ini_dir,
-                             int axi4_ids, size_t clock_hz)
+                             std::string output_dir, int axi4_ids,
+                             size_t clock_hz)
     : mm_t(mem_base, mem_sz, word_sz, line_sz, dat),
       read_id_busy(axi4_ids, false), write_id_busy(axi4_ids, false) {
 
   assert(line_sz == 64); // assumed by dramsim3
   assert(mem_sz % (1024 * 1024) == 0);
   (void)clock_hz;
+  if (output_dir.empty()) {
+    fprintf(stderr, "[BBSimDRAM] DRAMSim output directory is empty\n");
+    abort();
+  }
+  std::filesystem::create_directories(output_dir);
   auto config_file = dramsim3_config_path(memory_ini, ini_dir);
   mem = dramsim3::GetMemorySystem(
-      config_file, "results",
+      config_file, output_dir,
       [this](uint64_t address) { this->read_complete(address); },
       [this](uint64_t address) { this->write_complete(address); });
 };

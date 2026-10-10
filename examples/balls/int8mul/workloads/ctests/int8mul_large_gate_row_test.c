@@ -28,7 +28,6 @@ int main(void) {
   bb_mvin((uintptr_t)input, 1, ROWS, 1);
   bb_int8mul(0, 1, 2, ROWS, 1.0f, GATE_ROW);
   bb_mvout((uintptr_t)output, 2, ROWS, 1);
-  bb_fence();
 
   for (int row = 0; row < ROWS; ++row)
     for (int lane = 0; lane < 16; ++lane) {

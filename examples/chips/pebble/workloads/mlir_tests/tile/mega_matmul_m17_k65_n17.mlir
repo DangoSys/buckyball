@@ -46,7 +46,7 @@ func.func @main() -> i8 {
   linalg.fill ins(%zf : f32) outs(%output : memref<17x17xf32>)
   tile.mega_kernel %input %output : memref<17x65xi8> memref<17x17xf32> {
     tile.mega_matmul %input %weight %bias %scale %lut %output
-      {activation = 0 : i64, outputScale = 1.0 : f32}
+      <activation = 0, outputScale = 1.0>
       : memref<17x65xi8> memref<65x17xi8> memref<17xi32>
         memref<17xf32> memref<1xi8> memref<17x17xf32>
   }

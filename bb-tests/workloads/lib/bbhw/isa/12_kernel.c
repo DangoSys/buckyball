@@ -4,22 +4,28 @@
 #include "isa.h"
 
 struct kernel_launch {
-  uint32_t entry;
-  uint32_t end;
-  uint32_t stack;
-  uint32_t args[8];
-  uint32_t reserved;
+  uint64_t entry;
+  uint64_t end;
+  uint64_t stack;
+  uint64_t args[8];
+  uint64_t reserved;
 };
 
 static inline void mvin_kernel(const void *image, uint32_t bytes,
-                               uint32_t buffer) {
-  BUCKYBALL_INSTRUCTION_R_R((uint64_t)bytes | ((uint64_t)buffer << 32),
-                            (uintptr_t)image, 12);
+                               uint32_t program_bank) {
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK2(program_bank) | BB_ITER(bytes),
+                            (uintptr_t)image, 44);
 }
 
-static inline void run_kernel(uint32_t descriptor_bank_address,
-                              uint32_t instruction_buffer) {
-  BUCKYBALL_INSTRUCTION_R_R(descriptor_bank_address, instruction_buffer, 15);
+static inline void run_kernel(uint32_t read_bank, uint32_t program_bank,
+                              uint32_t write_bank, uint32_t descriptor_offset) {
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(read_bank) | BB_BANK1(program_bank) |
+                                BB_BANK2(write_bank),
+                            descriptor_offset, 79);
+}
+
+static inline void release_kernel(uint32_t program_bank) {
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(program_bank), 0, 32);
 }
 
 #endif

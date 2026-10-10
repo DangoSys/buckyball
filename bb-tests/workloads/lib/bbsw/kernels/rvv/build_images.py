@@ -8,18 +8,29 @@ KERNELS = {
     "swiglu": "rvv_swiglu_launch",
     "snake": "rvv_snake",
     "quant": "rvv_quant",
+    "cache_quant": "rvv_cache_quant",
+    "dequant": "rvv_dequant",
     "matmul": "rvv_matmul",
     "norm": "rvv_norm_launch",
+    "norm_no_weight": "rvv_norm_no_weight_launch",
     "softmax": "rvv_softmax_launch",
     "attention_softmax": "rvv_attention_softmax_launch",
+    "logsumexp_softmax": "rvv_logsumexp_softmax_launch",
     "rope": "rvv_rope_launch",
-    "pack": "rvv_pack",
+    "layernorm": "rvv_layernorm",
+    "gelu": "rvv_gelu",
+    "tanh": "rvv_tanh_launch",
+    "sin": "rvv_sin_launch",
+    "cos": "rvv_cos_launch",
+    "flash_attention": "rvv_flash_attention_launch",
+    "flash_attention_mxfp8": "rvv_flash_attention_mxfp8_launch",
+    "pointwise": "rvv_pointwise",
 }
 
 
 def read_segments(path):
     elf = path.read_bytes()
-    header = struct.unpack_from("<16sHHIIIIIHHHHHH", elf)
+    header = struct.unpack_from("<16sHHIQQQIHHHHHH", elf)
     ident, kind, machine = header[:3]
     entry, shoff, shsize, shnum, names_index = (
         header[4],
@@ -28,10 +39,10 @@ def read_segments(path):
         header[12],
         header[13],
     )
-    if ident[:6] != b"\x7fELF\x01\x01" or kind != 2 or machine != 243:
-        raise ValueError(f"{path}: expected a linked little-endian RISC-V ELF32")
+    if ident[:6] != b"\x7fELF\x02\x01" or kind != 2 or machine != 243:
+        raise ValueError(f"{path}: expected a linked little-endian RISC-V ELF64")
     sections = [
-        struct.unpack_from("<IIIIIIIIII", elf, shoff + index * shsize)
+        struct.unpack_from("<IIQQQQIIQQ", elf, shoff + index * shsize)
         for index in range(shnum)
     ]
     names_section = sections[names_index]
@@ -57,7 +68,7 @@ def read_segments(path):
         or entry % 4
     ):
         raise ValueError(f"{path}: invalid RVV instruction memory layout")
-    data_address = 0x80000000
+    data_address = 0x40000000
     initialized = b""
     if ".rodata" in sections and sections[".rodata"][5]:
         section = sections[".rodata"]
@@ -88,11 +99,19 @@ def main():
         "silu.cpp",
         "snake.cpp",
         "quant.cpp",
+        "dequant.cpp",
         "matmul.cpp",
         "norm.cpp",
         "softmax.cpp",
         "rope.cpp",
-        "pack.cpp",
+        "layernorm.cpp",
+        "gelu.cpp",
+        "tanh.cpp",
+        "trig.cpp",
+        "flash_attention.cpp",
+        "flash_attention_mxfp8.cpp",
+        "pointwise.cpp",
+        "math/erf.cpp",
         "math/exp.cpp",
         "math/sin.cpp",
         "math/cos.cpp",
@@ -101,14 +120,20 @@ def main():
         subprocess.run(
             [
                 str(tools / "clang++"),
-                "--target=riscv32",
-                "-march=rv32imafd_zve64d_zvl256b",
-                "-mabi=ilp32d",
+                "--target=riscv64",
+                "-march=rv64imf_zve32f_zvl128b",
+                "-mabi=lp64f",
+                "-mcmodel=medany",
                 "-ffreestanding",
                 "-O2",
                 "-ffp-contract=off",
                 "-ffunction-sections",
                 "-fdata-sections",
+                *(
+                    ["-fno-vectorize", "-fno-slp-vectorize"]
+                    if filename == "math/erf.cpp"
+                    else []
+                ),
                 "-c",
                 str(source / filename),
                 "-o",
@@ -125,7 +150,7 @@ def main():
             [
                 str(tools / "riscv64-unknown-elf-ld"),
                 "-m",
-                "elf32lriscv",
+                "elf64lriscv",
                 "--gc-sections",
                 "-e",
                 symbol,
@@ -139,7 +164,7 @@ def main():
         )
         text, data, entry = read_segments(path)
         image = (
-            struct.pack("<6I", 0x31564B52, len(text), entry, 0x80000000, len(data), 0)
+            struct.pack("<6I", 0x31564B52, len(text), entry, 0x40000000, len(data), 0)
             + text
             + data
         )

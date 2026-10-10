@@ -2,9 +2,9 @@
 #include <riscv_vector.h>
 #include <stdint.h>
 
-// Codes and E8M0 scales occupy separate contiguous regions of the output bank.
-extern "C" void rvv_quant(uint8_t *output, const uint32_t *input, size_t count,
-                          uint32_t *status) {
+template <bool bounded>
+static void quant(uint8_t *output, uint8_t *scales, const uint32_t *input,
+                  size_t count, uint32_t *status) {
   *status = 0;
   for (size_t block = 0; block < count / 32; ++block) {
     uint32_t maximum = 0;
@@ -22,9 +22,15 @@ extern "C" void rvv_quant(uint8_t *output, const uint32_t *input, size_t count,
       return;
     }
     int blockExponent = maximum == 0 ? 0 : int(maximum >> 23) - 135;
+    if constexpr (bounded) {
+      if ((maximum & 0x7fffff) > 0x600000)
+        ++blockExponent;
+      if (blockExponent > 119)
+        blockExponent = 119;
+    }
     if (blockExponent < -127)
       blockExponent = -127;
-    output[count + block] = uint8_t(blockExponent + 127);
+    scales[block] = uint8_t(blockExponent + 127);
     for (size_t begin = 0; begin < 32;) {
       size_t vl = __riscv_vsetvl_e32m1(32 - begin);
       auto bits = __riscv_vle32_v_u32m1(input + block * 32 + begin, vl);
@@ -110,4 +116,16 @@ extern "C" void rvv_quant(uint8_t *output, const uint32_t *input, size_t count,
       begin += vl;
     }
   }
+}
+
+extern "C" void rvv_quant(uint8_t *output, uint8_t *scales,
+                          const uint32_t *input, size_t count,
+                          uint32_t *status) {
+  quant<false>(output, scales, input, count, status);
+}
+
+extern "C" void rvv_cache_quant(uint8_t *output, uint8_t *scales,
+                                const uint32_t *input, size_t count,
+                                uint32_t *status) {
+  quant<true>(output, scales, input, count, status);
 }

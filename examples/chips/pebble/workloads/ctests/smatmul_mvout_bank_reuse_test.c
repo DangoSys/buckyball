@@ -33,12 +33,10 @@ int main(void) {
     bb_smatmul_bias(2, 0);
     bb_smatmul_os(0, 1, 3, DIM, DIM, DIM, 1, 1, 0);
     bb_mvout((uintptr_t)computed, 3, OUTPUT_ROWS, 1);
-    bb_fence();
     bb_mem_release(3);
     bb_mem_alloc(3, 1, 1);
     bb_mvin((uintptr_t)zero, 3, OUTPUT_ROWS, 1);
     bb_mvout((uintptr_t)cleared, 3, OUTPUT_ROWS, 1);
-    bb_fence();
     for (int row = 0; row < DIM; ++row)
       for (int col = 0; col < DIM; ++col) {
         int expected = 0;

@@ -1,6 +1,7 @@
 package framework.system.device
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import chisel3.util._
 import memcore.bus.chi.{Params => ChiParams}
 import memcore.bus.chi.snf.{LineRequest, LineResponse}
@@ -38,16 +39,17 @@ object BootRom {
  * ROM is a cacheable, executable, read-only region, so fetches and loads reach it as line reads;
  * a write to a ROM line can only come from a faulty requester and answers with an error.
  */
+@instantiable
 class BootRomLines(p: BootRomParams, chi: ChiParams) extends Module {
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val request        = Flipped(Decoupled(new LineRequest(chi)))
     val response       = Decoupled(new LineResponse(chi))
     val memoryRequest  = Decoupled(new LineRequest(chi))
     val memoryResponse = Flipped(Decoupled(new LineResponse(chi)))
   })
 
-  private val lines = p.image.padTo(((p.image.size + 63) / 64) * 64, 0.toByte).grouped(64).map { line =>
+  val lines = p.image.padTo(((p.image.size + 63) / 64) * 64, 0.toByte).grouped(64).map { line =>
     line.zipWithIndex.map { case (byte, i) => BigInt(byte & 0xff) << (8 * i) }.sum
   }.toSeq
 

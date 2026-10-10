@@ -27,8 +27,8 @@ class AdmissionSystem(
   implicit val cpuParams: CpuParams)
     extends Module
     with HasCpuParameters {
-  private val tracking  = TrackingParams(addressBits = prepared.bus.addressBits)
-  private val axiParams = axi4.Params(prepared.bus.addressBits, 128, 4)
+  val tracking  = TrackingParams(addressBits = prepared.bus.addressBits)
+  val axiParams = axi4.Params(prepared.bus.addressBits, 128, 4)
 
   @public
   val io = IO(new Bundle {

@@ -19,7 +19,7 @@ class MeshBankNode(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
   val request = Reg(new MeshPacket(p))
 
   bank.io.request.valid      := io.request.valid && !pending
-  bank.io.request.bits.addr  := io.request.bits.addr
+  bank.io.request.bits.addr  := io.request.bits.addr(log2Ceil(p.entriesPerBank) - 1, 0)
   bank.io.request.bits.write := io.request.bits.write
   bank.io.request.bits.data  := io.request.bits.data
   bank.io.request.bits.mask  := io.request.bits.mask
@@ -27,6 +27,7 @@ class MeshBankNode(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
   io.request.ready           := bank.io.request.ready && !pending
 
   when(io.request.fire) {
+    assert(io.request.bits.addr < p.entriesPerBank.U, "Mesh shared request exceeds bank depth")
     assert(io.request.bits.destRow === row.U && io.request.bits.destCol === col.U)
     request := io.request.bits
     pending := true.B

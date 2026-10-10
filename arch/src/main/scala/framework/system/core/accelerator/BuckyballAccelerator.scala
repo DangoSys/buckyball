@@ -79,6 +79,7 @@ class BuckyballAccelerator(val b: GlobalConfig) extends Module {
   val frontend:   Instance[Frontend]   = Instantiate(new Frontend(b))
   val ballDomain: Instance[BallDomain] = Instantiate(new BallDomain(b))
   val memDomain:  Instance[MemDomain]  = Instantiate(new MemDomain(b))
+  val rvv = if (b.rvv.enable) Some(Instantiate(new Rvv(b))) else None
   frontend.io.hartid                        := io.hartid
   frontend.io.sharedBankOwnerHartId         := io.sharedBankOwnerHartId
   frontend.io.bank_hashes.foreach(_         := memDomain.io.bank_hashes.get)
@@ -109,10 +110,18 @@ class BuckyballAccelerator(val b: GlobalConfig) extends Module {
   frontend.io.mem_complete_i <> memDomain.io.global_complete_o
   // Observe the accepted completion before the scheduler's ID-only queue.
   // Its arbiter accepts at most one of these domain completions per cycle.
-  val memoryFault     = memDomain.io.global_complete_o.fire && memDomain.io.global_complete_o.bits.fault.error =/= 0.U
-  val ballFault       = ballDomain.global_complete_o.fire && ballDomain.global_complete_o.bits.fault.error =/= 0.U
-  val faultCompletion = Mux(memoryFault, memDomain.io.global_complete_o.bits, ballDomain.global_complete_o.bits)
-  io.fault.valid        := memoryFault || ballFault
+  val memoryFault = memDomain.io.global_complete_o.fire && memDomain.io.global_complete_o.bits.fault.error =/= 0.U
+  val ballFault   = ballDomain.global_complete_o.fire && ballDomain.global_complete_o.bits.fault.error =/= 0.U
+  val rvvFault    = if (b.rvv.enable) rvv.get.complete.fire && rvv.get.complete.bits.fault.error =/= 0.U else false.B
+
+  val faultCompletion = Mux(
+    memoryFault,
+    memDomain.io.global_complete_o.bits,
+    if (b.rvv.enable) Mux(rvvFault, rvv.get.complete.bits, ballDomain.global_complete_o.bits)
+    else ballDomain.global_complete_o.bits
+  )
+
+  io.fault.valid        := memoryFault || ballFault || rvvFault
   io.fault.bits.rob_id  := faultCompletion.rob_id
   io.fault.bits.error   := faultCompletion.fault.error
   io.fault.bits.address := faultCompletion.fault.address
@@ -123,11 +132,15 @@ class BuckyballAccelerator(val b: GlobalConfig) extends Module {
   memDomain.io.inst_ids                                := frontend.io.inst_ids
 
   if (b.rvv.enable) {
-    ballDomain.kernel_command_i.get <> memDomain.io.kernel_command.get
-    memDomain.io.kernel_complete.get <> ballDomain.kernel_complete_o.get
-    ballDomain.kernel.get <> memDomain.io.kernel.get
+    val controller = rvv.get
+    controller.command <> frontend.io.kernel_issue_o.get
+    frontend.io.kernel_complete_i.get <> controller.complete
+    controller.memory <> memDomain.io.kernel.get
+    ballDomain.internalCommand.get <> controller.ballRequest
+    controller.ballResponse <> ballDomain.internalComplete.get
+    ballDomain.ownerRobId.get  := controller.ownerRobId
+    ballDomain.kernelBanks.get := controller.banks
   }
-  frontend.io.kernel_write_bank <> ballDomain.kernelWriteBank
 
   // --- BallDomain <-> MemDomain (bankRead with pipeline register to break comb loops) ---
   for (i <- 0 until totalBallRead) {
@@ -189,7 +202,7 @@ class BuckyballAccelerator(val b: GlobalConfig) extends Module {
   io.idle      := frontend.io.idle && !io.dma.readBusy && !io.dma.writeBusy
   // Typed completion failures are delivered through the admission fault path.
   // firstFault is retained diagnostic state, not an additional sticky IRQ.
-  io.interrupt := ballDomain.kernelFault
+  io.interrupt := (if (b.rvv.enable) rvv.get.fault else false.B)
 
   // --- Busy watchdog ---
   // BootRom clears and initializes the local memories before the external

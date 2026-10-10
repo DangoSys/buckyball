@@ -164,9 +164,9 @@ class MeshBulkDepacketizer(mesh: MeshParams, dataBits: Int, virtualChannel: Int)
 
 /** Native verification target for long AXI-stream packet ownership over Mesh. */
 class MeshBulkLoopback extends Module {
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
+  val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
 
-  private val map = ChiMeshNodeMap(
+  val map = ChiMeshNodeMap(
     Seq.tabulate(128)(_ & 1),
     Seq.tabulate(128)(node => (node >> 1) & 1),
     mesh,

@@ -60,8 +60,6 @@ static void emitBankTranspose(OpBuilder &b, Location loc, Value inContig,
                               Value outContig, int64_t rows, int64_t groups,
                               int64_t elemBits) {
   // CPU packed inContig before mvin; CPU reads outContig after mvout.
-  // FPGA RoCC is async — fence both edges (bemu is sync so hid this).
-  b.create<FenceOp>(loc);
   Value src = allocBank(b, loc, 1, groups);
   Value dst = allocBank(b, loc, 1, groups);
   Value loaded = mvinBank(b, loc, inContig, src, rows, /*stride=*/1);
@@ -69,7 +67,6 @@ static void emitBankTranspose(OpBuilder &b, Location loc, Value inContig,
       loc, dst.getType(), loaded, dst, createI64Const(b, loc, rows),
       createI64Const(b, loc, elemBits));
   mvoutBank(b, loc, outContig, transposed, rows, /*stride=*/1);
-  b.create<FenceOp>(loc);
   releaseBank(b, loc, loaded);
   releaseBank(b, loc, transposed);
 }
@@ -266,7 +263,6 @@ public:
     rewriter.create<memref::CopyOp>(loc, outView, output);
     rewriter.create<memref::DeallocOp>(loc, inPad);
     rewriter.create<memref::DeallocOp>(loc, outPad);
-    rewriter.create<FenceOp>(loc);
     rewriter.eraseOp(op);
     return success();
   }

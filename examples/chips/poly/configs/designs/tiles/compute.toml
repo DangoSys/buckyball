@@ -1,3 +1,5 @@
+controllerCore = 0
+factory = "examples.chips.poly.compute_tile.ComputeTile"
 # Poly compute tile: controller core 0, two Attention cores and three FFN cores.
 
 coreDataBytes = 64
@@ -10,7 +12,14 @@ nPMPs = 8
 
 memBallChannelNum = 6
 
+[tss]
+base = 0x20000
+bytes = 16384
+dataBits = 128
+
 [sharedMem]
+bankWidth = 128
+bankEntries = 1024
 enable = true
 virtualBankCount = 40
 entries = 16384

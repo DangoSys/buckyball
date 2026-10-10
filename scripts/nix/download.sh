@@ -37,7 +37,8 @@ git submodule update --init --progress \
   thirdparty/waveform-mcp \
   .agents/skills \
   .agents/mcps
-git -C ${BBDIR}/arch/thirdparty/rocket-chip submodule update --init --progress dependencies/cde dependencies/diplomacy
+git -C ${BBDIR}/arch/thirdparty/rocket-chip submodule sync -- dependencies/cde
+git -C ${BBDIR}/arch/thirdparty/rocket-chip submodule update --init --progress dependencies/cde
 git submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   bb-tests/thirdparty/linux \
   bb-tests/thirdparty/opensbi

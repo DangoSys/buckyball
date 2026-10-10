@@ -1,7 +1,9 @@
-#include "images.h"
-#include <bbhw/isa/isa.h>
+#include <CRunnerUtils.h>
 #include <cmath>
 #include <cstdio>
+
+extern "C" void _mlir_ciface_rvv_silu(UnrankedMemRefType<float> *,
+                                      UnrankedMemRefType<float> *);
 
 alignas(16) static float input[40], output[40];
 
@@ -10,21 +12,10 @@ int main() {
     input[i] = (int(i) - 18) * 0.75f;
     output[i] = 123.0f;
   }
-  for (unsigned bank = 0; bank < 3; ++bank)
-    bb_mem_alloc(bank, 1, 1);
-  alignas(16) kernel_launch call{images::silu.entry,
-                                 images::silu.text_bytes,
-                                 0x80002000,
-                                 {1 << 16, 2 << 16, 37},
-                                 0};
-  bb_mvin((uintptr_t)input, 2, 10, 1);
-  bb_mvin((uintptr_t)output, 1, 10, 1);
-  bb_mvin((uintptr_t)&call, 0, sizeof(call) / 16, 1);
-  mvin_kernel(images::silu.bytes, images::silu.size, 0);
-  bb_fence();
-  run_kernel(0, 0);
-  bb_mvout((uintptr_t)output, 1, 10, 1);
-  bb_fence();
+  StridedMemRefType<float, 1> in{input, input, 0, {37}, {1}};
+  StridedMemRefType<float, 1> out{output, output, 0, {37}, {1}};
+  UnrankedMemRefType<float> inputRef{1, &in}, outputRef{1, &out};
+  _mlir_ciface_rvv_silu(&outputRef, &inputRef);
   // Independent libm reference: approximate RVV exp is checked with tolerance.
   for (unsigned i = 0; i < 37; ++i) {
     float expected = input[i] / (1.0f + std::exp(-input[i]));

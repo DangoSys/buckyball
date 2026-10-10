@@ -33,6 +33,7 @@ object rvv extends SbtModule {
 
   override def sources = T.sources {
     super.sources() ++ Seq(
+      PathRef(archRoot / "src" / "main" / "scala" / "framework" / "arith" / "src" / "main" / "scala"),
       PathRef(archRoot / "src" / "main" / "scala" / "framework" / "top" / "GlobalConfig.scala"),
       PathRef(archRoot / "src" / "main" / "scala" / "framework" / "top" / "configs" / "SimParam.scala"),
       PathRef(archRoot / "src" / "main" / "scala" / "framework" / "memdomain" / "configs" / "MemDomainParam.scala"),

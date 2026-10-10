@@ -36,7 +36,7 @@ def Im2colMatmulOp : Buckyball_Op<"im2col_matmul"> {
                        DefaultValuedAttr<I64Attr, "-1">:$dwAddr,
                        DefaultValuedAttr<I64Attr, "0">:$dwBytes,
                        DefaultValuedAttr<BoolAttr, "false">:$perChannel);
-  let assemblyFormat = [{$input $filter $output attr-dict `:`
+  let assemblyFormat = [{$input $filter $output prop-dict attr-dict `:`
     type($input) type($filter) type($output)}];
 }
 
@@ -62,7 +62,7 @@ def Im2colFatMatmulOp : Buckyball_Op<"im2col_fat_matmul"> {
                        DefaultValuedAttr<I64Attr, "-1">:$dwAddr,
                        DefaultValuedAttr<I64Attr, "0">:$dwBytes,
                        DefaultValuedAttr<BoolAttr, "false">:$perChannel);
-  let assemblyFormat = [{$input $filter $output attr-dict `:`
+  let assemblyFormat = [{$input $filter $output prop-dict attr-dict `:`
     type($input) type($filter) type($output)}];
 }
 
@@ -88,7 +88,7 @@ def Im2colDepthwiseMatmulOp : Buckyball_Op<"im2col_depthwise_matmul"> {
                        DefaultValuedAttr<I64Attr, "-1">:$dwAddr,
                        DefaultValuedAttr<I64Attr, "0">:$dwBytes,
                        DefaultValuedAttr<BoolAttr, "false">:$perChannel);
-  let assemblyFormat = [{$input $filter $output attr-dict `:`
+  let assemblyFormat = [{$input $filter $output prop-dict attr-dict `:`
     type($input) type($filter) type($output)}];
 }
 
@@ -109,7 +109,7 @@ def Im2colOp : Buckyball_Op<"im2col"> {
                        I64Attr:$windowStart, I64Attr:$windowCount);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
                        "$iter `,` $ksize `,` $stride `,` $padding `,` "
-                       "$inputBase `,` $lane attr-dict `:` "
+                       "$inputBase `,` $lane prop-dict attr-dict `:` "
                        "type($inputBankId)";
 }
 
@@ -123,7 +123,7 @@ def BankIm2colOp : Buckyball_Op<"bank_im2col"> {
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
       "$inBank $outBank $iter $ksize $stride $padding $inputBase $lane "
-      "attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) "
+      "prop-dict attr-dict `:` type($inBank) type($outBank) type($iter) type($ksize) "
       "type($stride) type($padding) type($inputBase) type($lane)";
 }
 

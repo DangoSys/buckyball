@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
 @instantiable
-class ScalarFloating extends Module {
+class ScalarFloating(val maxWidth: Int) extends Module {
 
   @public
   val io = IO(new Bundle {
@@ -13,7 +13,7 @@ class ScalarFloating extends Module {
     val source1      = Input(UInt(64.W))
     val source2      = Input(UInt(64.W))
     val source3      = Input(UInt(64.W))
-    val xSource      = Input(UInt(32.W))
+    val xSource      = Input(UInt(64.W))
     val frm          = Input(UInt(3.W))
     val start        = Input(Bool())
     val ready        = Output(Bool())
@@ -35,7 +35,7 @@ class ScalarFloating extends Module {
   val usesRounding   =
     fmaInstruction || Seq(0, 4, 8, 12, 0x2c, 0x20, 0x60, 0x68).map(n => operation === n.U).reduce(_ || _)
   val rounding       = Mux(usesRounding, Mux(funct === 7.U, io.frm, funct), 0.U)
-  val falu: Instance[FALU] = Instantiate(new FALU)
+  val falu: Instance[FALU] = Instantiate(new FALU(maxWidth))
   def unbox(source: UInt): UInt = Mux(double, source, Mux(source(63, 32).andR, source(31, 0), "h7fc00000".U))
   falu.io.a            := unbox(io.source1)
   falu.io.b            := unbox(io.source2)
@@ -74,38 +74,41 @@ class ScalarFloating extends Module {
         falu.io.op := MuxLookup(funct, 25.U)(Seq(1.U -> 27.U, 2.U -> 24.U))
       }
       is(0x60.U) {
-        decoded       := rs2 <= 1.U
+        decoded       := rs2 <= 3.U
         integer       := true.B
         falu.io.op    := 18.U
-        falu.io.sew   := 2.U
-        falu.io.subop := Mux(double, 16.U, 0.U) + Mux(rs2 === 0.U, 1.U, 0.U)
+        falu.io.sew   := Mux(double && rs2(1), 3.U, 2.U)
+        falu.io.subop := Mux(double, Mux(rs2(1), 0.U, 16.U), Mux(rs2(1), 8.U, 0.U)) + !rs2(0)
       }
       is(0x68.U) {
-        decoded       := rs2 <= 1.U
+        decoded       := rs2 <= 3.U
         falu.io.op    := 18.U
-        falu.io.sew   := 2.U
-        falu.io.subop := Mux(double, 10.U, 2.U) + Mux(rs2 === 0.U, 1.U, 0.U)
+        falu.io.sew   := Mux(double && rs2(1), 3.U, 2.U)
+        falu.io.subop := Mux(double, Mux(rs2(1), 2.U, 10.U), Mux(rs2(1), 18.U, 2.U)) + !rs2(0)
         falu.io.a     := io.xSource
       }
       is(0x70.U) {
-        decoded := rs2 === 0.U && (funct === 1.U || (!double && funct === 0.U))
+        decoded := rs2 === 0.U && (funct === 1.U || funct === 0.U)
         integer := true.B
         when(funct === 1.U) { falu.io.op := 19.U; falu.io.subop := 16.U }
-          .otherwise { direct := true.B; directResult := io.source1(31, 0) }
+          .otherwise {
+            direct := true.B; directResult := Mux(double, io.source1, Cat(Fill(32, io.source1(31)), io.source1(31, 0)))
+          }
       }
       is(0x78.U) {
-        decoded      := !double && rs2 === 0.U && funct === 0.U
+        decoded      := rs2 === 0.U && funct === 0.U
         direct       := true.B
         directResult := io.xSource
       }
     }
   }
-  io.legal := decoded && format <= 1.U && rounding <= 4.U && (direct || falu.io.legal)
+  io.legal := decoded && format <= (if (maxWidth == 64) 1.U else 0.U) && rounding <= 4.U && (direct || falu.io.legal)
   falu.io.start := io.start && io.legal && !direct
   io.ready      := falu.io.ready
   io.valid      := Mux(direct, io.start && io.ready && io.legal, falu.io.valid)
-  val result = Mux(direct, directResult, falu.io.result)
-  io.result       := Mux(integer, result(31, 0), Mux(double, result, Cat("hffffffff".U(32.W), result(31, 0))))
+  val result        = Mux(direct, directResult, falu.io.result)
+  val integerResult = Mux(operation === 0x60.U && !rs2(1), Cat(Fill(32, result(31)), result(31, 0)), result)
+  io.result       := Mux(integer, integerResult, Mux(double, result, Cat("hffffffff".U(32.W), result(31, 0))))
   io.flags        := Mux(direct, 0.U, falu.io.flags)
   io.floatWrite   := io.legal && !integer
   io.integerWrite := io.legal && integer

@@ -16,7 +16,7 @@ class AddressAcceptance(p: Params, masters: Int) extends Bundle {
 @instantiable
 class AddressSelector(p: Params, masters: Int) extends Module {
   require(masters > 0)
-  private val masterBits = math.max(1, log2Ceil(masters))
+  val masterBits = math.max(1, log2Ceil(masters))
 
   @public val io = IO(new Bundle {
     val in       = Vec(masters, Flipped(Decoupled(new Address(p))))
@@ -64,18 +64,19 @@ class WriteOwner(p: Params, masters: Int) extends Bundle {
 class Interconnect(p: Params, masters: Int, slots: Option[Int] = None) extends Module {
   require(masters > 0)
 
-  private val capacity = slots.getOrElse {
+  val capacity = slots.getOrElse {
     val ids = BigInt(1) << p.idBits
     require(ids.isValidInt, "A full AXI ID pool must fit the slot index; supply an explicit slot count")
     ids.toInt
   }
 
   require(capacity > 1 && BigInt(capacity) <= (BigInt(1) << p.idBits))
-  private val masterBits = math.max(1, log2Ceil(masters))
+  val masterBits = math.max(1, log2Ceil(masters))
 
   @public val io = IO(new Bundle {
-    val in  = Vec(masters, Flipped(new Port(p)))
-    val out = new Port(p)
+    val in          = Vec(masters, Flipped(new Port(p)))
+    val out         = new Port(p)
+    val outstanding = Output(UInt(log2Ceil(2 * capacity + 1).W))
   })
 
   val readLive       = RegInit(VecInit(Seq.fill(capacity)(false.B)))
@@ -89,6 +90,8 @@ class Interconnect(p: Params, masters: Int, slots: Option[Int] = None) extends M
   val writeMaster    = Reg(Vec(capacity, UInt(masterBits.W)))
   val writeId        = Reg(Vec(capacity, UInt(p.idBits.W)))
   val writeRemaining = Reg(Vec(capacity, UInt(9.W)))
+
+  io.outstanding := PopCount(readLive) +& PopCount(writeLive)
 
   val reads:  Instance[AddressSelector] = Instantiate(new AddressSelector(p, masters))
   val writes: Instance[AddressSelector] = Instantiate(new AddressSelector(p, masters))

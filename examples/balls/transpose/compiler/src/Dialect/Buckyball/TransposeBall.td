@@ -19,7 +19,7 @@ def MemTransposeOp : Buckyball_Op<"mem_transpose"> {
   }];
   let arguments = (ins MemRefRankOf<[AnyType], [2]>:$input,
                        MemRefRankOf<[AnyType], [2]>:$output);
-  let assemblyFormat = [{$input $output attr-dict `:`
+  let assemblyFormat = [{$input $output prop-dict attr-dict `:`
     type($input) type($output)}];
 }
 
@@ -34,7 +34,7 @@ def TransposeOp : Buckyball_Op<"transpose"> {
   let arguments = (ins I64:$inputBankId, I64:$outputBankId,
                        I64:$iter, I64:$elemBits);
   let assemblyFormat = "$inputBankId `,` $outputBankId `,` "
-                       "$iter `,` $elemBits attr-dict `:` "
+                       "$iter `,` $elemBits prop-dict attr-dict `:` "
                        "type($inputBankId)";
 }
 
@@ -43,7 +43,7 @@ def BankTransposeOp : Buckyball_Op<"bank_transpose"> {
   let arguments = (ins I64:$inBank, I64:$outBank, I64:$iter, I64:$elemBits);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $outBank $iter $elemBits attr-dict `:` type($inBank) type($outBank) type($iter) type($elemBits)";
+      "$inBank $outBank $iter $elemBits prop-dict attr-dict `:` type($inBank) type($outBank) type($iter) type($elemBits)";
 }
 
 def TransposeIntrOp : Buckyball_IntrOpBase<"transpose">,

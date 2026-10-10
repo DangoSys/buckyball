@@ -23,7 +23,7 @@ class MemRequestIO(b: GlobalConfig) extends Bundle {
 
 @instantiable
 class MemBackend(val b: GlobalConfig) extends Module {
-  private val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
+  val kernelRequests = if (b.rvv.enable) 2 * b.rvv.memoryPorts else 0
 
   val sharedHashCount = if (b.memDomain.sharedEnable) SharedMemLayout.totalBank(b) else 0
 
@@ -74,7 +74,7 @@ class MemBackend(val b: GlobalConfig) extends Module {
       assert(io.kernel_req(i).bank_id <= b.frontend.vbank_id_upper_bound.U)
     }
   }
-  private val sharedChannelPerHart = SharedMemLayout.channelPerHart(b)
+  val sharedChannelPerHart = SharedMemLayout.channelPerHart(b)
 
   io.bank_hashes.foreach { states =>
     for (i <- 0 until b.memDomain.bankNum) {

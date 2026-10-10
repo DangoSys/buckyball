@@ -37,8 +37,7 @@
 
 /* This scale factor will be changed to equalise the runtime of the
    benchmarks. */
-// #define LOCAL_SCALE_FACTOR 46  // Original value for FPGA/real hardware
-#define LOCAL_SCALE_FACTOR 3 // Reduced for Verilator simulation
+#define LOCAL_SCALE_FACTOR 1
 #define UPPERLIMIT 20
 #define RANDOM_VALUE (RandomInteger())
 #define ZERO 0

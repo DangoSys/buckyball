@@ -8,7 +8,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 @instantiable
 class Fabric(p: Params, requesterCount: Int, homeId: Int) extends Module {
   require(requesterCount >= 1 && requesterCount < homeId && BigInt(homeId) < (BigInt(1) << p.nodeIdBits))
-  private val c = p
+  val c = p
 
   @public
   val io = IO(new Bundle {

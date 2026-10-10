@@ -23,7 +23,7 @@ def Int32ToFp32Op : Buckyball_Op<"int32_to_fp32"> {
   let arguments = (ins I64:$inputBankId, I64:$scaleBankId,
                        I64:$outputBankId, I64:$iter, BoolAttr:$relu);
   let assemblyFormat = "$inputBankId `,` $scaleBankId `,` $outputBankId `,` "
-                       "$iter attr-dict `:` "
+                       "$iter prop-dict attr-dict `:` "
                        "type($inputBankId)";
 }
 
@@ -33,7 +33,7 @@ def BankInt32ToFp32Op : Buckyball_Op<"bank_int32_to_fp32"> {
                        I64:$iter, BoolAttr:$relu);
   let results = (outs I64:$outBankOut);
   let assemblyFormat =
-      "$inBank $scaleBank $outBank $iter attr-dict `:` "
+      "$inBank $scaleBank $outBank $iter prop-dict attr-dict `:` "
       "type($inBank) type($scaleBank) type($outBank) type($iter)";
 }
 

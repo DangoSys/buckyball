@@ -26,7 +26,6 @@ int main() {
   cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
 
   // Publish CPU inputs before the CISC command starts its DMA chain.
-  bb_dma_fence();
   bb_gemmini_config(0, 0, 0, 0, 0);
   bb_gemmini_loop_ws_config_bounds(1, 1, 1);
   bb_gemmini_loop_ws_config_addr_a((uintptr_t)mat_a);
@@ -36,7 +35,6 @@ int main() {
   bb_gemmini_loop_ws_config_strides_ab(DIM, DIM);
   bb_gemmini_loop_ws_config_strides_dc(0, DIM * 4);
   bb_gemmini_loop_ws(0, 1, 2, 1);
-  bb_fence();
 
   if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
     printf("Gemmini OS CISC Basic Test PASSED\n");

@@ -1,5 +1,4 @@
 add_custom_target(chip-ctests-build)
-add_custom_target(chip-mlirtests-build)
 
 add_subdirectory(ctests)
 
@@ -10,6 +9,9 @@ add_subdirectory(
   ${CMAKE_CURRENT_BINARY_DIR}/smatmul-ctests)
 
 add_custom_target(chip-workloads-build ALL
-  DEPENDS chip-ctests-build
+  DEPENDS
+    chip-ctests-build
+    mlirtest-workloads-build
+    soctests-build
   COMMENT "Building goban workloads"
   VERBATIM)

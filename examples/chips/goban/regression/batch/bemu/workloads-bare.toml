@@ -10,4 +10,7 @@ tests = [
   "goban-goban-ctest-mvin_mvout_stride_test-baremetal",
   "goban-goban-ctest-chip-mvover_rows-multicore-baremetal",
   "goban-goban-ctest-core-transpose_smatmul_quant_pipeline-multicore-baremetal",
+  "goban-scheduler-soctest-clint_timer_interrupt-baremetal",
+  "goban-scheduler-soctest-clint_software_interrupt-baremetal",
+  "goban-scheduler-soctest-plic_register_access-baremetal",
 ]

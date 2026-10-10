@@ -19,16 +19,15 @@ func.func @main() -> i8 {
   linalg.fill ins(%z8 : i8) outs(%output : memref<4x16xi8>)
   %in = arith.constant 0 : i64
   %out = arith.constant 1 : i64
-  buckyball.mset %in {row = 1 : i64, col = 1 : i64} : i64
-  buckyball.mset %out {row = 1 : i64, col = 1 : i64} : i64
+  buckyball.mset %in <row = 1, col = 1> : i64
+  buckyball.mset %out <row = 1, col = 1> : i64
   buckyball.mvin %input %in %two %stride : memref<2x16xi8> i64 i64 i64
   buckyball.mvin_mmio %scales %zero64 %one64 %sixteen : memref<1x16xi8> i64 i64 i64
   buckyball.mxfp2int %in, %out, %two, %zero64 : i64
   buckyball.mvout %output %out %four %stride : memref<4x16xi8> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<4x16xi8>) -> ()
-  buckyball.mset %in {alloc = false, row = 0 : i64, col = 0 : i64} : i64
-  buckyball.mset %out {alloc = false, row = 0 : i64, col = 0 : i64} : i64
+  buckyball.mset %in <alloc = false, row = 0, col = 0> : i64
+  buckyball.mset %out <alloc = false, row = 0, col = 0> : i64
   memref.dealloc %input : memref<2x16xi8>
   memref.dealloc %scales : memref<1x16xi8>
   memref.dealloc %output : memref<4x16xi8>

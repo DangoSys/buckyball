@@ -19,22 +19,42 @@ def MXFP8QuantOp : Buckyball_Op<"mxfp8_quant", [NoMemoryEffect,
     I64Attr:$tile_k, I64Attr:$bank_bytes);
   let results = (outs AnyRankedTensor:$output);
   let hasVerifier = 1;
-  let assemblyFormat = "$input attr-dict `:` type($input) `->` type($output)";
+  let assemblyFormat = "$input prop-dict attr-dict `:` type($input) `->` type($output)";
 }
 
 def MXFP8MatmulOp : Buckyball_Op<"mxfp8_matmul", [
   DeclareOpInterfaceMethods<BufferizableOpInterface, ["bufferizesToAllocation",
     "bufferizesToMemoryRead", "bufferizesToMemoryWrite", "getAliasingValues", "bufferize"]>]> {
-  let arguments = (ins AnyRankedTensor:$input, AnyRankedTensor:$weight, I64Attr:$reduction_k, I64Attr:$tile_k, I64Attr:$tile_m, I64Attr:$tile_n, I64Attr:$bank_bytes);
+  let arguments = (ins AnyRankedTensor:$input, AnyRankedTensor:$weight, I64Attr:$reduction_k, I64Attr:$tile_k, I64Attr:$tile_m, I64Attr:$tile_n, I64Attr:$bank_bytes, I64Attr:$activation_tile_k);
   let results = (outs AnyRankedTensor:$output);
   let hasVerifier = 1;
-  let assemblyFormat = "$input `,` $weight attr-dict `:` type($input) `,` type($weight) `->` type($output)";
+  let assemblyFormat = "$input `,` $weight prop-dict attr-dict `:` type($input) `,` type($weight) `->` type($output)";
 }
 def MXFP8MemMatmulOp : Buckyball_Op<"mxfp8_mem_matmul"> {
   let arguments = (ins Arg<AnyMemRef, "", [MemReadAt<0, FullEffect>]>:$input,
     Arg<AnyMemRef, "", [MemReadAt<0, FullEffect>]>:$weight,
-    Arg<AnyMemRef, "", [MemWriteAt<0, FullEffect>]>:$output, I64Attr:$reduction_k, I64Attr:$tile_k, I64Attr:$tile_m, I64Attr:$tile_n, I64Attr:$bank_bytes);
-  let assemblyFormat = "$input `,` $weight `,` $output attr-dict `:` type($input) `,` type($weight) `,` type($output)";
+    Arg<AnyMemRef, "", [MemWriteAt<0, FullEffect>]>:$output, I64Attr:$reduction_k, I64Attr:$tile_k, I64Attr:$tile_m, I64Attr:$tile_n, I64Attr:$bank_bytes, I64Attr:$activation_tile_k);
+  let assemblyFormat = "$input `,` $weight `,` $output prop-dict attr-dict `:` type($input) `,` type($weight) `,` type($output)";
+}
+def MXFP8SharedPanelOp : Buckyball_Op<"mxfp8_shared_panel", [MemoryEffects<[MemRead, MemWrite]>]> {
+  let summary = "Compute one original MXFP8 output panel into a live shared bank";
+  let arguments = (ins MemRefRankOf<[I8], [1]>:$input,
+    MemRefRankOf<[I8], [1]>:$weight, I64:$bank,
+    I64Attr:$rows, I64Attr:$columns, I64Attr:$reduction_k,
+    I64Attr:$tile_k, I64Attr:$bank_bytes, I64Attr:$shared_bytes);
+  let results = (outs I64:$bank_out);
+  let assemblyFormat = "$input `,` $weight `,` $bank prop-dict attr-dict `:` "
+    "type($input) `,` type($weight) `,` type($bank)";
+}
+def MXFP8SharedWindowOp : Buckyball_Op<"mxfp8_shared_window", [MemoryEffects<[MemRead, MemWrite]>]> {
+  let summary = "Compute a shared output panel from one complete MXFP8 activation bank";
+  let arguments = (ins MemRefRankOf<[I8], [1]>:$input,
+    MemRefRankOf<[I8], [1]>:$weight, I64:$bank,
+    I64Attr:$rows, I64Attr:$columns, I64Attr:$reduction_k,
+    I64Attr:$tile_k, I64Attr:$bank_bytes, I64Attr:$shared_bytes);
+  let results = (outs I64:$bank_out);
+  let assemblyFormat = "$input `,` $weight `,` $bank prop-dict attr-dict `:` "
+    "type($input) `,` type($weight) `,` type($bank)";
 }
 def MXFP8Op : Buckyball_Op<"mxfp8"> {
   let summary = "MxmmBall compute";
@@ -46,7 +66,7 @@ def MXFP8Op : Buckyball_Op<"mxfp8"> {
                        I1:$first, I1:$last, I64:$outputBase);
   let assemblyFormat = "$op1BankId `,` $op2BankId `,` $resultBankId `,` "
                        "$config `,` $first `,` $last `,` $outputBase "
-                       "attr-dict `:` "
+                       "prop-dict attr-dict `:` "
                        "type($op1BankId)";
 }
 
@@ -57,7 +77,7 @@ def BankMXFP8Op : Buckyball_Op<"bank_mxfp8"> {
   let results = (outs I64:$wrBankOut);
   let assemblyFormat =
       "$op1Bank $op2Bank $wrBank $config $first $last $outputBase "
-      "attr-dict `:` "
+      "prop-dict attr-dict `:` "
       "type($op1Bank) type($op2Bank) type($wrBank) type($config)";
 }
 
@@ -68,7 +88,7 @@ def MXFP8WindowOp : Buckyball_Op<"mxfp8_window"> {
     I1:$first, I1:$last, I64:$outputBase);
   let assemblyFormat = "$op1BankId `,` $op2BankId `,` $resultBankId `,` "
     "$rows `,` $cols `,` $count `,` $fullK `,` $startK `,` "
-    "$first `,` $last `,` $outputBase attr-dict `:` type($op1BankId)";
+    "$first `,` $last `,` $outputBase prop-dict attr-dict `:` type($op1BankId)";
 }
 
 def BankMXFP8WindowOp : Buckyball_Op<"bank_mxfp8_window", [MemoryEffects<[MemRead, MemWrite]>]> {
@@ -78,7 +98,7 @@ def BankMXFP8WindowOp : Buckyball_Op<"bank_mxfp8_window", [MemoryEffects<[MemRea
     I1:$first, I1:$last, I64:$outputBase);
   let results = (outs I64:$wrBankOut);
   let assemblyFormat = "$op1Bank $op2Bank $wrBank $rows $cols $count "
-    "$fullK $startK $first $last $outputBase attr-dict `:` type($op1Bank)";
+    "$fullK $startK $first $last $outputBase prop-dict attr-dict `:` type($op1Bank)";
 }
 
 def FP32MatmulOp : Buckyball_Op<"fp32_matmul", [
@@ -87,13 +107,13 @@ def FP32MatmulOp : Buckyball_Op<"fp32_matmul", [
   let arguments = (ins AnyRankedTensor:$lhs, AnyRankedTensor:$rhs,
     OptionalAttr<UnitAttr>:$rhs_transposed, BoolAttr:$fused);
   let results = (outs AnyRankedTensor:$output);
-  let assemblyFormat = "$lhs `,` $rhs attr-dict `:` type($lhs) `,` type($rhs) `->` type($output)";
+  let assemblyFormat = "$lhs `,` $rhs prop-dict attr-dict `:` type($lhs) `,` type($rhs) `->` type($output)";
 }
 def FP32MemMatmulOp : Buckyball_Op<"fp32_mem_matmul"> {
   let arguments = (ins Arg<AnyMemRef, "", [MemReadAt<0, FullEffect>]>:$lhs,
     Arg<AnyMemRef, "", [MemReadAt<0, FullEffect>]>:$rhs,
     Arg<AnyMemRef, "", [MemWriteAt<0, FullEffect>]>:$output, BoolAttr:$fused);
-  let assemblyFormat = "$lhs `,` $rhs `,` $output attr-dict `:` type($lhs) `,` type($rhs) `,` type($output)";
+  let assemblyFormat = "$lhs `,` $rhs `,` $output prop-dict attr-dict `:` type($lhs) `,` type($rhs) `,` type($output)";
 }
 def FP32Op : Buckyball_Op<"matmul_f32"> {
   let summary = "MxmmBall compute";
@@ -105,7 +125,7 @@ def FP32Op : Buckyball_Op<"matmul_f32"> {
                        I1:$first, I1:$last, I64:$outputBase, BoolAttr:$fused);
   let assemblyFormat = "$op1BankId `,` $op2BankId `,` $resultBankId `,` "
                        "$config `,` $first `,` $last `,` $outputBase "
-                       "attr-dict `:` "
+                       "prop-dict attr-dict `:` "
                        "type($op1BankId)";
 }
 
@@ -116,7 +136,7 @@ def BankFP32Op : Buckyball_Op<"bank_matmul_f32"> {
   let results = (outs I64:$wrBankOut);
   let assemblyFormat =
       "$op1Bank $op2Bank $wrBank $config $first $last $outputBase "
-      "attr-dict `:` "
+      "prop-dict attr-dict `:` "
       "type($op1Bank) type($op2Bank) type($wrBank) type($config)";
 }
 

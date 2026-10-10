@@ -1,17 +1,17 @@
 package framework.system.core.rocket
 
 import org.chipsalliance.cde.config.Parameters
-import freechips.rocketchip.tile.{CorePAddrBits, HasCoreParameters, MaxHartIdBits, RocketTileParams, TileKey}
+import freechips.rocketchip.tile.{CoreBeatBytes, CorePAddrBits, CpuTileParams, HasCoreParameters, MaxHartIdBits, TileKey}
 import freechips.rocketchip.rocket.ASIdBits
-import freechips.rocketchip.subsystem.{CacheBlockBytes, SystemBusKey, SystemBusParams}
+import freechips.rocketchip.subsystem.CacheBlockBytes
 
 object RocketParameters {
 
   def apply(cpu: CpuParams): Parameters = Parameters.empty.alterPartial {
-    case TileKey         => RocketTileParams(core = cpu.core, dcache = cpu.dcache, icache = cpu.icache, btb = cpu.btb)
+    case TileKey         => CpuTileParams(core = cpu.core, dcache = cpu.dcache, icache = cpu.icache, btb = cpu.btb)
     case CorePAddrBits   => cpu.physicalAddressBits
     case MaxHartIdBits   => cpu.hartIdBits
-    case SystemBusKey    => SystemBusParams(beatBytes = cpu.beatBytes, blockBytes = cpu.blockBytes)
+    case CoreBeatBytes   => cpu.beatBytes
     case CacheBlockBytes => cpu.blockBytes
     case ASIdBits        => cpu.asIdBits
   }

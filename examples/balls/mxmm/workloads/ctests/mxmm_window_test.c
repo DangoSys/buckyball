@@ -27,7 +27,6 @@ int main(void) {
   }
   memset(actual, 0x5a, sizeof(actual));
   memset(expected, 0x5a, sizeof(expected));
-  bb_dma_fence();
   for (int bank = 3; bank <= 7; ++bank)
     bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)a, 3, sizeof(a) / 16, 1);
@@ -39,7 +38,6 @@ int main(void) {
   bb_mxmm_mxfp8_window(3, 6, 7, 1, 16, 32, 1, 1, 1, 64, 32);
   bb_mvout((uintptr_t)expected, 5, sizeof(expected) / 16, 1);
   bb_mvout((uintptr_t)actual, 7, sizeof(actual) / 16, 1);
-  bb_fence();
   if (memcmp(actual, expected, sizeof(actual)))
     return 1;
   for (int i = 0; i < 96; ++i)

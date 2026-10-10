@@ -36,10 +36,16 @@ repo_reset() {
 
   git submodule sync
   git submodule update --init --force
+
+  # submodules in submodules we used need update by hands
+  git -C arch/thirdparty/rocket-chip submodule sync -- dependencies/cde
+  git -C arch/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
+
   git -C stack submodule sync
   git -C stack submodule update --init --force -- compiler/thirdparty/buddy-mlir
   git -C stack/compiler/thirdparty/buddy-mlir submodule sync
   git -C stack/compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
+
   git submodule foreach 'git clean -ffd'
   have_sha="$(git rev-parse HEAD)"
   if [[ "${have_sha}" != "${want_sha}" ]]; then

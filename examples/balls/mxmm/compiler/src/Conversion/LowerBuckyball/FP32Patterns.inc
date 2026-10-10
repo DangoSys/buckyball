@@ -50,7 +50,7 @@ public:
     SmallVector<int64_t> rhsStrides;
     int64_t rhsOffset;
     bool bankPack =
-        target.bankNum >= 4 && llvm::is_contained(target.balls, "kernel") &&
+        target.bankNum >= 5 && target.rvvEnabled &&
         succeeded(w.getStridesAndOffset(rhsStrides, rhsOffset)) &&
         rhsStrides[rank - 2] == N && rhsStrides.back() == 1 &&
         K * N * 4 <= bytes && chunk == K && rows * columns * 4 >= 64;
@@ -68,8 +68,23 @@ public:
     for (Value buffer : {ap, bp, cp})
       buffer.getDefiningOp()->setAttr("alignment", b.getI64IntegerAttr(bytes));
     SmallVector<Value> banks{ab, wb, cb};
-    if (bankPack)
-      banks.push_back(allocBank(b, loc, 1, 1));
+    if (bankPack) {
+      Value input = allocBank(b, loc, 1, 1);
+      Value descriptor = allocBank(b, loc, 1, 1);
+      Value read = b.create<BankTransferOp>(loc, b.getI64Type(), ab, input);
+      Value write = b.create<BankTransferOp>(loc, b.getI64Type(), wb, descriptor);
+      write = b.create<BankTransferOp>(loc, b.getI64Type(), cb, write);
+      auto loaded = b.create<BankKernelOp>(
+          loc, b.getI64Type(), b.getI64Type(), read, write,
+          FlatSymbolRefAttr::get(b.getContext(), "rvv_packmm"), ValueRange{
+          createI64Const(b, loc, 0), createI64Const(b, loc, K),
+          createI64Const(b, loc, N), createI64Const(b, loc, 0),
+          createI64Const(b, loc, 0), createI64Const(b, loc, K),
+          createI64Const(b, loc, columns), createI64Const(b, loc, rows),
+          createI64Const(b, loc, 1), createI64Const(b, loc, 1),
+          createI64Const(b, loc, op.getFusedAttr().getValue())});
+      banks = {loaded.getReadOut(), loaded.getWriteOut()};
+    }
     auto batchLoop = b.create<scf::ForOp>(loc, zero, idx(batches), one, banks);
     b.setInsertionPointToStart(batchLoop.getBody());
     Value batch = batchLoop.getInductionVar();
@@ -88,17 +103,15 @@ public:
           {K, N}, w, offsets, sizes, strides);
       Value source = b.create<memref::SubViewOp>(loc, rowType, op.getRhs(),
                                                  offsets, sizes, strides);
-      auto flatType = MemRefType::get(
-          {K * N}, b.getF32Type(),
-          StridedLayoutAttr::get(b.getContext(), ShapedType::kDynamic, {1}));
       Value flat = b.create<memref::CollapseShapeOp>(
-          loc, flatType, source, ArrayRef<ReassociationIndices>{{0, 1}});
-      auto packedType = MemRefType::get(
-          {K * N / 4, 4}, b.getF32Type(),
-          StridedLayoutAttr::get(b.getContext(), ShapedType::kDynamic, {4, 1}));
+          loc, source, ArrayRef<ReassociationIndices>{{0, 1}});
       Value packed = b.create<memref::ExpandShapeOp>(
-          loc, packedType, flat, ArrayRef<ReassociationIndices>{{0, 1}});
-      batchBanks[3] = mvinBank(b, loc, packed, batchBanks[3], K * N / 4);
+          loc, ArrayRef<int64_t>{K * N / 4, 4}, flat,
+          ArrayRef<ReassociationIndices>{{0, 1}});
+      batchBanks[0] = b.create<BankMvinOp>(
+          loc, b.getI64Type(), packed, batchBanks[0],
+          createI64Const(b, loc, K * N / 4), createI64Const(b, loc, 1),
+          b.getI64IntegerAttr(0));
     }
     auto rowLoop =
         b.create<scf::ForOp>(loc, zero, idx(M), idx(rows), batchBanks);
@@ -110,7 +123,7 @@ public:
     Value column = colLoop.getInductionVar();
     ab = colLoop.getRegionIterArgs()[0];
     wb = colLoop.getRegionIterArgs()[1];
-    cb = colLoop.getRegionIterArgs()[2];
+    cb = bankPack ? wb : colLoop.getRegionIterArgs()[2];
     for (int64_t begin = 0; begin < K; begin += chunk) {
       int64_t count = std::min(chunk, K - begin);
       for (int operand = 0; operand < (bankPack ? 1 : 2); ++operand) {
@@ -197,31 +210,44 @@ public:
                                    false);
         }
       }
-      ab = mvinBank(b, loc, ap, ab, rows * count / 4);
       if (bankPack) {
-        auto pack = b.create<BankPackFP32Op>(
-            loc, TypeRange{b.getI64Type(), b.getI64Type()}, cb, wb,
-            colLoop.getRegionIterArgs()[3], createI64Const(b, loc, K),
+        ab = b.create<BankMvinOp>(
+            loc, b.getI64Type(), ap, ab,
+            createI64Const(b, loc, rows * count / 4),
+            createI64Const(b, loc, 1), b.getI64IntegerAttr(1));
+        auto packed = b.create<BankKernelOp>(
+            loc, b.getI64Type(), b.getI64Type(), ab, wb,
+            FlatSymbolRefAttr::get(b.getContext(), "rvv_packmm"), ValueRange{
+            createI64Const(b, loc, 1), createI64Const(b, loc, K),
             createI64Const(b, loc, N), createI64Const(b, loc, begin),
             b.create<arith::IndexCastOp>(loc, b.getI64Type(), column),
-            createI64Const(b, loc, count), createI64Const(b, loc, columns));
-        cb = pack.getDescriptorOut();
-        wb = pack.getOutputOut();
+            createI64Const(b, loc, count), createI64Const(b, loc, columns),
+            createI64Const(b, loc, rows), createI64Const(b, loc, begin == 0),
+            createI64Const(b, loc, begin + count == K),
+            createI64Const(b, loc, op.getFusedAttr().getValue())});
+        ab = packed.getReadOut();
+        wb = cb = packed.getWriteOut();
       } else {
+        ab = mvinBank(b, loc, ap, ab, rows * count / 4);
         wb = mvinBank(b, loc, bp, wb, columns * count / 4);
+        cb = b.create<BankFP32Op>(loc, b.getI64Type(), ab, wb, cb,
+                                  createI64Const(b, loc,
+                                                 packBits(rows, 0, 11) |
+                                                     packBits(columns, 12, 23) |
+                                                     packBits(count, 24, 35)),
+                                  createI1Const(b, loc, begin == 0),
+                                  createI1Const(b, loc, begin + count == K),
+                                  createI64Const(b, loc, 0), op.getFusedAttr())
+                 .getWrBankOut();
       }
-      cb = b.create<BankFP32Op>(loc, b.getI64Type(), ab, wb, cb,
-                                createI64Const(b, loc,
-                                               packBits(rows, 0, 11) |
-                                                   packBits(columns, 12, 23) |
-                                                   packBits(count, 24, 35)),
-                                createI1Const(b, loc, begin == 0),
-                                createI1Const(b, loc, begin + count == K),
-                                createI64Const(b, loc, 0), op.getFusedAttr())
-               .getWrBankOut();
     }
-    cb = mvoutBank(b, loc, cp, cb, rows * columns / 4);
-    b.create<FenceOp>(loc);
+    if (bankPack)
+      cb = b.create<BankMvoutOp>(
+          loc, b.getI64Type(), cp, cb,
+          createI64Const(b, loc, rows * columns / 4),
+          createI64Const(b, loc, 1), b.getI64IntegerAttr(2));
+    else
+      cb = mvoutBank(b, loc, cp, cb, rows * columns / 4);
     SmallVector<int64_t> outputStrides;
     int64_t outputOffset;
     if (failed(out.getStridesAndOffset(outputStrides, outputOffset)))
@@ -279,15 +305,30 @@ public:
     b.setInsertionPointAfter(rr);
     SmallVector<Value> nextBanks{ab, wb, cb};
     if (bankPack)
-      nextBanks.push_back(colLoop.getRegionIterArgs()[3]);
+      nextBanks = {ab, cb};
     b.create<scf::YieldOp>(loc, nextBanks);
     b.setInsertionPointAfter(colLoop);
     b.create<scf::YieldOp>(loc, colLoop.getResults());
     b.setInsertionPointAfter(rowLoop);
     b.create<scf::YieldOp>(loc, rowLoop.getResults());
     b.setInsertionPointAfter(batchLoop);
-    for (Value bank : batchLoop.getResults())
-      releaseBank(b, loc, bank);
+    if (bankPack) {
+      auto finished = b.create<BankKernelOp>(
+          loc, b.getI64Type(), b.getI64Type(), batchLoop.getResult(0),
+          batchLoop.getResult(1),
+          FlatSymbolRefAttr::get(b.getContext(), "rvv_packmm"), ValueRange{
+          createI64Const(b, loc, 2), createI64Const(b, loc, K),
+          createI64Const(b, loc, N), createI64Const(b, loc, 0),
+          createI64Const(b, loc, 0), createI64Const(b, loc, K),
+          createI64Const(b, loc, columns), createI64Const(b, loc, rows),
+          createI64Const(b, loc, 1), createI64Const(b, loc, 1),
+          createI64Const(b, loc, op.getFusedAttr().getValue())});
+      releaseBank(b, loc, finished.getReadOut());
+      releaseBank(b, loc, finished.getWriteOut());
+    } else {
+      for (Value bank : batchLoop.getResults())
+        releaseBank(b, loc, bank);
+    }
     for (Value buffer : {ap, bp, cp})
       b.create<memref::DeallocOp>(loc, buffer);
     b.eraseOp(op);

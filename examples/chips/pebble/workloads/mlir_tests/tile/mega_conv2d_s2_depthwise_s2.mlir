@@ -76,13 +76,13 @@ func.func @main() -> i8 {
   linalg.fill ins(%i8_0 : i8) outs(%output : memref<1x4x4x16xi8>)
   tile.mega_kernel %input %output : memref<1x16x16x3xi8> memref<1x4x4x16xi8> {
     tile.mega_conv2d %input %weight0 %bias0 %scale0 %lut %middle
-        {activation = 1 : i64, kernel = 3 : i64, outputScale = 1.0 : f32,
-         padHigh = 1 : i64, padLow = 1 : i64, stride = 2 : i64}
+        <activation = 1, kernel = 3, outputScale = 1.0,
+         padHigh = 1, padLow = 1, stride = 2>
         : memref<1x16x16x3xi8> memref<1x3x16x16xi8> memref<16xi32>
           memref<16xf32> memref<1xi8> memref<1x8x8x16xi8>
     tile.mega_conv2d_depthwise %middle %weight1 %bias1 %scale1 %lut %output
-        {activation = 0 : i64, kernel = 3 : i64, outputScale = 1.0 : f32,
-         padHigh = 1 : i64, padLow = 1 : i64, stride = 2 : i64}
+        <activation = 0, kernel = 3, outputScale = 1.0,
+         padHigh = 1, padLow = 1, stride = 2>
         : memref<1x8x8x16xi8> memref<3x3x16x1xi8> memref<16xi32>
           memref<16xf32> memref<1xi8> memref<1x4x4x16xi8>
   }

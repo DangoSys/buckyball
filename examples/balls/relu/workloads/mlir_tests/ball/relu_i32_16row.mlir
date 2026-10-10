@@ -22,11 +22,10 @@ func.func @main() -> i8 {
       memref.store %signed, %input[%row, %lane] : memref<16x4xi32>
     }
   }
-  %bank = buckyball.bank_alloc {col = 1 : i64}
+  %bank = buckyball.bank_alloc <col = 1>
   %loaded = buckyball.bank_mvin %input %bank %iter %stride : memref<16x4xi32> i64 i64 i64
   buckyball.relu %loaded, %group, %iter, %iter : i64
   %stored = buckyball.bank_mvout %output %loaded %iter %stride : memref<16x4xi32> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<16x4xi32>) -> ()
   buckyball.bank_release %stored : i64
   memref.dealloc %input : memref<16x4xi32>

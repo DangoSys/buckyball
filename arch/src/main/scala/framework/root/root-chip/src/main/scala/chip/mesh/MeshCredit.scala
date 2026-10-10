@@ -22,7 +22,7 @@ class MeshCreditLink(p: MeshParams) extends Bundle {
 @instantiable
 class MeshCreditTx(p: MeshParams, maxCredits: Int) extends Module {
   require(maxCredits >= 1 && maxCredits <= 255)
-  private val creditBits = math.max(1, log2Ceil(maxCredits + 1))
+  val creditBits = math.max(1, log2Ceil(maxCredits + 1))
 
   @public
   val io = IO(new Bundle {
@@ -58,7 +58,7 @@ class MeshCreditTx(p: MeshParams, maxCredits: Int) extends Module {
 @instantiable
 class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
   require(depth >= 1 && depth <= 255)
-  private val creditBits = math.max(1, log2Ceil(depth + 1))
+  val creditBits = math.max(1, log2Ceil(depth + 1))
 
   @public
   val io = IO(new Bundle {
@@ -101,8 +101,8 @@ class MeshCreditRx(p: MeshParams, depth: Int) extends Module {
 @instantiable
 class MeshCreditNetwork(p: MeshParams, linkDepth: Int = 2) extends Module {
   require(linkDepth >= 1 && linkDepth <= 255)
-  private val flit = new MeshFlit(p)
-  private val routers: Seq[Seq[Instance[MeshRouter]]] =
+  val flit = new MeshFlit(p)
+  val routers: Seq[Seq[Instance[MeshRouter]]] =
     Seq.tabulate(p.yNodes, p.xNodes)((y, x) => Instantiate(new MeshRouter(p, x, y)))
   private def index(x: Int, y: Int): Int = y * p.xNodes + x
 

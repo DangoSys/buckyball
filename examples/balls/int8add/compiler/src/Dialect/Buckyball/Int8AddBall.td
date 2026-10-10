@@ -9,7 +9,7 @@ def Int8AddOp : Buckyball_Op<"int8add"> {
                        I64:$iter, F32:$lhsRatio, F32:$rhsRatio,
                        BoolAttr:$relu);
   let assemblyFormat = "$lhsBankId `,` $rhsBankId `,` $outputBankId `,` $iter `,` "
-                       "$lhsRatio `,` $rhsRatio attr-dict `:` type($lhsBankId)";
+                       "$lhsRatio `,` $rhsRatio prop-dict attr-dict `:` type($lhsBankId)";
 }
 
 def BankInt8AddOp : Buckyball_Op<"bank_int8add"> {
@@ -19,7 +19,7 @@ def BankInt8AddOp : Buckyball_Op<"bank_int8add"> {
                        BoolAttr:$relu);
   let results = (outs I64:$outputBankOut);
   let assemblyFormat = "$lhsBank $rhsBank $outputBank $iter $lhsRatio $rhsRatio "
-                       "attr-dict `:` type($lhsBank) type($rhsBank) "
+                       "prop-dict attr-dict `:` type($lhsBank) type($rhsBank) "
                        "type($outputBank) type($iter) type($lhsRatio)";
 }
 

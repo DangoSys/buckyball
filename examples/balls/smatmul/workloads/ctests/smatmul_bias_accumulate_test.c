@@ -34,7 +34,6 @@ int main(void) {
   bb_smatmul_os(1, 2, 5, 16, 16, 16, 1, 0, 0);
   bb_smatmul_os(3, 4, 5, 16, 16, 16, 0, 1, 0);
   bb_mvout((uintptr_t)actual, 5, 64, 1);
-  bb_fence();
 
   for (int row = 0; row < 16; ++row) {
     for (int col = 0; col < 16; ++col) {

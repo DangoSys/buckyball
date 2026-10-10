@@ -1,6 +1,7 @@
 package framework.system.device
 
 import chisel3._
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import chisel3.util._
 
 case class PlicParams(
@@ -15,12 +16,13 @@ case class PlicParams(
  * RISC-V PLIC with level-triggered gateways and 32-bit registers. Hart h owns context 2h (M) and
  * 2h+1 (S). A claim read clears the source's pending bit and holds it in service until completed.
  */
+@instantiable
 class Plic(p: PlicParams, hartIds: Seq[Int]) extends Module {
   require(hartIds.distinct.size == hartIds.size)
-  private val n        = hartIds.size
-  private val contexts = 2 * (hartIds.max + 1)
+  val n        = hartIds.size
+  val contexts = 2 * (hartIds.max + 1)
 
-  val io = IO(new Bundle {
+  @public val io = IO(new Bundle {
     val port    = new DevicePort
     val sources = Input(UInt(p.sources.W))
     val meip    = Output(Vec(n, Bool()))

@@ -30,7 +30,6 @@ int main(void) {
   bb_int8mul(0, 1, 2, ROWS, .5f, 0);
   bb_lut(2, 3, 4, ROWS);
   bb_mvout((uintptr_t)output, 4, ROWS, 1);
-  bb_fence();
   for (int i = 0; i < VALUES; ++i)
     if (output[i] != input[i]) {
       printf("se gate lut mismatch index=%d\n", i);

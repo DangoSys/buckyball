@@ -47,7 +47,6 @@ template <MxmmFormat Format> static int run_mxmm_native_test() {
       bb_mvin((uintptr_t)result, 5, 1 + m * n / 4, 1);
       steps[mindex][nindex][0]();
       bb_mvout((uintptr_t)result, 5, 1 + m * n / 4, 1);
-      bb_fence();
       for (int i = 0; i < 4 + m * n; i++)
         if (result[i] != 0x5a5a5a5a)
           return 1;
@@ -60,7 +59,6 @@ template <MxmmFormat Format> static int run_mxmm_native_test() {
       bb_mvin((uintptr_t)b, 4, br, 1);
       steps[mindex][nindex][1]();
       bb_mvout((uintptr_t)result, 5, 1 + m * n / 4, 1);
-      bb_fence();
       uint32_t expected = Format == MxmmFormat::Mxfp8   ? 0x43800000
                           : Format == MxmmFormat::Fma32 ? 0xa8800000
                                                         : 0;
@@ -79,7 +77,6 @@ template <MxmmFormat Format> static int run_mxmm_native_test() {
         bb_mvin((uintptr_t)b, 4, br, 1);
         steps[mindex][nindex][2]();
         bb_mvout((uintptr_t)result, 5, 1 + m * n / 4, 1);
-        bb_fence();
         for (int i = 4; i < 4 + m * n; i++)
           if (result[i] != 0x80000000)
             return 4;

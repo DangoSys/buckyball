@@ -7,20 +7,21 @@ import framework.memdomain.frontend.mem.dma.{BBReadRequest, BBReadResponse, DmaE
 import framework.top.GlobalConfig
 import framework.balldomain.blink.{BankRead, BankWrite}
 
-class KernelDmaRequest extends Bundle {
+class KernelDmaRequest(b: GlobalConfig) extends Bundle {
+  val rob_id  = UInt(log2Ceil(b.frontend.rob_entries).W)
   val address = UInt(64.W)
   val bytes   = UInt(32.W)
 }
 
-class KernelDmaPort extends Bundle {
-  val load   = Flipped(Decoupled(new KernelDmaRequest))
+class KernelDmaPort(b: GlobalConfig) extends Bundle {
+  val load   = Flipped(Decoupled(new KernelDmaRequest(b)))
   val image  = Decoupled(UInt(32.W))
   val result = Decoupled(new DmaStatus)
   val abort  = Input(Bool())
   val busy   = Output(Bool())
 }
 
-class KernelMemoryBridge(b: GlobalConfig) extends KernelDmaPort {
+class KernelMemoryBridge(b: GlobalConfig) extends KernelDmaPort(b) {
   val bankRead  = Vec(b.rvv.memoryPorts, new BankRead(b))
   val bankWrite = Vec(b.rvv.memoryPorts, new BankWrite(b))
   val active    = Input(Bool())
@@ -29,22 +30,21 @@ class KernelMemoryBridge(b: GlobalConfig) extends KernelDmaPort {
 
 @instantiable
 class KernelDma(val b: GlobalConfig) extends Module {
-  private val beatWords = b.memDomain.dma_buswidth / 32
-  private val beatBytes = b.memDomain.dma_buswidth / 8
+  val beatWords = b.memDomain.dma_buswidth / 32
+  val beatBytes = b.memDomain.dma_buswidth / 8
   require(beatWords > 0 && b.memDomain.dma_buswidth % 32 == 0)
 
   @public
   val io = IO(new Bundle {
-    val rob_id    = Input(UInt(log2Ceil(b.frontend.rob_entries).W))
     val footprint = Output(new Footprint(b))
-    val kernel    = new KernelDmaPort
+    val kernel    = new KernelDmaPort(b)
     val request   = Decoupled(new BBReadRequest)
     val response  = Flipped(Decoupled(new BBReadResponse(b.memDomain.dma_buswidth)))
   })
 
   val idle :: request :: receive :: output :: terminal :: Nil = Enum(5)
   val state                                                   = RegInit(idle)
-  val descriptor                                              = Reg(new KernelDmaRequest)
+  val descriptor                                              = Reg(new KernelDmaRequest(b))
   val remaining                                               = Reg(UInt(32.W))
   val data                                                    = Reg(UInt(b.memDomain.dma_buswidth.W))
   val words                                                   = Reg(UInt(math.max(1, log2Ceil(beatWords + 1)).W))
@@ -102,7 +102,7 @@ class KernelDma(val b: GlobalConfig) extends Module {
 
   when(io.kernel.load.fire) {
     val invalid = invalidShape(io.kernel.load.bits.address, io.kernel.load.bits.bytes)
-    owner          := io.rob_id
+    owner          := io.kernel.load.bits.rob_id
     descriptor     := io.kernel.load.bits
     remaining      := io.kernel.load.bits.bytes >> 2
     discarded      := false.B

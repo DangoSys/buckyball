@@ -11,9 +11,9 @@ namespace {
 FailureOr<int64_t> packedSize(int64_t m, int64_t k, int64_t rows, int64_t chunk,
                               int64_t stride) {
   if (m <= 0 || k <= 0 || k % 32 || rows <= 0 || (rows != 1 && rows % 16) ||
-      chunk <= 0 || chunk % 32 || chunk >= 4096 || stride <= 0 ||
-      stride > 65536 || !llvm::isPowerOf2_64(stride) ||
-      rows > stride * 32 / (chunk * 33))
+      chunk <= 0 || chunk % 32 || stride <= 0 || stride > 65536 ||
+      !llvm::isPowerOf2_64(stride) || rows > stride ||
+      chunk > stride * 32 / (rows * 33))
     return failure();
   int64_t panels, bytes;
   if (llvm::MulOverflow((m - 1) / rows + 1, (k - 1) / chunk + 1, panels) ||
@@ -99,8 +99,15 @@ LogicalResult MXFP8MatmulOp::verify() {
         "requires packed activation/weight bytes and a static FP32 matrix");
   int64_t m = output.getShape()[0], n = output.getShape()[1],
           k = getReductionK();
+  if (getTileK() >= 4096)
+    return emitOpError("matrix panel K must be less than 4096");
   int64_t rows = m == 1 ? 1 : getTileM(), columns = getTileN();
-  auto activationBytes = packedSize(m, k, rows, getTileK(), getBankBytes());
+  int64_t activationK = getActivationTileK();
+  if (activationK != getTileK() &&
+      (activationK != k || k > 65535 || rows * k * 33 / 32 > getBankBytes()))
+    return emitOpError("activation tile K must match the weight panel or fit a "
+                       "complete row window");
+  auto activationBytes = packedSize(m, k, rows, activationK, getBankBytes());
   auto weightBytes = packedSize(n, k, columns, getTileK(), getBankBytes());
   if (columns <= 0 || columns % 16 || failed(activationBytes) ||
       failed(weightBytes) || input.getShape()[0] != *activationBytes ||
@@ -111,7 +118,7 @@ LogicalResult MXFP8MatmulOp::verify() {
     if (source.getRank() != 2 || source.getShape()[0] != m ||
         source.getShape()[1] != k)
       return emitOpError("activation quantization matrix shape mismatch");
-    if (quant.getTileRows() != rows || quant.getTileK() != getTileK() ||
+    if (quant.getTileRows() != rows || quant.getTileK() != activationK ||
         quant.getBankBytes() != getBankBytes())
       return emitOpError("activation quantization panel layout mismatch");
   }
@@ -140,9 +147,10 @@ LogicalResult MXFP8MatmulOp::bufferize(RewriterBase &b,
   auto type = cast<RankedTensorType>(getOutput().getType());
   auto output = b.create<memref::AllocOp>(
       getLoc(), MemRefType::get(type.getShape(), type.getElementType()));
-  b.create<MXFP8MemMatmulOp>(
-      getLoc(), *input, *weight, output, getReductionKAttr(), getTileKAttr(),
-      getTileMAttr(), getTileNAttr(), getBankBytesAttr());
+  b.create<MXFP8MemMatmulOp>(getLoc(), *input, *weight, output,
+                             getReductionKAttr(), getTileKAttr(),
+                             getTileMAttr(), getTileNAttr(), getBankBytesAttr(),
+                             getActivationTileKAttr());
   replaceOpWithBufferizedValues(b, getOperation(),
                                 ValueRange{output.getResult()});
   return success();

@@ -60,10 +60,10 @@ class ChiMeshPacketizer(
   require(localX >= 0 && localX < mesh.xNodes && localY >= 0 && localY < mesh.yNodes)
   require(nodeMap.mesh == mesh)
 
-  private val chunks     = (flitBits + mesh.payloadBits - 1) / mesh.payloadBits
-  private val beatBits   = math.max(1, log2Ceil(chunks))
-  private val paddedBits = chunks * mesh.payloadBits
-  private val message    = new ChiMeshMessage(flitBits, nodeMap.coordinateBits)
+  val chunks     = (flitBits + mesh.payloadBits - 1) / mesh.payloadBits
+  val beatBits   = math.max(1, log2Ceil(chunks))
+  val paddedBits = chunks * mesh.payloadBits
+  val message    = new ChiMeshMessage(flitBits, nodeMap.coordinateBits)
 
   @public
   val io = IO(new Bundle {
@@ -114,8 +114,8 @@ class ChiMeshPacketizer(
 class ChiMeshDepacketizer(mesh: MeshParams, flitBits: Int, virtualChannel: Int) extends Module {
   require(flitBits > 0)
   require(virtualChannel >= 0 && virtualChannel < mesh.virtualChannels)
-  private val chunks   = (flitBits + mesh.payloadBits - 1) / mesh.payloadBits
-  private val beatBits = math.max(1, log2Ceil(chunks))
+  val chunks   = (flitBits + mesh.payloadBits - 1) / mesh.payloadBits
+  val beatBits = math.max(1, log2Ceil(chunks))
 
   @public
   val io = IO(new Bundle {
@@ -174,11 +174,11 @@ class ChiMeshEndpoint(
     extends Module {
   require(mesh.virtualChannels >= ChiMeshVirtualChannel.Required)
   require(nodeMap.mesh == mesh && nodeMap.coordinateBits == p.nodeIdBits)
-  private val reqBits = (new RequestFlit(p)).flitWidth
-  private val rspBits = (new ResponseFlit(p)).flitWidth
-  private val datBits = (new DataFlit(p)).flitWidth
-  private val snpBits = (new SnoopFlit(p)).flitWidth
-  private val message = (bits: Int) => new ChiMeshMessage(bits, p.nodeIdBits)
+  val reqBits = (new RequestFlit(p)).flitWidth
+  val rspBits = (new ResponseFlit(p)).flitWidth
+  val datBits = (new DataFlit(p)).flitWidth
+  val snpBits = (new SnoopFlit(p)).flitWidth
+  val message = (bits: Int) => new ChiMeshMessage(bits, p.nodeIdBits)
 
   @public
   val io = IO(new Bundle {
@@ -289,7 +289,7 @@ class ChiMeshHomeEndpoint(
   agents:  Int)
     extends Module {
   require(agents >= 1 && agents < (1 << p.nodeIdBits))
-  private val snpBits = (new SnoopFlit(p)).flitWidth
+  val snpBits = (new SnoopFlit(p)).flitWidth
 
   @public
   val io = IO(new Bundle {
@@ -339,17 +339,17 @@ class ChiMeshHomeEndpoint(
 
 /** Native verification target for Home snoop target-sideband routing. */
 class ChiMeshHomeSnoopLoopback extends Module {
-  private val chi  = Params()
-  private val mesh = MeshParams(xNodes = 2, yNodes = 1, payloadBits = 32, virtualChannels = 8)
+  val chi  = Params()
+  val mesh = MeshParams(xNodes = 2, yNodes = 1, payloadBits = 32, virtualChannels = 8)
 
-  private val map = ChiMeshNodeMap(
+  val map = ChiMeshNodeMap(
     Seq.tabulate(1 << chi.nodeIdBits)(node => if (node == 1) 1 else 0),
     Seq.fill(1 << chi.nodeIdBits)(0),
     mesh,
     presentNodes = (0 until (1 << chi.nodeIdBits)).toSet
   )
 
-  private val snpBits = (new SnoopFlit(chi)).flitWidth
+  val snpBits = (new SnoopFlit(chi)).flitWidth
 
   @public
   val io = IO(new Bundle {
@@ -395,17 +395,17 @@ class ChiMeshHomeSnoopLoopback extends Module {
 
 /** Native endpoint verification target: a real CHI Dat channel traverses its Mesh endpoint. */
 class ChiMeshEndpointLoopback extends Module {
-  private val chi  = Params()
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 8)
+  val chi  = Params()
+  val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 8)
 
-  private val map = ChiMeshNodeMap(
+  val map = ChiMeshNodeMap(
     Seq.tabulate(1 << chi.nodeIdBits)(_ & 1),
     Seq.tabulate(1 << chi.nodeIdBits)(node => (node >> 1) & 1),
     mesh,
     presentNodes = (0 until (1 << chi.nodeIdBits)).toSet
   )
 
-  private val datBits = (new DataFlit(chi)).flitWidth
+  val datBits = (new DataFlit(chi)).flitWidth
 
   @public
   val io = IO(new Bundle {
@@ -431,17 +431,17 @@ class ChiMeshEndpointLoopback extends Module {
 
 /** Native verification target for packetization and reassembly without a mesh topology. */
 class ChiMeshCodecLoopback extends Module {
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 4)
-  private val chi  = Params()
+  val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 32, virtualChannels = 4)
+  val chi  = Params()
 
-  private val map = ChiMeshNodeMap(
+  val map = ChiMeshNodeMap(
     Seq.tabulate(1 << chi.nodeIdBits)(_ & 1),
     Seq.tabulate(1 << chi.nodeIdBits)(node => (node >> 1) & 1),
     mesh,
     presentNodes = Set(1, 2, 3, 64)
   )
 
-  private val flitBits = (new DataFlit(chi)).flitWidth
+  val flitBits = (new DataFlit(chi)).flitWidth
 
   @public
   val io = IO(new Bundle {

@@ -7,7 +7,7 @@ set(CTEST_EMBENCH_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/embench)
 set(EMBENCH_SUPPORT_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/support)
 set(EMBENCH_SRC_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/src)
 set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
-list(GET BUCKYBALL_TARGETS 0 EMBENCH_CORE)
+list(GET BUCKYBALL_CPU_TARGETS 0 EMBENCH_CORE)
 
 set(EMBENCH_SUPPORT_SOURCES
   ${EMBENCH_SUPPORT_DIR}/main.c
@@ -58,6 +58,7 @@ function(add_embench_target BMARK_NAME)
       ${BMARK_SOURCES}
       -lm
     DEPENDS ${BMARK_SOURCES} ${EMBENCH_SUPPORT_SOURCES}
+      ${BBSIM_LD}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c
     COMMENT "Building embench: ${EXECUTABLE}"
@@ -67,6 +68,24 @@ function(add_embench_target BMARK_NAME)
   add_custom_target(embench_${BMARK_NAME}
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMENT "Building embench ${BMARK_NAME}")
+
+  if(BMARK_NAME STREQUAL "matmult-int" OR BMARK_NAME STREQUAL "sglib-combined")
+    buckyball_ctest_name(CHECK_NAME ${EMBENCH_CORE} check-embench_${BMARK_NAME})
+    set(CHECK_EXECUTABLE ${CHECK_NAME}-baremetal)
+    set(CHECK_SUPPORT_SOURCES ${EMBENCH_SUPPORT_SOURCES})
+    list(REMOVE_ITEM CHECK_SUPPORT_SOURCES ${EMBENCH_SUPPORT_DIR}/main.c)
+    add_custom_command(
+      OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CHECK_EXECUTABLE}
+      COMMAND ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${CHECK_EXECUTABLE}
+        ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c
+        ${EMBENCH_SUPPORT_DIR}/check.c ${CHECK_SUPPORT_SOURCES} ${BMARK_SOURCES} -lm
+      DEPENDS ${EMBENCH_SUPPORT_DIR}/check.c ${CHECK_SUPPORT_SOURCES} ${BMARK_SOURCES}
+        ${BBSW_BAREMETAL_DIR}/crt0.S ${BBSW_BAREMETAL_DIR}/syscalls.c ${BBSIM_LD}
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    add_custom_target(embench_check_${BMARK_NAME}
+      DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${CHECK_EXECUTABLE})
+    add_dependencies(embench_${BMARK_NAME} embench_check_${BMARK_NAME})
+  endif()
 endfunction()
 
 macro(add_embench_top_object BMARK_NAME PREFIX SOURCE_FILES)
@@ -137,6 +156,7 @@ function(add_embench_top_target)
       ${BBSW_BAREMETAL_DIR}/test.c
       -lm
     DEPENDS ${EMBENCH_TOP_SUPPORT_SOURCES}
+      ${BBSIM_LD}
       ${EMBENCH_TOP_OBJECTS}
       ${BBSW_BAREMETAL_DIR}/crt0.S
       ${BBSW_BAREMETAL_DIR}/syscalls.c

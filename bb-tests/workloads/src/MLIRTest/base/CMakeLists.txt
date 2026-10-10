@@ -3,7 +3,10 @@ add_custom_target(base-mlirtest-build)
 set(BUCKYBALL_MLIR_GROUP_TARGET base-mlirtest-build)
 set(BUCKYBALL_MLIR_TEST_PREFIX base)
 
-foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_BANK_TARGETS)
+foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_CPU_TARGETS)
+  if(NOT BUCKYBALL_TARGET IN_LIST BUCKYBALL_BANK_TARGETS)
+    continue()
+  endif()
   add_buckyball_mlir_test(base_memref_copy_dynamic
     TARGET ${BUCKYBALL_TARGET}
     CRUNNER_SOURCE "${BUCKYBALL_REPO_ROOT}/stack/runtime/src/mlir.cpp"
@@ -19,6 +22,36 @@ foreach(BUCKYBALL_TARGET IN LISTS BUCKYBALL_BANK_TARGETS)
       -reconcile-unrealized-casts)
 
   add_buckyball_mlir_test(base_mvin_mvout_16x16_i8
+    TARGET ${BUCKYBALL_TARGET}
+    PASSES
+      ${BUCKYBALL_LOWER_BUCKYBALL}
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -lower-affine
+      -convert-scf-to-cf
+      -convert-cf-to-llvm
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts)
+
+  add_buckyball_mlir_test(base_mset_transfer
+    TARGET ${BUCKYBALL_TARGET}
+    PASSES
+      ${BUCKYBALL_LOWER_BUCKYBALL}
+      -convert-linalg-to-loops
+      -expand-strided-metadata
+      -lower-affine
+      -convert-scf-to-cf
+      -convert-cf-to-llvm
+      -convert-arith-to-llvm
+      -convert-math-to-llvm
+      -finalize-memref-to-llvm
+      -convert-func-to-llvm
+      -reconcile-unrealized-casts)
+
+  add_buckyball_mlir_test(base_dma_group
     TARGET ${BUCKYBALL_TARGET}
     PASSES
       ${BUCKYBALL_LOWER_BUCKYBALL}

@@ -36,23 +36,25 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val opcode = io.id_i.bits.cmd.opcode
   val rs1    = io.id_i.bits.cmd.rs1Data
 
-  // Kernel image loads use memory; kernel execution uses Ball control.
+  // Private kernel commands are issued by the RVV controller.
   val is_mem_inst = (func7 === MVIN_BITPAT) ||
     (func7 === MVIN_2D_BITPAT) ||
     (func7 === MVOUT_BITPAT) ||
     (func7 === MSET_BITPAT) ||
     (func7 === MVIN_MMIO_BITPAT) ||
-    (func7 === MVOVER_BITPAT) ||
-    (func7 === MVIN_KERNEL_BITPAT)
+    (func7 === MVOVER_BITPAT)
 
-  val is_frontend_inst = func7 === FENCE_BITPAT
-  val is_barrier_inst  = func7 === BARRIER_BITPAT
+  val is_barrier_inst = func7 === BARRIER_BITPAT
 
-  val is_kernel_inst = func7 === MVIN_KERNEL_BITPAT || func7 === RUN_KERNEL_BITPAT
-  val is_bare_rvv    = opcode === "h57".U || opcode === "h07".U || opcode === "h27".U
-  val is_ball_inst   = !is_mem_inst && !is_frontend_inst && !is_barrier_inst && !is_bare_rvv
+  val programBank      = rs1(bankIdLen - 1, 0) >= b.memDomain.virtualBankCount.U &&
+    rs1(bankIdLen - 1, 0) < (b.memDomain.virtualBankCount + 2).U
+  val isProgramRelease = b.rvv.enable.B && func7 === MSET_BITPAT && programBank
+  val is_kernel_inst   = func7 === MVIN_KERNEL_BITPAT || func7 === RUN_KERNEL_BITPAT || isProgramRelease
+  val is_bare_rvv      = opcode === "h57".U || opcode === "h07".U || opcode === "h27".U
+  val is_ball_inst     = !is_mem_inst && !is_barrier_inst && !is_bare_rvv && !is_kernel_inst
 
   when(io.id_i.fire) {
+    assert(func7 =/= 0.U, "GlobalDecoder: funct7 zero is not a Buckyball instruction")
     assert(!is_bare_rvv, "GlobalDecoder: bare RVV instructions are not Buckyball commands")
     when(is_kernel_inst) {
       assert(b.rvv.enable.B, "GlobalDecoder: kernel command requires rvv.enable=true")
@@ -63,9 +65,10 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val domain_id = MuxCase(
     DomainId.BALL,
     Seq(
-      is_frontend_inst -> DomainId.FRONTEND,
-      is_mem_inst      -> DomainId.MEM,
-      is_ball_inst     -> DomainId.BALL
+      is_barrier_inst -> DomainId.FRONTEND,
+      is_kernel_inst  -> DomainId.RVV,
+      is_mem_inst     -> DomainId.MEM,
+      is_ball_inst    -> DomainId.BALL
     )
   )
 
@@ -90,9 +93,10 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   val enableBits = func7(6, 4)
 
   // Decode enable from funct7[6:4]
-  val hasRd0 = enableBits === 1.U || enableBits === 3.U || enableBits === 4.U
-  val hasRd1 = enableBits === 4.U
-  val hasWr  = (enableBits === 2.U || enableBits === 3.U || enableBits === 4.U) && func7 =/= MVIN_MMIO_BITPAT
+  val msetTransfer = func7 === MSET_BITPAT && io.id_i.bits.cmd.rs2Data(12)
+  val hasRd0       = enableBits === 1.U || enableBits === 3.U || enableBits === 4.U || msetTransfer
+  val hasRd1       = enableBits === 4.U
+  val hasWr        = (enableBits === 2.U || enableBits === 3.U || enableBits === 4.U) && func7 =/= MVIN_MMIO_BITPAT
 
   val ballBid = WireDefault(0.U(5.W))
   b.ballDomain.ballISA.foreach { entry =>
@@ -106,10 +110,11 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   bankAccess.rd_bank_1_valid := hasRd1
   bankAccess.rd_bank_1_id    := rs1(bankIdLen + 9, 10)
   bankAccess.wr_bank_valid   := hasWr
-  bankAccess.wr_bank_id      := Mux(func7 === MSET_BITPAT, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 19, 20))
+  bankAccess.wr_bank_id      := Mux(func7 === MSET_BITPAT && !msetTransfer, rs1(bankIdLen - 1, 0), rs1(bankIdLen + 19, 20))
 
   private def legalBank(raw: UInt): Bool =
     raw <= b.frontend.vbank_id_upper_bound.U ||
+      (b.rvv.enable.B && raw >= b.memDomain.virtualBankCount.U && raw < (b.memDomain.virtualBankCount + 2).U) ||
       (b.memDomain.sharedEnable.B && raw >= b.frontend.shared_bank_id_base.U &&
         raw < b.memDomain.virtualBankCount.U)
 
@@ -130,6 +135,5 @@ class GlobalDecoder(val b: GlobalConfig) extends Module {
   io.id_o.bits.op1_col    := 0.U
   io.id_o.bits.op2_col    := 0.U
   io.id_o.bits.wr_col     := 0.U
-  io.id_o.bits.isFence    := is_frontend_inst
   io.id_o.bits.isBarrier  := is_barrier_inst
 }

@@ -10,7 +10,7 @@ import memcore.memory.coherence.configs.CoherenceParams
 /** CPU coherent Home and shared L2 with one backing-memory client. */
 @instantiable
 class Memory(p: CoherenceParams) extends Module {
-  private val c = p.chi
+  val c = p.chi
 
   @public
   val io = IO(new Bundle {

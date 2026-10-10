@@ -2,7 +2,7 @@ add_custom_target(tutorial-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET tutorial-ctests-build)
 
 # Baremetal single-core only (matches Bazel //bb-tests/.../CTest/tutorial).
-foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_TARGETS)
+foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_CPU_TARGETS)
   buckyball_ctest_name(BUCKYBALL_TUTORIAL_TEST
     ${BUCKYBALL_CTEST_TARGET} tutorial)
   add_buckyball_baremetal_ctest(

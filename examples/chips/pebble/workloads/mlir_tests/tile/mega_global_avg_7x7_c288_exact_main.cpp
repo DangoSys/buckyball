@@ -34,10 +34,8 @@ extern "C" void poison_reused_banks(void) {
     bb_mem_alloc(bank, 1, 1);
   for (int bank = 0; bank < PHYSICAL_BANKS; ++bank)
     bb_mvin((uintptr_t)stale_bank, bank, BANK_ROWS, 1);
-  bb_fence();
   for (int bank = 0; bank < PHYSICAL_BANKS; ++bank)
     bb_mem_release(bank);
-  bb_fence();
 }
 
 extern "C" void check_result(int8_t *allocated, int8_t *aligned, int64_t offset,

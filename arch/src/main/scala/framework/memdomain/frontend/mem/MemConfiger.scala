@@ -8,14 +8,16 @@ import framework.memdomain.frontend.cmd.rs.{MemRsComplete, MemRsIssue}
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 class MemConfigerIO(val b: GlobalConfig) extends Bundle {
-  val vbank_id  = Output(UInt(b.memDomain.vbankIdWidth.W))
-  val is_shared = Output(Bool())
-  val is_multi  = Output(Bool())
-  val alloc     = Output(Bool())
+  val vbank_id       = Output(UInt(b.memDomain.vbankIdWidth.W))
+  val is_shared      = Output(Bool())
+  val is_multi       = Output(Bool())
+  val alloc          = Output(Bool())
+  val transfer       = Output(Bool())
+  val source_bank_id = Output(UInt(b.memDomain.vbankIdWidth.W))
   // Zero the physical bank this allocation binds; the backend clears it locally.
-  val clear     = Output(Bool())
-  val group_id  = Output(UInt(b.memDomain.groupIdWidth.W))
-  val hart_id   = Output(UInt(b.tile.xLen.W))
+  val clear          = Output(Bool())
+  val group_id       = Output(UInt(b.memDomain.groupIdWidth.W))
+  val hart_id        = Output(UInt(b.tile.xLen.W))
 }
 
 @instantiable
@@ -34,30 +36,34 @@ class MemConfiger(val b: GlobalConfig) extends Module {
 
   val idle :: config :: clearWait :: resp :: Nil = Enum(4)
 
-  val state          = RegInit(idle)
-  val alloc_reg      = RegInit(false.B)
-  val is_shared_reg  = RegInit(false.B)
-  val col_reg        = RegInit(0.U(b.memDomain.groupCountWidth.W))
-  val clear_reg      = RegInit(false.B)
-  val vbank_id_reg   = RegInit(0.U(b.memDomain.vbankIdWidth.W))
-  val rob_id_reg     = RegInit(0.U(rob_id_width.W))
-  val is_sub_reg     = RegInit(false.B)
-  val sub_rob_id_reg = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
-  val counter        = RegInit(0.U(b.memDomain.groupCountWidth.W))
+  val state              = RegInit(idle)
+  val transfer_reg       = RegInit(false.B)
+  val source_bank_id_reg = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val alloc_reg          = RegInit(false.B)
+  val is_shared_reg      = RegInit(false.B)
+  val col_reg            = RegInit(0.U(b.memDomain.groupCountWidth.W))
+  val clear_reg          = RegInit(false.B)
+  val vbank_id_reg       = RegInit(0.U(b.memDomain.vbankIdWidth.W))
+  val rob_id_reg         = RegInit(0.U(rob_id_width.W))
+  val is_sub_reg         = RegInit(false.B)
+  val sub_rob_id_reg     = RegInit(0.U(log2Up(b.frontend.sub_rob_depth * 4).W))
+  val counter            = RegInit(0.U(b.memDomain.groupCountWidth.W))
 
-  io.config.bits.is_multi    := false.B
-  io.config.bits.is_shared   := false.B
-  io.config.bits.alloc       := false.B
-  io.config.bits.clear       := false.B
-  io.config.bits.vbank_id    := 0.U(b.memDomain.vbankIdWidth.W)
-  io.config.bits.group_id    := 0.U
-  io.config.bits.hart_id     := io.hartid
-  io.config.valid            := false.B
-  io.cmdResp.valid           := false.B
-  io.cmdResp.bits            := 0.U.asTypeOf(io.cmdResp.bits)
-  io.cmdResp.bits.rob_id     := 0.U(rob_id_width.W)
-  io.cmdResp.bits.is_sub     := false.B
-  io.cmdResp.bits.sub_rob_id := 0.U
+  io.config.bits.is_multi       := false.B
+  io.config.bits.is_shared      := false.B
+  io.config.bits.transfer       := false.B
+  io.config.bits.source_bank_id := 0.U
+  io.config.bits.alloc          := false.B
+  io.config.bits.clear          := false.B
+  io.config.bits.vbank_id       := 0.U(b.memDomain.vbankIdWidth.W)
+  io.config.bits.group_id       := 0.U
+  io.config.bits.hart_id        := io.hartid
+  io.config.valid               := false.B
+  io.cmdResp.valid              := false.B
+  io.cmdResp.bits               := 0.U.asTypeOf(io.cmdResp.bits)
+  io.cmdResp.bits.rob_id        := 0.U(rob_id_width.W)
+  io.cmdResp.bits.is_sub        := false.B
+  io.cmdResp.bits.sub_rob_id    := 0.U
 
   io.cmdReq.ready := state === idle
 
@@ -77,15 +83,21 @@ class MemConfiger(val b: GlobalConfig) extends Module {
             b.memDomain.bankNum.U(col_reg.getWidth.W)
           }
 
-        state          := config
-        col_reg        := Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
-        alloc_reg      := alloc
-        clear_reg      := io.cmdReq.bits.cmd.clear
-        is_shared_reg  := io.cmdReq.bits.cmd.is_shared
-        vbank_id_reg   := io.cmdReq.bits.cmd.bank_id
-        rob_id_reg     := io.cmdReq.bits.rob_id
-        is_sub_reg     := io.cmdReq.bits.is_sub
-        sub_rob_id_reg := io.cmdReq.bits.sub_rob_id
+        state              := config
+        col_reg            := Mux(
+          io.cmdReq.bits.cmd.transfer,
+          1.U,
+          Mux(alloc && rawCol === 0.U, fullCol, Mux(rawCol > 1.U, rawCol, 1.U))
+        )
+        transfer_reg       := io.cmdReq.bits.cmd.transfer
+        source_bank_id_reg := io.cmdReq.bits.cmd.source_bank_id
+        alloc_reg          := alloc
+        clear_reg          := io.cmdReq.bits.cmd.clear
+        is_shared_reg      := io.cmdReq.bits.cmd.is_shared
+        vbank_id_reg       := io.cmdReq.bits.cmd.bank_id
+        rob_id_reg         := io.cmdReq.bits.rob_id
+        is_sub_reg         := io.cmdReq.bits.is_sub
+        sub_rob_id_reg     := io.cmdReq.bits.sub_rob_id
         assert(
           !(io.cmdReq.bits.cmd.clear && io.cmdReq.bits.cmd.is_shared),
           "MSET clear is currently supported for private banks only"
@@ -94,13 +106,15 @@ class MemConfiger(val b: GlobalConfig) extends Module {
     }
 
   }.elsewhen(state === config) {
-    io.config.bits.is_multi  := col_reg > 1.U
-    io.config.bits.is_shared := is_shared_reg
-    io.config.bits.alloc     := alloc_reg
-    io.config.bits.clear     := clear_reg && alloc_reg
-    io.config.bits.vbank_id  := vbank_id_reg
-    io.config.bits.group_id  := counter(b.memDomain.groupIdWidth - 1, 0)
-    io.config.valid          := true.B
+    io.config.bits.is_multi       := col_reg > 1.U
+    io.config.bits.is_shared      := is_shared_reg
+    io.config.bits.transfer       := transfer_reg
+    io.config.bits.source_bank_id := source_bank_id_reg
+    io.config.bits.alloc          := alloc_reg
+    io.config.bits.clear          := clear_reg && alloc_reg
+    io.config.bits.vbank_id       := vbank_id_reg
+    io.config.bits.group_id       := counter(b.memDomain.groupIdWidth - 1, 0)
+    io.config.valid               := true.B
 
     when(io.config.fire) {
       when(counter === col_reg - 1.U) {

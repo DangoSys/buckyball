@@ -34,15 +34,20 @@ typedef int32_t result_t;
 //         101/110/111 = none (extended opcode space)
 
 // Generic RISC-V custom instruction macro (funct3 always 0x3 = CUSTOM3_RS1_RS2)
+#ifdef BUCKYBALL_ANT_HOST
+#include <ant_stream.h>
+#define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
+  ant_emit((func7), (uint64_t)(rs1_val), (uint64_t)(rs2_val))
+#else
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 3, %c2, x0, %0, %1"                 \
                :                                                               \
                : "r"(rs1_val), "r"(rs2_val), "i"(func7)                        \
                : "memory")
+#endif
 
 // Base (mem/frontend) instruction definitions only.
 // Ball-specific ISA macros live under examples/balls/<ball>/workloads/isa/.
-#include "00_fence.c"
 #include "01_barrier.c"
 #include "12_kernel.c"
 #include "13_mvover.c"

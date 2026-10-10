@@ -123,6 +123,7 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     DEPENDS
       ${TEST_DEPS}
       ${BBSW_BAREMETAL_DIR}/crt0.S
+      ${BBSIM_LD}
     COMMENT "Building baremetal executable: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   )
@@ -241,12 +242,37 @@ endif()
 add_subdirectory(${BUCKYBALL_CHIP_WORKLOAD_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/chips/${BUCKYBALL_WORKLOAD_SOURCE_CHIP})
 
-# Task dispatch inside a compute tile: its controller submits to its hidden workers.
-if(BUCKYBALL_WORKLOAD_SOURCE_CHIP STREQUAL "poly" AND BUCKYBALL_WORKLOAD_CHIP STREQUAL "poly")
-  add_subdirectory(chip/poly)
-endif()
-
 if(NOT TARGET chip-workloads-build)
   message(FATAL_ERROR
     "Buckyball chip workloads must define target chip-workloads-build: ${BUCKYBALL_WORKLOAD_CHIP}")
 endif()
+
+add_custom_target(ctest-workloads-build
+  DEPENDS
+    base-ctests-build
+    tlb-ctests-build
+    tutorial-ctests-build
+    core-ctests-build
+    chip-ctests-build
+  COMMENT "Building CTest workloads"
+)
+
+add_custom_target(sync-ctest-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
+  COMMAND rsync -a --delete --exclude=CMakeFiles
+          "--exclude=*/mlir_tests/**" "--include=*/"
+          "--include=*-baremetal" "--include=*-linux"
+          "--include=*-baremetal.expect" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/CTest/
+  DEPENDS ctest-workloads-build
+  COMMENT "Syncing CTest binaries to output directory"
+)
+
+add_custom_target(sync-native-bin
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${OUTPUT_BIN_DIR}/src/CTest
+  COMMAND rsync -a --delete --exclude=CMakeFiles "--exclude=mlir_tests" "--include=*/"
+          "--include=*-baremetal" "--include=*-baremetal.expect"
+          "--include=*-linux" "--include=*-run" "--exclude=*"
+          ${CMAKE_CURRENT_BINARY_DIR}/ ${OUTPUT_BIN_DIR}/src/CTest/
+  DEPENDS ctest-workloads-build embench-all coremark-all
+  COMMENT "Syncing CTest and benchmark binaries")

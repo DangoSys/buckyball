@@ -71,19 +71,19 @@ jobs:
       matrix:
         include:
           - chip: toy
-            run_area: false
+            run_area: true
             run_power: false
           - chip: pebble
             run_area: true
             run_power: false
           - chip: goban
-            run_area: false
+            run_area: true
             run_power: false
           - chip: poly
-            run_area: false
+            run_area: true
             run_power: false
           - chip: multi-rocket
-            run_area: false
+            run_area: true
             run_power: false
     env:
       BB_ROOT: ~/Code/buckyball

@@ -1,0 +1,6 @@
+factory = "examples.cores.reduce.ReduceCore"
+balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
+frontend = "frontends/default.toml"
+rvv = "rvv/default.toml"
+cpu = "cpu/default.toml"

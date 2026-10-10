@@ -29,8 +29,16 @@ foreach(KERNEL silu swiglu snake mxfp8_quant matmul)
   buckyball_enforce_ctest_line_limit("${KERNEL}.cpp")
   buckyball_ctest_name(NAME ${BUCKYBALL_CTEST_TARGET} rvv_${KERNEL})
   add_buckyball_linux_ctest(${NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${KERNEL}.cpp)
-  target_sources(${NAME}-linux PRIVATE "${IMAGE_SOURCE}")
-  target_include_directories(${NAME}-linux PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+  if(KERNEL STREQUAL "matmul")
+    set(DISPATCH_SOURCE "${KERNEL_DIR}/matmul_dispatch.cpp")
+  elseif(KERNEL STREQUAL "mxfp8_quant")
+    set(DISPATCH_SOURCE "${KERNEL_DIR}/quant_dispatch.cpp")
+  else()
+    set(DISPATCH_SOURCE "${KERNEL_DIR}/dispatch.cpp")
+  endif()
+  target_sources(${NAME}-linux PRIVATE "${IMAGE_SOURCE}" "${DISPATCH_SOURCE}")
+  target_include_directories(${NAME}-linux PRIVATE "${CMAKE_CURRENT_BINARY_DIR}"
+    "${BUCKYBALL_REPO_ROOT}/stack/compiler/thirdparty/buddy-mlir/llvm/mlir/include/mlir/ExecutionEngine")
   target_compile_options(${NAME}-linux PRIVATE -O2)
   set_target_properties(${NAME}-linux PROPERTIES LINKER_LANGUAGE CXX)
   target_link_libraries(${NAME}-linux PRIVATE m)
@@ -43,11 +51,12 @@ foreach(KERNEL silu swiglu snake mxfp8_quant matmul)
       -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
       -I${BUCKYBALL_ISA_DIR}/chip -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
       -I${CMAKE_CURRENT_BINARY_DIR}
+      -I${BUCKYBALL_REPO_ROOT}/stack/compiler/thirdparty/buddy-mlir/llvm/mlir/include/mlir/ExecutionEngine
       -o "${NAME}-baremetal" ${BBSW_BAREMETAL_DIR}/crt0.S
       -x c ${WORKLOAD_LIB_DIR}/buckyball.c ${BBHW_MEM_C}
       ${BUCKYBALL_CHIP_COMMON_SOURCES}
-      -x c++ "${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL}.cpp" "${IMAGE_SOURCE}" -lm
-    DEPENDS ${DEPS} "${IMAGE_SOURCE}" "${IMAGE_HEADER}"
+      -x c++ "${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL}.cpp" "${IMAGE_SOURCE}" "${DISPATCH_SOURCE}" -lm
+    DEPENDS ${DEPS} "${IMAGE_SOURCE}" "${IMAGE_HEADER}" "${DISPATCH_SOURCE}"
       ${BBSW_BAREMETAL_DIR}/crt0.S
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     VERBATIM)

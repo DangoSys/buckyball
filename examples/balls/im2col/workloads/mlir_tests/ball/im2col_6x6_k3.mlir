@@ -45,11 +45,10 @@ func.func @main() -> i8 {
   %lane = arith.constant 7 : i64
   buckyball.im2col %loaded, %out, %iter, %ksize, %stride, %padding,
       %inputBase, %lane
-      {startRow = 0 : i64,
-       startCol = 0 : i64, windowStart = 0 : i64, windowCount = 16 : i64} : i64
+      <startRow = 0,
+       startCol = 0, windowStart = 0, windowCount = 16> : i64
   %stored = buckyball.bank_mvout %output %out %dout %s
       : memref<16x16xi8> i64 i64 i64
-  buckyball.fence
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64
 

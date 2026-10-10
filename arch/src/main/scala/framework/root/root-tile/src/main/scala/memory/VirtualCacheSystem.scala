@@ -22,7 +22,7 @@ import memcore.memory.coherence.configs.CoherenceParams
 /** Independent verification composition: one virtual client and the two-RN-F shared-L2 cache system. */
 @instantiable
 class VirtualCacheSystem(p: CoherenceParams, regions: Seq[PhysicalRegion]) extends Module {
-  private val cp = CpuMemParams(p.chi, tagBits = 6)
+  val cp = CpuMemParams(p.chi, tagBits = 6)
 
   @public
   val io = IO(new Bundle {

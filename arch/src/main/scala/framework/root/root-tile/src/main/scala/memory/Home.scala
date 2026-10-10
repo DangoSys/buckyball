@@ -11,7 +11,7 @@ import memcore.memory.coherence.configs.CoherenceParams
 /** One Tile-owned shared L2/Home and its explicit requester fabric. */
 @instantiable
 class Home(p: CoherenceParams) extends Module {
-  private val c = p.chi
+  val c = p.chi
 
   @public
   val io = IO(new Bundle {

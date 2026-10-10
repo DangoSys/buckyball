@@ -41,7 +41,45 @@ _start:
     addi t6, t6, 1
     j .Lzero_tls
 .Lrun_main:
+    # Loaders write only the file image, so .bss can hold a previous run's values on P2E DDR.
+    # The reporting hart clears it, then releases the others through the last flag write.
+    csrr t0, mhartid
+    la t1, .Lbss_ready
+    li t2, BB_REPORT_HART
+    bne t0, t2, .Lwait_bss
+    la t2, __bss_start
+    la t3, __bss_end
+    addi t4, t3, -63
+.Lclear_bss_blocks:
+    bgeu t2, t4, .Lclear_bss
+    sd zero, 0(t2)
+    sd zero, 8(t2)
+    sd zero, 16(t2)
+    sd zero, 24(t2)
+    sd zero, 32(t2)
+    sd zero, 40(t2)
+    sd zero, 48(t2)
+    sd zero, 56(t2)
+    addi t2, t2, 64
+    j .Lclear_bss_blocks
+.Lclear_bss:
+    bgeu t2, t3, .Lbss_cleared
+    sd zero, 0(t2)
+    addi t2, t2, 8
+    j .Lclear_bss
+.Lbss_cleared:
+    li t2, 1
+    fence rw, w
+    sw t2, 0(t1)
+    j .Lcall_main
+.Lwait_bss:
+    lw t2, 0(t1)
+    beqz t2, .Lwait_bss
+    fence r, rw
+.Lcall_main:
     # Jump to main for all harts; the workload dispatches by core id.
+    li a0, 0
+    li a1, 0
     call main
 
     # Core 0 of the work tile reports the workload result. Other harts remain parked.
@@ -53,3 +91,10 @@ _start:
 1:
     wfi
     j 1b
+
+# Outside .bss so the clear cannot reset it; a stale 1 from a previous run is
+# overwritten by the image load because .data is part of the file image.
+.section .data
+.balign 4
+.Lbss_ready:
+    .word 0

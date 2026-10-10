@@ -17,7 +17,7 @@ import memcore.memory.interlock.{AccessInfo, Acknowledgement, Dispatch, Interloc
 class Consistency(memory: CoherenceParams, l1: RnfParams, tracking: Params) extends Module {
   require(memory.agents >= 2 && l1.homeCount == 1 && l1.homeId == memory.homeId)
   require(l1.chi == memory.chi && tracking.addressBits == memory.chi.addressBits)
-  private val c = memory.chi
+  val c = memory.chi
 
   @public
   val io = IO(new Bundle {

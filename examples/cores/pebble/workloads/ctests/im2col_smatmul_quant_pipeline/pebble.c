@@ -46,7 +46,6 @@ extern "C"
   bb_smatmul_os(1, 2, 4, WINDOWS, LANES, LANES, 1, 1, 0);
   bb_quant_i32_to_i8(4, 5, 6, WINDOWS * 4, 0, 0, 4, 4, 4, 0);
   bb_mvout((uintptr_t)output[core], 6, WINDOWS, 1);
-  bb_fence();
   for (int window = 0; window < WINDOWS; ++window)
     for (int channel = 0; channel < LANES; ++channel) {
       int expected = bias[core][channel];

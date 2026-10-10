@@ -2,6 +2,8 @@ package framework.memdomain.verification
 
 import java.nio.file.{Files, Path}
 import chisel3._
+import chisel3.experimental.hierarchy.Instance
+import framework.system.{System, SystemParams}
 import framework.system.configloader.ExampleTopology
 import memcore.bus.chi.{Params => ChiParams}
 import memcore.bus.chi.rnf.RnfParams
@@ -10,35 +12,39 @@ import memcore.memory.coherence.configs.CoherenceParams
 import memcore.memory.cpu.PhysicalRegion
 import memcore.memory.interlock.{Params => TrackingParams}
 
-/** Elaboration of the actual Goban PB composition, with explicit verification cache geometry. */
+/** Elaboration of the actual single-tile composition, with explicit verification cache geometry. */
 object EmitTile {
 
-  def apply(topology: ExampleTopology, output: Path, firtoolOptions: Array[String]): Unit = {
-    require(topology.tiles.size == 1, "Goban Tile gate uses its one actual configured Tile")
-    val t       = topology.tiles.head
-    val chi     = ChiParams()
-    val memory  = CoherenceParams(
+  def apply(
+    topology:       ExampleTopology,
+    output:         Path,
+    firtoolOptions: Array[String],
+    build:          SystemParams => Instance[System]
+  ): Unit = {
+    require(topology.tiles.size == 1, "Tile gate requires one configured tile")
+    val t              = topology.tiles.head
+    val chi            = ChiParams()
+    val memory         = CoherenceParams(
       chi,
       CacheParams(chi.addressBits, 64, 4, 2, 8, 4, 2),
       agents = 2 * t.cores.size,
       mshrEntries = 8,
       homeId = 64
     )
-    val regions = Seq(
+    val regions        = Seq(
       PhysicalRegion(BigInt("80000000", 16), BigInt(256) << 20, true, true, true, true, true, true),
       PhysicalRegion(BigInt("90000000", 16), BigInt(16) << 20, false, true, true, true, true, true),
       PhysicalRegion(BigInt("10000000", 16), BigInt(4096), false, false, true, true, false, false),
       PhysicalRegion(BigInt("60000000", 16), BigInt(4096), false, false, true, true, false, false)
     )
-    val ram     = memcore.memory.uncached_ram.Params(
+    val slotsPerClient = 16
+    val ddr            = memcore.memory.ddr.Params(
       chi,
-      cpuHartIds = t.hartIds.map(BigInt(_)),
-      lineAgents = 1,
-      slots = 16,
-      base = BigInt("80000000", 16),
-      bytes = BigInt(16) << 30
+      clients = 1,
+      slotsPerClient = slotsPerClient,
+      dataBits = 128,
+      idBits = 4
     )
-    val ddr     = memcore.memory.ddr.Params(chi, clients = 2, slotsPerClient = 8, dataBits = 128, idBits = 4)
     var interface: Data = null
     _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
       {
@@ -49,8 +55,8 @@ object EmitTile {
           RnfParams(chi, cacheLines = 8, banks = 2),
           regions,
           TrackingParams(addressBits = chi.addressBits),
-          ram,
-          ddr
+          ddr,
+          build
         )
         interface = system.io
         system

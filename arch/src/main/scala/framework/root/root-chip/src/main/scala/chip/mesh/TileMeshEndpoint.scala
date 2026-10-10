@@ -63,10 +63,10 @@ class TileMeshEndpoint(
 
 /** Native bulk-path verification target for the combined tile endpoint. */
 class TileMeshBulkLoopback extends Module {
-  private val chi  = Params()
-  private val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
+  val chi  = Params()
+  val mesh = MeshParams(xNodes = 2, yNodes = 2, payloadBits = 320, virtualChannels = 8)
 
-  private val map = ChiMeshNodeMap(
+  val map = ChiMeshNodeMap(
     Seq.tabulate(1 << chi.nodeIdBits)(_ & 1),
     Seq.tabulate(1 << chi.nodeIdBits)(node => (node >> 1) & 1),
     mesh,

@@ -1,5 +1,5 @@
-#include "images.h"
 #include <bbhw/isa/isa.h>
+#include <bbsw/kernels/mxfp8/quant.h>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -43,27 +43,7 @@ int main() {
   input[3] = -0x1p-9f;
   input[31] = -448.0f;
   input[63] = 31.0f;
-  for (unsigned bank = 0; bank < 3; ++bank)
-    bb_mem_alloc(bank, 1, 1);
-  alignas(16) uint8_t descriptor[64]{};
-  kernel_launch call{images::quant.entry,
-                     images::quant.text_bytes,
-                     0x80002000,
-                     {1 << 16, 2 << 16, 128, 48},
-                     0};
-  std::memcpy(descriptor, &call, sizeof(call));
-  bb_mvin((uintptr_t)input, 2, sizeof(input) / 16, 1);
-  bb_mvin((uintptr_t)descriptor, 0, sizeof(descriptor) / 16, 1);
-  mvin_kernel(images::quant.bytes, images::quant.size, 0);
-  bb_fence();
-  run_kernel(0, 0);
-  bb_mvout((uintptr_t)descriptor, 0, sizeof(descriptor) / 16, 1);
-  bb_mvout((uintptr_t)output, 1, sizeof(output) / 16, 1);
-  bb_fence();
-  uint32_t status;
-  std::memcpy(&status, descriptor + 48, sizeof(status));
-  if (status)
-    return 1;
+  mxfp8_quant(reinterpret_cast<const uint32_t *>(input), output, 128);
   for (unsigned block = 0; block < 4; ++block) {
     float maximum = 0;
     for (unsigned i = 0; i < 32; ++i)

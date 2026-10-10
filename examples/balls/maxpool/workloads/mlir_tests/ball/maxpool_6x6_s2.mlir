@@ -21,9 +21,8 @@ func.func @main() -> i8 {
   %in_bank = buckyball.bank_alloc
   %out_bank = buckyball.bank_alloc
   %loaded = buckyball.bank_mvin %input %in_bank %depth36 %stride : memref<36x16xi8> i64 i64 i64
-  buckyball.maxpool %loaded, %out_bank, %depth9, %zero64, %zero64, %three64 {inputSide = 6 : i64, outputSide = 3 : i64, kernel = 2 : i64, stride = 2 : i64, padding = 0 : i64, startRow = 0 : i64, startCol = 0 : i64} : i64 i64 i64 i64 i64 i64
+  buckyball.maxpool %loaded, %out_bank, %depth9, %zero64, %zero64, %three64 <inputSide = 6, outputSide = 3, kernel = 2, stride = 2, padding = 0, startRow = 0, startCol = 0> : i64 i64 i64 i64 i64 i64
   %stored = buckyball.bank_mvout %output %out_bank %depth9 %stride : memref<9x16xi8> i64 i64 i64
-  buckyball.fence
   func.call @check_result(%output) : (memref<9x16xi8>) -> ()
   buckyball.bank_release %loaded : i64
   buckyball.bank_release %stored : i64

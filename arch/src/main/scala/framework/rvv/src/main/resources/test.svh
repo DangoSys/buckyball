@@ -5,11 +5,12 @@ class protocol_test extends ip_test;
   int unsigned completed = 0;
   bit protocol_fault = 0;
   bit reject_write = 0;
-  bit [31:0] protocol_cause, protocol_tval, protocol_pc, protocol_instruction;
-  int unsigned requests[4];
+  bit [31:0] protocol_cause, protocol_pc, protocol_instruction;
+  bit [63:0] protocol_tval;
+  int unsigned requests[`RVV_MEMORY_PORTS];
   function new(string name, uvm_component parent);
     super.new(name, parent);
-    timeout = 20ms;
+    timeout = 40ms;
   endfunction
   function void build_phase(uvm_phase phase);
     super.build_phase(phase);
@@ -21,7 +22,7 @@ class protocol_test extends ip_test;
     bit read_pending = 0, write_pending = 0;
     int read_delay, write_delay;
     bit [31:0] seed = 32'h629731a5 ^ (p * 32'h1234567);
-    int unsigned address;
+    longint unsigned address;
     forever begin
       @(negedge vif.clock);
       seed = {seed[30:0], seed[31] ^ seed[21] ^ seed[1] ^ seed[0]};
@@ -46,14 +47,14 @@ class protocol_test extends ip_test;
           requests[p]++;
           read_pending = 1;
           read_delay = 1 + seed[4:2];
-          address = (int'(vif.read_bank[p]) << 16) | (int'(vif.read_row[p]) << 4);
+          address = (longint'(vif.read_bank[p] + vif.read_group[p]) << 32) | (int'(vif.read_row[p]) << 4);
           vif.read_data[p] = {rvv_memory_read(address + 8, 3), rvv_memory_read(address, 3)};
         end
         if (vif.write_valid[p] && vif.write_ready[p]) begin
           requests[p]++;
           write_pending = 1;
           write_delay = 1 + seed[7:5];
-          address = (int'(vif.write_bank[p]) << 16) | (int'(vif.write_row[p]) << 4);
+          address = (longint'(vif.write_bank[p] + vif.write_group[p]) << 32) | (int'(vif.write_row[p]) << 4);
           if (!reject_write) begin
             rvv_memory_masked_write(address, vif.write_data[p][63:0], vif.write_mask[p][7:0]);
             rvv_memory_masked_write(address + 8, vif.write_data[p][127:64],
@@ -72,7 +73,7 @@ class protocol_test extends ip_test;
       if (!vif.reset) begin
         if (vif.command_valid && vif.command_ready) begin
           launch_item item = launch_item::type_id::create("launch");
-          item.execute = vif.command_funct7 == 15;
+          item.execute = vif.command_funct7 == 79;
           item.protocol_fault = protocol_fault;
           item.protocol_cause = protocol_cause;
           item.protocol_tval = protocol_tval;
@@ -107,7 +108,7 @@ class protocol_test extends ip_test;
     vif.command_valid = 0;
   endtask
   task retire();
-    bit [218:0] held;
+    bit [250:0] held;
     while (!vif.done_valid) @(negedge vif.clock);
     held = {
       vif.done_rob,
@@ -136,7 +137,7 @@ class protocol_test extends ip_test;
     test_env.scoreboard.wait_checked(completed);
   endtask
   task upload();
-    command(12, (longint'(rvv_case_meta(0)) << 32) | rvv_image_bytes(), 64'h10000000);
+    command(44, (longint'(rvv_image_bytes()) << 30) | ((6 + rvv_case_meta(0)) << 20), 64'h10000000);
     for (int word_index = 0; word_index < rvv_image_bytes() / 4; word_index++) begin
       @(negedge vif.clock);
       vif.image_valid = 1;
@@ -163,10 +164,15 @@ class protocol_test extends ip_test;
     end
     rvv_model_init();
     fork
-      memory_port(0);
-      memory_port(1);
-      memory_port(2);
-      memory_port(3);
+      begin
+        for (int p = 0; p < `RVV_MEMORY_PORTS; p++) begin
+          automatic int port = p;
+          fork
+            memory_port(port);
+          join_none
+        end
+        wait fork;
+      end
       monitor();
     join_none
     repeat (4) @(negedge vif.clock);
@@ -174,7 +180,7 @@ class protocol_test extends ip_test;
     for (int case_index = 0; case_index < rvv_case_count(); case_index++) begin
       rvv_case_select(case_index);
       upload();
-      command(15, 2048, rvv_case_meta(0));
+      command(79, (64'd1 << 20) | ((6 + rvv_case_meta(0)) << 10), 2048);
       while (!vif.done_valid) @(negedge vif.clock);
       if (!rvv_compare_memory())
         `uvm_fatal("REFERENCE", $sformatf("case %0d bank contents differ", case_index))
@@ -187,7 +193,7 @@ class protocol_test extends ip_test;
     protocol_fault = 1;
     protocol_cause = 2;
     protocol_tval  = 32'hdeadbeef;
-    command(12, rvv_image_bytes(), 0);
+    command(44, (longint'(rvv_image_bytes()) << 30) | (64'd6 << 20), 0);
     for (int index = 0; index < 6; index++) begin
       @(negedge vif.clock);
       vif.image_valid = 1;
@@ -198,11 +204,11 @@ class protocol_test extends ip_test;
     vif.image_valid = 0;
     retire();
     protocol_tval = 25;
-    command(12, 25, 0);
+    command(44, (64'd25 << 30) | (64'd6 << 20), 0);
     retire();
     protocol_cause = 1;
-    protocol_tval  = 0;
-    command(15, 2048, 0);
+    protocol_tval  = (64'd1 << 20) | (64'd6 << 10);
+    command(79, protocol_tval, 2048);
     retire();
     protocol_cause = 2;
     protocol_tval  = 127;
@@ -212,7 +218,7 @@ class protocol_test extends ip_test;
     for (int invalid_field = 3; invalid_field <= 5; invalid_field += 2) begin
       protocol_cause = 2;
       protocol_tval  = invalid_field == 3 ? 32'h50000 : 4;
-      command(12, rvv_image_bytes(), 0);
+      command(44, (longint'(rvv_image_bytes()) << 30) | (64'd6 << 20), 0);
       for (int index = 0; index < 6; index++) begin
         @(negedge vif.clock);
         vif.image_valid = 1;
@@ -230,11 +236,11 @@ class protocol_test extends ip_test;
     upload();
     protocol_fault = 1;
     protocol_cause = 7;
-    protocol_tval = 32'h10001;
+    protocol_tval = (64'd1 << 32) + 1;
     protocol_pc = 4;
     protocol_instruction = rvv_program_word(1);
     reject_write = 1;
-    command(15, 2048, rvv_case_meta(0));
+    command(79, (64'd1 << 20) | ((6 + rvv_case_meta(0)) << 10), 2048);
     retire();
     reject_write = 0;
     protocol_pc = 0;
@@ -243,7 +249,7 @@ class protocol_test extends ip_test;
     // Reset cancels a command while it waits for a descriptor bank response.
     rvv_case_select(rvv_case_count() - 2);
     upload();
-    command(15, 2048, rvv_case_meta(0));
+    command(79, (64'd1 << 20) | ((6 + rvv_case_meta(0)) << 10), 2048);
     do @(posedge vif.clock); while (!(vif.read_valid[0] && vif.read_ready[0]));
     @(negedge vif.clock);
     vif.reset = 1;

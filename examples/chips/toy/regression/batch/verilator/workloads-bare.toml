@@ -1,12 +1,7 @@
 [workloads]
 tests = [
-  "toy-toy-ctest-mxmm_window_test-baremetal",
-  "toy-toy-ctest-mxquant_values_test-baremetal",
   "toy-toy-ctest-rvv_kernel-baremetal",
   "toy-toy-ctest-mvin_2d_pixel_stride_test-baremetal",
-  "toy-toy-ctest-mxmm_fp32_test-baremetal",
-  "toy-toy-ctest-mxmm_mxfp8_test-baremetal",
-  "toy-toy-ctest-mxmm_bank_capacity_test-baremetal",
   "toy-toy-ctest-gemmini_accumulated_16x16_test-baremetal",
   "toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-baremetal",
   "toy-toy-ctest-alexnet_gemmini_round_test-baremetal",

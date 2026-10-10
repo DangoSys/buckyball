@@ -1,9 +1,7 @@
 set(CTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/CTest)
-set(MLIRTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/MLIRTest)
-set(SOCTEST_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/SocTest)
+set(MLIR_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/MLIRTest)
+set(SOC_WORKLOAD_DIR ${WORKLOAD_SRC_DIR}/SocTest)
 
-if(NOT BUCKYBALL_CTEST_ONLY)
-  include(${MLIRTEST_WORKLOAD_DIR}/CMakeLists.txt)
-endif()
 add_subdirectory(CTest)
+add_subdirectory(MLIRTest)
 add_subdirectory(SocTest)

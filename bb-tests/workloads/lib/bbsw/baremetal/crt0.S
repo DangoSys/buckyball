@@ -36,6 +36,8 @@ bss_loop:
     j    bss_loop
 bss_done:
 
+    li a0, 0
+    li a1, 0
     call main
 
     /* if main returns, write its return code to sim_exit */

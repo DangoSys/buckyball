@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "fw_payload-v32-t32-multi-rocket-linux.elf",
+  "fw_payload-h32-multi-rocket-linux.elf",
 ]

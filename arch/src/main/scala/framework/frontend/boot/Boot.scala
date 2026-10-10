@@ -22,25 +22,25 @@ class BootRom(val b: GlobalConfig) extends Module {
     val active        = Output(Bool())
   })
 
-  private val ballInitRecords = b.ballDomain.ballIdMappings.map { mapping =>
+  val ballInitRecords = b.ballDomain.ballIdMappings.map { mapping =>
     BallISA.init(mapping.ballId)
   }
 
-  private val bootRecords =
+  val bootRecords =
     MemBoot.initializationCommands(b) ++ ballInitRecords ++ MemBoot.releaseCommands(b) ++
       Seq.empty[BuckyballCommand]
 
-  private val bootFuncts  = VecInit(bootRecords.map(r => r.funct.U(7.W)))
-  val bootRs1Data         = VecInit(bootRecords.map(r => r.rs1.U(b.tile.xLen.W)))
-  val bootRs2Data         = VecInit(bootRecords.map(r => r.rs2.U(b.tile.xLen.W)))
-  private val bootPcWidth = math.max(1, log2Ceil(bootRecords.length + 1))
+  val bootFuncts  = VecInit(bootRecords.map(r => r.funct.U(7.W)))
+  val bootRs1Data = VecInit(bootRecords.map(r => r.rs1.U(b.tile.xLen.W)))
+  val bootRs2Data = VecInit(bootRecords.map(r => r.rs2.U(b.tile.xLen.W)))
+  val bootPcWidth = math.max(1, log2Ceil(bootRecords.length + 1))
 
-  private val active   = RegInit(true.B)
-  private val drain    = RegInit(false.B)
-  private val waitIdle = RegInit(false.B)
-  private val pc       = RegInit(0.U(bootPcWidth.W))
+  val active   = RegInit(true.B)
+  val drain    = RegInit(false.B)
+  val waitIdle = RegInit(false.B)
+  val pc       = RegInit(0.U(bootPcWidth.W))
 
-  private val atEnd = pc === bootRecords.length.U(bootPcWidth.W)
+  val atEnd = pc === bootRecords.length.U(bootPcWidth.W)
 
   val current = Wire(new RoCCCommandBB(b.tile.xLen))
   current         := 0.U.asTypeOf(new RoCCCommandBB(b.tile.xLen))
@@ -50,7 +50,7 @@ class BootRom(val b: GlobalConfig) extends Module {
   current.rs1Data := Mux(atEnd, 0.U, bootRs1Data(pc))
   current.rs2Data := Mux(atEnd, 0.U, bootRs2Data(pc))
 
-  private val injectValid = active && !drain && !waitIdle && !atEnd
+  val injectValid = active && !drain && !waitIdle && !atEnd
 
   when(active && !drain && atEnd) {
     drain := true.B

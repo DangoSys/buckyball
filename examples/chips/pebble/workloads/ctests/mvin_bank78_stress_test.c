@@ -45,7 +45,6 @@ int main(void) {
                  SOURCE_WIDTH, chunk * 4, 4, 16);
   }
   bb_mvout((uintptr_t)output, 8, ROWS, 1);
-  bb_fence();
 
   for (int chunk = 0; chunk < 4; ++chunk)
     for (int pixel = 0; pixel < 4; ++pixel)

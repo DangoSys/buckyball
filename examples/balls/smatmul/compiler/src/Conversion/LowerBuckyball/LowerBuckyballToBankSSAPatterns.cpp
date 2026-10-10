@@ -303,7 +303,6 @@ public:
         Value stored = mvoutBank(b, loc, packedOut, converted,
                                  finalOutput ? tileCount * resultRows
                                              : tileCount * tileRows);
-        b.create<FenceOp>(loc);
         for (Value pack : hostPacks)
           b.create<memref::DeallocOp>(loc, pack);
 

@@ -7,7 +7,7 @@ import framework.top.GlobalConfig
 
 @instantiable
 class IBuf(val b: GlobalConfig) extends Module {
-  private val p = b.rvv
+  val p = b.rvv
 
   @public
   val io = IO(new Bundle {

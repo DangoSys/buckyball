@@ -17,7 +17,7 @@ import framework.top.GlobalConfig
 @instantiable
 class MmioBank(val b: GlobalConfig) extends Module {
 
-  private val numEntries = b.memDomain.mmioBankEntries
+  val numEntries = b.memDomain.mmioBankEntries
   require(
     b.memDomain.mmioBankWidth == b.memDomain.mmioReadWidth,
     "MmioBank requires one physical MMIO element per read"

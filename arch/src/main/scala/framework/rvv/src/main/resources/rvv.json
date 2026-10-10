@@ -1,0 +1,8 @@
+{
+  "enable": true,
+  "laneNumber": 4,
+  "vLen": 1024,
+  "eLen": 32,
+  "iBufWords": 1024,
+  "memoryPorts": 4
+}

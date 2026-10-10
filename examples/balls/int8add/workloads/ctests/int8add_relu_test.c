@@ -32,7 +32,6 @@ int main(void) {
   bb_mvin((uintptr_t)rhs, 1, ROWS, 1);
   bb_int8add_relu(0, 1, 2, ROWS, 0.5f, 0.25f);
   bb_mvout((uintptr_t)output, 2, ROWS, 1);
-  bb_fence();
   for (int i = 0; i < VALUES; ++i) {
     int expected = round_even(lhs[i] * .5f + rhs[i] * .25f);
     if (expected < 0)
