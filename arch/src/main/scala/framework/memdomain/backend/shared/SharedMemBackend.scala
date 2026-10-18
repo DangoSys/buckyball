@@ -46,10 +46,16 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false, externalPh
     if (useMesh) {
       require(b.memDomain.bankWidth == 128 && b.memDomain.bankMaskLen == 16)
       require(b.memDomain.sharedInputChannels % b.memDomain.computeCoreIds.size == 0)
-      val physicalBanks = totalBanks
-      val rows          = math.ceil(math.sqrt(physicalBanks.toDouble)).toInt
-      val columns       = (physicalBanks + rows - 1) / rows
-      val perCore       = SharedMemLayout.channelPerHart(b)
+      val physicalBanks   = totalBanks
+      val (rows, columns) = MeshSharedMemParams.dimensions(physicalBanks)
+      val perCore         = SharedMemLayout.channelPerHart(b)
+      val computeCores    = b.memDomain.computeCoreIds
+      val attachments     = MeshSharedMemParams.directionalAttachments(
+        rows,
+        columns,
+        computeCores.size,
+        perCore
+      )
       Some(MeshSharedMemParams(
         rows = rows,
         cols = columns,
@@ -58,13 +64,9 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false, externalPh
         tagBits = tagBits,
         localBankBits = MvoverISA.BankBits,
         cores = (0 until nCores).map { core =>
-          val computeIndex = b.memDomain.computeCoreIds.indexOf(core)
+          val computeIndex = computeCores.indexOf(core)
           if (computeIndex < 0) MeshCoreAttachment(Seq.empty, Seq.empty, None)
-          else {
-            val inputs  = (0 until perCore).map(ch => (computeIndex * perCore + ch) % totalBanks)
-            val outputs = inputs.map(bank => (bank + columns + 1) % totalBanks)
-            MeshCoreAttachment(inputs, outputs, Some(inputs.head))
-          }
+          else attachments(computeIndex)
         },
         externalChannels = externalPhysicalPorts,
         visibleBanks = totalBanks

@@ -21,7 +21,7 @@ import framework.system.core.accelerator.Admission
 import framework.memdomain.frontend.mem.dma.DmaStatus
 import framework.memdomain.backend.shared.{SharedMemLayout, SharedPhysicalPort, SharedPhysicalRequest}
 import framework.memdomain.backend.MTraceDPI
-import memcore.memory.mesh_shm.{MeshCoreAttachment, MeshSharedMem, MeshSharedMemParams}
+import memcore.memory.mesh_shm.{MeshSharedMem, MeshSharedMemParams}
 import hier.tile.memory.{Composition, CoreInterrupts, CorePlacement, CoreRole}
 import memcore.bus.chi.RequesterPort
 import memcore.bus.chi.rnf.RnfParams
@@ -131,15 +131,15 @@ class MainTilePlatform(p: TileParams) extends TileEndpoint(p.linkParams, true) {
           }
         }
       case None          =>
-        val rows    = math.ceil(math.sqrt(geometry.banks.toDouble)).toInt
-        val columns = (geometry.banks + rows - 1) / rows
-        val shm     = Instantiate(new MeshSharedMem(MeshSharedMemParams(
+        val (rows, columns) = MeshSharedMemParams.dimensions(geometry.banks)
+        val core            = MeshSharedMemParams.directionalAttachments(rows, columns, 1, 1).head
+        val shm             = Instantiate(new MeshSharedMem(MeshSharedMemParams(
           rows = rows,
           cols = columns,
           entriesPerBank = geometry.bankEntries,
           dataBits = geometry.bankBits,
           tagBits = 8,
-          cores = Seq(MeshCoreAttachment(Seq(0), Seq((columns + 1) % geometry.banks), Some(0))),
+          cores = Seq(core),
           externalChannels = 4,
           visibleBanks = geometry.banks
         )))
