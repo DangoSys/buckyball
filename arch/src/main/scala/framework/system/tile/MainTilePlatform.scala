@@ -131,14 +131,15 @@ class MainTilePlatform(p: TileParams) extends TileEndpoint(p.linkParams, true) {
           }
         }
       case None          =>
-        val rows = math.ceil(math.sqrt(geometry.banks.toDouble)).toInt
-        val shm  = Instantiate(new MeshSharedMem(MeshSharedMemParams(
+        val rows    = math.ceil(math.sqrt(geometry.banks.toDouble)).toInt
+        val columns = (geometry.banks + rows - 1) / rows
+        val shm     = Instantiate(new MeshSharedMem(MeshSharedMemParams(
           rows = rows,
-          cols = (geometry.banks + rows - 1) / rows,
+          cols = columns,
           entriesPerBank = geometry.bankEntries,
           dataBits = geometry.bankBits,
           tagBits = 8,
-          cores = Seq(MeshCoreAttachment(Seq(0))),
+          cores = Seq(MeshCoreAttachment(Seq(0), Seq((columns + 1) % geometry.banks), Some(0))),
           externalChannels = 4,
           visibleBanks = geometry.banks
         )))

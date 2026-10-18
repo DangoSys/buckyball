@@ -59,8 +59,12 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false, externalPh
         localBankBits = MvoverISA.BankBits,
         cores = (0 until nCores).map { core =>
           val computeIndex = b.memDomain.computeCoreIds.indexOf(core)
-          MeshCoreAttachment(if (computeIndex < 0) Seq.empty
-          else (0 until perCore).map(ch => (computeIndex * perCore + ch) % totalBanks))
+          if (computeIndex < 0) MeshCoreAttachment(Seq.empty, Seq.empty, None)
+          else {
+            val inputs  = (0 until perCore).map(ch => (computeIndex * perCore + ch) % totalBanks)
+            val outputs = inputs.map(bank => (bank + columns + 1) % totalBanks)
+            MeshCoreAttachment(inputs, outputs, Some(inputs.head))
+          }
         },
         externalChannels = externalPhysicalPorts,
         visibleBanks = totalBanks

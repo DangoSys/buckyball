@@ -26,9 +26,9 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
   val data                                                                              = Reg(UInt(p.dataBits.W))
   val remaining                                                                         = Reg(UInt(17.W))
   val failed                                                                            = RegInit(false.B)
-  val endpoints                                                                         = VecInit(p.cores.map(core => core.bankIds.nonEmpty.B))
-  val coreRows                                                                          = VecInit(p.coreLocations.map(_._1.U(p.rowBits.W)))
-  val coreCols                                                                          = VecInit(p.coreLocations.map(_._2.U(p.colBits.W)))
+  val endpoints                                                                         = VecInit(p.cores.map(_.localBankNode.nonEmpty.B))
+  val coreRows                                                                          = VecInit(p.localBankLocations.map(_.map(_._1).getOrElse(0).U(p.rowBits.W)))
+  val coreCols                                                                          = VecInit(p.localBankLocations.map(_.map(_._2).getOrElse(0).U(p.colBits.W)))
   io.command.ready         := state === idle
   io.completion.valid      := state === complete
   io.completion.bits.tag   := command.tag
@@ -66,7 +66,7 @@ class MeshTransferController(p: MeshSharedMemParams) extends Module {
     true.B,
     0.U(p.rowBits.W),
     0.U(p.colBits.W),
-    p.totalChannels.U(p.channelBits.W),
+    p.transferChannel.U(p.channelBits.W),
     address(p.addressBits - 1, 0),
     write,
     false.B

@@ -25,7 +25,58 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
   io.transferCompletion.bits   := transfer.io.completion.bits
   transfer.io.completion.ready := io.transferCompletion.ready
 
-  for (core <- p.cores.indices if p.cores(core).bankIds.isEmpty) {
+  val directionalEndpoints = p.inputChannelLocations.zip(p.outputChannelLocations).zipWithIndex.flatMap {
+    case ((inputLocation, outputLocation), channel) =>
+      val read          = Instantiate(new MeshClientEndpoint(
+        p,
+        inputLocation._1,
+        inputLocation._2,
+        2 * channel,
+        Some(false)
+      ))
+      val write         = Instantiate(new MeshClientEndpoint(
+        p,
+        outputLocation._1,
+        outputLocation._2,
+        2 * channel + 1,
+        Some(true)
+      ))
+      val clientRequest = io.channels(channel).request
+      val available     = (read.io.inFlight +& write.io.inFlight) < p.maxInFlight.U &&
+        !read.io.tags(clientRequest.bits.tag) && !write.io.tags(clientRequest.bits.tag)
+      read.io.client.request.valid  := clientRequest.valid && available && !clientRequest.bits.write
+      read.io.client.request.bits   := clientRequest.bits
+      write.io.client.request.valid := clientRequest.valid && available && clientRequest.bits.write
+      write.io.client.request.bits  := clientRequest.bits
+      clientRequest.ready           := available && Mux(
+        clientRequest.bits.write,
+        write.io.client.request.ready,
+        read.io.client.request.ready
+      )
+
+      val responses = Module(new RRArbiter(new MeshClientResponse(p), 2))
+      responses.io.in(0) <> read.io.client.response
+      responses.io.in(1) <> write.io.client.response
+      io.channels(channel).response <> responses.io.out
+      Seq(
+        (inputLocation._1, inputLocation._2, 2 * channel, read),
+        (outputLocation._1, outputLocation._2, 2 * channel + 1, write)
+      )
+  }
+
+  val externalEndpoints = (0 until p.externalChannels).map { index =>
+    val channel  = 2 * p.totalChannels + index
+    val endpoint = Instantiate(new MeshClientEndpoint(p, 0, 0, channel, None))
+    endpoint.io.client.request.valid := io.external(index).request.valid
+    endpoint.io.client.request.bits  := io.external(index).request.bits
+    io.external(index).request.ready := endpoint.io.client.request.ready
+    io.external(index).response <> endpoint.io.client.response
+    (0, 0, channel, endpoint)
+  }
+
+  val clientEndpoints = directionalEndpoints ++ externalEndpoints
+
+  for (core <- p.cores.indices if p.cores(core).localBankNode.isEmpty) {
     io.localBanks(core).request.valid  := false.B
     io.localBanks(core).request.bits   := 0.U.asTypeOf(io.localBanks(core).request.bits)
     io.localBanks(core).response.ready := false.B
@@ -37,9 +88,6 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
   val banks:     Seq[Seq[Instance[MeshBankNode]]] =
     Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
-  val bankRows = VecInit((0 until p.bankCount).map(i => (i / p.cols).U(p.rowBits.W)))
-  val bankCols = VecInit((0 until p.bankCount).map(i => (i % p.cols).U(p.colBits.W)))
-
   for {
     row <- 0 until p.rows
     col <- 0 until p.cols
@@ -62,7 +110,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
       (!localRequest.bits.write || io.bankWrites(bankIndex).ready)
     bank.io.request.bits                := localRequest.bits
     val privateCores =
-      p.cores.indices.filter(core => p.cores(core).bankIds.nonEmpty && p.coreLocations(core) == (row, col))
+      p.cores.indices.filter(core => p.localBankLocations(core).contains((row, col)))
     val privateReady = Wire(Vec(privateCores.size, Bool()))
     val replies      = Module(new RRArbiter(new MeshPacket(p), privateCores.size + 1) {
       override lazy val lastGrant = {
@@ -93,113 +141,40 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     }
     responseRouter.io.in(MeshDirection.endpoint) <> replies.io.out
 
-    val attached = p.channelLocations.zipWithIndex.collect {
-      case ((r, c), index) if r == row && c == col => index
-    } ++ (if (row == 0 && col == 0) (p.totalChannels until p.totalChannels + 1 + p.externalChannels) else Seq.empty)
-    if (attached.nonEmpty) {
-      val arbiter            = Module(new RRArbiter(new MeshPacket(p), attached.size) {
+    val attached         = clientEndpoints.filter { case (r, c, _, _) => r == row && c == col }
+    val transferAttached = row == 0 && col == 0
+    val attachmentCount  = attached.size + (if (transferAttached) 1 else 0)
+    if (attachmentCount > 0) {
+      val arbiter            = Module(new RRArbiter(new MeshPacket(p), attachmentCount) {
         override lazy val lastGrant = {
-          val pointer = RegInit(0.U(math.max(1, log2Ceil(attached.size)).W))
+          val pointer = RegInit(0.U(math.max(1, log2Ceil(attachmentCount)).W))
           when(io.out.fire)(pointer := io.chosen)
           pointer
         }
       })
-      val localResponseReady = Wire(Vec(attached.size, Bool()))
-      for ((channel, port) <- attached.zipWithIndex) {
-        if (channel == p.totalChannels) {
-          arbiter.io.in(port) <> transfer.io.mesh.request
-          val network = responseRouter.io.out(MeshDirection.endpoint)
-          transfer.io.mesh.response.valid := network.valid && network.bits.channel === channel.U
-          transfer.io.mesh.response.bits  := network.bits
-          localResponseReady(port)        := network.bits.channel === channel.U && transfer.io.mesh.response.ready
-        } else {
-          val client       =
-            if (channel < p.totalChannels) io.channels(channel) else io.external(channel - p.totalChannels - 1)
-          val requestPort  = client.request
-          val responsePort = client.response
-          val inFlight     = RegInit(0.U(log2Ceil(p.maxInFlight + 1).W))
-          val tags         = RegInit(0.U((1 << p.tagBits).W))
-          val available    = inFlight < p.maxInFlight.U && !tags(requestPort.bits.tag)
-          val errorPending = RegInit(false.B)
-          val errorTag     = Reg(UInt(p.tagBits.W))
-          val errorWrite   = Reg(Bool())
-          val bankValid    = requestPort.bits.bank < p.visibleBankCount.U
-          val packet       = Wire(new MeshPacket(p))
-          packet                    := 0.U.asTypeOf(new MeshPacket(p))
-          packet.tdest              := Cat(bankRows(requestPort.bits.bank), bankCols(requestPort.bits.bank))
-          packet.tdata              := requestPort.bits.data
-          packet.tkeep              := requestPort.bits.mask
-          packet.tid                := requestPort.bits.tag
-          packet.tlast              := true.B
-          packet.tuser              := Cat(
-            row.U(p.rowBits.W),
-            col.U(p.colBits.W),
-            channel.U(p.channelBits.W),
-            requestPort.bits.addr,
-            requestPort.bits.write,
-            false.B
-          )
-          arbiter.io.in(port).valid := requestPort.valid && available && !errorPending && bankValid
-          arbiter.io.in(port).bits  := packet
-          requestPort.ready         := available && !errorPending && Mux(bankValid, arbiter.io.in(port).ready, true.B)
-          when(requestPort.fire) {
-            when(!bankValid) {
-              errorPending := true.B
-              errorTag     := requestPort.bits.tag
-              errorWrite   := requestPort.bits.write
-            }
-          }
-
-          val responseValid = RegInit(false.B)
-          val responseBits  = Reg(new MeshClientResponse(p))
-          val responseNext  = Wire(Decoupled(new MeshClientResponse(p)))
-          responsePort.valid                                   := responseValid
-          responsePort.bits                                    := responseBits
-          responseNext.ready                                   := !responseValid || responsePort.ready
-          when(responseNext.ready) {
-            responseValid                         := responseNext.valid
-            when(responseNext.valid)(responseBits := responseNext.bits)
-          }
-          responseNext.valid                                   :=
-            errorPending || (responseRouter.io.out(MeshDirection.endpoint).valid &&
-              responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U)
-          responseNext.bits                                    := 0.U.asTypeOf(responseNext.bits)
-          responseNext.bits.data                               :=
-            Mux(errorPending, 0.U, responseRouter.io.out(MeshDirection.endpoint).bits.data)
-          responseNext.bits.tag                                :=
-            Mux(errorPending, errorTag, responseRouter.io.out(MeshDirection.endpoint).bits.tag)
-          responseNext.bits.tkeep                              := Fill(p.maskBits, 1.U(1.W))
-          responseNext.bits.tlast                              := true.B
-          responseNext.bits.tuser                              := Cat(
-            Mux(errorPending, errorWrite, responseRouter.io.out(MeshDirection.endpoint).bits.write),
-            errorPending || responseRouter.io.out(MeshDirection.endpoint).bits.error
-          )
-          localResponseReady(port)                             :=
-            responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U &&
-              responseNext.ready && !errorPending
-          when(responseRouter.io.out(MeshDirection.endpoint).valid &&
-            responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U) {
-            assert(inFlight =/= 0.U && tags(responseRouter.io.out(MeshDirection.endpoint).bits.tag))
-          }
-          when(responsePort.fire) {
-            assert(inFlight =/= 0.U && tags(responsePort.bits.tag))
-          }
-          when(responseNext.fire && errorPending)(errorPending := false.B)
-          val issued    = Mux(requestPort.fire, 1.U((1 << p.tagBits).W) << requestPort.bits.tag, 0.U)
-          val completed = Mux(responsePort.fire, 1.U((1 << p.tagBits).W) << responsePort.bits.tag, 0.U)
-          tags := (tags | issued) & ~completed
-          when(requestPort.fire =/= responsePort.fire) {
-            inFlight := Mux(requestPort.fire, inFlight + 1.U, inFlight - 1.U)
-          }
-        }
+      val network            = responseRouter.io.out(MeshDirection.endpoint)
+      val localResponseReady = Wire(Vec(attachmentCount, Bool()))
+      for (((_, _, channel, endpoint), port) <- attached.zipWithIndex) {
+        arbiter.io.in(port) <> endpoint.io.mesh.request
+        endpoint.io.mesh.response.valid := network.valid && network.bits.channel === channel.U
+        endpoint.io.mesh.response.bits  := network.bits
+        localResponseReady(port)        := network.bits.channel === channel.U && endpoint.io.mesh.response.ready
+      }
+      if (transferAttached) {
+        val port = attached.size
+        arbiter.io.in(port) <> transfer.io.mesh.request
+        transfer.io.mesh.response.valid := network.valid && network.bits.channel === p.transferChannel.U
+        transfer.io.mesh.response.bits  := network.bits
+        localResponseReady(port)        := network.bits.channel === p.transferChannel.U && transfer.io.mesh.response.ready
       }
       requestRouter.io.in(MeshDirection.endpoint) <> arbiter.io.out
       responseRouter.io.out(MeshDirection.endpoint).ready := localResponseReady.asUInt.orR
       when(responseRouter.io.out(MeshDirection.endpoint).valid) {
         assert(
-          attached.map(channel => responseRouter.io.out(MeshDirection.endpoint).bits.channel === channel.U).reduce(
-            _ || _
-          )
+          (attached.map { case (_, _, channel, _) =>
+            network.bits.channel === channel.U
+          } ++
+            (if (transferAttached) Seq(network.bits.channel === p.transferChannel.U) else Seq.empty)).reduce(_ || _)
         )
       }
     } else {
