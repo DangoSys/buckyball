@@ -2,7 +2,7 @@ package memcore.memory.mesh_shm
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 
 object MeshDirection {
   val endpoint  = 0
@@ -14,13 +14,13 @@ object MeshDirection {
 }
 
 @instantiable
-class MeshRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
+class MeshCreditRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
   require(row >= 0 && row < p.rows && col >= 0 && col < p.cols)
 
   @public
   val io = IO(new Bundle {
-    val in  = Vec(MeshDirection.portCount, Flipped(Decoupled(new MeshPacket(p))))
-    val out = Vec(MeshDirection.portCount, Decoupled(new MeshPacket(p)))
+    val in  = Vec(MeshDirection.portCount, Flipped(new MeshCreditPort(p)))
+    val out = Vec(MeshDirection.portCount, new MeshCreditPort(p))
   })
 
   def direction(packet: MeshPacket): UInt = {
@@ -39,7 +39,20 @@ class MeshRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
     )
   }
 
-  val choices = io.in.map(port => direction(port.bits))
+  val inputs = Seq.fill(MeshDirection.portCount) {
+    Module(new Queue(new MeshPacket(p), p.linkBufferDepth, pipe = false, flow = false))
+  }
+
+  for ((input, port) <- inputs.zip(io.in)) {
+    input.io.enq.valid := port.valid
+    input.io.enq.bits  := port.bits
+    port.credit        := input.io.deq.fire
+    when(port.valid) {
+      assert(input.io.enq.ready, "Mesh credit sender exceeded the router input capacity")
+    }
+  }
+
+  val choices = inputs.map(input => direction(input.io.deq.bits))
 
   val arbiters = Seq.fill(MeshDirection.portCount)(Module(new RRArbiter(new MeshPacket(p), MeshDirection.portCount) {
 
@@ -53,37 +66,50 @@ class MeshRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
 
   for (output <- 0 until MeshDirection.portCount) {
     for (input <- 0 until MeshDirection.portCount) {
-      arbiters(output).io.in(input).valid := io.in(input).valid && choices(input) === output.U
-      arbiters(output).io.in(input).bits  := io.in(input).bits
+      arbiters(output).io.in(input).valid := inputs(input).io.deq.valid && choices(input) === output.U
+      arbiters(output).io.in(input).bits  := inputs(input).io.deq.bits
     }
-    val valid = RegInit(false.B)
-    val data      = Reg(new MeshPacket(p))
-    val heldValid = RegInit(false.B)
-    val heldData  = Reg(new MeshPacket(p))
-    val input     = arbiters(output).io.out
-    val sink      = io.out(output)
-    input.ready := !heldValid
-    sink.valid  := valid
-    sink.bits   := data
-    when(!valid || sink.ready) {
-      valid     := heldValid || input.fire
-      when(heldValid || input.fire) {
-        data := Mux(heldValid, heldData, input.bits)
-      }
-      heldValid := false.B
-    }.elsewhen(input.fire) {
-      heldValid := true.B
-      heldData  := input.bits
+    val credits = RegInit(p.linkBufferDepth.U(p.linkCreditBits.W))
+    val available = credits =/= 0.U
+    val sent      = arbiters(output).io.out.valid && available
+    io.out(output).valid          := sent
+    io.out(output).bits           := arbiters(output).io.out.bits
+    arbiters(output).io.out.ready := available
+    when(io.out(output).credit && !sent) {
+      assert(credits < p.linkBufferDepth.U)
+      credits := credits + 1.U
+    }.elsewhen(sent && !io.out(output).credit) {
+      credits := credits - 1.U
     }
   }
 
   for (input <- 0 until MeshDirection.portCount) {
-    io.in(input).ready := MuxLookup(choices(input), false.B)(
+    inputs(input).io.deq.ready := MuxLookup(choices(input), false.B)(
       (0 until MeshDirection.portCount).map(output => output.U -> arbiters(output).io.in(input).ready)
     )
-    when(io.in(input).fire) {
-      assert(io.in(input).bits.destRow < p.rows.U)
-      assert(io.in(input).bits.destCol < p.cols.U)
+    when(inputs(input).io.deq.fire) {
+      assert(inputs(input).io.deq.bits.destRow < p.rows.U)
+      assert(inputs(input).io.deq.bits.destCol < p.cols.U)
     }
+  }
+}
+
+@instantiable
+class MeshRouter(p: MeshSharedMemParams, row: Int, col: Int) extends Module {
+
+  @public
+  val io = IO(new Bundle {
+    val in  = Vec(MeshDirection.portCount, Flipped(Decoupled(new MeshPacket(p))))
+    val out = Vec(MeshDirection.portCount, Decoupled(new MeshPacket(p)))
+  })
+
+  val router = Instantiate(new MeshCreditRouter(p, row, col))
+  for (port <- 0 until MeshDirection.portCount) {
+    val source = Instantiate(new MeshDecoupledToCredit(p))
+    val sink   = Instantiate(new MeshCreditToDecoupled(p))
+    source.io.in <> io.in(port)
+    router.io.in(port) <> source.io.out
+    sink.io.in <> router.io.out(port)
+    io.out(port) <> sink.io.out
   }
 }

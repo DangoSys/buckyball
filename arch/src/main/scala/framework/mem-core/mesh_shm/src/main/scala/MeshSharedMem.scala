@@ -82,11 +82,11 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     io.localBanks(core).response.ready := false.B
   }
 
-  val requests:  Seq[Seq[Instance[MeshRouter]]]   =
-    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
-  val responses: Seq[Seq[Instance[MeshRouter]]]   =
-    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshRouter(p, row, col)))
-  val banks:     Seq[Seq[Instance[MeshBankNode]]] =
+  val requests:  Seq[Seq[Instance[MeshCreditRouter]]] =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshCreditRouter(p, row, col)))
+  val responses: Seq[Seq[Instance[MeshCreditRouter]]] =
+    Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshCreditRouter(p, row, col)))
+  val banks:     Seq[Seq[Instance[MeshBankNode]]]     =
     Seq.tabulate(p.rows, p.cols)((row, col) => Instantiate(new MeshBankNode(p, row, col)))
   for {
     row <- 0 until p.rows
@@ -96,7 +96,9 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     val responseRouter = responses(row)(col)
     val bank           = banks(row)(col)
     val bankIndex      = row * p.cols + col
-    val localRequest   = requestRouter.io.out(MeshDirection.endpoint)
+    val requestEgress  = Instantiate(new MeshCreditToDecoupled(p))
+    requestEgress.io.in <> requestRouter.io.out(MeshDirection.endpoint)
+    val localRequest   = requestEgress.io.out
     io.bankWrites(
       bankIndex
     ).valid                             := localRequest.valid && !localRequest.bits.privateRequest && localRequest.bits.write && bank.io.request.ready
@@ -109,10 +111,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
     bank.io.request.valid               := localRequest.valid && !localRequest.bits.privateRequest &&
       (!localRequest.bits.write || io.bankWrites(bankIndex).ready)
     bank.io.request.bits                := localRequest.bits
-    val privateCores =
+    val privateCores    =
       p.cores.indices.filter(core => p.localBankLocations(core).contains((row, col)))
-    val privateReady = Wire(Vec(privateCores.size, Bool()))
-    val replies      = Module(new RRArbiter(new MeshPacket(p), privateCores.size + 1) {
+    val privateReady    = Wire(Vec(privateCores.size, Bool()))
+    val replies         = Module(new RRArbiter(new MeshPacket(p), privateCores.size + 1) {
       override lazy val lastGrant = {
         val pointer = RegInit(0.U(math.max(1, log2Ceil(privateCores.size + 1)).W))
         when(io.out.fire)(pointer := io.chosen)
@@ -139,11 +141,18 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         "private request reached a node without its Core"
       )
     }
-    responseRouter.io.in(MeshDirection.endpoint) <> replies.io.out
+    val responseIngress = Instantiate(new MeshDecoupledToCredit(p))
+    responseIngress.io.in <> replies.io.out
+    responseRouter.io.in(MeshDirection.endpoint) <> responseIngress.io.out
 
     val attached         = clientEndpoints.filter { case (r, c, _, _) => r == row && c == col }
     val transferAttached = row == 0 && col == 0
     val attachmentCount  = attached.size + (if (transferAttached) 1 else 0)
+    val requestIngress   = Instantiate(new MeshDecoupledToCredit(p))
+    requestRouter.io.in(MeshDirection.endpoint) <> requestIngress.io.out
+    val responseEgress   = Instantiate(new MeshCreditToDecoupled(p))
+    responseEgress.io.in <> responseRouter.io.out(MeshDirection.endpoint)
+    val network          = responseEgress.io.out
     if (attachmentCount > 0) {
       val arbiter            = Module(new RRArbiter(new MeshPacket(p), attachmentCount) {
         override lazy val lastGrant = {
@@ -152,7 +161,6 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
           pointer
         }
       })
-      val network            = responseRouter.io.out(MeshDirection.endpoint)
       val localResponseReady = Wire(Vec(attachmentCount, Bool()))
       for (((_, _, channel, endpoint), port) <- attached.zipWithIndex) {
         arbiter.io.in(port) <> endpoint.io.mesh.request
@@ -167,9 +175,9 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         transfer.io.mesh.response.bits  := network.bits
         localResponseReady(port)        := network.bits.channel === p.transferChannel.U && transfer.io.mesh.response.ready
       }
-      requestRouter.io.in(MeshDirection.endpoint) <> arbiter.io.out
-      responseRouter.io.out(MeshDirection.endpoint).ready := localResponseReady.asUInt.orR
-      when(responseRouter.io.out(MeshDirection.endpoint).valid) {
+      requestIngress.io.in <> arbiter.io.out
+      network.ready := localResponseReady.asUInt.orR
+      when(network.valid) {
         assert(
           (attached.map { case (_, _, channel, _) =>
             network.bits.channel === channel.U
@@ -178,10 +186,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         )
       }
     } else {
-      requestRouter.io.in(MeshDirection.endpoint).valid   := false.B
-      requestRouter.io.in(MeshDirection.endpoint).bits    := 0.U.asTypeOf(new MeshPacket(p))
-      responseRouter.io.out(MeshDirection.endpoint).ready := false.B
-      when(responseRouter.io.out(MeshDirection.endpoint).valid) {
+      requestIngress.io.in.valid := false.B
+      requestIngress.io.in.bits  := 0.U.asTypeOf(new MeshPacket(p))
+      network.ready              := false.B
+      when(network.valid) {
         assert(false.B, "response reached a node without an attached channel")
       }
     }
@@ -201,24 +209,24 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
 
     for (router <- Seq(requestRouter, responseRouter)) {
       if (col == 0) {
-        router.io.in(MeshDirection.west).valid  := false.B
-        router.io.in(MeshDirection.west).bits   := 0.U.asTypeOf(new MeshPacket(p))
-        router.io.out(MeshDirection.west).ready := false.B
+        router.io.in(MeshDirection.west).valid   := false.B
+        router.io.in(MeshDirection.west).bits    := 0.U.asTypeOf(new MeshPacket(p))
+        router.io.out(MeshDirection.west).credit := false.B
       }
       if (col == p.cols - 1) {
-        router.io.in(MeshDirection.east).valid  := false.B
-        router.io.in(MeshDirection.east).bits   := 0.U.asTypeOf(new MeshPacket(p))
-        router.io.out(MeshDirection.east).ready := false.B
+        router.io.in(MeshDirection.east).valid   := false.B
+        router.io.in(MeshDirection.east).bits    := 0.U.asTypeOf(new MeshPacket(p))
+        router.io.out(MeshDirection.east).credit := false.B
       }
       if (row == 0) {
-        router.io.in(MeshDirection.north).valid  := false.B
-        router.io.in(MeshDirection.north).bits   := 0.U.asTypeOf(new MeshPacket(p))
-        router.io.out(MeshDirection.north).ready := false.B
+        router.io.in(MeshDirection.north).valid   := false.B
+        router.io.in(MeshDirection.north).bits    := 0.U.asTypeOf(new MeshPacket(p))
+        router.io.out(MeshDirection.north).credit := false.B
       }
       if (row == p.rows - 1) {
-        router.io.in(MeshDirection.south).valid  := false.B
-        router.io.in(MeshDirection.south).bits   := 0.U.asTypeOf(new MeshPacket(p))
-        router.io.out(MeshDirection.south).ready := false.B
+        router.io.in(MeshDirection.south).valid   := false.B
+        router.io.in(MeshDirection.south).bits    := 0.U.asTypeOf(new MeshPacket(p))
+        router.io.out(MeshDirection.south).credit := false.B
       }
     }
   }

@@ -18,6 +18,7 @@ case class MeshSharedMemParams(
   tagBits:          Int,
   cores:            Seq[MeshCoreAttachment],
   maxInFlight:      Int = 4,
+  linkBufferDepth:  Int = 2,
   localBankBits:    Int = 10,
   visibleBanks:     Int = 0,
   externalChannels: Int = 0) {
@@ -31,6 +32,7 @@ case class MeshSharedMemParams(
   ))
 
   require(externalChannels >= 0)
+  require(linkBufferDepth > 0)
   require(maxInFlight > 0 && maxInFlight <= (1 << tagBits))
   val bankParams = BankSetParams(dataBits, 1, entriesPerBank, tagBits)
   val bankCount:              Int             = rows * cols
@@ -51,6 +53,7 @@ case class MeshSharedMemParams(
   val transferChannel:        Int             = networkClientChannels
   val channelBits:            Int             = math.max(1, log2Ceil(networkClientChannels + 1))
   val coreBits:               Int             = math.max(1, log2Ceil(cores.size))
+  val linkCreditBits:         Int             = math.max(1, log2Ceil(linkBufferDepth + 1))
 
   val localBankLocations: Seq[Option[(Int, Int)]] =
     cores.map(_.localBankNode.map(id => (id / cols, id % cols)))
