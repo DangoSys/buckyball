@@ -53,8 +53,7 @@ class SharedMemBackend(val b: GlobalConfig, useMesh: Boolean = false, externalPh
       val attachments     = MeshSharedMemParams.directionalAttachments(
         rows,
         columns,
-        computeCores.size,
-        perCore
+        Seq.fill(computeCores.size)(perCore)
       )
       Some(MeshSharedMemParams(
         rows = rows,

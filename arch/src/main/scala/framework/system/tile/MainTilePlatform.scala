@@ -132,7 +132,7 @@ class MainTilePlatform(p: TileParams) extends TileEndpoint(p.linkParams, true) {
         }
       case None          =>
         val (rows, columns) = MeshSharedMemParams.dimensions(geometry.banks)
-        val core            = MeshSharedMemParams.directionalAttachments(rows, columns, 1, 1).head
+        val core            = MeshSharedMemParams.directionalAttachments(rows, columns, Seq(1)).head
         val shm             = Instantiate(new MeshSharedMem(MeshSharedMemParams(
           rows = rows,
           cols = columns,

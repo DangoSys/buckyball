@@ -82,23 +82,24 @@ object MeshSharedMemParams {
   /**
    * Assigns each channel lane to a directed chain of adjacent Mesh nodes.
    *
-   * Core order defines the order of stages within a lane. When the rectangular
-   * Mesh has an even dimension, the node order is a Hamiltonian cycle, so the
-   * last stage and reused lanes also remain adjacent.
+   * Core order defines the stages within each lane; a Core may own fewer lanes
+   * than its neighbors. A two-dimensional Mesh with an even dimension uses a
+   * Hamiltonian cycle, so the last stage and reused lanes remain adjacent.
    */
   def directionalAttachments(
     rows:            Int,
     cols:            Int,
-    coreCount:       Int,
-    channelsPerCore: Int
+    channelsPerCore: Seq[Int]
   ): Seq[MeshCoreAttachment] = {
     require(rows > 0 && cols > 0)
-    require(coreCount > 0 && channelsPerCore > 0)
-    val bankCount = rows * cols
+    require(channelsPerCore.nonEmpty && channelsPerCore.forall(_ > 0))
+    val bankCount    = rows * cols
+    val channelCount = channelsPerCore.sum
+    val canWrap      = bankCount == 2 || rows > 1 && cols > 1 && (rows % 2 == 0 || cols % 2 == 0)
     require(bankCount > 1)
     require(
-      rows % 2 == 0 || cols % 2 == 0 || coreCount * channelsPerCore < bankCount,
-      "an odd Mesh without a Hamiltonian cycle cannot wrap directional channels"
+      canWrap || channelCount < bankCount,
+      "a Mesh without a Hamiltonian cycle cannot wrap directional channels"
     )
 
     def cycle(r: Int, c: Int): Seq[(Int, Int)] = {
@@ -112,22 +113,27 @@ object MeshSharedMemParams {
       firstColumn ++ inner ++ firstRow
     }
 
-    val coordinates =
+    val coordinates  =
       if (rows % 2 == 0 && cols > 1) cycle(cols, rows).map { case (row, col) => (col, row) }
       else if (cols % 2 == 0 && rows > 1) cycle(rows, cols)
       else (0 until rows).flatMap { row =>
         val columns = if (row % 2 == 0) (0 until cols) else (cols - 1 to 0 by -1)
         columns.map(col => (row, col))
       }
-    val bankOrder   = coordinates.map { case (row, col) => row * cols + col }
+    val bankOrder    = coordinates.map { case (row, col) => row * cols + col }
+    val channelOrder = (0 until channelsPerCore.max).flatMap { channel =>
+      channelsPerCore.indices.collect { case core if channel < channelsPerCore(core) => (core, channel) }
+    }
+    val locations    = channelOrder.zipWithIndex.map { case (owner, index) =>
+      owner -> (
+        bankOrder(index       % bankOrder.size),
+        bankOrder((index + 1) % bankOrder.size)
+      )
+    }.toMap
 
-    (0 until coreCount).map { core =>
-      val inputs  = (0 until channelsPerCore).map { channel =>
-        bankOrder((channel * coreCount + core) % bankOrder.size)
-      }
-      val outputs = (0 until channelsPerCore).map { channel =>
-        bankOrder((channel * coreCount + core + 1) % bankOrder.size)
-      }
+    channelsPerCore.indices.map { core =>
+      val inputs  = (0 until channelsPerCore(core)).map(channel => locations(core -> channel)._1)
+      val outputs = (0 until channelsPerCore(core)).map(channel => locations(core -> channel)._2)
       MeshCoreAttachment(inputs, outputs, Some(inputs.head))
     }
   }
@@ -139,13 +145,7 @@ object MeshSharedMemParams {
     entriesPerBank = 1024,
     dataBits = 128,
     tagBits = 8,
-    cores = Seq(
-      MeshCoreAttachment(Seq(0), Seq(5), Some(0)),
-      MeshCoreAttachment(Seq(3), Seq(4), Some(3)),
-      MeshCoreAttachment(Seq(4, 8), Seq(9, 1), Some(4)),
-      MeshCoreAttachment(Seq(7, 11), Seq(0, 4), Some(7)),
-      MeshCoreAttachment(Seq(5, 6, 9, 10), Seq(10, 11, 2, 3), Some(5))
-    )
+    cores = directionalAttachments(3, 4, Seq(1, 1, 2, 2, 4))
   )
 
 }
