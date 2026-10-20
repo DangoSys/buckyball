@@ -25,13 +25,23 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
   io.transferCompletion.bits   := transfer.io.completion.bits
   transfer.io.completion.ready := io.transferCompletion.ready
 
+  val ordering = Instantiate(new MeshChannelOrdering(p, p.totalChannels + p.externalChannels))
+  for (channel <- 0 until p.totalChannels) {
+    ordering.io.client(channel).request.valid := io.channels(channel).request.valid
+    ordering.io.client(channel).request.bits  := io.channels(channel).request.bits
+    io.channels(channel).request.ready        := ordering.io.client(channel).request.ready
+    io.channels(channel).response <> ordering.io.client(channel).response
+  }
+  for (channel <- 0 until p.externalChannels) {
+    val index = p.totalChannels + channel
+    ordering.io.client(index).request.valid := io.external(channel).request.valid
+    ordering.io.client(index).request.bits  := io.external(channel).request.bits
+    io.external(channel).request.ready      := ordering.io.client(index).request.ready
+    io.external(channel).response <> ordering.io.client(index).response
+  }
+
   val directionalEndpoints = p.inputChannelLocations.zip(p.outputChannelLocations).zipWithIndex.flatMap {
     case ((inputLocation, outputLocation), channel) =>
-      val ordering = Instantiate(new MeshChannelOrdering(p))
-      ordering.io.client.request.valid   := io.channels(channel).request.valid
-      ordering.io.client.request.bits    := io.channels(channel).request.bits
-      io.channels(channel).request.ready := ordering.io.client.request.ready
-      io.channels(channel).response <> ordering.io.client.response
       val read          = Instantiate(new MeshClientEndpoint(
         p,
         inputLocation._1,
@@ -46,7 +56,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
         2 * channel + 1,
         Some(true)
       ))
-      val clientRequest = ordering.io.ordered.request
+      val clientRequest = ordering.io.ordered(channel).request
       val available     = (read.io.inFlight +& write.io.inFlight) < p.maxInFlight.U &&
         !read.io.tags(clientRequest.bits.tag) && !write.io.tags(clientRequest.bits.tag)
       read.io.client.request.valid  := clientRequest.valid && available && !clientRequest.bits.write
@@ -62,7 +72,7 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
       val responses = Module(new RRArbiter(new MeshClientResponse(p), 2))
       responses.io.in(0) <> read.io.client.response
       responses.io.in(1) <> write.io.client.response
-      ordering.io.ordered.response <> responses.io.out
+      ordering.io.ordered(channel).response <> responses.io.out
       Seq(
         (inputLocation._1, inputLocation._2, 2 * channel, read),
         (outputLocation._1, outputLocation._2, 2 * channel + 1, write)
@@ -70,14 +80,10 @@ class MeshSharedMem(p: MeshSharedMemParams) extends Module {
   }
 
   val externalEndpoints = (0 until p.externalChannels).map { index =>
-    val channel  = 2 * p.totalChannels + index
-    val ordering = Instantiate(new MeshChannelOrdering(p))
-    val endpoint = Instantiate(new MeshClientEndpoint(p, 0, 0, channel, None))
-    ordering.io.client.request.valid := io.external(index).request.valid
-    ordering.io.client.request.bits  := io.external(index).request.bits
-    io.external(index).request.ready := ordering.io.client.request.ready
-    io.external(index).response <> ordering.io.client.response
-    endpoint.io.client <> ordering.io.ordered
+    val channel         = 2 * p.totalChannels + index
+    val orderingChannel = p.totalChannels + index
+    val endpoint        = Instantiate(new MeshClientEndpoint(p, 0, 0, channel, None))
+    endpoint.io.client <> ordering.io.ordered(orderingChannel)
     (0, 0, channel, endpoint)
   }
 
