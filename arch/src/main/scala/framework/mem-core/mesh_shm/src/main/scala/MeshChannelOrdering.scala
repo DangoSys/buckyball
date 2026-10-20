@@ -20,28 +20,40 @@ class MeshChannelOrdering(p: MeshSharedMemParams, channels: Int) extends Module 
   val write = Reg(Vec(channels, Vec(p.maxInFlight, Bool())))
   val tag   = Reg(Vec(channels, Vec(p.maxInFlight, UInt(p.tagBits.W))))
 
-  val reserved = Wire(Vec(channels, Bool()))
+  val priorityBits = math.max(1, log2Ceil(channels))
+  val priority     = RegInit(0.U(priorityBits.W))
+  val available    = Wire(Vec(channels, Bool()))
+
+  def distance(channel: Int): UInt = {
+    val index = channel.U(priorityBits.W)
+    Mux(index >= priority, index - priority, index + channels.U - priority)
+  }
 
   for (channel <- 0 until channels) {
-    val request = io.client(channel).request
-    val free    = VecInit(valid(channel).map(slot => !slot)).asUInt
-
-    val outstandingConflict = VecInit(for {
+    val request  = io.client(channel).request
+    val free     = VecInit(valid(channel).map(slot => !slot)).asUInt
+    val conflict = VecInit(for {
       owner <- 0 until channels
       slot  <- 0 until p.maxInFlight
     } yield {
       valid(owner)(slot) && bank(owner)(slot) === request.bits.bank && addr(owner)(slot) === request.bits.addr &&
       (write(owner)(slot) || request.bits.write)
     }).asUInt.orR
-    val reservedConflict    = (0 until channel).map { owner =>
-      val earlier = io.client(owner).request.bits
-      reserved(owner) && earlier.bank === request.bits.bank && earlier.addr === request.bits.addr &&
-      (earlier.write || request.bits.write)
-    }.reduceOption(_ || _).getOrElse(false.B)
-    val canIssue            = free.orR && !outstandingConflict && !reservedConflict
-    val freeSlot            = PriorityEncoder(free)
+    available(channel) := free.orR && !conflict
+  }
 
-    reserved(channel)                 := request.valid && canIssue
+  for (channel <- 0 until channels) {
+    val request                = io.client(channel).request
+    val free                   = VecInit(valid(channel).map(slot => !slot)).asUInt
+    val higherPriorityConflict = (0 until channels).filter(_ != channel).map { owner =>
+      val contender = io.client(owner).request
+      contender.valid && available(owner) && contender.bits.bank === request.bits.bank &&
+      contender.bits.addr === request.bits.addr && (contender.bits.write || request.bits.write) &&
+      distance(owner) < distance(channel)
+    }.reduceOption(_ || _).getOrElse(false.B)
+    val canIssue               = available(channel) && !higherPriorityConflict
+    val freeSlot               = PriorityEncoder(free)
+
     io.ordered(channel).request.valid := request.valid && canIssue
     io.ordered(channel).request.bits  := request.bits
     request.ready                     := io.ordered(channel).request.ready && canIssue
@@ -66,5 +78,9 @@ class MeshChannelOrdering(p: MeshSharedMemParams, channels: Int) extends Module 
         tag(channel)(slot)   := request.bits.tag
       }
     }
+  }
+
+  when(VecInit(io.client.map(_.request.fire)).asUInt.orR) {
+    priority := Mux(priority === (channels - 1).U, 0.U, priority + 1.U)
   }
 }
