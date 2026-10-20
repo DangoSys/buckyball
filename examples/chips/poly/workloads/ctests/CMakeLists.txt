@@ -24,7 +24,7 @@ target_include_directories(${POLY_CONTROL_NAME}-linux PRIVATE ${BUCKYBALL_ISA_DI
 target_link_libraries(${POLY_CONTROL_NAME}-linux PRIVATE pthread)
 add_dependencies(poly-ctests-build ${POLY_CONTROL_NAME}-linux-build)
 
-foreach(POLY_ANT_CASE mxmm shared bank bank_rows parallel highpa tlink tlink_bank tlink_reduce coherence)
+foreach(POLY_ANT_CASE mxmm shared bank bank_rows parallel mesh_move highpa tlink tlink_bank tlink_reduce coherence)
 set(POLY_ANT_CORE attention)
 if(POLY_ANT_CASE STREQUAL "bank" OR POLY_ANT_CASE STREQUAL "bank_rows")
   set(POLY_ANT_CORE ffn)
@@ -86,7 +86,8 @@ endif()
 buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN}")
 buckyball_ctest_name(POLY_ANT_HOST_NAME main chip-ant_${POLY_ANT_CASE})
 set(BUCKYBALL_CTEST_TARGET ${POLY_ANT_CORE})
-if(NOT POLY_ANT_CASE STREQUAL "highpa" AND NOT POLY_ANT_CASE MATCHES "^tlink" AND NOT POLY_ANT_CASE STREQUAL "coherence")
+if(NOT POLY_ANT_CASE STREQUAL "highpa" AND NOT POLY_ANT_CASE MATCHES "^tlink" AND
+   NOT POLY_ANT_CASE STREQUAL "coherence" AND NOT POLY_ANT_CASE STREQUAL "mesh_move")
 add_buckyball_linux_ctest(${POLY_ANT_HOST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${POLY_ANT_MAIN})
 target_sources(${POLY_ANT_HOST_NAME}-linux PRIVATE ${POLY_ANT_EMBED} ${POLY_ANT_CONTROL_SOURCES})
 target_include_directories(${POLY_ANT_HOST_NAME}-linux PRIVATE ${BUCKYBALL_ISA_DIR}/chip)
