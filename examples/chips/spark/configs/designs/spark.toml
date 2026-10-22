@@ -1,0 +1,9 @@
+# Spark Chip: 1 tiles
+
+[top]
+nTiles = 1
+
+[tileTemplate]
+tile_ids = [0]
+include = "tiles/default.toml"
+count = 1
