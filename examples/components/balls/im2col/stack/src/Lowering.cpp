@@ -1,4 +1,17 @@
 //===- Lowering.cpp - Im2colBall in lower-buckyball -----------------------===//
+//
+// im2col_i8: the source holds a square feature map of `input_side` pixels per
+// side; group g is channel block g, line y * input_side + x holds the sixteen
+// channels of pixel (y, x). The destination receives the windows of the
+// `kernel` x `kernel` convolution with `stride` and zero `padding`, every
+// window in row-major order, as the matmul_i8 A operand: K is ordered (kernel
+// row, kernel column, channel), sixteen columns (one source line) per K tile,
+// K tile t = (kr * kernel + kc) * groups + g. The destination groups divide
+// the K tiles; group j holds the next K / 16 / groups tiles in M tiles of
+// `tile_rows` rows (the layout of the matmul that consumes it), windows
+// beyond the last zero up to a multiple of tile_rows.
+//
+//===----------------------------------------------------------------------===//
 
 #include "Buckyball/BuckyballOps.h"
 #include "Conversion/Buckyball.h"
@@ -23,46 +36,28 @@ public:
     int64_t kernel = cast<IntegerAttr>(op->getAttr("kernel")).getInt();
     int64_t stride = cast<IntegerAttr>(op->getAttr("stride")).getInt();
     int64_t padding = cast<IntegerAttr>(op->getAttr("padding")).getInt();
-    int64_t startRow = cast<IntegerAttr>(op->getAttr("start_row")).getInt();
-    int64_t startCol = cast<IntegerAttr>(op->getAttr("start_col")).getInt();
-    int64_t base = cast<IntegerAttr>(op->getAttr("op1_base")).getInt();
-    int64_t lane = cast<IntegerAttr>(op->getAttr("lane")).getInt();
-    int64_t windowStart =
-        cast<IntegerAttr>(op->getAttr("window_start")).getInt();
-    int64_t windowCount =
-        cast<IntegerAttr>(op->getAttr("window_count")).getInt();
+    int64_t tileRows = cast<IntegerAttr>(op->getAttr("tile_rows")).getInt();
     const auto &target = buckyball_target::getBuckyballTarget();
-    if (target.bankWidthBits != 128 || side <= 0 || side >= (1LL << 33) ||
+    int64_t span = side + 2 * padding - kernel;
+    if (target.bankWidthBits != 128 || side <= 0 ||
         side > buckyball_target::getBuckyballBallParam("IM2COL", "maxIter") ||
-        kernel <= 0 || kernel > 255 ||
+        side * side > target.bankDepth || kernel <= 0 ||
         kernel >
             buckyball_target::getBuckyballBallParam("IM2COL", "maxKSize") ||
-        stride <= 0 || stride > 255 || padding < 0 || padding > 255 ||
+        stride <= 0 || stride > 15 || padding < 0 ||
         padding >
             buckyball_target::getBuckyballBallParam("IM2COL", "maxPadding") ||
-        startRow < 0 || startRow > padding || startCol < 0 ||
-        startCol > padding || base < 0 || base > 63 || lane < 0 || lane > 15 ||
-        windowStart < 0 || windowStart > 63 || windowCount <= 0 ||
-        windowCount > 64)
+        span < 0 || span % stride || tileRows <= 0 || tileRows > 16 ||
+        (tileRows & (tileRows - 1)))
       return op.emitOpError("im2col_i8 geometry exceeds the ISA field ranges");
-    int64_t rowNumerator = side + 2 * padding - kernel - startRow;
-    int64_t colNumerator = side + 2 * padding - kernel - startCol;
-    if (rowNumerator < 0 || colNumerator < 0 || rowNumerator % stride ||
-        colNumerator % stride ||
-        windowStart + windowCount >
-            (rowNumerator / stride + 1) * (colNumerator / stride + 1) ||
-        base + side * side > target.bankDepth ||
-        ((windowCount + 15) / 16) * ((kernel * kernel + 15) / 16) * 16 >
-            target.bankDepth)
-      return op.emitOpError("im2col_i8 window or bank footprint is invalid");
-    uint64_t rs2 =
-        mlir::buddy::field(kernel, 0, 7) | mlir::buddy::field(stride, 8, 15) |
-        mlir::buddy::field(padding, 16, 23) |
-        mlir::buddy::field(startCol, 24, 31) |
-        mlir::buddy::field(startRow, 32, 39) |
-        mlir::buddy::field(base, 40, 45) | mlir::buddy::field(lane, 46, 49) |
-        mlir::buddy::field(windowStart, 50, 55) |
-        mlir::buddy::field(windowCount, 56, 62);
+    int64_t windows = (span / stride + 1) * (span / stride + 1);
+    if (windows > 1023)
+      return op.emitOpError("im2col_i8 has more windows than one instruction");
+    uint64_t rs2 = mlir::buddy::field(kernel, 0, 3) |
+                   mlir::buddy::field(stride, 4, 7) |
+                   mlir::buddy::field(padding, 8, 11) |
+                   mlir::buddy::field(windows, 36, 45) |
+                   mlir::buddy::field(tileRows, 46, 50);
     mlir::buddy::emitInstruction(
         rewriter, op.getLoc(), buckyball_target::getBuckyballFunct7("IM2COL"),
         mlir::buddy::constantI64(rewriter, op.getLoc(),

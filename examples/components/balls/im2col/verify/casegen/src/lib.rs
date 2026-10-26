@@ -3,22 +3,10 @@ mod model;
 
 use std::cell::RefCell;
 
-use casegen::{Im2colCase, Im2colCmd, MAX_WORDS};
+use casegen::{Im2colCase, Im2colCmd};
 
 thread_local! {
-    static CURRENT: RefCell<Option<Im2colCase>> = RefCell::new(None);
-}
-
-#[no_mangle]
-pub extern "C" fn im2col_case_load(seed: u32, index: u32) -> i32 {
-    let case = casegen::gen_case(seed, index);
-    let nsrc = case.cmd.num_src_words as usize;
-    let ndst = case.cmd.num_dst_words as usize;
-    if nsrc > MAX_WORDS || ndst > MAX_WORDS {
-        panic!("im2col_case_load: word count out of range src={nsrc} dst={ndst}");
-    }
-    CURRENT.with(|c| *c.borrow_mut() = Some(case));
-    0
+    static CURRENT: RefCell<Option<Im2colCase>> = const { RefCell::new(None) };
 }
 
 fn current_case<F: FnOnce(&Im2colCase) -> R, R>(f: F) -> R {
@@ -28,44 +16,75 @@ fn current_case<F: FnOnce(&Im2colCase) -> R, R>(f: F) -> R {
     })
 }
 
+fn lo(row: &[u8; 16]) -> u64 {
+    u64::from_le_bytes(row[..8].try_into().unwrap())
+}
+
+fn hi(row: &[u8; 16]) -> u64 {
+    u64::from_le_bytes(row[8..].try_into().unwrap())
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_load(index: u32) -> i32 {
+    let case = casegen::gen_case(index);
+    CURRENT.with(|c| *c.borrow_mut() = Some(case));
+    0
+}
+
 #[no_mangle]
 pub extern "C" fn im2col_case_cmd(out_ptr: *mut Im2colCmd) {
-    current_case(|case| unsafe {
-        if out_ptr.is_null() {
-            panic!("im2col_case_cmd: null out_ptr");
-        }
-        *out_ptr = case.cmd;
-    });
+    if out_ptr.is_null() {
+        panic!("im2col_case_cmd: null out_ptr");
+    }
+    current_case(|case| unsafe { *out_ptr = case.cmd });
 }
 
 #[no_mangle]
-pub extern "C" fn im2col_case_src_word_lo(word_index: u32) -> u64 {
-    if word_index as usize >= MAX_WORDS {
-        panic!("im2col_case_src_word_lo: word_index out of range");
-    }
-    current_case(|case| case.src_word_lo(word_index as usize))
+pub extern "C" fn im2col_case_src_group(i: u32) -> u32 {
+    current_case(|case| case.src[i as usize].0 as u32)
 }
 
 #[no_mangle]
-pub extern "C" fn im2col_case_src_word_hi(word_index: u32) -> u64 {
-    if word_index as usize >= MAX_WORDS {
-        panic!("im2col_case_src_word_hi: word_index out of range");
-    }
-    current_case(|case| case.src_word_hi(word_index as usize))
+pub extern "C" fn im2col_case_src_addr(i: u32) -> u32 {
+    current_case(|case| case.src[i as usize].1 as u32)
 }
 
 #[no_mangle]
-pub extern "C" fn im2col_case_dst_word_lo(word_index: u32) -> u64 {
-    if word_index as usize >= MAX_WORDS {
-        panic!("im2col_case_dst_word_lo: word_index out of range");
-    }
-    current_case(|case| case.dst_word_lo(word_index as usize))
+pub extern "C" fn im2col_case_src_lo(i: u32) -> u64 {
+    current_case(|case| lo(&case.src[i as usize].2))
 }
 
 #[no_mangle]
-pub extern "C" fn im2col_case_dst_word_hi(word_index: u32) -> u64 {
-    if word_index as usize >= MAX_WORDS {
-        panic!("im2col_case_dst_word_hi: word_index out of range");
-    }
-    current_case(|case| case.dst_word_hi(word_index as usize))
+pub extern "C" fn im2col_case_src_hi(i: u32) -> u64 {
+    current_case(|case| hi(&case.src[i as usize].2))
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_read_group(i: u32) -> u32 {
+    current_case(|case| case.reads[i as usize].0 as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_read_addr(i: u32) -> u32 {
+    current_case(|case| case.reads[i as usize].1 as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_dst_group(i: u32) -> u32 {
+    current_case(|case| case.dst[i as usize].0 as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_dst_addr(i: u32) -> u32 {
+    current_case(|case| case.dst[i as usize].1 as u32)
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_dst_lo(i: u32) -> u64 {
+    current_case(|case| lo(&case.dst[i as usize].2))
+}
+
+#[no_mangle]
+pub extern "C" fn im2col_case_dst_hi(i: u32) -> u64 {
+    current_case(|case| hi(&case.dst[i as usize].2))
 }

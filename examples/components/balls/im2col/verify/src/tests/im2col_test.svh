@@ -19,24 +19,11 @@ class im2col_ball_test extends uvm_test;
 
   task run_phase(uvm_phase phase);
     phase.raise_objection(this);
-    run_directed();
-    run_random();
+    for (int unsigned index = 0; index < IM2COL_NUM_CASES; index++) run_case(index);
     phase.drop_objection(this);
   endtask
 
-  task run_directed();
-    run_case(0, "DIR_K3_PAD0");
-    run_case(1, "DIR_K3_PAD1");
-  endtask
-
-  task run_random();
-    int i;
-    for (i = 2; i <= 21; i++) begin
-      run_case(i, $sformatf("RND_%0d", i));
-    end
-  endtask
-
-  task run_case(int unsigned idx, string label);
+  task run_case(int unsigned idx);
     im2col_basic_seq seq;
     int cycles;
 
@@ -53,15 +40,13 @@ class im2col_ball_test extends uvm_test;
       cycles++;
       if (cycles > IM2COL_TIMEOUT_CYCLES) begin
         `uvm_fatal("TIMEOUT",
-                   $sformatf(
-                       "Im2colBall %s (idx=%0d) timeout: cmds=%0d reads=%0d wr=%0d/%0d resp=%0d",
-                       label, idx, env.scb.cmd_count, env.scb.read_count, env.scb.write_count,
-                       env.scb.expected_writes, env.scb.resp_count))
+                   $sformatf("Im2colBall case %0d timeout: cmds=%0d reads=%0d writes=%0d resp=%0d",
+                             idx, env.scb.cmd_count, env.scb.read_count, env.scb.write_count,
+                             env.scb.resp_count))
       end
     end
 
-    `uvm_info("IM2COL", $sformatf("Im2colBall %s (idx=%0d) passed in %0d cycles", label, idx,
-                                  cycles), UVM_LOW)
+    `uvm_info("IM2COL", $sformatf("Im2colBall case %0d passed in %0d cycles", idx, cycles), UVM_LOW)
   endtask
 
   task apply_reset();

@@ -22,6 +22,7 @@ class gemmini_ball_test extends uvm_test;
     apply_reset();
     run_config();
     run_loop_bounds();
+    run_group_select();
     phase.drop_objection(this);
   endtask
 
@@ -119,6 +120,136 @@ class gemmini_ball_test extends uvm_test;
                  "completion mismatch: writes=%0d rob=%0h", writes, xif.complete_bits_rob_id))
     @(negedge vif.clock);
     `uvm_info("GEMMINI", "loop-ws bounds config passed", UVM_LOW)
+  endtask
+
+  // Operands span three groups of their banks; rs2[41:36] and rs2[47:42] pick
+  // A's group 2 and B's group 1. The other groups hold different data, so a
+  // wrong group fails both the read check and the product.
+  localparam int GroupA = 2;
+  localparam int GroupB = 1;
+
+  // Row `row` of group `group` of bank 1 (A) or bank 2 (B).
+  function bit [127:0] bank_row(int bank, int group, int row);
+    bit [127:0] data;
+    for (int lane = 0; lane < 16; lane++)
+    if (bank == 1) data[lane*8+:8] = group == GroupA ? 8'(lane == row % 16) : 8'd5;
+    else data[lane*8+:8] = group == GroupB ? 8'((row + 2 * lane + 1) % 7 - 3) : 8'd9;
+    return data;
+  endfunction
+
+  // Issues one command and serves its bank traffic until it completes:
+  // reads answer one cycle after they fire, writes are recorded in c.
+  task issue(int rob, int funct, bit [63:0] rs2, int op1_bank, int op2_bank,
+             ref bit [31:0] c[16][16], ref int written);
+    bit read_fire[`BB_IN_BW], write_fire[`BB_OUT_BW];
+    bit read_done[`BB_IN_BW], write_done[`BB_OUT_BW];
+    int read_bank[`BB_IN_BW], read_group[`BB_IN_BW], read_addr[`BB_IN_BW];
+    bit cmd_fire = 0;
+    int cycles;
+    @(negedge vif.clock);
+    vif.cmd_req_bits_rob_id       = rob;
+    vif.cmd_req_bits_funct        = funct;
+    vif.cmd_req_bits_rs2          = rs2;
+    vif.cmd_req_bits_iter         = 16;
+    vif.cmd_req_bits_op1_bank     = op1_bank;
+    vif.cmd_req_bits_op2_bank     = op2_bank;
+    vif.cmd_req_bits_wr_bank      = 3;
+    vif.cmd_req_bits_op1_group    = '0;
+    vif.cmd_req_bits_op2_group    = '0;
+    vif.cmd_req_bits_wr_group     = '0;
+    vif.cmd_req_bits_op1_col      = 3;
+    vif.cmd_req_bits_op2_col      = 3;
+    vif.cmd_req_bits_wr_col       = 4;
+    vif.cmd_req_bits_wr_read_bank = '0;
+    vif.cmd_req_bits_wr_arch_bank = 3;
+    vif.cmd_req_valid             = 1'b1;
+    cycles                        = 0;
+    forever begin
+      // Values set at this negedge are sampled with the DUT outputs at the
+      // next posedge, so handshakes seen here fire at that edge.
+      if (cmd_fire) vif.cmd_req_valid = 1'b0;
+      for (int port = 0; port < `BB_IN_BW; port++) begin
+        if (read_done[port]) vif.bank_read_resp_valid[port] = 1'b0;
+        if (read_fire[port]) begin
+          if (vif.bank_read_resp_valid[port]) `uvm_fatal("BANK", "read response overrun")
+          vif.bank_read_resp_valid[port] = 1'b1;
+          vif.bank_read_resp_data[port] =
+              bank_row(read_bank[port], read_group[port], read_addr[port]);
+        end
+      end
+      for (int port = 0; port < `BB_OUT_BW; port++) begin
+        if (write_done[port]) vif.bank_write_resp_valid[port] = 1'b0;
+        if (write_fire[port]) vif.bank_write_resp_valid[port] = 1'b1;
+      end
+      #1;
+      cmd_fire = vif.cmd_req_valid && vif.cmd_req_ready;
+      for (int port = 0; port < `BB_IN_BW; port++) begin
+        read_done[port] = vif.bank_read_resp_valid[port] && vif.bank_read_resp_ready[port];
+        read_fire[port] = vif.bank_read_req_valid[port] && vif.bank_read_req_ready[port];
+        if (read_fire[port]) begin
+          read_bank[port]  = vif.bank_read_bank_id[port];
+          read_group[port] = vif.bank_read_group_id[port];
+          read_addr[port]  = vif.bank_read_req_addr[port];
+          verification_pkg::evidence::checks++;
+          if (read_bank[port] != op1_bank && read_bank[port] != op2_bank)
+            `uvm_fatal("BANK", $sformatf("read of bank %0d", read_bank[port]))
+          if (read_group[port] != (read_bank[port] == 1 ? GroupA : GroupB))
+            `uvm_fatal("GROUP", $sformatf(
+                       "bank %0d read group %0d", read_bank[port], read_group[port]))
+        end
+      end
+      for (int port = 0; port < `BB_OUT_BW; port++) begin
+        write_done[port] = vif.bank_write_resp_valid[port] && vif.bank_write_resp_ready[port];
+        write_fire[port] = vif.bank_write_req_valid[port] && vif.bank_write_req_ready[port];
+        if (write_fire[port]) begin
+          int group = vif.bank_write_group_id[port];
+          int row = vif.bank_write_req_addr[port];
+          if (vif.bank_write_bank_id[port] != 3 || group > 3 || row > 15 ||
+              vif.bank_write_req_mask[port] !== 16'hffff)
+            `uvm_fatal("BANK", $sformatf(
+                       "write bank %0d group %0d row %0d", vif.bank_write_bank_id[port], group, row
+                       ))
+          for (int lane = 0; lane < 4; lane++)
+          c[row][group*4+lane] = vif.bank_write_req_data[port][lane*32+:32];
+          written++;
+        end
+      end
+      if (vif.cmd_resp_valid && vif.cmd_resp_ready) break;
+      @(negedge vif.clock);
+      if (++cycles > 2000) `uvm_fatal("TIMEOUT", $sformatf("command %0h did not complete", rs2))
+    end
+    verification_pkg::evidence::checks++;
+    if (vif.cmd_resp_bits_rob_id !== rob)
+      `uvm_fatal("RESP", $sformatf("rob_id mismatch: got %0h", vif.cmd_resp_bits_rob_id))
+    @(negedge vif.clock);
+    for (int port = 0; port < `BB_IN_BW; port++) vif.bank_read_resp_valid[port] = 1'b0;
+    for (int port = 0; port < `BB_OUT_BW; port++) vif.bank_write_resp_valid[port] = 1'b0;
+  endtask
+
+  // CONFIG (output-stationary, no shift), PRELOAD of B and COMPUTE_PRELOADED of
+  // A @ B with A the identity: C must be B's selected group.
+  task run_group_select();
+    bit [31:0] c[16][16];
+    int written = 0;
+    issue('h6, `GEMMINI_CONFIG_FUNCT7, 64'd0, 0, 0, c, written);
+    issue('h7, `GEMMINI_PRELOAD_FUNCT7, 64'd1 | (64'(GroupB) << 36), 2, 0, c, written);
+    issue('h8, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, 64'd2 | (64'(GroupA) << 36) | (64'(GroupB) << 42),
+          1, 2, c, written);
+    verification_pkg::evidence::checks++;
+    if (written != 64) `uvm_fatal("WRITE", $sformatf("%0d row writes, expected 64", written))
+    for (int row = 0; row < 16; row++)
+      for (int col = 0; col < 16; col++)
+        if ($signed(c[row][col]) != (row + 2 * col + 1) % 7 - 3)
+          `uvm_fatal("RESULT", $sformatf(
+                     "C[%0d][%0d] = %0d, expected %0d",
+                     row,
+                     col,
+                     $signed(
+                         c[row][col]
+                     ),
+                     (row + 2 * col + 1) % 7 - 3
+                     ))
+    `uvm_info("GEMMINI", "operand group select passed", UVM_LOW)
   endtask
 
   function void check_no_bank_traffic(string what);

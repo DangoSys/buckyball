@@ -31,13 +31,15 @@ import "DPI-C" function int unsigned maxpool_case_input_addr(input int unsigned 
 import "DPI-C" function longint unsigned maxpool_case_dst_word_lo(input int unsigned word_index);
 import "DPI-C" function longint unsigned maxpool_case_dst_word_hi(input int unsigned word_index);
 import "DPI-C" function int unsigned maxpool_case_dst_addr(input int unsigned word_index);
+import "DPI-C" function int unsigned maxpool_case_input_group(input int unsigned word_index);
+import "DPI-C" function int unsigned maxpool_case_dst_group(input int unsigned word_index);
 
 `ifndef MAXPOOL_FUNCT7
 `error "MAXPOOL_FUNCT7 must be provided by the selected Thread ballISA"
 `endif
 
 localparam int MAXPOOL_THREAD_FUNCT7 = `MAXPOOL_FUNCT7;
-localparam int MAXPOOL_MAX_INPUT_WORDS = 64;
+localparam int MAXPOOL_MAX_INPUT_WORDS = 128;
 localparam int MAXPOOL_MAX_DST_WORDS = 64;
-localparam int MAXPOOL_NUM_CASES = 9;
+localparam int MAXPOOL_NUM_CASES = 11;
 localparam int MAXPOOL_TIMEOUT_CYCLES = 20000;

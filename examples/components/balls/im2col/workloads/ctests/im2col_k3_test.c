@@ -1,74 +1,39 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <dma.h>
 #include <isa/im2col.h>
+#include <stdint.h>
 #include <stdio.h>
 
-/* exact M core: 6x6 k3 -> 16 windows */
-enum { ITER = 6, K = 3, STRIDE = 1, PAD = 0, LANES = 16 };
-enum {
-  OUT_DIM = (ITER + 2 * PAD - K) / STRIDE + 1,
-  WINDOWS = OUT_DIM * OUT_DIM,
-  KERNEL = K * K,
-  M_TILES = (WINDOWS + LANES - 1) / LANES,
-  K_TILES = (KERNEL + LANES - 1) / LANES,
-  OUT_ROWS = M_TILES * K_TILES * LANES,
-};
-
-static elem_t in[ITER * ITER] __attribute__((aligned(64))) = {
-    -1,  2,  3,   4,  -5,  6,  0,  8,   9,  -10, 11, 12,
-    13,  0,  -15, 16, 17,  18, 19, -20, 0,  22,  23, -24,
-    -25, 26, 27,  0,  -29, 30, 31, 32,  33, -34, 0,  36,
-};
-static elem_t packed[BANK_LINES * LANES] __attribute__((aligned(64)));
-static elem_t out[OUT_ROWS * LANES] __attribute__((aligned(64)));
-static elem_t exp[OUT_ROWS * LANES] __attribute__((aligned(64)));
-
-static void build_expected(void) {
-  int w = 0;
-  clear_i8_matrix(exp, OUT_ROWS, LANES);
-  for (int orow = 0; orow < OUT_DIM; orow++) {
-    for (int ocol = 0; ocol < OUT_DIM; ocol++) {
-      for (int krow = 0; krow < K; krow++) {
-        for (int kcol = 0; kcol < K; kcol++) {
-          int ki = krow * K + kcol;
-          int bank_row =
-              ((w / LANES) * K_TILES + ki / LANES) * LANES + (w % LANES);
-          int row = orow * STRIDE + krow - PAD;
-          int col = ocol * STRIDE + kcol - PAD;
-          exp[bank_row * LANES + ki % LANES] =
-              (row < 0 || row >= ITER || col < 0 || col >= ITER)
-                  ? 0
-                  : in[row * ITER + col];
-        }
-      }
-      w++;
-    }
-  }
-}
+/* 3x3 kernel over a 4x4 input (16 channels) gives 2x2 windows. Nine output
+ * groups hold one tap each: group kr * 3 + kc, line w is the input row of
+ * pixel (oy + kr, ox + kc); lines 4..7 pad the 8-row M tile with zeros. */
+static int8_t input[16 * 16] __attribute__((aligned(64)));
+static int8_t actual[8 * 16] __attribute__((aligned(64)));
 
 int main(void) {
-#ifdef MULTITHREAD
-  multithread(MULTITHREAD);
-#endif
-  clear_i8_matrix(out, OUT_ROWS, LANES);
-  build_expected();
-  clear_i8_matrix(packed, BANK_LINES, LANES);
-  for (int i = 0; i < ITER * ITER; ++i)
-    packed[i * LANES] = in[i];
+  for (int i = 0; i < 16 * 16; ++i)
+    input[i] = (int8_t)(i * 5 + 1);
 
   bb_mem_alloc(0, 1, 1);
-  bb_mem_alloc(1, 1, 1);
-  bb_mvin((uintptr_t)packed, 0, BANK_LINES, 1);
-  bb_im2col(0, 1, ITER, K, STRIDE, PAD, 0, 0, 0, 0, 0, WINDOWS);
-  bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
-  bb_mem_release(0);
-  bb_mem_release(1);
+  bb_mem_alloc(1, 1, 9);
+  bb_mvin((uintptr_t)input, 0, 16, 1);
+  bb_im2col(0, 1, 4, 3, 1, 0, 0, 0, 0, 0, 4, 8);
 
-  if (compare_i8_matrices(out, exp, OUT_ROWS, LANES)) {
-    printf("im2col k3 6x6 exact-M PASSED\n");
-    return 0;
+  for (int tap = 0; tap < 9; ++tap) {
+    bb_mvout_group((uintptr_t)actual, 1, tap, 8, 1);
+    for (int w = 0; w < 8; ++w) {
+      int pixel = (w / 2 + tap / 3) * 4 + w % 2 + tap % 3;
+      for (int lane = 0; lane < 16; ++lane) {
+        int8_t expected = w < 4 ? input[pixel * 16 + lane] : 0;
+        if (actual[w * 16 + lane] != expected) {
+          printf("im2col_k3 FAIL tap=%d window=%d lane=%d expected=%d "
+                 "actual=%d\n",
+                 tap, w, lane, expected, actual[w * 16 + lane]);
+          return 1;
+        }
+      }
+    }
   }
-  printf("im2col k3 6x6 exact-M FAILED\n");
-  return 1;
+  printf("im2col_k3 PASS\n");
+  return 0;
 }

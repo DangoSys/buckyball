@@ -9,20 +9,15 @@
 #   paddedSize = iter + 2*padding >= ksize + start
 #   op1_bank != wr_bank
 #   inputBase + iter*iter <= bankEntries
-#   lane in 0 .. 15
-#   outputDim = floor((iter + 2*padding - ksize - start) / stride) + 1
-#   M = outputDim * outputDim
-#   K = ksize * ksize
-#   outputRows = ceil(M/16) * ceil(K/16) * 16
-#   outputRows <= bankEntries   # bankEntries from design memdomain
+#   window_start + window_count <= outputDim * outputDim
+#   K tiles = ksize * ksize * input groups, divisible by output groups
+#   ceil(window_count / tile_rows) * tile_rows * K tiles / output groups <= bankEntries
 #
-# Partial final K-core lanes and partial final M-core rows are zero.
-# One bank row is one spatial position with 16 INT8 channels.
+# Input groups are 16-channel blocks; one bank row is one spatial position.
 
 inputWidth = 8
 # Resident Conv lowering can request a 4x4 output core from a stride-2,
-# kernel-7 producer, which needs a 13x13 local input.  Keep this a power of two
-# because the RTL line buffer splits maxIter^2 beats into two equal banks.
+# kernel-7 producer, which needs a 13x13 local input.
 maxIter = 16
 maxKSize = 7
 maxPadding = 7

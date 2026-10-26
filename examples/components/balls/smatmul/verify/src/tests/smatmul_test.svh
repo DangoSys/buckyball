@@ -18,7 +18,7 @@ class smatmul_ball_test extends uvm_test;
 
   task run_phase(uvm_phase phase);
     phase.raise_objection(this);
-    for (int unsigned index = 0; index < 11; index++) run_case(index);
+    for (int unsigned index = 0; index < 13; index++) run_case(index);
     phase.drop_objection(this);
   endtask
 

@@ -1,73 +1,36 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <dma.h>
 #include <isa/im2col.h>
+#include <stdint.h>
 #include <stdio.h>
 
-/* partial M core: 5x5 k3 -> 9 windows, unused m rows must be 0 */
-enum { ITER = 5, K = 3, STRIDE = 1, PAD = 0, LANES = 16 };
-enum {
-  OUT_DIM = (ITER + 2 * PAD - K) / STRIDE + 1,
-  WINDOWS = OUT_DIM * OUT_DIM,
-  KERNEL = K * K,
-  M_TILES = (WINDOWS + LANES - 1) / LANES,
-  K_TILES = (KERNEL + LANES - 1) / LANES,
-  OUT_ROWS = M_TILES * K_TILES * LANES,
-};
-
-static elem_t in[ITER * ITER] __attribute__((aligned(64))) = {
-    -1, 2,  3, 0,  5,  6,  7, 0,  9,  10, 11, 0,   -13,
-    14, 15, 0, 17, 18, 19, 0, 21, 22, 23, 0,  -25,
-};
-static elem_t packed[BANK_LINES * LANES] __attribute__((aligned(64)));
-static elem_t out[OUT_ROWS * LANES] __attribute__((aligned(64)));
-static elem_t exp[OUT_ROWS * LANES] __attribute__((aligned(64)));
-
-static void build_expected(void) {
-  int w = 0;
-  clear_i8_matrix(exp, OUT_ROWS, LANES);
-  for (int orow = 0; orow < OUT_DIM; orow++) {
-    for (int ocol = 0; ocol < OUT_DIM; ocol++) {
-      for (int krow = 0; krow < K; krow++) {
-        for (int kcol = 0; kcol < K; kcol++) {
-          int ki = krow * K + kcol;
-          int bank_row =
-              ((w / LANES) * K_TILES + ki / LANES) * LANES + (w % LANES);
-          int row = orow * STRIDE + krow - PAD;
-          int col = ocol * STRIDE + kcol - PAD;
-          exp[bank_row * LANES + ki % LANES] =
-              (row < 0 || row >= ITER || col < 0 || col >= ITER)
-                  ? 0
-                  : in[row * ITER + col];
-        }
-      }
-      w++;
-    }
-  }
-}
+/* Window range 5..7 of a 1x1 im2col over a 4x4 input: lines 0..2 are pixels
+ * 5, 6, 7 and lines 3..7 zero-fill the partial 8-row M tile. */
+static int8_t input[16 * 16] __attribute__((aligned(64)));
+static int8_t actual[8 * 16] __attribute__((aligned(64)));
 
 int main(void) {
-#ifdef MULTITHREAD
-  multithread(MULTITHREAD);
-#endif
-  clear_i8_matrix(out, OUT_ROWS, LANES);
-  build_expected();
-  clear_i8_matrix(packed, BANK_LINES, LANES);
-  for (int i = 0; i < ITER * ITER; ++i)
-    packed[i * LANES] = in[i];
+  for (int i = 0; i < 16 * 16; ++i)
+    input[i] = (int8_t)(i * 11 + 7);
+  for (int i = 0; i < 8 * 16; ++i)
+    actual[i] = 99;
 
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
-  bb_mvin((uintptr_t)packed, 0, BANK_LINES, 1);
-  bb_im2col(0, 1, ITER, K, STRIDE, PAD, 0, 0, 0, 0, 0, WINDOWS);
-  bb_mvout((uintptr_t)out, 1, OUT_ROWS, 1);
-  bb_mem_release(0);
-  bb_mem_release(1);
+  bb_mvin((uintptr_t)input, 0, 16, 1);
+  bb_im2col(0, 1, 4, 1, 1, 0, 0, 0, 0, 5, 3, 8);
+  bb_mvout((uintptr_t)actual, 1, 8, 1);
 
-  if (compare_i8_matrices(out, exp, OUT_ROWS, LANES)) {
-    printf("im2col k3 5x5 partial-M PASSED\n");
-    return 0;
-  }
-  printf("im2col k3 5x5 partial-M FAILED\n");
-  return 1;
+  for (int line = 0; line < 8; ++line)
+    for (int lane = 0; lane < 16; ++lane) {
+      int8_t expected = line < 3 ? input[(5 + line) * 16 + lane] : 0;
+      if (actual[line * 16 + lane] != expected) {
+        printf("im2col_k3_partial FAIL line=%d lane=%d expected=%d "
+               "actual=%d\n",
+               line, lane, expected, actual[line * 16 + lane]);
+        return 1;
+      }
+    }
+  printf("im2col_k3_partial PASS\n");
+  return 0;
 }

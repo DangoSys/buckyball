@@ -19,7 +19,7 @@ int main(void) {
   bb_mem_alloc(2, 1, 1);
   bb_mvin((uintptr_t)input, 0, INPUT_ROWS, 1);
   bb_maxpool(0, 1, 6, 3, 2, 2, 0, 0, 0, 3, 0, 0);
-  bb_im2col(1, 2, 3, 1, 1, 0, 0, 0, 0, 0, 0, OUTPUT_ROWS);
+  bb_im2col(1, 2, 3, 1, 1, 0, 0, 0, 0, 0, OUTPUT_ROWS, 8);
   bb_mvout((uintptr_t)output, 2, OUTPUT_ROWS, 1);
   for (int y = 0; y < 3; ++y)
     for (int x = 0; x < 3; ++x) {

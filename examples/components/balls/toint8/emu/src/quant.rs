@@ -1,6 +1,6 @@
-use bebop_bemu::thread::banks::bank_lines;
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
+use bebop_bemu::thread::banks::bank_lines;
 
 pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let src = rs1_b0(xs1);
@@ -33,24 +33,24 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 
     // Group g of every operand is channel block g; each block uses the same rows.
     for channel_group in 0..groups {
-    let ps = pbank_group(ctx, src, channel_group);
-    let pd = pbank_group(ctx, dst, channel_group);
-    let (input, output) = ctx.banks.read_write(ps, pd);
-    for output_row in 0..iter / 4 {
-        let mut packed = [0u8; 16];
-        for group in 0..4 {
-            let input_row = output_row * 4 + group;
-            let base = input_row * 16;
-            for lane in 0..4 {
-                let offset = base + lane * 4;
-                let bits = u32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
-                packed[group * 4 + lane] =
-                    super::model::quantize_f32(f32::from_bits(bits), scale, false) as u8;
+        let ps = pbank_group(ctx, src, channel_group);
+        let pd = pbank_group(ctx, dst, channel_group);
+        let (input, output) = ctx.banks.read_write(ps, pd);
+        for output_row in 0..iter / 4 {
+            let mut packed = [0u8; 16];
+            for group in 0..4 {
+                let input_row = output_row * 4 + group;
+                let base = input_row * 16;
+                for lane in 0..4 {
+                    let offset = base + lane * 4;
+                    let bits = u32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
+                    packed[group * 4 + lane] =
+                        super::model::quantize_f32(f32::from_bits(bits), scale, false) as u8;
+                }
             }
+            let base = output_row * 16;
+            output[base..base + 16].copy_from_slice(&packed);
         }
-        let base = output_row * 16;
-        output[base..base + 16].copy_from_slice(&packed);
-    }
     }
     0
 }
@@ -98,41 +98,43 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 
     // Group g of every operand is channel block g; each block uses the same rows.
     for channel_group in 0..groups {
-    let pscale = pbank_group(ctx, scale_bank, channel_group);
-    let mut scales = [0.0f32; 16];
-    for group in 0..4 {
-        let base = group * 16;
-        for lane in 0..4 {
-            let offset = base + lane * 4;
-            scales[group * 4 + lane] = f32::from_bits(u32::from_le_bytes(
-                ctx.banks[pscale][offset..offset + 4].try_into().unwrap(),
-            ));
-            if !scales[group * 4 + lane].is_finite() || scales[group * 4 + lane] <= 0.0 {
-                panic!("quant_i32_to_i8: scales must be finite and positive");
-            }
-        }
-    }
-
-    let ps = pbank_group(ctx, src, channel_group);
-    let pd = pbank_group(ctx, dst, channel_group);
-    let (input, output) = ctx.banks.read_write(ps, pd);
-    for output_row in 0..iter / 4 {
-        let mut packed = [0u8; 16];
+        let pscale = pbank_group(ctx, scale_bank, channel_group);
+        let mut scales = [0.0f32; 16];
         for group in 0..4 {
-            let input_row = input_base + output_row * 4 + group;
-            let base = input_row * 16;
+            let base = group * 16;
             for lane in 0..4 {
                 let offset = base + lane * 4;
-                let value = i32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
-                let channel = group * 4 + lane;
-                packed[channel] = super::model::quantize_i32(value, scales[channel], relu) as u8;
+                scales[group * 4 + lane] = f32::from_bits(u32::from_le_bytes(
+                    ctx.banks[pscale][offset..offset + 4].try_into().unwrap(),
+                ));
+                if !scales[group * 4 + lane].is_finite() || scales[group * 4 + lane] <= 0.0 {
+                    panic!("quant_i32_to_i8: scales must be finite and positive");
+                }
             }
         }
-        let row =
-            output_base + (output_row / output_width) * output_stride + output_row % output_width;
-        let base = row * 16;
-        output[base..base + 16].copy_from_slice(&packed);
-    }
+
+        let ps = pbank_group(ctx, src, channel_group);
+        let pd = pbank_group(ctx, dst, channel_group);
+        let (input, output) = ctx.banks.read_write(ps, pd);
+        for output_row in 0..iter / 4 {
+            let mut packed = [0u8; 16];
+            for group in 0..4 {
+                let input_row = input_base + output_row * 4 + group;
+                let base = input_row * 16;
+                for lane in 0..4 {
+                    let offset = base + lane * 4;
+                    let value = i32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
+                    let channel = group * 4 + lane;
+                    packed[channel] =
+                        super::model::quantize_i32(value, scales[channel], relu) as u8;
+                }
+            }
+            let row = output_base
+                + (output_row / output_width) * output_stride
+                + output_row % output_width;
+            let base = row * 16;
+            output[base..base + 16].copy_from_slice(&packed);
+        }
     }
     0
 }

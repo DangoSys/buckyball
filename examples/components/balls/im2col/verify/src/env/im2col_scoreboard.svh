@@ -10,9 +10,6 @@ class im2col_scoreboard extends uvm_scoreboard;
   bb_blink_mem_model #(1, 1) mem_model;
 
   im2col_cmd_item stim_q[$];
-  bit [127:0] expected_dst[IM2COL_MAX_WORDS];
-  bit seen_addr[IM2COL_MAX_WORDS];
-  int unsigned expected_writes;
   int unsigned cmd_count;
   int unsigned read_count;
   int unsigned write_count;
@@ -30,33 +27,18 @@ class im2col_scoreboard extends uvm_scoreboard;
   function void write_stim(bb_blink_cmd_item item);
     im2col_cmd_item titem;
     im2col_cmd_item clone;
-    int i;
 
-    if (stim_q.size() != 0) begin
-      `uvm_fatal("SCB", "single outstanding command supported")
-    end
-    if (!$cast(titem, item)) begin
-      `uvm_fatal("SCB", "stim item is not im2col_cmd_item")
-    end
-    if (!$cast(clone, titem.clone())) begin
-      `uvm_fatal("SCB", "failed to clone stimulus item")
-    end
+    if (stim_q.size() != 0) `uvm_fatal("SCB", "single outstanding command supported")
+    if (!$cast(titem, item)) `uvm_fatal("SCB", "stim item is not im2col_cmd_item")
+    if (!$cast(clone, titem.clone())) `uvm_fatal("SCB", "failed to clone stimulus item")
     stim_q.push_back(clone);
 
-    if (mem_model == null) begin
-      `uvm_fatal("SCB", "mem_model handle not set")
-    end
+    if (mem_model == null) `uvm_fatal("SCB", "mem_model handle not set")
     mem_model.clear_mem();
-    for (i = 0; i < clone.num_src_words; i++) begin
-      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group), i, clone.src_words[i]);
-    end
+    foreach (clone.src_data[i])
+    mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group) + clone.src_group[i],
+                          clone.src_addr[i], clone.src_data[i]);
     mem_model.arm();
-
-    for (i = 0; i < clone.num_dst_words; i++) begin
-      expected_dst[i] = clone.dst_words[i];
-      seen_addr[i] = 1'b0;
-    end
-    expected_writes = clone.num_dst_words;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
@@ -77,43 +59,58 @@ class im2col_scoreboard extends uvm_scoreboard;
 
   function void write_read(bb_blink_read_item item);
     im2col_cmd_item stim;
+    int unsigned group;
     stim = current_stim("READ");
+    if (read_count >= stim.read_addr.size())
+      `uvm_fatal("READ", $sformatf("extra read %0d", read_count))
+    group = stim.op1_group + stim.read_group[read_count];
     if (item.bank_id !== stim.op1_bank)
       `uvm_fatal("READ", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.op1_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== stim.op1_group)
+    if (item.group_id !== group[BB_BLINK_GROUP_ID_W-1:0])
       `uvm_fatal("READ", $sformatf(
-                 "group_id mismatch: got %0d exp %0d", item.group_id, stim.op1_group))
-    if (item.addr >= stim.num_src_words[9:0])
+                 "read %0d group mismatch: got %0d exp %0d", read_count, item.group_id, group))
+    if (item.addr !== stim.read_addr[read_count][BB_BLINK_BANK_ADDR_W-1:0])
       `uvm_fatal("READ", $sformatf(
-                 "addr out of range: got %0d max %0d", item.addr, stim.num_src_words))
+                 "read %0d addr mismatch: got %0d exp %0d",
+                 read_count,
+                 item.addr,
+                 stim.read_addr[read_count]
+                 ))
     read_count++;
   endfunction
 
   function void write_write(bb_blink_write_item item);
     im2col_cmd_item stim;
-    int unsigned addr;
+    int unsigned group;
     stim = current_stim("WRITE");
+    if (write_count >= stim.dst_addr.size())
+      `uvm_fatal("WRITE", $sformatf("extra write %0d", write_count))
+    group = stim.wr_group + stim.dst_group[write_count];
     if (item.bank_id !== stim.wr_bank)
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== stim.wr_group)
+    if (item.group_id !== group[BB_BLINK_GROUP_ID_W-1:0])
       `uvm_fatal("WRITE", $sformatf(
-                 "group_id mismatch: got %0d exp %0d", item.group_id, stim.wr_group))
-    addr = int'(item.addr);
-    if (addr >= expected_writes)
-      `uvm_fatal("WRITE", $sformatf("addr out of range: got %0d max %0d", addr, expected_writes))
-    if (seen_addr[addr]) `uvm_fatal("WRITE", $sformatf("duplicate write addr %0d", addr))
+                 "write %0d group mismatch: got %0d exp %0d", write_count, item.group_id, group))
+    if (item.addr !== stim.dst_addr[write_count][BB_BLINK_BANK_ADDR_W-1:0])
+      `uvm_fatal("WRITE", $sformatf(
+                 "write %0d addr mismatch: got %0d exp %0d",
+                 write_count,
+                 item.addr,
+                 stim.dst_addr[write_count]
+                 ))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))
-    if (item.data !== expected_dst[addr])
-      `uvm_fatal(
-          "SCB", $sformatf(
-          "data mismatch at addr %0d: got 0x%032h exp 0x%032h", addr, item.data, expected_dst[addr]
-          ))
-    seen_addr[addr] = 1'b1;
+    if (item.data !== stim.dst_data[write_count])
+      `uvm_fatal("SCB", $sformatf(
+                 "write %0d data mismatch: got 0x%032h exp 0x%032h",
+                 write_count,
+                 item.data,
+                 stim.dst_data[write_count]
+                 ))
     write_count++;
   endfunction
 
@@ -134,25 +131,24 @@ class im2col_scoreboard extends uvm_scoreboard;
   endfunction
 
   function bit done();
-    return cmd_count == 1 && write_count == expected_writes && resp_count == 1;
+    return stim_q.size() == 1 && cmd_count == 1 && read_count == stim_q[0].read_addr.size() &&
+        write_count == stim_q[0].dst_addr.size() && resp_count == 1;
   endfunction
 
   function void reset_counters();
     stim_q.delete();
-    for (int i = 0; i < IM2COL_MAX_WORDS; i++) seen_addr[i] = 1'b0;
-    cmd_count = 0;
-    read_count = 0;
+    cmd_count   = 0;
+    read_count  = 0;
     write_count = 0;
-    resp_count = 0;
-    expected_writes = 0;
+    resp_count  = 0;
   endfunction
 
   function void check_phase(uvm_phase phase);
     verification_pkg::evidence::checks++;
     super.check_phase(phase);
     if (!done()) begin
-      `uvm_fatal("SCB", $sformatf("incomplete: cmds=%0d reads=%0d writes=%0d/%0d resp=%0d",
-                                  cmd_count, read_count, write_count, expected_writes, resp_count))
+      `uvm_fatal("SCB", $sformatf("incomplete: cmds=%0d reads=%0d writes=%0d resp=%0d", cmd_count,
+                                  read_count, write_count, resp_count))
     end
     stim_q.delete();
   endfunction

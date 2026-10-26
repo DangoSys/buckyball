@@ -1,17 +1,29 @@
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
+use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 
 fn max_iter(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::im2col::Params>("im2col", instance).max_iter.expect("maxIter") as usize
+    bebop_bemu::configs::ball_domain::parameters::<
+        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
+    >("im2col", instance)
+    .max_iter
+    .expect("maxIter") as usize
 }
 
 fn max_kernel(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::im2col::Params>("im2col", instance).max_k_size.expect("maxKSize") as usize
+    bebop_bemu::configs::ball_domain::parameters::<
+        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
+    >("im2col", instance)
+    .max_k_size
+    .expect("maxKSize") as usize
 }
 
 fn max_padding(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::im2col::Params>("im2col", instance).max_padding.expect("maxPadding") as usize
+    bebop_bemu::configs::ball_domain::parameters::<
+        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
+    >("im2col", instance)
+    .max_padding
+    .expect("maxPadding") as usize
 }
 
 #[derive(Clone, Copy)]
@@ -153,6 +165,9 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 pub(crate) fn latency(xs1: u64, xs2: u64, instance: u32) -> u64 {
     let shape = decode_shape(xs1, xs2);
     output_cols(shape, instance);
-    (shape.window_count.div_ceil(shape.tile_rows) * shape.tile_rows * shape.kernel * shape.kernel * 2)
-        as u64
+    (shape.window_count.div_ceil(shape.tile_rows)
+        * shape.tile_rows
+        * shape.kernel
+        * shape.kernel
+        * 2) as u64
 }

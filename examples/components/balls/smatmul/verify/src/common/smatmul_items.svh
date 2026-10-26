@@ -6,6 +6,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
   bit [31:0] command_count;
   bit [31:0] op1_words;
   bit [31:0] op2_words;
+  bit [31:0] k_groups;
   bit [63:0] rs1;
 
   function new(string name = "smatmul_cmd_item");
@@ -24,6 +25,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     command_count = smatmul_case_num_commands();
     op1_words = cmd.op1_words;
     op2_words = cmd.op2_words;
+    k_groups = cmd.k_groups;
     rs1 = {cmd.rs1_hi, cmd.rs1_lo};
 
     // BB_BANK0/1/2 and BB_ITER fields of rs1; banks are not renamed at Ball level.
@@ -48,12 +50,14 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
         `uvm_fatal("CASE", "invalid bias command")
     end else begin
       funct   = SMATMUL_OS_THREAD_FUNCT7[6:0];
-      op1_col = 1;
-      op2_col = 1;
-      wr_col  = 1;
+      // A and B group g hold K block g; C rows continue across wr_col groups.
+      op1_col = cmd.k_groups;
+      op2_col = cmd.k_groups;
+      wr_col  = cmd.wr_col;
+      if (k_groups == 0 || cmd.wr_col == 0) `uvm_fatal("CASE", "SMATMUL_OS needs groups")
       if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank)
         `uvm_fatal("CASE", "SMATMUL_OS banks must be distinct")
-      if (rs2[63:26] != 0 || rs2[23:12] != 16 || iter != 16)
+      if (rs2[63:32] != 0 || rs2[23:12] != 16 || iter != 16)
         `uvm_fatal("CASE", "invalid SMATMUL_OS shape or reserved bits")
     end
   endfunction
@@ -67,6 +71,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     command_count = rhs_.command_count;
     op1_words = rhs_.op1_words;
     op2_words = rhs_.op2_words;
+    k_groups = rhs_.k_groups;
     rs1 = rhs_.rs1;
   endfunction
 endclass

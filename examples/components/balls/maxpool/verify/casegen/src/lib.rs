@@ -105,3 +105,25 @@ pub extern "C" fn maxpool_case_dst_addr(word_index: u32) -> u32 {
         case.dst_addr[i]
     })
 }
+
+#[no_mangle]
+pub extern "C" fn maxpool_case_input_group(word_index: u32) -> u32 {
+    current_case(|case| {
+        let i = idx(word_index, case.cmd.num_input_words, "input_group");
+        if i >= MAX_INPUT_WORDS {
+            panic!("maxpool_case_input_group: word_index out of range");
+        }
+        case.input_group[i]
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn maxpool_case_dst_group(word_index: u32) -> u32 {
+    current_case(|case| {
+        let i = idx(word_index, case.cmd.num_dst_words, "dst_group");
+        if i >= MAX_DST {
+            panic!("maxpool_case_dst_group: word_index out of range");
+        }
+        case.dst_group[i]
+    })
+}

@@ -36,6 +36,7 @@ class smatmul_scoreboard extends uvm_scoreboard;
     matrix_cmd_dpi_t data_cmd;
     longint unsigned lo;
     longint unsigned hi;
+    int unsigned per_group;
     if (!$cast(got, item) || !$cast(clone, got.clone()))
       `uvm_fatal("SCB", "failed to clone smatmul stimulus")
     if (got.command_index != stim_count) `uvm_fatal("SCB", "commands arrived out of order")
@@ -52,15 +53,20 @@ class smatmul_scoreboard extends uvm_scoreboard;
       end
       for (int block = 0; block < expected_commands - 1; block++) begin
         smatmul_case_cmd(block + 1, data_cmd);
+        // A and B words are group-major: K group g starts at g * per_group.
+        per_group = smatmul_case_a_words(block) / data_cmd.k_groups;
         for (int i = 0; i < smatmul_case_a_words(block); i++) begin
           lo = smatmul_case_a_word_lo(block, i);
           hi = smatmul_case_a_word_hi(block, i);
-          mem_model.load_word_g(data_cmd.rs1_lo[9:0], data_cmd.op1_group, i, {hi, lo});
+          mem_model.load_word_g(data_cmd.rs1_lo[9:0], data_cmd.op1_group + i / per_group,
+                                i % per_group, {hi, lo});
         end
+        per_group = smatmul_case_b_words(block) / data_cmd.k_groups;
         for (int i = 0; i < smatmul_case_b_words(block); i++) begin
           lo = smatmul_case_b_word_lo(block, i);
           hi = smatmul_case_b_word_hi(block, i);
-          mem_model.load_word_g(data_cmd.rs1_lo[19:10], data_cmd.op2_group, i, {hi, lo});
+          mem_model.load_word_g(data_cmd.rs1_lo[19:10], data_cmd.op2_group + i / per_group,
+                                i % per_group, {hi, lo});
         end
       end
       mem_model.arm();
@@ -77,8 +83,8 @@ class smatmul_scoreboard extends uvm_scoreboard;
       `uvm_fatal("SCB", "command count changed within a case")
     end
 
-    expected_reads[0] += got.op1_words;
-    expected_reads[1] += got.kind == 0 ? 0 : got.op2_words;
+    expected_reads[0] += got.kind == 0 ? got.op1_words : got.op1_words * got.k_groups;
+    expected_reads[1] += got.kind == 0 ? 0 : got.op2_words * got.k_groups;
     stim_q.push_back(clone);
     stim_count++;
   endfunction
@@ -100,12 +106,12 @@ class smatmul_scoreboard extends uvm_scoreboard;
           item.addr >= 4)
         `uvm_fatal("READ", "invalid bias read")
     end else if (item.port == 0) begin
-      if (item.bank_id != stim.op1_bank || item.group_id != stim.op1_group ||
-          item.addr >= stim.op1_words)
+      if (item.bank_id != stim.op1_bank || item.group_id < stim.op1_group ||
+          item.group_id >= stim.op1_group + stim.k_groups || item.addr >= stim.op1_words)
         `uvm_fatal("READ", "A read outside command footprint")
     end else if (item.port == 1) begin
-      if (item.bank_id != stim.op2_bank || item.group_id != stim.op2_group ||
-          item.addr >= stim.op2_words)
+      if (item.bank_id != stim.op2_bank || item.group_id < stim.op2_group ||
+          item.group_id >= stim.op2_group + stim.k_groups || item.addr >= stim.op2_words)
         `uvm_fatal("READ", "B read outside command footprint")
     end else begin
       `uvm_fatal("READ", "unexpected read port")
@@ -119,11 +125,14 @@ class smatmul_scoreboard extends uvm_scoreboard;
     stim = current_stim("WRITE");
     if (stim.kind != 1 || stim.rs2[25] != 1)
       `uvm_fatal("WRITE", "write before the last accumulation block")
-    if (item.port != 0 || item.group_id != stim.wr_group || item.bank_id != stim.wr_bank ||
+    if (item.port != 0 || item.bank_id != stim.wr_bank ||
         item.mask != 16'hffff || item.rob_id != stim.rob_id)
       `uvm_fatal("WRITE", "write metadata violates SMatMul contract")
     for (int i = 0; i < expected_writes; i++) begin
-      if (!exp_seen[i] && item.addr === exp_addr[i][9:0] && item.data === exp_data[i]) begin
+      // exp_addr is C's virtual line: group wr_group + line / depth, addr line % depth.
+      if (!exp_seen[i] && item.addr === exp_addr[i] % (1 << `BB_BANK_ADDR_W) &&
+          item.group_id === stim.wr_group + (exp_addr[i] >> `BB_BANK_ADDR_W) &&
+          item.data === exp_data[i]) begin
         match_index = i;
         break;
       end

@@ -40,8 +40,9 @@ localparam int QUANT_F32_TO_I8_THREAD_FUNCT7 = `QUANT_F32_TO_I8_FUNCT7;
 localparam int QUANT_I32_TO_I8_THREAD_FUNCT7 = `QUANT_I32_TO_I8_FUNCT7;
 localparam int TOINT8_KIND_F32 = 0;
 localparam int TOINT8_KIND_I32 = 1;
-localparam int TOINT8_MAX_SRC_WORDS = 16;
-localparam int TOINT8_MAX_SCALE_WORDS = 4;
-localparam int TOINT8_MAX_DST_WORDS = 4;
-localparam int TOINT8_NUM_CASES = 8;
+// Words are group-major: rows of channel group 0, then group 1, ...
+localparam int TOINT8_MAX_SRC_WORDS = 48;
+localparam int TOINT8_MAX_SCALE_WORDS = 12;
+localparam int TOINT8_MAX_DST_WORDS = 12;
+localparam int TOINT8_NUM_CASES = 10;
 localparam int TOINT8_TIMEOUT_CYCLES = 4000;

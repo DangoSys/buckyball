@@ -46,12 +46,14 @@ class toint8_scoreboard extends uvm_scoreboard;
       `uvm_fatal("SCB", "mem_model handle not set")
     end
     mem_model.clear_mem();
+    // Group g of every operand is channel block g with the same rows.
     for (i = 0; i < clone.num_src_words; i++) begin
-      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group), int'(clone.input_base) + i,
-                            clone.src_words[i]);
+      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group) + i / int'(clone.iter),
+                            int'(clone.input_base) + i % int'(clone.iter), clone.src_words[i]);
     end
     for (i = 0; i < clone.num_scale_words; i++) begin
-      mem_model.load_word_g(int'(clone.op2_bank), int'(clone.op2_group), i, clone.scale_words[i]);
+      mem_model.load_word_g(int'(clone.op2_bank), int'(clone.op2_group) + i / 4, i % 4,
+                            clone.scale_words[i]);
     end
     mem_model.arm();
 
@@ -78,6 +80,9 @@ class toint8_scoreboard extends uvm_scoreboard;
   function void write_read(bb_blink_read_item item);
     toint8_cmd_item stim;
     int unsigned scale_reads;
+    int unsigned group_reads;
+    int unsigned group;
+    int unsigned index;
     int unsigned expect_bank;
     int unsigned expect_group;
     int unsigned expect_addr;
@@ -88,15 +93,19 @@ class toint8_scoreboard extends uvm_scoreboard;
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
 
-    scale_reads = stim.num_scale_words;
-    if (read_count < scale_reads) begin
+    // Each group reads its scale rows (I32 only), then its input rows.
+    scale_reads = stim.num_scale_words / stim.op1_col;
+    group_reads = scale_reads + stim.iter;
+    group       = read_count / group_reads;
+    index       = read_count % group_reads;
+    if (index < scale_reads) begin
       expect_bank  = stim.op2_bank;
-      expect_group = stim.op2_group;
-      expect_addr  = read_count;
+      expect_group = stim.op2_group + group;
+      expect_addr  = index;
     end else begin
       expect_bank  = stim.op1_bank;
-      expect_group = stim.op1_group;
-      expect_addr  = stim.input_base + (read_count - scale_reads);
+      expect_group = stim.op1_group + group;
+      expect_addr  = stim.input_base + (index - scale_reads);
     end
     if (item.bank_id !== expect_bank[BB_BLINK_BANK_ID_W-1:0])
       `uvm_fatal("READ", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, expect_bank))
@@ -117,8 +126,11 @@ class toint8_scoreboard extends uvm_scoreboard;
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== stim.wr_group)
-      `uvm_fatal("WRITE", $sformatf("group mismatch: got %0d exp %0d", item.group_id, stim.wr_group
+    if (item.group_id !== stim.wr_group + write_count / (stim.iter >> 2))
+      `uvm_fatal("WRITE", $sformatf(
+                 "group mismatch: got %0d exp %0d",
+                 item.group_id,
+                 stim.wr_group + write_count / (stim.iter >> 2)
                  ))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))

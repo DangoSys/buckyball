@@ -6,12 +6,14 @@ class maxpool_cov extends uvm_component;
   int unsigned cur_kernel;
   int unsigned cur_stride;
   int unsigned cur_padding;
+  int unsigned cur_groups;
   int cmd_count;
 
   covergroup cmd_cg;
     coverpoint cur_kernel {bins k2 = {2}; bins k3 = {3};}
     coverpoint cur_stride {bins s1 = {1}; bins s2 = {2};}
     coverpoint cur_padding {bins p0 = {0}; bins p1 = {1};}
+    coverpoint cur_groups {bins one = {1}; bins many = {[2 : 24]};}
   endgroup
 
   function new(string name, uvm_component parent);
@@ -26,6 +28,7 @@ class maxpool_cov extends uvm_component;
     cur_kernel  = int'(item.rs2[11:8]);
     cur_stride  = int'(item.rs2[15:12]);
     cur_padding = int'(item.rs2[19:16]);
+    cur_groups  = int'(item.op1_col);
     cmd_count++;
     cmd_cg.sample();
   endfunction
@@ -38,7 +41,7 @@ class maxpool_cov extends uvm_component;
       `uvm_fatal(
           "COV",
           $sformatf(
-              "maxpool_cov coverage incomplete: %0.2f%% (need kernel {2,3}, stride {1,2}, pad {0,1})",
+              "maxpool_cov coverage incomplete: %0.2f%% (need kernel {2,3}, stride {1,2}, pad {0,1}, groups {1,>1})",
               cmd_cg.get_coverage()))
     end
   endfunction

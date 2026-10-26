@@ -19,7 +19,8 @@ pub fn pack_b(src: &[i8]) -> Vec<u8> {
     src.iter().map(|value| *value as u8).collect()
 }
 
-pub fn emit_writes(c: &[Vec<i32>]) -> Vec<WriteExp> {
+// `addr` is the line of C's virtual bank; it continues across groups.
+pub fn emit_writes(c: &[Vec<i32>], output_base: usize) -> Vec<WriteExp> {
     let mut writes = Vec::with_capacity(c.len() * RESULT_WORDS);
     for (row, values) in c.iter().enumerate() {
         assert_eq!(values.len(), CORE);
@@ -30,7 +31,7 @@ pub fn emit_writes(c: &[Vec<i32>]) -> Vec<WriteExp> {
                 data[lane * 4..lane * 4 + 4].copy_from_slice(&value.to_le_bytes());
             }
             writes.push(WriteExp {
-                addr: (row * RESULT_WORDS + word) as u32,
+                addr: (output_base + row * RESULT_WORDS + word) as u32,
                 data,
             });
         }
@@ -49,10 +50,11 @@ pub fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u64) -> u64 {
     u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20) | (iter << 30)
 }
 
-pub fn encode_rs2(rows: usize, first: bool, last: bool) -> u64 {
-    assert!(matches!(rows, 16 | 32 | 64));
+pub fn encode_rs2(rows: usize, first: bool, last: bool, output_base: usize) -> u64 {
+    assert!(matches!(rows, 16 | 32 | 64 | 128) && output_base < 64);
     rows as u64
         | ((CORE as u64) << 12)
         | ((first as u64) << 24)
         | ((last as u64) << 25)
+        | ((output_base as u64) << 26)
 }

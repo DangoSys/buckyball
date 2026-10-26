@@ -46,8 +46,8 @@ class maxpool_scoreboard extends uvm_scoreboard;
     end
     mem_model.clear_mem();
     for (i = 0; i < clone.num_input_words; i++) begin
-      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group), int'(clone.input_addr[i]),
-                            clone.input_words[i]);
+      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group + clone.input_group[i]),
+                            int'(clone.input_addr[i]), clone.input_words[i]);
     end
     mem_model.arm();
 
@@ -91,8 +91,12 @@ class maxpool_scoreboard extends uvm_scoreboard;
     stim = current_stim("READ");
     if (item.port != 0)
       `uvm_fatal("READ", $sformatf("MaxPoolBall has one read port, got port %0d", item.port))
-    if (item.group_id !== stim.op1_group)
-      `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp %0d", item.group_id, stim.op1_group
+    // Groups are pooled in order: every read belongs to the group being written.
+    if (item.group_id !== stim.op1_group + stim.dst_group[write_count])
+      `uvm_fatal("READ", $sformatf(
+                 "group mismatch: got %0d exp %0d",
+                 item.group_id,
+                 stim.op1_group + stim.dst_group[write_count]
                  ))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
@@ -113,13 +117,16 @@ class maxpool_scoreboard extends uvm_scoreboard;
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== stim.wr_group)
-      `uvm_fatal("WRITE", $sformatf("group mismatch: got %0d exp %0d", item.group_id, stim.wr_group
+    if (write_count >= stim.num_dst_words)
+      `uvm_fatal("WRITE", $sformatf("extra write %0d", write_count))
+    if (item.group_id !== stim.wr_group + stim.dst_group[write_count])
+      `uvm_fatal("WRITE", $sformatf(
+                 "group mismatch: got %0d exp %0d",
+                 item.group_id,
+                 stim.wr_group + stim.dst_group[write_count]
                  ))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))
-    if (write_count >= stim.num_dst_words)
-      `uvm_fatal("WRITE", $sformatf("extra write %0d", write_count))
     if (item.addr !== stim.dst_addr[write_count][BB_BLINK_BANK_ADDR_W-1:0])
       `uvm_fatal("WRITE", $sformatf(
                  "addr mismatch: got %0d exp %0d", item.addr, stim.dst_addr[write_count]))

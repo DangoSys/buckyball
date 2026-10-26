@@ -4,10 +4,10 @@ pub const BANK_NUM: u32 = 24;
 pub const BANK_ENTRIES: u32 = 64;
 pub const LANES: usize = 4;
 pub const SCALE_ROWS: usize = 4;
-pub const MAX_SRC: usize = 16;
-pub const MAX_SCALE: usize = 4;
-pub const MAX_DST: usize = 16;
-pub const NUM_CASES: u32 = 6;
+pub const MAX_SRC: usize = 48;
+pub const MAX_SCALE: usize = 12;
+pub const MAX_DST: usize = 48;
+pub const NUM_CASES: u32 = 8;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,12 +70,34 @@ pub fn gen_case(index: u32) -> Int2FpCase {
         panic!("int2fp: unsupported directed case {index}");
     }
     match index {
-        0 => directed(2, 4, false, &MLIR_INPUT, &[0.125; 16], [0, 0, 0]),
-        1 => directed(3, 4, true, &RELU_INPUT, &[1.0; 16], [1, 2, 3]),
-        2 => directed(4, 8, false, &ITER8, &SCALE16, [2, 0, 1]),
-        3 => directed(5, 8, true, &ITER8, &SCALE16, [3, 1, 0]),
-        4 => directed(6, 16, false, &ITER16, &SCALE16, [0, 3, 2]),
-        5 => directed(7, 16, true, &ITER16, &SCALE16, [1, 1, 1]),
+        0 => directed(2, 4, 1, false, &MLIR_INPUT, &[0.125; 16], [0, 0, 0]),
+        1 => directed(3, 4, 1, true, &RELU_INPUT, &[1.0; 16], [1, 2, 3]),
+        2 => directed(4, 8, 1, false, &ITER8, &SCALE16, [2, 0, 1]),
+        3 => directed(5, 8, 1, true, &ITER8, &SCALE16, [3, 1, 0]),
+        4 => directed(6, 16, 1, false, &ITER16, &SCALE16, [0, 3, 2]),
+        5 => directed(7, 16, 1, true, &ITER16, &SCALE16, [1, 1, 1]),
+        // Two channel groups: group 0 is MLIR_INPUT with 0.125 scales, group 1
+        // is RELU_INPUT with SCALE16.
+        6 => directed(
+            0,
+            4,
+            2,
+            false,
+            &[MLIR_INPUT, RELU_INPUT].concat(),
+            &[[0.125; 16], SCALE16].concat(),
+            [0, 0, 0],
+        ),
+        // Three channel groups with ReLU and nonzero base groups: group g holds
+        // ITER8, then the two halves of ITER16; scales are SCALE16, 1.0, 0.5.
+        7 => directed(
+            1,
+            8,
+            3,
+            true,
+            &[&ITER8[..], &ITER16[..32], &ITER16[32..]].concat(),
+            &[SCALE16, [1.0; 16], [0.5; 16]].concat(),
+            [1, 2, 0],
+        ),
         _ => panic!("int2fp: unsupported directed case {index}"),
     }
 }
@@ -87,9 +109,9 @@ const ITER8: [i32; 32] = [
     -9, 12, -12, 6, -6, 11, -11,
 ];
 const ITER16: [i32; 64] = [
-    1, 2, 3, -1, -2, 0, 4, 5, 10, -10, 7, 100, -100, 8, 16, -8, 8, -4, 16, 0, 1, -2, 3, -8, 12, -12,
-    6, -6, 9, -9, 11, -11, 20, -20, 24, -24, 15, -15, 18, -18, 30, -30, 40, -40, 25, -25, 28, -28,
-    50, -50, 60, -60, 7, -7, 13, -13, 14, -14, 17, -17, 19, -19, 21, -21,
+    1, 2, 3, -1, -2, 0, 4, 5, 10, -10, 7, 100, -100, 8, 16, -8, 8, -4, 16, 0, 1, -2, 3, -8, 12,
+    -12, 6, -6, 9, -9, 11, -11, 20, -20, 24, -24, 15, -15, 18, -18, 30, -30, 40, -40, 25, -25, 28,
+    -28, 50, -50, 60, -60, 7, -7, 13, -13, 14, -14, 17, -17, 19, -19, 21, -21,
 ];
 const SCALE16: [f32; 16] = [
     0.125, 0.25, 0.5, 1.0, 0.25, 0.5, 1.0, 2.0, 0.5, 1.0, 2.0, 0.125, 1.0, 0.125, 0.25, 0.5,
@@ -97,7 +119,10 @@ const SCALE16: [f32; 16] = [
 
 fn pack_u32s(vals: &[u32]) -> Vec<u128> {
     if vals.len() % LANES != 0 {
-        panic!("int2fp: value count {} is not a multiple of four", vals.len());
+        panic!(
+            "int2fp: value count {} is not a multiple of four",
+            vals.len()
+        );
     }
     vals.chunks(LANES)
         .map(|chunk| {
@@ -147,8 +172,8 @@ pub(crate) fn validate(
     if op1_bank >= BANK_NUM || op2_bank >= BANK_NUM || wr_bank >= BANK_NUM {
         panic!("INT32_TO_FP32 bank id is invalid");
     }
-    if op1_col != 1 || op2_col != 1 || wr_col != 1 {
-        panic!("INT32_TO_FP32 operands must each occupy one bank");
+    if op1_col == 0 || op1_col != op2_col || op1_col != wr_col {
+        panic!("INT32_TO_FP32 operands must have the same channel groups");
     }
     if op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank {
         panic!("INT32_TO_FP32 banks must be distinct");
@@ -156,8 +181,8 @@ pub(crate) fn validate(
     if rs2 >> 1 != 0 {
         panic!("INT32_TO_FP32 reserves rs2[63:1]");
     }
-    if scales.len() != SCALE_ROWS {
-        panic!("INT32_TO_FP32 must emit four scale rows");
+    if scales.len() != SCALE_ROWS * op2_col as usize {
+        panic!("INT32_TO_FP32 must emit four scale rows per group");
     }
     for word in scales {
         for lane in 0..LANES {
@@ -169,11 +194,12 @@ pub(crate) fn validate(
     }
 }
 
-fn dst_words(src: &[u128], scales: &[u128], relu: bool) -> Vec<u128> {
+// Words are group-major: src/dst word i is group i / iter, row i % iter.
+fn dst_words(src: &[u128], scales: &[u128], iter: usize, relu: bool) -> Vec<u128> {
     src.iter()
         .enumerate()
-        .map(|(row, word)| {
-            let scale = scales[row % SCALE_ROWS];
+        .map(|(i, word)| {
+            let scale = scales[i / iter * SCALE_ROWS + i % iter % SCALE_ROWS];
             let mut packed = 0u128;
             for lane in 0..LANES {
                 let raw = (*word >> (lane * 32)) as u32 as i32;
@@ -190,37 +216,42 @@ fn dst_words(src: &[u128], scales: &[u128], relu: bool) -> Vec<u128> {
 fn directed(
     rob_id: u32,
     iter: u32,
+    cols: u32,
     relu: bool,
     values: &[i32],
     scales: &[f32],
     groups: [u32; 3],
 ) -> Int2FpCase {
-    if values.len() != iter as usize * LANES {
+    if values.len() != (cols * iter) as usize * LANES {
         panic!(
             "int2fp: {} values do not match iter {iter} * {LANES}",
             values.len()
         );
     }
-    if scales.len() != SCALE_ROWS * LANES {
-        panic!("int2fp: {} scales, expected {}", scales.len(), SCALE_ROWS * LANES);
+    if scales.len() != cols as usize * SCALE_ROWS * LANES {
+        panic!(
+            "int2fp: {} scales, expected {}",
+            scales.len(),
+            SCALE_ROWS * LANES
+        );
     }
     let src = pack_u32s(&values.iter().map(|v| *v as u32).collect::<Vec<_>>());
     let scale = pack_u32s(&scales.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
     let op1_bank = 0;
     let op2_bank = 1;
     let wr_bank = 2;
-    let op1_col = 1;
-    let op2_col = 1;
-    let wr_col = 1;
+    let op1_col = cols;
+    let op2_col = cols;
+    let wr_col = cols;
     let rs2 = u64::from(relu);
     validate(
         op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs2, &scale,
     );
-    if src.len() != iter as usize {
-        panic!("int2fp: src rows {} != iter {iter}", src.len());
+    if src.len() != (cols * iter) as usize {
+        panic!("int2fp: src rows {} != iter {iter} * groups", src.len());
     }
-    let dst = dst_words(&src, &scale, relu);
-    if dst.len() != iter as usize {
+    let dst = dst_words(&src, &scale, iter as usize, relu);
+    if dst.len() != (cols * iter) as usize {
         panic!("int2fp: dst rows {} != iter {iter}", dst.len());
     }
     let (rs2_lo, rs2_hi) = split_rs(rs2);

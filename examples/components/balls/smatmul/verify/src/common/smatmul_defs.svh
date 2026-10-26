@@ -10,6 +10,8 @@ typedef struct {
   int unsigned op1_group;
   int unsigned op2_group;
   int unsigned wr_group;
+  int unsigned k_groups;
+  int unsigned wr_col;
 } matrix_cmd_dpi_t;
 
 `ifndef SMATMUL_TILE_ROWS

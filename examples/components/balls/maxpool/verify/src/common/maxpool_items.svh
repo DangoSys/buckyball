@@ -15,8 +15,10 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
   bit [31:0] num_dst_words;
   bit [127:0] input_words[MAXPOOL_MAX_INPUT_WORDS];
   bit [31:0] input_addr[MAXPOOL_MAX_INPUT_WORDS];
+  bit [31:0] input_group[MAXPOOL_MAX_INPUT_WORDS];
   bit [127:0] dst_words[MAXPOOL_MAX_DST_WORDS];
   bit [31:0] dst_addr[MAXPOOL_MAX_DST_WORDS];
+  bit [31:0] dst_group[MAXPOOL_MAX_DST_WORDS];
 
   function new(string name = "maxpool_cmd_item");
     super.new(name);
@@ -64,12 +66,12 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
     num_input_words = cmd.num_input_words;
     num_dst_words   = cmd.num_dst_words;
 
-    if (op1_col != 1 || wr_col != 1)
-      `uvm_fatal("CASE", "MAXPOOL requires one input group and one output group")
+    if (op1_col == 0 || wr_col != op1_col)
+      `uvm_fatal("CASE", "MAXPOOL input and output must have the same channel groups")
     if (op1_bank == wr_bank) `uvm_fatal("CASE", "MAXPOOL input and output banks must differ")
     if (rs2[63:46] != 0) `uvm_fatal("CASE", "MAXPOOL reserved rs2 bits must be zero")
-    if (num_dst_words != iter)
-      `uvm_fatal("CASE", $sformatf("num_dst_words %0d != iter %0d", num_dst_words, iter))
+    if (num_dst_words != iter * op1_col)
+      `uvm_fatal("CASE", $sformatf("num_dst_words %0d != iter %0d x groups", num_dst_words, iter))
     if (iter != output_side * output_side)
       `uvm_fatal("CASE", $sformatf("iter %0d != output_side^2 %0d", iter, output_side * output_side
                  ))
@@ -83,12 +85,14 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
       w_hi = maxpool_case_input_word_hi(i);
       input_words[i] = {w_hi, w_lo};
       input_addr[i] = maxpool_case_input_addr(i);
+      input_group[i] = maxpool_case_input_group(i);
     end
     for (i = 0; i < num_dst_words; i++) begin
       w_lo = maxpool_case_dst_word_lo(i);
       w_hi = maxpool_case_dst_word_hi(i);
       dst_words[i] = {w_hi, w_lo};
       dst_addr[i] = maxpool_case_dst_addr(i);
+      dst_group[i] = maxpool_case_dst_group(i);
     end
   endfunction
 
@@ -113,10 +117,12 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
     for (int i = 0; i < MAXPOOL_MAX_INPUT_WORDS; i++) begin
       input_words[i] = rhs_.input_words[i];
       input_addr[i]  = rhs_.input_addr[i];
+      input_group[i] = rhs_.input_group[i];
     end
     for (int i = 0; i < MAXPOOL_MAX_DST_WORDS; i++) begin
       dst_words[i] = rhs_.dst_words[i];
       dst_addr[i]  = rhs_.dst_addr[i];
+      dst_group[i] = rhs_.dst_group[i];
     end
   endfunction
 endclass

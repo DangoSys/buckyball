@@ -5,10 +5,12 @@ class int2fp_cov extends uvm_component;
 
   bit cur_relu;
   int unsigned cur_iter;
+  int unsigned cur_groups;
 
   covergroup cmd_cg;
     coverpoint cur_relu {bins off = {0}; bins on = {1};}
     coverpoint cur_iter {bins i4 = {4}; bins i8 = {8}; bins i16 = {16};}
+    coverpoint cur_groups {bins g1 = {1}; bins g2 = {2}; bins g3 = {3};}
   endgroup
 
   int cmd_count;
@@ -22,8 +24,9 @@ class int2fp_cov extends uvm_component;
   function void write_cmd(bb_blink_cmd_item item);
     if (item.funct != INT32_TO_FP32_THREAD_FUNCT7[6:0])
       `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
-    cur_relu = item.rs2[0];
-    cur_iter = item.iter;
+    cur_relu   = item.rs2[0];
+    cur_iter   = item.iter;
+    cur_groups = item.op1_col;
     cmd_count++;
     cmd_cg.sample();
   endfunction

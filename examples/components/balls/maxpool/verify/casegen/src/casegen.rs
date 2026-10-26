@@ -1,8 +1,8 @@
 use crate::model;
 
-pub const MAX_INPUT_WORDS: usize = 64;
+pub const MAX_INPUT_WORDS: usize = 128;
 pub const MAX_DST: usize = 64;
-pub const NUM_CASES: u32 = 9;
+pub const NUM_CASES: u32 = 11;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,8 +36,11 @@ pub struct MaxPoolCase {
     pub cmd: MaxPoolCmd,
     pub input_words: [u128; MAX_INPUT_WORDS],
     pub input_addr: [u32; MAX_INPUT_WORDS],
+    // Channel group of each word, relative to the command's base group.
+    pub input_group: [u32; MAX_INPUT_WORDS],
     pub dst_words: [u128; MAX_DST],
     pub dst_addr: [u32; MAX_DST],
+    pub dst_group: [u32; MAX_DST],
 }
 
 impl MaxPoolCase {
@@ -66,6 +69,9 @@ struct CaseSpec {
     rob_id: u32,
     ctest_input: bool,
     seed: u32,
+    // Channel groups of the input and output banks; group g is pooled with
+    // the same geometry after group g - 1.
+    groups: u32,
 }
 
 fn field(val: u32, lo: u32, hi: u32) -> u64 {
@@ -155,11 +161,6 @@ fn copy_addrs<const N: usize>(src: &[u32]) -> [u32; N] {
 fn build_case(spec: CaseSpec) -> MaxPoolCase {
     model::validate(&spec.geo);
     let iter = model::iter_for(&spec.geo);
-    let input_bytes = if spec.ctest_input {
-        ctest_tile(&spec.geo)
-    } else {
-        seeded_tile(&spec.geo, spec.seed)
-    };
 
     let mut referenced = vec![false; spec.geo.input_side * spec.geo.input_side];
     for output_y in 0..spec.geo.output_side {
@@ -183,26 +184,39 @@ fn build_case(spec: CaseSpec) -> MaxPoolCase {
 
     let mut input_addrs = Vec::new();
     let mut input_words = Vec::new();
-    for y in 0..spec.geo.input_side {
-        for x in 0..spec.geo.input_side {
-            if !referenced[y * spec.geo.input_side + x] {
-                continue;
+    let mut input_groups = Vec::new();
+    let mut dst_addrs = Vec::new();
+    let mut dst_words = Vec::new();
+    let mut dst_groups = Vec::new();
+    for group in 0..spec.groups {
+        let input_bytes = if spec.ctest_input {
+            ctest_tile(&spec.geo)
+        } else {
+            seeded_tile(&spec.geo, spec.seed + group * 101)
+        };
+        for y in 0..spec.geo.input_side {
+            for x in 0..spec.geo.input_side {
+                if !referenced[y * spec.geo.input_side + x] {
+                    continue;
+                }
+                let addr = (spec.geo.input_base + y * spec.geo.input_side + x) as u32;
+                let row_off = (y * spec.geo.input_side + x) * model::BANK_ROW_BYTES;
+                let mut row = [0u8; model::BANK_ROW_BYTES];
+                row.copy_from_slice(&input_bytes[row_off..row_off + model::BANK_ROW_BYTES]);
+                input_addrs.push(addr);
+                input_words.push(model::pack_row(&row));
+                input_groups.push(group);
             }
-            let addr = (spec.geo.input_base + y * spec.geo.input_side + x) as u32;
-            let row_off = (y * spec.geo.input_side + x) * model::BANK_ROW_BYTES;
-            let mut row = [0u8; model::BANK_ROW_BYTES];
-            row.copy_from_slice(&input_bytes[row_off..row_off + model::BANK_ROW_BYTES]);
-            input_addrs.push(addr);
-            input_words.push(model::pack_row(&row));
+        }
+        for (addr, row) in model::maxpool_rows(&input_bytes, &spec.geo) {
+            dst_addrs.push(addr);
+            dst_words.push(model::pack_row(&row));
+            dst_groups.push(group);
         }
     }
 
-    let gold = model::maxpool_rows(&input_bytes, &spec.geo);
-    let dst_addrs: Vec<u32> = gold.iter().map(|(addr, _)| *addr).collect();
-    let dst_words: Vec<u128> = gold.iter().map(|(_, row)| model::pack_row(row)).collect();
-
-    if dst_addrs.len() as u32 != iter {
-        panic!("maxpool: gold rows {} != iter {iter}", dst_addrs.len());
+    if dst_addrs.len() as u32 != iter * spec.groups {
+        panic!("maxpool: gold rows {} != iter {iter} x groups", dst_addrs.len());
     }
 
     let rs2 = encode_rs2(&spec.geo);
@@ -218,8 +232,8 @@ fn build_case(spec: CaseSpec) -> MaxPoolCase {
             // Vary the renamed group bases across cases; the Ball adds them to every access.
             op1_group: spec.seed % 3,
             wr_group: (spec.seed + 1) % 4,
-            op1_col: 1,
-            wr_col: 1,
+            op1_col: spec.groups,
+            wr_col: spec.groups,
             rob_id: spec.rob_id,
             rs2_lo,
             rs2_hi,
@@ -234,12 +248,14 @@ fn build_case(spec: CaseSpec) -> MaxPoolCase {
             start_row: spec.geo.start_row as u32,
             start_col: spec.geo.start_col as u32,
             num_input_words: input_words.len() as u32,
-            num_dst_words: iter,
+            num_dst_words: dst_words.len() as u32,
         },
         input_words: copy_words(&input_words),
         input_addr: copy_addrs::<MAX_INPUT_WORDS>(&input_addrs),
+        input_group: copy_addrs::<MAX_INPUT_WORDS>(&input_groups),
         dst_words: copy_words(&dst_words),
         dst_addr: copy_addrs::<MAX_DST>(&dst_addrs),
+        dst_group: copy_addrs::<MAX_DST>(&dst_groups),
     }
 }
 
@@ -263,6 +279,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 2,
             ctest_input: true,
             seed: 0,
+            groups: 1,
         },
         1 => CaseSpec {
             geo: model::Geo {
@@ -282,6 +299,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 3,
             ctest_input: false,
             seed: 1,
+            groups: 1,
         },
         2 => CaseSpec {
             geo: model::Geo {
@@ -301,6 +319,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 4,
             ctest_input: false,
             seed: 2,
+            groups: 1,
         },
         3 => CaseSpec {
             geo: model::Geo {
@@ -320,6 +339,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 5,
             ctest_input: false,
             seed: 3,
+            groups: 1,
         },
         4 => CaseSpec {
             geo: model::Geo {
@@ -339,6 +359,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 6,
             ctest_input: false,
             seed: 4,
+            groups: 1,
         },
         5 => CaseSpec {
             geo: model::Geo {
@@ -358,6 +379,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 7,
             ctest_input: false,
             seed: 5,
+            groups: 1,
         },
         6 => CaseSpec {
             geo: model::Geo {
@@ -377,6 +399,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 8,
             ctest_input: false,
             seed: 6,
+            groups: 1,
         },
         7 => CaseSpec {
             geo: model::Geo {
@@ -396,6 +419,7 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 9,
             ctest_input: false,
             seed: 7,
+            groups: 1,
         },
         8 => CaseSpec {
             geo: model::Geo {
@@ -415,6 +439,49 @@ fn spec_for(index: u32) -> CaseSpec {
             rob_id: 10,
             ctest_input: false,
             seed: 8,
+            groups: 1,
+        },
+        // Two channel groups, 3x3 kernel with padding.
+        9 => CaseSpec {
+            geo: model::Geo {
+                input_side: 5,
+                output_side: 3,
+                kernel: 3,
+                stride: 2,
+                padding: 1,
+                input_base: 2,
+                output_base: 5,
+                output_stride: 4,
+                start_row: 0,
+                start_col: 0,
+            },
+            op1_bank: 2,
+            wr_bank: 5,
+            rob_id: 11,
+            ctest_input: false,
+            seed: 9,
+            groups: 2,
+        },
+        // Three channel groups, 2x2 stride-2 pooling.
+        10 => CaseSpec {
+            geo: model::Geo {
+                input_side: 4,
+                output_side: 2,
+                kernel: 2,
+                stride: 2,
+                padding: 0,
+                input_base: 0,
+                output_base: 0,
+                output_stride: 2,
+                start_row: 0,
+                start_col: 0,
+            },
+            op1_bank: 1,
+            wr_bank: 0,
+            rob_id: 12,
+            ctest_input: false,
+            seed: 10,
+            groups: 3,
         },
         _ => panic!("maxpool: unsupported directed case {index}"),
     }

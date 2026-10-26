@@ -14,8 +14,13 @@ bias vector. bank1, bank2, and `rs2` are zero, and `iter` is four.
 
 `SMATMUL_OS` uses bank0 for A, bank1 for B, and bank2 for C. `iter` is K.
 `rs2[11:0]` is M, `rs2[23:12]` is N, and bits 24 and 25 are the first/last
-accumulation-block flags. The remaining `rs2` bits are zero. M and K are
-positive multiples of 16 and N is exactly 16.
+accumulation-block flags and bits 31:26 the C base row. The remaining `rs2`
+bits are zero. M is one or a positive multiple of tileRows, N is exactly 16.
+
+A and B have the same number of groups G. Group g holds reduction block g in
+the single-group layouts below, so `iter` is K per group (a positive multiple
+of 16) and the instruction accumulates over `K = iter * G`, walking group 0 to
+group G-1 for every output tile.
 
 ## Layout
 
@@ -25,6 +30,10 @@ Every result row has four 128-bit words. With `outBW=1`, logical output row
 ```text
 line r*4 + word
 ```
+
+C rows continue across groups: line `L = base + r*4 + word` is written to
+group `L / bankEntries`, line `L % bankEntries`. M is limited by the
+accumulator (`max(bankEntries / 4, 32)` rows).
 
 The Ball keeps partial sums internally between commands with `last=0`; only
 the command with `last=1` writes C. A later accumulation block may select new

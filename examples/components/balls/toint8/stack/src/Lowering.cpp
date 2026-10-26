@@ -4,10 +4,12 @@
 // four; the destination receives rows / 4 rows of sixteen i8,
 // clamp(round_half_even(x * multiplier), -128, 127). Argument 0 is the f32
 // multiplier.
-// int32_to_int8: source 0 holds `rows` rows of sixteen i32 (four bank rows
-// each), source 1 the sixteen f32 scales of the columns (four bank rows); the
+// int32_to_int8: source 0 holds `rows` rows of sixteen i32 (four lines each),
+// source 1 the sixteen f32 scales of the columns (four lines); the
 // destination receives `rows` rows of sixteen i8,
 // clamp(round_half_even(x * scale), -128, 127), with `relu` at least zero.
+// Both kinds work on every group: group g is channel block g, and the banks
+// have the same number of groups.
 //
 //===----------------------------------------------------------------------===//
 
@@ -54,14 +56,15 @@ public:
     auto rows = cast<IntegerAttr>(op->getAttr("rows")).getInt();
     bool relu = cast<BoolAttr>(op->getAttr("relu")).getValue();
     int64_t depth = buckyball_target::getBuckyballTarget().bankDepth;
-    if (rows <= 0 || rows > 127 || rows * 4 > depth)
-      return op.emitOpError("INT32-to-INT8 rows exceed the ISA range");
-    // The output rows start at the base of the destination: width one, height
-    // `rows`, stride one.
+    if (rows <= 0 || rows * 4 > depth)
+      return op.emitOpError("INT32-to-INT8 rows exceed the bank depth");
+    // The output rows start at the base of the destination, packed; the
+    // seven-bit height takes 128 rows as two columns of 64.
+    int64_t width = rows > 127 ? 2 : 1;
     uint64_t rs1 = mlir::buddy::bankFields(op.getSources(), op.getDestination(),
                                            false, rows * 4);
-    uint64_t rs2 =
-        uint64_t(relu) | (1ULL << 8) | (uint64_t(rows) << 15) | (1ULL << 22);
+    uint64_t rs2 = uint64_t(relu) | (uint64_t(width) << 8) |
+                   (uint64_t(rows / width) << 15) | (uint64_t(width) << 22);
     mlir::buddy::emitInstruction(
         rewriter, op.getLoc(),
         buckyball_target::getBuckyballFunct7("QUANT_I32_TO_I8"),

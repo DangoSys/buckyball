@@ -32,8 +32,8 @@ import "DPI-C" function longint unsigned int2fp_case_dst_word_hi(input int unsig
 `endif
 
 localparam int INT32_TO_FP32_THREAD_FUNCT7 = `INT32_TO_FP32_FUNCT7;
-localparam int INT2FP_MAX_SRC_WORDS = 16;
-localparam int INT2FP_MAX_SCALE_WORDS = 4;
-localparam int INT2FP_MAX_DST_WORDS = 16;
-localparam int INT2FP_NUM_CASES = 6;
+localparam int INT2FP_MAX_SRC_WORDS = 48;
+localparam int INT2FP_MAX_SCALE_WORDS = 12;
+localparam int INT2FP_MAX_DST_WORDS = 48;
+localparam int INT2FP_NUM_CASES = 8;
 localparam int INT2FP_TIMEOUT_CYCLES = 20000;

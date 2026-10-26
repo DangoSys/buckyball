@@ -4,6 +4,8 @@ add_buckyball_ctest(smatmul_8x16_test.c)
 add_buckyball_ctest(smatmul_16x16_test.c)
 add_buckyball_ctest(smatmul_16x16x32_test.c)
 add_buckyball_ctest(smatmul_nondefault_banks_test.c)
+add_buckyball_ctest(smatmul_k_groups_test.c)
+add_buckyball_ctest(smatmul_c_groups_test.c)
 file(
     STRINGS "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h"
     F32_ISA

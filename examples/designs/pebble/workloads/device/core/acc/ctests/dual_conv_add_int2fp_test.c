@@ -15,7 +15,9 @@ enum {
   K = 3,
   OUT = 2,
   WINDOWS = 4,
-  PACKED_K = 16,
+  M = 8,
+  // K is (kernel row, kernel column, channel); only channel 0 is nonzero.
+  PACKED_K = K * K * CORE,
   RESULT_ROWS = CORE * 2
 };
 static int8_t images[2][IN * IN * CORE] __attribute__((aligned(64)));
@@ -34,15 +36,16 @@ static int32_t expected(int row, int column) {
     for (int ky = 0; ky < K; ++ky)
       for (int kx = 0; kx < K; ++kx)
         sum += image_value(branch, row / OUT + ky, row % OUT + kx) *
-               weights[branch][(ky * K + kx) * CORE + column];
+               weights[branch][(ky * K + kx) * CORE * CORE + column];
   return sum;
 }
 
 static void run_branch(int branch, int out_bank) {
   bb_mvin((uintptr_t)images[branch], 0, IN * IN, 1);
-  bb_im2col(0, 1, IN, K, 1, 0, 0, 0, 0, 0, 0, WINDOWS);
+  // One output group holds all nine K tiles in SMatMul's 8-row M tiles.
+  bb_im2col(0, 1, IN, K, 1, 0, 0, 0, 0, 0, WINDOWS, M);
   bb_mvin((uintptr_t)weights[branch], 0, PACKED_K, 1);
-  bb_smatmul_os(1, 0, out_bank, CORE, CORE, PACKED_K, 1, 1, 0);
+  bb_smatmul_os(1, 0, out_bank, M, CORE, PACKED_K, 1, 1, 0);
 }
 
 int main(void) {
@@ -51,8 +54,10 @@ int main(void) {
       for (int column = 0; column < IN; ++column)
         images[branch][(row * IN + column) * CORE] =
             image_value(branch, row, column);
-    for (int i = 0; i < PACKED_K * CORE; ++i)
-      weights[branch][i] = (int8_t)((i / CORE * 3 + i % CORE) % 41 - 20);
+    for (int tap = 0; tap < K * K; ++tap)
+      for (int column = 0; column < CORE; ++column)
+        weights[branch][tap * CORE * CORE + column] =
+            (int8_t)((tap * 3 + column) % 41 - 20);
   }
   for (int lane = 0; lane < CORE; ++lane)
     scale[lane] = 0.05f;

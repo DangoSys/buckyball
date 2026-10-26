@@ -1,6 +1,6 @@
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallModel, ExecContext};
+use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 
 pub struct MaxPool;
 
@@ -100,40 +100,40 @@ impl BallModel for MaxPool {
 
         // Group g of both operands is channel block g; each block uses the same rows.
         for group in 0..groups {
-        let pi = pbank_group(ctx, input_bank, group);
-        let po = pbank_group(ctx, output_bank, group);
-        let (input, output) = ctx.banks.read_write(pi, po);
-        for output_y in 0..output_side {
-            for output_x in 0..output_side {
-                let output_offset =
-                    (output_base + output_y * output_stride + output_x) * bank_row_bytes();
-                let mut maximum = [-128i8; 16];
-                for kernel_y in 0..kernel {
-                    for kernel_x in 0..kernel {
-                        let input_y =
-                            (output_y * stride + kernel_y + start_row) as isize - padding as isize;
-                        let input_x =
-                            (output_x * stride + kernel_x + start_col) as isize - padding as isize;
-                        if input_y < 0
-                            || input_x < 0
-                            || input_y >= input_side as isize
-                            || input_x >= input_side as isize
-                        {
-                            continue;
-                        }
-                        let input_offset =
-                            (input_base + input_y as usize * input_side + input_x as usize)
-                                * bank_row_bytes();
-                        for lane in 0..16 {
-                            maximum[lane] = maximum[lane].max(input[input_offset + lane] as i8);
+            let pi = pbank_group(ctx, input_bank, group);
+            let po = pbank_group(ctx, output_bank, group);
+            let (input, output) = ctx.banks.read_write(pi, po);
+            for output_y in 0..output_side {
+                for output_x in 0..output_side {
+                    let output_offset =
+                        (output_base + output_y * output_stride + output_x) * bank_row_bytes();
+                    let mut maximum = [-128i8; 16];
+                    for kernel_y in 0..kernel {
+                        for kernel_x in 0..kernel {
+                            let input_y = (output_y * stride + kernel_y + start_row) as isize
+                                - padding as isize;
+                            let input_x = (output_x * stride + kernel_x + start_col) as isize
+                                - padding as isize;
+                            if input_y < 0
+                                || input_x < 0
+                                || input_y >= input_side as isize
+                                || input_x >= input_side as isize
+                            {
+                                continue;
+                            }
+                            let input_offset =
+                                (input_base + input_y as usize * input_side + input_x as usize)
+                                    * bank_row_bytes();
+                            for lane in 0..16 {
+                                maximum[lane] = maximum[lane].max(input[input_offset + lane] as i8);
+                            }
                         }
                     }
-                }
-                for lane in 0..16 {
-                    output[output_offset + lane] = maximum[lane] as u8;
+                    for lane in 0..16 {
+                        output[output_offset + lane] = maximum[lane] as u8;
+                    }
                 }
             }
-        }
         }
         0
     }

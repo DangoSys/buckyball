@@ -51,7 +51,7 @@ int main(void) {
   bb_mvin_2d((uintptr_t)(pixel_input + 16), 8, 1, 24, 28, 15, 3, 8);
   for (int iteration = 0; iteration < iterations; ++iteration)
     for (int lane = 0; lane < 16; ++lane) {
-      bb_im2col(8, 5, 3, 1, 1, 0, 0, lane, 0, 0, 0, 9);
+      bb_im2col(8, 5, 3, 1, 1, 0, 0, 0, 0, 0, 9, 8);
       bb_mvin((uintptr_t)weights, 6, 16, 1);
       bb_smatmul_os(5, 6, 7, 16, 16, 16, lane == 0, lane == 15, 0);
     }

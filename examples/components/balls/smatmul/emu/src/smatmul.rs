@@ -1,10 +1,22 @@
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
+use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use std::collections::HashMap;
 
-fn tile_rows(instance: u32) -> usize { bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::smatmul::Params>("smatmul", instance).tile_rows.expect("tileRows") as usize }
-fn tile_cols(instance: u32) -> usize { bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::smatmul::Params>("smatmul", instance).tile_cols.expect("tileCols") as usize }
+fn tile_rows(instance: u32) -> usize {
+    bebop_bemu::configs::ball_domain::parameters::<
+        bebop_bemu::configs::ball_domain::parameters::smatmul::Params,
+    >("smatmul", instance)
+    .tile_rows
+    .expect("tileRows") as usize
+}
+fn tile_cols(instance: u32) -> usize {
+    bebop_bemu::configs::ball_domain::parameters::<
+        bebop_bemu::configs::ball_domain::parameters::smatmul::Params,
+    >("smatmul", instance)
+    .tile_cols
+    .expect("tileCols") as usize
+}
 
 #[derive(Default)]
 struct State {
@@ -19,8 +31,6 @@ struct Chain {
     output_base: usize,
     accumulators: Vec<i32>,
 }
-
-
 
 fn read_i32(bank: &[u8], row: usize, lane: usize) -> i32 {
     let offset = row * bank_row_bytes() + lane * 4;
@@ -75,7 +85,11 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if xs2 >> 32 != 0 {
         panic!("smatmul: rs2[63:32] must be zero");
     }
-    if (rows != 1 && (rows == 0 || rows % m_tile != 0)) || cols != n_tile || k == 0 || k % k_tile != 0 {
+    if (rows != 1 && (rows == 0 || rows % m_tile != 0))
+        || cols != n_tile
+        || k == 0
+        || k % k_tile != 0
+    {
         panic!("smatmul: M must be one or a positive multiple of 8, K must be a positive multiple of 16, and N must be 16");
     }
     if a_bank == b_bank || a_bank == c_bank || b_bank == c_bank {
@@ -98,10 +112,17 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("smatmul: M exceeds the accumulator");
     }
 
-    let a_rows = if rows == 1 { k / k_tile } else { rows * k / k_tile };
+    let a_rows = if rows == 1 {
+        k / k_tile
+    } else {
+        rows * k / k_tile
+    };
     let b_rows = k;
     let c_rows = rows * 4;
-    if a_rows > bank_lines() || b_rows > bank_lines() || output_base + c_rows > c_groups * bank_lines() {
+    if a_rows > bank_lines()
+        || b_rows > bank_lines()
+        || output_base + c_rows > c_groups * bank_lines()
+    {
         panic!("smatmul: bank footprint exceeds bank depth");
     }
 
@@ -152,29 +173,29 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     // Wrapping arithmetic is intentionally retained to match the accumulator
     // semantics of the RTL and the previous emulator implementation.
     for k_group in 0..k_groups {
-    let pa = pbank_group(ctx, a_bank, k_group as u64);
-    let pb = pbank_group(ctx, b_bank, k_group as u64);
-    for inner in 0..k {
-        let b_base = ((inner / k_tile) * k_tile + inner % k_tile) * row_bytes;
-        let b_row = &ctx.banks[pb][b_base..b_base + cols];
-        let mut b_values = vec![0i32; n_tile];
-        for col in 0..cols {
-            b_values[col] = b_row[col] as i8 as i32;
-        }
-        for row in 0..rows {
-            let a_row = if rows == 1 {
-                inner / k_tile
-            } else {
-                ((row / m_tile) * k_tiles + inner / k_tile) * m_tile + row % m_tile
-            };
-            let a = ctx.banks[pa][a_row * row_bytes + inner % k_tile] as i8 as i32;
-            let acc_base = row * cols;
-            let acc_row = &mut chain.accumulators[acc_base..acc_base + cols];
+        let pa = pbank_group(ctx, a_bank, k_group as u64);
+        let pb = pbank_group(ctx, b_bank, k_group as u64);
+        for inner in 0..k {
+            let b_base = ((inner / k_tile) * k_tile + inner % k_tile) * row_bytes;
+            let b_row = &ctx.banks[pb][b_base..b_base + cols];
+            let mut b_values = vec![0i32; n_tile];
             for col in 0..cols {
-                acc_row[col] = acc_row[col].wrapping_add(a.wrapping_mul(b_values[col]));
+                b_values[col] = b_row[col] as i8 as i32;
+            }
+            for row in 0..rows {
+                let a_row = if rows == 1 {
+                    inner / k_tile
+                } else {
+                    ((row / m_tile) * k_tiles + inner / k_tile) * m_tile + row % m_tile
+                };
+                let a = ctx.banks[pa][a_row * row_bytes + inner % k_tile] as i8 as i32;
+                let acc_base = row * cols;
+                let acc_row = &mut chain.accumulators[acc_base..acc_base + cols];
+                for col in 0..cols {
+                    acc_row[col] = acc_row[col].wrapping_add(a.wrapping_mul(b_values[col]));
+                }
             }
         }
-    }
     }
 
     if last {
@@ -189,7 +210,12 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         }
     } else {
         {
-            ball_state.lock().unwrap().entry(ctx.hart_id).or_default().chain = Some(chain);
+            ball_state
+                .lock()
+                .unwrap()
+                .entry(ctx.hart_id)
+                .or_default()
+                .chain = Some(chain);
         };
     }
     0

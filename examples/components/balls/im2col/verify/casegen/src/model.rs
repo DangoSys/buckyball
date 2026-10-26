@@ -1,103 +1,93 @@
-pub const CORE: usize = 16;
-pub const BANK_ROW_BYTES: usize = CORE;
+// Reference IM2COL model in the RTL's traversal order (see emu/src/im2col.rs
+// and arch/README.md): K tile t outer, window w inner, one write per output
+// line, one read per in-bounds tap of a window below window_count.
+
+pub type Row = [u8; 16];
 
 pub fn bank_entries() -> usize {
-    let config = match std::env::var("BB_VERIFY_CONFIG") {
-        Ok(path) => path,
-        Err(_) if cfg!(test) => return 64,
-        Err(_) => panic!("BB_VERIFY_CONFIG is required"),
-    };
+    let config = std::env::var("BB_VERIFY_CONFIG").expect("BB_VERIFY_CONFIG is required");
     let text = std::fs::read_to_string(config).expect("failed to read BB_VERIFY_CONFIG");
     text.lines()
         .find_map(|line| line.strip_prefix("bank_entries="))
-        .unwrap_or_else(|| panic!("bank_entries missing from BB_VERIFY_CONFIG"))
+        .expect("bank_entries missing from BB_VERIFY_CONFIG")
         .parse()
         .expect("invalid bank_entries in BB_VERIFY_CONFIG")
 }
 
-pub fn output_rows(iter: usize, ksize: usize, stride: usize, padding: usize) -> usize {
-    if iter == 0 || ksize == 0 || stride == 0 {
-        panic!("im2col model: iter/ksize/stride must be >= 1");
-    }
-    let padded = iter + 2 * padding;
-    if padded < ksize {
-        panic!("im2col model: kernel larger than padded input");
-    }
-    let out_dim = (padded - ksize) / stride + 1;
-    let windows = out_dim * out_dim;
-    let kernel = ksize * ksize;
-    let m_tiles = windows.div_ceil(CORE);
-    let k_tiles = kernel.div_ceil(CORE);
-    m_tiles * k_tiles * CORE
+pub struct Shape {
+    pub size: usize,
+    pub kernel: usize,
+    pub stride: usize,
+    pub padding: usize,
+    pub start_row: usize,
+    pub start_col: usize,
+    pub input_base: usize,
+    pub window_start: usize,
+    pub window_count: usize,
+    pub tile_rows: usize,
+    pub in_groups: usize,
+    pub out_groups: usize,
 }
 
-pub fn im2col(src: &[u8], iter: usize, ksize: usize, stride: usize, padding: usize) -> Vec<u8> {
-    if src.len() != iter * iter {
-        panic!(
-            "im2col model: src len {} != iter*iter {}",
-            src.len(),
-            iter * iter
-        );
+impl Shape {
+    pub fn rs2(&self) -> u64 {
+        self.kernel as u64
+            | (self.stride as u64) << 4
+            | (self.padding as u64) << 8
+            | (self.start_col as u64) << 12
+            | (self.start_row as u64) << 16
+            | (self.input_base as u64) << 20
+            | (self.window_start as u64) << 26
+            | (self.window_count as u64) << 36
+            | (self.tile_rows as u64) << 46
     }
-    let padded = iter + 2 * padding;
-    if padded < ksize {
-        panic!("im2col model: kernel larger than padded input");
-    }
-    if stride == 0 {
-        panic!("im2col model: stride must be >= 1");
-    }
-    let out_dim = (padded - ksize) / stride + 1;
-    let windows = out_dim * out_dim;
-    let kernel_elems = ksize * ksize;
-    let m_tiles = windows.div_ceil(CORE);
-    let k_tiles = kernel_elems.div_ceil(CORE);
-    let rows = m_tiles * k_tiles * CORE;
-    let mut output = vec![0u8; rows * CORE];
+}
 
-    let mut window = 0usize;
-    for orow in 0..out_dim {
-        for ocol in 0..out_dim {
-            for kr in 0..ksize {
-                for kc in 0..ksize {
-                    let kernel = kr * ksize + kc;
-                    let m_tile = window / CORE;
-                    let m_row = window % CORE;
-                    let k_tile = kernel / CORE;
-                    let lane = kernel % CORE;
-                    let bank_row = (m_tile * k_tiles + k_tile) * CORE + m_row;
-                    let out = bank_row * CORE + lane;
-                    if out >= output.len() {
-                        panic!("im2col model: output range out={out}");
-                    }
-                    let input_row = (orow * stride + kr) as isize - padding as isize;
-                    let input_col = (ocol * stride + kc) as isize - padding as isize;
-                    if input_row >= 0
-                        && input_row < iter as isize
-                        && input_col >= 0
-                        && input_col < iter as isize
-                    {
-                        let src_i = input_row as usize * iter + input_col as usize;
-                        output[out] = src[src_i];
-                    }
+pub struct Trace {
+    // (input group, line) per read, in issue order.
+    pub reads: Vec<(usize, usize)>,
+    // (output group, line, data) per write, in issue order.
+    pub writes: Vec<(usize, usize, Row)>,
+}
+
+// `input[g][line]` is input group g; lines below input_base are present too.
+pub fn im2col(s: &Shape, input: &[Vec<Row>]) -> Trace {
+    let padded = s.size + 2 * s.padding;
+    let out_rows = (padded - s.kernel - s.start_row) / s.stride + 1;
+    let out_cols = (padded - s.kernel - s.start_col) / s.stride + 1;
+    assert!((padded - s.kernel - s.start_row) % s.stride == 0);
+    assert!((padded - s.kernel - s.start_col) % s.stride == 0);
+    assert!(s.window_start + s.window_count <= out_rows * out_cols);
+    assert!(s.input_base + s.size * s.size <= bank_entries());
+    let k_tiles = s.kernel * s.kernel * s.in_groups;
+    assert!(k_tiles % s.out_groups == 0);
+    let group_tiles = k_tiles / s.out_groups;
+    let padded_windows = s.window_count.div_ceil(s.tile_rows) * s.tile_rows;
+    assert!(padded_windows * group_tiles <= bank_entries());
+
+    let mut trace = Trace { reads: Vec::new(), writes: Vec::new() };
+    for tile in 0..k_tiles {
+        let g = tile % s.in_groups;
+        let kr = tile / s.in_groups / s.kernel;
+        let kc = tile / s.in_groups % s.kernel;
+        for w in 0..padded_windows {
+            let line = ((w / s.tile_rows) * group_tiles + tile % group_tiles) * s.tile_rows
+                + w % s.tile_rows;
+            let mut data = [0u8; 16];
+            if w < s.window_count {
+                let window = s.window_start + w;
+                let y = (s.start_row + window / out_cols * s.stride + kr) as isize
+                    - s.padding as isize;
+                let x = (s.start_col + window % out_cols * s.stride + kc) as isize
+                    - s.padding as isize;
+                if y >= 0 && x >= 0 && (y as usize) < s.size && (x as usize) < s.size {
+                    let source = s.input_base + y as usize * s.size + x as usize;
+                    trace.reads.push((g, source));
+                    data = input[g][source];
                 }
             }
-            window += 1;
+            trace.writes.push((tile / group_tiles, line, data));
         }
     }
-    output
-}
-
-pub fn pack_bank_words(flat: &[u8]) -> Vec<u8> {
-    let mut out = vec![0u8; flat.len() * BANK_ROW_BYTES];
-    for (index, value) in flat.iter().enumerate() {
-        out[index * BANK_ROW_BYTES] = *value;
-    }
-    out
-}
-
-pub fn num_words(total_bytes: usize) -> usize {
-    if total_bytes % BANK_ROW_BYTES != 0 {
-        panic!("num_words: total_bytes {total_bytes} not a multiple of bank row");
-    }
-    total_bytes / BANK_ROW_BYTES
+    trace
 }
