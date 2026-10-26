@@ -4,6 +4,8 @@ set(TARGET ${DESIGN_CORE_TARGET_${CORE}})
 
 set(BUCKYBALL_BALLS ${DESIGN_TARGET_BALL_STACKS_${TARGET}})
 set(BUCKYBALL_TARGET_TABLE "${DESIGN_ISA_DIR}/${TARGET}/target.inc")
+# The core owns computation recognition and its conversion to bank dataflow.
+file(GLOB_RECURSE BUCKYBALL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/src/*.cpp")
 
 add_subdirectory("${DESIGN_REPO}/stack/compiler/midend" compiler)
 add_library(${TARGET}-compiler MODULE $<TARGET_OBJECTS:buckyball-compiler>)

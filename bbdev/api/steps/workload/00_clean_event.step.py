@@ -50,7 +50,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     bbdir = get_buckyball_path()
-    output_path = design_output_root(bbdir, design, selection=input_data["target"])
+    output_path = os.path.join(
+        design_output_root(bbdir, design, selection=input_data["target"]), "workloads"
+    )
     build_path = workload_build_dir(bbdir, design, selection=input_data["target"])
 
     for path in (output_path, build_path):

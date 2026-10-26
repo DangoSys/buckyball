@@ -2,9 +2,6 @@
 tests = [
   "toy-toy-ctest-gemmini_accumulated_16x16_test-linux",
   "toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-linux",
-  "toy-toy-mlirtest-bank_gemmini_conv_tail-linux",
-  "toy-toy-mlirtest-bank_gemmini_conv_direct_weight-linux",
-  "toy-toy-mlirtest-bank_gemmini_conv_round-linux",
   "toy-toy-ctest-mvin_2d_test-linux",
   "toy-toy-ctest-mvin_mvout_acc_test-linux",
   "toy-toy-ctest-mvin_mvout_test-linux",

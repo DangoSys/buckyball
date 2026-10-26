@@ -1,15 +1,191 @@
 set(BUCKYBALL_MLIR_GROUP_TARGET pebble-mlir-tests-build)
 set(BUCKYBALL_MLIR_TEST_PREFIX linalg)
 
-foreach(test
-    linalg_relu_513x17_i32
-    linalg_matmul_16x16_i8
-    linalg_transpose_16x16_i8
-    linalg_transpose_detect_1x84x100_f32
-    linalg_transpose_nchw_nhwc_1x3x8x8_f32
-    linalg_transpose_oihw_ohwi_4x8x3x3_f32
-    linalg_mega_conv2d_k3_c16)
-  add_buckyball_mlir_test(${test}
-    TARGET pebble
-    PASSES ${PEBBLE_CUSTOM_PASSES})
-endforeach()
+add_buckyball_mlir_test(linalg_relu_513x17_i32
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_matmul_16x16_i8
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_transpose_16x16_i8
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_transpose_detect_1x84x100_f32
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_transpose_nchw_nhwc_1x3x8x8_f32
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_transpose_oihw_ohwi_4x8x3x3_f32
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_buckyball_mlir_test(linalg_mega_conv2d_k3_c16
+  TARGET pebble
+  PASSES
+    -allow-unregistered-dialect
+    -form-custom-ops
+    -convert-linalg-to-buckyball
+    -lower-frontend
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -convert-trace-to-llvm
+    -assign-physical-banks
+    -lower-buckyball
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
