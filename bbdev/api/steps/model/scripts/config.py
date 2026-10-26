@@ -1,4 +1,5 @@
 """Compile model-owned TOML parameters to protobuf and ordinary build arguments."""
+
 import ast
 import json
 import math
@@ -9,9 +10,13 @@ from pathlib import Path
 
 from steps.config.scripts.model_pb2 import ModelConfig
 
-
-_OPERATORS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
-              ast.FloorDiv: operator.floordiv, ast.Mod: operator.mod}
+_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+}
 
 
 def compile_config(source: Path, destination: Path, name: str) -> None:
@@ -48,7 +53,9 @@ def compile_config(source: Path, destination: Path, name: str) -> None:
             if type(left) not in (int, float) or type(right) not in (int, float):
                 raise ValueError("Derived arithmetic requires numeric parameters")
             return _OPERATORS[type(node.op)](left, right)
-        raise ValueError("Model expressions support names, numbers, +, -, *, // and % only")
+        raise ValueError(
+            "Model expressions support names, numbers, +, -, *, // and % only"
+        )
 
     for key in derived:
         resolve(key)
@@ -57,12 +64,18 @@ def compile_config(source: Path, destination: Path, name: str) -> None:
     for key, value in values.items():
         if not re.fullmatch(r"[a-z][a-z0-9_]*", key):
             raise ValueError(f"Invalid model parameter name: {key}")
-        if type(value) not in fields or isinstance(value, float) and not math.isfinite(value):
+        if (
+            type(value) not in fields
+            or isinstance(value, float)
+            and not math.isfinite(value)
+        ):
             raise ValueError(f"Invalid model parameter value: {key}")
         setattr(message.parameters[key], fields[type(value)], value)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(message.SerializeToString(deterministic=True))
-    destination.with_suffix(".json").write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
+    destination.with_suffix(".json").write_text(
+        json.dumps(values, indent=2, sort_keys=True) + "\n"
+    )
 
 
 def cmake_arguments(path: Path, name: str) -> list[str]:

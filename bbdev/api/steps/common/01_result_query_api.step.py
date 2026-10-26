@@ -19,10 +19,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     trace_id = request.path_params.get("trace_id", "")
 
     if not trace_id:
-        return ApiResponse(
-            status=400,
-            body={"error": "trace_id is required"}
-        )
+        return ApiResponse(status=400, body={"error": "trace_id is required"})
 
     cancelled_state = await ctx.state.get(trace_id, "cancelled")
     if cancelled_state:
@@ -41,8 +38,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=200,
             body={
                 "status": "success",
-                "body": success_state.get("body", success_state)
-            }
+                "body": success_state.get("body", success_state),
+            },
         )
 
     # Check for failure state
@@ -52,23 +49,16 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             status=200,
             body={
                 "status": "failure",
-                "body": failure_state.get("body", failure_state)
-            }
+                "body": failure_state.get("body", failure_state),
+            },
         )
 
     # Check for processing state
     processing_state = await ctx.state.get(trace_id, "processing")
     if processing_state:
-        return ApiResponse(
-            status=200,
-            body={
-                "status": "processing",
-                "body": {}
-            }
-        )
+        return ApiResponse(status=200, body={"status": "processing", "body": {}})
 
     # No state found
     return ApiResponse(
-        status=404,
-        body={"error": f"No result found for trace_id: {trace_id}"}
+        status=404, body={"error": f"No result found for trace_id: {trace_id}"}
     )

@@ -1,6 +1,5 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-
 config = {
     "name": "task-cancel-api",
     "description": "Cancel a queued or running bbdev task by trace_id",
@@ -22,8 +21,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 body={"error": "task is already terminal", "trace_id": trace_id},
             )
 
-    await ctx.enqueue({
-        "topic": "common.task.cancel",
-        "data": {"_trace_id": trace_id},
-    })
+    await ctx.enqueue(
+        {
+            "topic": "common.task.cancel",
+            "data": {"_trace_id": trace_id},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": trace_id, "status": "cancelling"})

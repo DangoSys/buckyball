@@ -5,7 +5,6 @@ from motia import FlowContext, queue
 from utils.event_common import get_origin_trace_id
 from utils.process_registry import cancel_process, force_cancel_process, process_pid
 
-
 config = {
     "name": "task-cancel",
     "description": "Terminate a task process group",

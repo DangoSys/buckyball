@@ -4,7 +4,11 @@ import threading
 from typing import Optional, List, Callable
 
 from utils.process import kill_tree
-from utils.process_registry import current_task_scope, register_process, unregister_process
+from utils.process_registry import (
+    current_task_scope,
+    register_process,
+    unregister_process,
+)
 
 
 class StreamResult:
@@ -102,8 +106,8 @@ def stream_run(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
-        encoding='utf-8',
-        errors='replace',  # Replace invalid UTF-8 bytes with � instead of crashing
+        encoding="utf-8",
+        errors="replace",  # Replace invalid UTF-8 bytes with � instead of crashing
         bufsize=1,
         executable=executable,
         env=env,

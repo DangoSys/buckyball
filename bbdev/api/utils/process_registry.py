@@ -8,11 +8,12 @@ from typing import Dict
 
 from utils.process import kill_tree
 
-
 _lock = threading.Lock()
 _processes: Dict[str, int] = {}
 _cancelled: set[str] = set()
-_current_task_scope: ContextVar[str | None] = ContextVar("bbdev_task_scope", default=None)
+_current_task_scope: ContextVar[str | None] = ContextVar(
+    "bbdev_task_scope", default=None
+)
 
 
 def set_current_task_scope(scope: str) -> None:

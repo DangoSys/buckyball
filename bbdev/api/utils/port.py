@@ -1,5 +1,6 @@
 import socket
 
+
 def find_available_port(start_port: int = 5000, end_port: int = 5500) -> int:
     """Find an available port in the specified range"""
     for port in range(start_port, end_port + 1):

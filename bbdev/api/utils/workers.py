@@ -3,11 +3,14 @@ import os
 import subprocess
 from pathlib import Path
 
+
 def server_ports_path(workflow_dir: str) -> str:
     return os.path.join(workflow_dir, "data", "bbdev-server.json")
 
 
-def write_server_ports(workflow_dir: str, http_port: int, worker_port: int, bb_root: str) -> None:
+def write_server_ports(
+    workflow_dir: str, http_port: int, worker_port: int, bb_root: str
+) -> None:
     path = server_ports_path(workflow_dir)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
@@ -62,7 +65,9 @@ def list_engine_workers(worker_port: int, timeout_s: float = 10.0) -> list:
     try:
         payload = json.loads(result.stdout)
     except json.JSONDecodeError as e:
-        raise RuntimeError(f"engine::workers::list returned non-JSON: {result.stdout[:500]}") from e
+        raise RuntimeError(
+            f"engine::workers::list returned non-JSON: {result.stdout[:500]}"
+        ) from e
     workers = payload.get("workers")
     if not isinstance(workers, list):
         raise RuntimeError(f"engine::workers::list missing workers list: {payload}")
