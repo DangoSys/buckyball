@@ -42,7 +42,9 @@ repo_reset() {
   git -C examples/components/cores/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
 
   git -C stack submodule sync
-  git -C stack submodule update --init --force -- thirdparty/buddy-mlir
+  git -C stack submodule update --init --force -- engine os/linux thirdparty/buddy-mlir
+  git -C stack submodule update --init --depth 1 --single-branch --recommend-shallow -- \
+    os/thirdparty/linux os/thirdparty/busybox os/thirdparty/opensbi
   git -C stack/thirdparty/buddy-mlir submodule sync
   git -C stack/thirdparty/buddy-mlir submodule update --init --force -- llvm
 

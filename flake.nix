@@ -26,6 +26,7 @@
             hardeningDisable = [ "libcxxhardeningfast" ];
 
             buildInputs = with pkgs; [
+              cacert
               SDL2
               clibs.zlib-dev
               clibs.zlib

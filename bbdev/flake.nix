@@ -19,6 +19,7 @@
             bbdevPythonPkgs
 
             # System tools
+            cacert
             curl
             git
           ];
@@ -31,8 +32,8 @@
             if [ ! -d "$VENV_DIR" ]; then
               echo "Creating Python venv..."
               python3 -m venv "$VENV_DIR" --system-site-packages
-              "$VENV_DIR/bin/pip" install -q motia[otel]==1.0.0rc17 iii-sdk==0.2.0
             fi
+            "$VENV_DIR/bin/pip" install -q 'motia[otel]==1.0.0rc17' iii-sdk==0.2.0 || exit $?
             export PATH="$VENV_DIR/bin:$PATH"
 
             echo "bbdev dev environment ready"
