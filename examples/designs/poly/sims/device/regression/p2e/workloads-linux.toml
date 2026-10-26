@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "fw_payload-h3-poly-linux.hex",
+  "fw_payload-h9-poly-linux-mem4096M-ddr.hex",
 ]

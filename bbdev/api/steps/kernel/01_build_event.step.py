@@ -52,6 +52,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     hart_count = len(design_config.device.cores)
     ddr = design_config.device.ddr
     guest_memory_mib = (ddr.bytes - ddr.model) // (1024 * 1024)
+    # A DDR without a model region leaves the base empty: init runs no model.
+    model_base = f"{ddr.base + ddr.bytes - ddr.model:#x}" if ddr.model else ""
     interactive = input_data.get("interactive", False)
     output_dir = os.path.join(
         bbdir, "examples/designs", design, "output/sims/device/workloads/kernel"
@@ -72,7 +74,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_GUEST_MEMORY_MIB={guest_memory_mib} "
         f"-DBUCKYBALL_KERNEL_DESIGN={design} "
         f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg} "
-        f"-DBUCKYBALL_MODEL_BASE={ddr.base + ddr.bytes - ddr.model:#x} "
+        f"-DBUCKYBALL_MODEL_BASE={model_base} "
         f"-DBUCKYBALL_KERNEL_WORKLOADS={programs}"
     )
 
