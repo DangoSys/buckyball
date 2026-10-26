@@ -1,0 +1,9 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+
+[[cores]]
+include = "core/default.toml"
+hartId = 0

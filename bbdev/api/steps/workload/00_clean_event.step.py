@@ -8,13 +8,13 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import chip_output_root, get_buckyball_path, workload_build_dir
+from utils.path import design_output_root, get_buckyball_path, workload_build_dir
 
 config = {
     "name": "workload-clean",
-    "description": "clean workload output directory for one chip",
+    "description": "clean workload output directory for one design",
     "flows": ["workload"],
     "triggers": [queue("workload.clean")],
     "enqueues": [],
@@ -23,7 +23,7 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    allowed = {"chip", "_trace_id"}
+    allowed = {"device", "core", "target", "design", "_trace_id"}
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload clean parameter(s): {', '.join(unknown)}")
@@ -37,21 +37,21 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
 
     bbdir = get_buckyball_path()
-    output_path = chip_output_root(bbdir, chip)
-    build_path = workload_build_dir(bbdir, chip)
+    output_path = design_output_root(bbdir, design, selection=input_data["target"])
+    build_path = workload_build_dir(bbdir, design, selection=input_data["target"])
 
     for path in (output_path, build_path):
         if os.path.exists(path):
@@ -66,7 +66,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "clean",
-            "chip": chip,
+            "design": design,
             "output_path": output_path,
             "build_path": build_path,
         },

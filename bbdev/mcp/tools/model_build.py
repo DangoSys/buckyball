@@ -5,11 +5,11 @@ from common import submit, err, fmt, need
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_model_build(chip: str, model: str | None = None, ctrace: bool = False, dtrace: bool = False) -> str:
-        """Build one model recipe, or all recipes for the chip when model is omitted. POST /model/build."""
-        if error := need("chip", chip):
+    def bbdev_model_build(design: str, model: str | None = None) -> str:
+        """Build one model recipe, or all recipes for the design when model is omitted. POST /model/build."""
+        if error := need("design", design):
             return err(error)
-        params = {"chip": chip, "ctrace": ctrace, "dtrace": dtrace}
+        params = {"design": design}
         if model is not None:
             params["model"] = model
         return fmt(submit("/model/build", params))

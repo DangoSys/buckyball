@@ -1,4 +1,4 @@
-/* Buckyball chip support implementation for Embench
+/* Buckyball design support implementation for Embench
 
    Adapted for Buckyball baremetal environment.
 
@@ -6,11 +6,11 @@
 
 #include "chipsupport.h"
 
-/* Initialize chip
+/* Initialize design
 
-   For Buckyball, no chip-specific initialization is needed.
+   For Buckyball, no design-specific initialization is needed.
    All necessary setup is done by crt0.S/start.S. */
 
-void initialise_chip(void) {
-  /* Empty - no chip-specific initialization needed */
+void initialise_design(void) {
+  /* Empty - no design-specific initialization needed */
 }

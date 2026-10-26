@@ -52,7 +52,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctx,
             1,
             continue_run=False,
-            extra_fields={"task": "dc", "error": "missing fixed DC analysis output directory"},
+            extra_fields={
+                "task": "dc",
+                "error": "missing fixed DC analysis output directory",
+            },
             trace_id=origin_tid,
         )
         return
@@ -70,7 +73,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     try:
-        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("chip"), top_module)
+        contract = get_tapeout_contract(
+            get_buckyball_path(),
+            input_data.get("design"),
+            top_module,
+            selection=input_data["target"],
+        )
     except (OSError, ValueError) as exc:
         await check_result(
             ctx,
@@ -96,8 +104,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             raise ValueError("missing generate_manifest with link_dbs")
         with open(gman, encoding="utf-8") as handle:
             link_dbs = json.load(handle).get("link_dbs")
-        if not isinstance(link_dbs, list) or not link_dbs:
-            raise ValueError(f"generate_manifest.link_dbs empty: {gman}")
+        if not isinstance(link_dbs, list):
+            raise ValueError(f"generate_manifest.link_dbs must be a list: {gman}")
         for path in link_dbs:
             if not isinstance(path, str) or not os.path.isfile(path):
                 raise ValueError(f"sram db missing: {path}")
@@ -105,7 +113,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "target_library": contract.target_library,
             "synthetic_library": contract.synthetic_library,
             "link_library": list(contract.link_library) + list(link_dbs),
-            "max_cores": contract.max_cores,
+            "max_threads": contract.max_threads,
         }
         run_config = write_run_tcl(
             os.path.join(analysis_dir, "run.tcl"),
@@ -119,12 +127,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             },
         )
     except (OSError, ValueError, json.JSONDecodeError) as exc:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "dc", "error": str(exc)}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "dc", "error": str(exc)},
+            trace_id=origin_tid,
+        )
         return
     script_path = contract.dc_script
-    report_context = source_context(get_buckyball_path(), contract.chip)
+    report_context = source_context(get_buckyball_path(), contract.design)
     dc_log = os.path.join(analysis_dir, "dc_shell.log")
-    ctx.logger.info(f"Running chip-owned DC synthesis for {contract.chip}, top {top_module}: {script_path}")
+    ctx.logger.info(
+        f"Running design-owned DC synthesis for {contract.design}, top {top_module}: {script_path}"
+    )
     result = await stream_run_logger_async(
         cmd=(
             f"set -o pipefail; dc_shell -f {shlex.quote(str(script_path))} "
@@ -144,15 +160,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "dc_report_dir": report_dir,
         "dc_log": dc_log,
         "run_config": str(run_config),
-        "chip": contract.chip,
+        "design": contract.design,
         "tapeout_dir": str(contract.root),
         "replace_manifest": input_data.get("replace_manifest"),
     }
     if result.returncode == 0:
         try:
-            extra_fields["report_path"] = area_report(report_context, origin_tid, report_dir, contract)
+            extra_fields["report_path"] = area_report(
+                report_context, origin_tid, report_dir, contract
+            )
         except (OSError, ValueError) as error:
-            await check_result(ctx, 1, extra_fields={**extra_fields, "error": str(error)}, trace_id=origin_tid)
+            await check_result(
+                ctx,
+                1,
+                extra_fields={**extra_fields, "error": str(error)},
+                trace_id=origin_tid,
+            )
             return
 
     await check_result(
@@ -163,4 +186,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         trace_id=origin_tid,
     )
     if result.returncode == 0 and input_data.get("from_power_workflow"):
-        await ctx.enqueue({"topic": "dc.sim", "data": {**input_data, "area_dir": output_dir, "chip": contract.chip, "_trace_id": origin_tid}})
+        await ctx.enqueue(
+            {
+                "topic": "dc.sim",
+                "data": {
+                    **input_data,
+                    "area_dir": output_dir,
+                    "design": contract.design,
+                    "_trace_id": origin_tid,
+                    "target": input_data["target"],
+                },
+            }
+        )

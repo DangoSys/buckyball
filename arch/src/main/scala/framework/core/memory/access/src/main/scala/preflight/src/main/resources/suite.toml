@@ -1,0 +1,54 @@
+[model]
+manifest="src/csrc/Cargo.toml"
+library="libpreflight_reference"
+
+[[tests]]
+functional_groups = ["preflight_pkg::env::behavior"]
+name = "preflight"
+top = "preflight_tb"
+test = "protocol_test"
+filelist = "preflight/filelist.f"
+timeout_ns = 1000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = ["prepared_map_pkg::env::behavior"]
+name = "prepared_map"
+top = "prepared_map_tb"
+test = "protocol_test"
+filelist = "prepared_map/filelist.f"
+timeout_ns = 1000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+name="preparation"
+top="preparation_tb"
+test="protocol_test"
+filelist="preparation/filelist.f"
+timeout_ns=500000
+wall_timeout_s=120
+kind="functional"
+rtl_scopes=["dut"]
+metrics=["line","cond","tgl"]
+functional_groups=["preparation_pkg::model::behavior"]
+sink_ready=1
+sink_stall=3
+designs=[]
+plusargs=[]
+assertion=""

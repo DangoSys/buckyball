@@ -10,24 +10,29 @@ from common import submit, err, fmt, need, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_yosys_run(
-        chip: str,
+        design: str,
         top: Optional[str] = None,
         output_dir: Optional[str] = None,
-        log_dir: Optional[str] = None,
         vcd: Optional[str] = None,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
         """Full yosys flow. POST /yosys/run."""
-        if e := need("chip", chip):
+        if e := need("design", design):
             return err(e)
+        request = opt(
+            {"design": design},
+            top=top,
+            output_dir=output_dir,
+            vcd=vcd,
+        )
+        if device:
+            request["device"] = True
+        if core is not None:
+            request["core"] = core
         return fmt(
             submit(
                 "/yosys/run",
-                opt(
-                    {"chip": chip},
-                    top=top,
-                    output_dir=output_dir,
-                    log_dir=log_dir,
-                    vcd=vcd,
-                ),
+                request,
             )
         )

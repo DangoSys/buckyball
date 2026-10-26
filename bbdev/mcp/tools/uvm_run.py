@@ -4,26 +4,27 @@ from __future__ import annotations
 
 from typing import Optional
 
-from common import submit, err, fmt, need
+from common import submit, err, fmt
 
 
 def register(mcp):
     @mcp.tool()
     def bbdev_uvm_run(
-        chip: str, ball: Optional[str] = None, ip: Optional[str] = None, target: Optional[str] = None
+        design: Optional[str] = None,
+        ball: Optional[str] = None,
+        ip: Optional[str] = None,
+        device: bool = False,
     ) -> str:
         """Build and run a Ball or IP UVM simulation. POST /uvm/run."""
-        if e := need("chip", chip):
-            return err(e)
-        params = {"chip": chip}
+        if design is None and not ip:
+            return err("Standalone UVM requires ip")
+        params = {} if design is None else {"design": design}
         if ball and ip:
             return err("Parameters --ball and --ip are mutually exclusive")
-        if target is not None:
-            if not ip or not target.strip():
-                return err("Parameter --target requires --ip and a target name")
-            params["target"] = target
         if ball:
             params["ball"] = ball
         if ip:
             params["ip"] = ip
+        if device:
+            params["device"] = True
         return fmt(submit("/uvm/run", params))

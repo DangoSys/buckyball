@@ -1,0 +1,15 @@
+[tracking]
+entries = 8
+addressBits = 44
+idBits = 8
+lineBytes = 64
+maxRanges = 8
+
+[cache]
+nodeId = 8
+cacheLines = 64
+homeId = 64
+homeCount = 1
+banks = 2
+lineResult = false
+probe = false

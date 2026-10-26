@@ -1,0 +1,71 @@
+component = "poly"
+hartId = 5
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+dmaCache = "dmaCache/core.toml"
+memory = "memory/core.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "interconnect/core.toml"
+c2c = "c2c/core.toml"
+tbus = "tbus/core.toml"
+controller = "controller/core.toml"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[tss]
+base = 0x20000
+bytes = 0x4000
+dataBits = 128
+
+[sharedMem]
+bankWidth = 128
+bankEntries = 1024
+enable = true
+virtualBankCount = 40
+entries = 16384
+inputChannels = 65
+defaultGroupCount = 1
+memCycles = 10
+
+[[threads]]
+id = 0
+name = "attention0"
+component = "attention"
+transport = "../core1/transport.toml"
+include = "../../../../../../components/threads/attention/configs/default.toml"
+
+[[threads]]
+id = 1
+name = "attention1"
+component = "attention"
+transport = "../core1/transport.toml"
+include = "../../../../../../components/threads/attention/configs/default.toml"
+
+[[threads]]
+id = 2
+name = "ffn0"
+component = "ffn"
+transport = "../core1/transport.toml"
+include = "../../../../../../components/threads/ffn/configs/default.toml"
+
+[[threads]]
+id = 3
+name = "ffn1"
+component = "ffn"
+transport = "../core1/transport.toml"
+include = "../../../../../../components/threads/ffn/configs/default.toml"
+
+[[threads]]
+id = 4
+name = "ffn2"
+component = "ffn"
+transport = "../core1/transport.toml"
+include = "../../../../../../components/threads/ffn/configs/default.toml"

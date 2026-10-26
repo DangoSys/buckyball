@@ -1,0 +1,13 @@
+source = ".."
+# MatMul Thread Configuration (default)
+
+balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
+frontend = "frontends/default.toml"
+gpdomain = "gpdomain/default.toml"
+cpu = "cpu/default.toml"
+transport = "default"
+
+[compiler]
+name = "matmul"
+component = "matmul"

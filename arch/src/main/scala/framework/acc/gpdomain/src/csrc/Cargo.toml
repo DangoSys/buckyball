@@ -1,0 +1,15 @@
+[package]
+name = "rvv-reference-model"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+rustc_apfloat = "0.2.3"
+
+[build-dependencies]
+serde_json = "1"
+
+[workspace]

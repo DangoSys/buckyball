@@ -1,0 +1,9 @@
+[parameters]
+entries = 4
+
+[parameters.bus]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+
+[defines]

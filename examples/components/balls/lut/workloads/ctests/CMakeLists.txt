@@ -1,0 +1,2 @@
+add_buckyball_ctest(lut_uniform_lookup_test.c)
+add_buckyball_ctest(lut_channel_table_lookup_test.c)

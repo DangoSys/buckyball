@@ -1,0 +1,3 @@
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256

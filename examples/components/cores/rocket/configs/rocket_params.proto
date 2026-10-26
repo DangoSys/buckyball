@@ -1,0 +1,17 @@
+syntax = "proto2";
+package buckyball.components.rocket;
+option java_package = "buckyball.components.rocket";
+option java_multiple_files = true;
+message Params {
+  required uint32 physical_address_bits = 1;
+  required uint32 hart_id_bits = 2;
+  required uint32 page_levels = 3;
+  required uint32 pmp_entries = 4;
+  required bool virtual_memory = 5;
+  required bool supervisor = 6;
+  required bool user = 7;
+  required bool floating_point = 8;
+  required bool atomics = 9;
+  required bool multiply_divide = 10;
+  required bool external_home = 11;
+}

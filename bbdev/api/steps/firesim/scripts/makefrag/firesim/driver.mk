@@ -12,7 +12,7 @@ else
 LRISCV=-lriscv
 endif
 
-firechip_lib_dir = $(chipyard_dir)/generators/firechip/chip/src/main/cc
+firechip_lib_dir = $(chipyard_dir)/generators/firechip/design/src/main/cc
 firechip_bridgestubs_lib_dir = $(chipyard_dir)/generators/firechip/bridgestubs/src/main/cc
 testchipip_csrc_dir = $(chipyard_dir)/generators/testchipip/src/main/resources/testchipip/csrc
 

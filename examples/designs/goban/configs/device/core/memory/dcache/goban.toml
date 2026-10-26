@@ -1,0 +1,7 @@
+cache = "shared.toml"
+[tracking]
+entries = 8
+addressBits = 44
+idBits = 8
+lineBytes = 64
+maxRanges = 8

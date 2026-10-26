@@ -4,28 +4,12 @@
 [submodule "bebop"]
 	path = bebop
 	url = https://github.com/DangoSys/bebop
-[submodule "bb-tests/workloads/lib/kernel"]
-	path = bb-tests/workloads/lib/kernel
-	url = https://github.com/DangoSys/bbkernel.git
-[submodule "bb-tests/thirdparty/busybox"]
-	path = bb-tests/thirdparty/busybox
-	url = https://github.com/mirror/busybox.git
-[submodule "bb-tests/thirdparty/linux"]
-	path = bb-tests/thirdparty/linux
-	url = https://github.com/firesim/linux.git
-[submodule "bb-tests/thirdparty/opensbi"]
-	path = bb-tests/thirdparty/opensbi
-	url = https://github.com/riscv-software-src/opensbi.git
-	branch = master
 [submodule "docs"]
 	path = docs
 	url = https://github.com/DangoSys/document.git
 [submodule "verify"]
 	path = verify
 	url = https://github.com/DangoSys/verify
-[submodule "arch/thirdparty/rocket-chip"]
-	path = arch/thirdparty/rocket-chip
-	url = https://github.com/SEU-ACAL/rocket-chip.git
 [submodule "arch/thirdparty/berkeley-hardfloat"]
 	path = arch/thirdparty/berkeley-hardfloat
 	url = https://github.com/SEU-ACAL/berkeley-hardfloat.git
@@ -38,9 +22,6 @@
 [submodule ".agents/mcps"]
 	path = .agents/mcps
 	url = https://github.com/DangoSys/mcps.git
-[submodule "arch/src/main/scala/framework/system/core/seed"]
-	path = arch/src/main/scala/framework/system/core/seed
-	url = https://github.com/DangoSys/seed.git
 [submodule "stack"]
 	path = stack
 	url = https://github.com/buddy-compiler/buddy-examples
@@ -51,3 +32,37 @@
 [submodule "thirdparty/soc-framework"]
 	path = thirdparty/soc-framework
 	url = https://github.com/DangoSys/soc-framework.git
+[submodule "arch/thirdparty/redmule"]
+	path = arch/thirdparty/redmule
+	url = https://github.com/pulp-platform/redmule.git
+[submodule "arch/thirdparty/cvfpu"]
+	path = arch/thirdparty/cvfpu
+	url = https://github.com/pulp-platform/cvfpu.git
+[submodule "arch/thirdparty/common_cells"]
+	path = arch/thirdparty/common_cells
+	url = https://github.com/pulp-platform/common_cells.git
+[submodule "arch/thirdparty/hci"]
+	path = arch/thirdparty/hci
+	url = https://github.com/pulp-platform/hci.git
+[submodule "arch/thirdparty/hwpe-stream"]
+	path = arch/thirdparty/hwpe-stream
+	url = https://github.com/pulp-platform/hwpe-stream.git
+[submodule "arch/thirdparty/hwpe-ctrl"]
+	path = arch/thirdparty/hwpe-ctrl
+	url = https://github.com/pulp-platform/hwpe-ctrl.git
+[submodule "arch/thirdparty/tech_cells_generic"]
+	path = arch/thirdparty/tech_cells_generic
+	url = https://github.com/pulp-platform/tech_cells_generic.git
+[submodule "examples/components/core/rocket/thirdparty/rocket-chip"]
+	path = examples/components/cores/rocket/thirdparty/rocket-chip
+	url = https://github.com/SEU-ACAL/rocket-chip.git
+
+[submodule "examples/components/core/xiangshan/thirdparty/xiangshan"]
+	path = examples/components/cores/xiangshan/thirdparty/xiangshan
+	url = https://github.com/OpenXiangShan/XiangShan.git
+[submodule "examples/components/cores/boom/thirdparty/riscv-boom"]
+	path = examples/components/cores/boom/thirdparty/riscv-boom
+	url = https://github.com/riscv-boom/riscv-boom.git
+[submodule "examples/components/cores/boom/thirdparty/rocket-chip"]
+	path = examples/components/cores/boom/thirdparty/rocket-chip
+	url = https://github.com/chipsalliance/rocket-chip.git

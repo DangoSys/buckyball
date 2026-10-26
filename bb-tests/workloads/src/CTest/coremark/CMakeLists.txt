@@ -1,65 +1,71 @@
-set(ELF_CC "riscv64-unknown-elf-gcc")
-
-set(CTEST_COREMARK_WORKLOAD_DIR ${CTEST_WORKLOAD_DIR}/coremark)
+set(CTEST_COREMARK_WORKLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(COREMARK_PORT_DIR ${CTEST_COREMARK_WORKLOAD_DIR}/buckyball)
 set(COREMARK_SRC_DIR ${CTEST_COREMARK_WORKLOAD_DIR}/src)
-set(BBSIM_LD ${BBSW_BAREMETAL_DIR}/bbsim.ld)
-list(GET BUCKYBALL_CPU_TARGETS 0 COREMARK_CORE)
+set(COREMARK_THREAD ${BUCKYBALL_CONTROL_TARGET})
 
 set(COREMARK_SOURCES
-  ${COREMARK_SRC_DIR}/core_list_join.c
-  ${COREMARK_SRC_DIR}/core_main.c
-  ${COREMARK_SRC_DIR}/core_matrix.c
-  ${COREMARK_SRC_DIR}/core_state.c
-  ${COREMARK_SRC_DIR}/core_util.c
-  ${COREMARK_PORT_DIR}/core_portme.c
-  ${COREMARK_PORT_DIR}/main.c
+    ${COREMARK_SRC_DIR}/core_list_join.c
+    ${COREMARK_SRC_DIR}/core_main.c
+    ${COREMARK_SRC_DIR}/core_matrix.c
+    ${COREMARK_SRC_DIR}/core_state.c
+    ${COREMARK_SRC_DIR}/core_util.c
+    ${COREMARK_PORT_DIR}/core_portme.c
+    ${COREMARK_PORT_DIR}/main.c
 )
 
 set(COREMARK_HEADERS
-  ${COREMARK_SRC_DIR}/coremark.h
-  ${COREMARK_PORT_DIR}/core_portme.h
+    ${COREMARK_SRC_DIR}/coremark.h
+    ${COREMARK_PORT_DIR}/core_portme.h
 )
 
 set(COREMARK_C_FLAGS
-  -g -fno-common -O2 -static -std=gnu99 -march=rv64gc -mcmodel=medany
-  -fno-builtin-printf -specs=nano.specs -specs=nosys.specs -nostartfiles
-  -Wl,-T,${BBSIM_LD}
-  -I${COREMARK_SRC_DIR}
-  -I${COREMARK_PORT_DIR}
-  -I${BUCKYBALL_ISA_DIR}/${COREMARK_CORE}
-  -I${BUCKYBALL_REPO_ROOT}/stack/runtime/include -I${WORKLOAD_LIB_DIR}
-  -ffunction-sections -fdata-sections
-  -Wl,--gc-sections
-  -DITERATIONS=10
-  -DBUCKYBALL_WORKLOAD=1
+    -g
+    -fno-common
+    -O2
+    -static
+    -std=gnu99
+    -march=rv64gc
+    -mcmodel=medany
+    -fno-builtin-printf
+    -specs=nano.specs
+    -specs=nosys.specs
+    -nostartfiles
+    -Wl,-T,${BBSIM_LD}
+    -I${COREMARK_SRC_DIR}
+    -I${COREMARK_PORT_DIR}
+    -I${BUCKYBALL_ISA_DIR}/control
+    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
+    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
+    -I${WORKLOAD_LIB_DIR}
+    -ffunction-sections
+    -fdata-sections
+    -Wl,--gc-sections
+    -DITERATIONS=10
+    -DBUCKYBALL_WORKLOAD=1
 )
 
-function(add_coremark_target)
-  buckyball_ctest_name(COREMARK_NAME ${COREMARK_CORE} benchmark-coremark)
-  set(EXECUTABLE "${COREMARK_NAME}-baremetal")
+set(COREMARK_NAME
+    "${BUCKYBALL_WORKLOAD_DESIGN}-${COREMARK_THREAD}-ctest-benchmark-coremark"
+)
+set(EXECUTABLE "${COREMARK_NAME}-baremetal")
 
-  add_custom_command(
+add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMAND ${ELF_CC} ${COREMARK_C_FLAGS} -o ${EXECUTABLE}
-      ${BBSW_BAREMETAL_DIR}/crt0.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      ${BBSW_BAREMETAL_DIR}/test.c
-      ${COREMARK_SOURCES}
-      -lm
-    DEPENDS ${COREMARK_SOURCES}
-      ${COREMARK_HEADERS}
-      ${BBSW_BAREMETAL_DIR}/crt0.S
-      ${BBSW_BAREMETAL_DIR}/syscalls.c
-      ${BBSW_BAREMETAL_DIR}/test.c
-      ${BUCKYBALL_ISA_DIR}/${COREMARK_CORE}/params.h
+    COMMAND
+        ${ELF_CC} ${COREMARK_C_FLAGS} -o ${EXECUTABLE} ${BAREMETAL_DIR}/crt0.S
+        ${BAREMETAL_DIR}/syscalls.c ${COREMARK_SOURCES} -lm
+    DEPENDS
+        ${COREMARK_SOURCES}
+        ${COREMARK_HEADERS}
+        ${BAREMETAL_DIR}/crt0.S
+        ${BAREMETAL_DIR}/syscalls.c
+        ${BUCKYBALL_ISA_DIR}/control/params.h
     COMMENT "Building coremark: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  )
+)
 
-  add_custom_target(coremark-all
+add_custom_target(
+    coremark-all
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
-    COMMENT "Building coremark for Buckyball")
-endfunction()
-
-add_coremark_target()
+    COMMENT "Building coremark for Buckyball"
+)

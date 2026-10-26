@@ -46,6 +46,7 @@ in
     pre-commit-hooks
 
     # compiler
+    tomli-w
     torch
     numpy
     transformers

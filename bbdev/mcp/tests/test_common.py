@@ -18,7 +18,7 @@ class SubmitTest(unittest.TestCase):
     def test_submit_returns_trace_without_reading_state(self, ensure, workers, http):
         http.return_value = 202, {"trace_id": "trace-1"}
 
-        result = common.submit("/workload/build", {"chip": "pebble"})
+        result = common.submit("/workload/build", {"design": "pebble"})
 
         self.assertEqual(
             result,
@@ -34,7 +34,7 @@ class SubmitTest(unittest.TestCase):
         http.assert_called_once_with(
             "POST",
             "http://127.0.0.1:5100/workload/build",
-            {"chip": "pebble"},
+            {"design": "pebble"},
             timeout=30,
         )
 
@@ -141,7 +141,7 @@ class EnsureTest(unittest.TestCase):
             "processing": {
                 "processing": True,
                 "task": "bebop.p2e.buildbitstream",
-                "chip": "pebble",
+                "design": "pebble",
             }
         }
 
@@ -150,7 +150,7 @@ class EnsureTest(unittest.TestCase):
             {
                 "processing": True,
                 "task": "bebop.p2e.buildbitstream",
-                "chip": "pebble",
+                "design": "pebble",
                 "accepted": True,
                 "trace_id": "trace-1",
             },

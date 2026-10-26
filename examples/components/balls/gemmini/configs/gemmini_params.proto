@@ -1,0 +1,16 @@
+syntax = "proto3";
+package buckyball.balls.gemmini;
+option java_package = "buckyball.balls.gemmini";
+option java_multiple_files = true;
+
+message Params {
+  optional int32 meshRows = 1;
+  optional int32 meshColumns = 2;
+  optional int32 tileRows = 3;
+  optional int32 tileColumns = 4;
+  optional int32 inputWidth = 5;
+  optional int32 accWidth = 6;
+  optional int32 spatialOutputWidth = 7;
+  optional int32 tileLatency = 8;
+  optional int32 outputDelay = 9;
+}

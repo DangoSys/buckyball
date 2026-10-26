@@ -1,0 +1,53 @@
+[[balls]]
+id = 0
+name = "MxmmBall"
+component = "mxmm"
+param = "../../../../balls/mxmm/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXMM_MXFP8", funct7 = 71 },
+  { mnemonic = "MXMM_MXFP8_WINDOW", funct7 = 75 },
+  { mnemonic = "MXMM_FMA32", funct7 = 72 },
+  { mnemonic = "MXMM_F32", funct7 = 73 },
+]
+
+[[balls]]
+id = 1
+name = "ToInt8Ball"
+component = "toint8"
+param = "../../../../balls/toint8/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 51 },
+  { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
+]
+
+[[balls]]
+id = 2
+name = "Int2FpBall"
+component = "int2fp"
+param = "../../../../balls/int2fp/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT32_TO_FP32", funct7 = 68 },
+]
+
+[[balls]]
+id = 3
+name = "TransposeBall"
+component = "transpose"
+param = "../../../../balls/transpose/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "TRANSPOSE", funct7 = 49 },
+]
+
+[[balls]]
+id = 4
+name = "MxquantBall"
+component = "mxquant"
+param = "../../../../balls/mxquant/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXQUANT", funct7 = 54 },
+]

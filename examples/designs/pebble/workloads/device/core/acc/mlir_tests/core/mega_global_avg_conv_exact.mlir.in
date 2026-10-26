@@ -1,0 +1,33 @@
+memref.global "private" constant @input : memref<1x14x14x96xi8> = dense<"0x@PEBBLE_GAP_CONV_INPUT_HEX@"> alignment = 64
+memref.global "private" constant @weight : memref<2x96x16x16xi8> = dense<"0x@PEBBLE_GAP_CONV_WEIGHT_HEX@"> alignment = 64
+memref.global "private" constant @bias : memref<24xi32> = dense<[-1929, -3345, -826, -4425, -1950, -1378, -2544, 3397, -134, -2621, 385, -1868, -3754, -948, 275, -53, -1955, -3197, -1065, -298, 536, -2267, -3803, -48]> alignment = 64
+memref.global "private" constant @scale : memref<24xf32> = dense<[9.64902255E-11, 1.20455174E-10, 9.11374864E-11, 6.07460609E-11, 6.96993296E-11, 2.21286572E-10, 8.11237535E-11, 1.33313652E-10, 1.26243266E-10, 1.44089102E-10, 0.0341239199, 6.56752361E-11, 6.62821395E-11, 1.91158489E-9, 1.69707901E-10, 4.13074019E-10, 5.95885979E-11, 8.92385332E-11, 6.12655274E-11, 2.72214418E-10, 2.77576795E-10, 2.37361242E-10, 6.75774228E-11, 1.48867613E-10]> alignment = 64
+memref.global "private" constant @none : memref<1xi8> = dense<0> alignment = 64
+
+func.func private @check_result(memref<1x1x1x24xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero = arith.constant 0 : i8
+  %input = memref.get_global @input : memref<1x14x14x96xi8>
+  %weight = memref.get_global @weight : memref<2x96x16x16xi8>
+  %bias = memref.get_global @bias : memref<24xi32>
+  %scale = memref.get_global @scale : memref<24xf32>
+  %source_tensor = bufferization.to_tensor %input restrict : memref<1x14x14x96xi8> to tensor<1x14x14x96xi8>
+  %source_matrix = tensor.collapse_shape %source_tensor [[0, 1, 2], [3]] : tensor<1x14x14x96xi8> into tensor<196x96xi8>
+  %w1_raw = bufferization.to_tensor %weight restrict : memref<2x96x16x16xi8> to tensor<2x96x16x16xi8>
+  %w1_empty = tensor.empty() : tensor<96x24xi8>
+  %weights1 = linalg.generic {indexing_maps = [affine_map<(k,n)->(n floordiv 16,k,0,n mod 16)>, affine_map<(k,n)->(k,n)>], iterator_types = ["parallel", "parallel"]} ins(%w1_raw: tensor<2x96x16x16xi8>) outs(%w1_empty: tensor<96x24xi8>) {
+  ^bb0(%v: i8, %o: i8): linalg.yield %v : i8
+  } -> tensor<96x24xi8>
+  %b1_raw = bufferization.to_tensor %bias restrict : memref<24xi32> to tensor<24xi32>
+  %bias_tensor1 = tensor.expand_shape %b1_raw [[0,1]] output_shape [1,24] : tensor<24xi32> into tensor<1x24xi32>
+  %s1_raw = bufferization.to_tensor %scale restrict : memref<24xf32> to tensor<24xf32>
+  %scale_tensor1 = tensor.expand_shape %s1_raw [[0,1]] output_shape [1,24] : tensor<24xf32> into tensor<1x24xf32>
+  %average = custom.op "global_avg_i8"(%source_tensor) {input_scale = 0.043821115 : f32, output_scale = 0.023039883 : f32} : (tensor<1x14x14x96xi8>) -> tensor<1x1x1x96xi8>
+  %a1 = tensor.collapse_shape %average [[0,1,2],[3]] : tensor<1x1x1x96xi8> into tensor<1x96xi8>
+  %v1 = custom.op "linear_i8_requant"(%a1, %weights1, %bias_tensor1, %scale_tensor1) {relu = true} : (tensor<1x96xi8>, tensor<96x24xi8>, tensor<1x24xi32>, tensor<1x24xf32>) -> tensor<1x24xi8>
+  %final = tensor.expand_shape %v1 [[0,1,2],[3]] output_shape [1,1,1,24] : tensor<1x24xi8> into tensor<1x1x1x24xi8>
+  %memory = bufferization.to_buffer %final : tensor<1x1x1x24xi8> to memref<1x1x1x24xi8>
+  func.call @check_result(%memory) : (memref<1x1x1x24xi8>) -> ()
+  return %zero : i8
+}

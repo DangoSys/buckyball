@@ -1,6 +1,6 @@
 # Buckyball BootROM: validate mhartid and jump to the DRAM entry in M-mode.
 # The SoC fills the two dwords at _config (ROM offsets 0x8 and 0x10) when it
-# builds the ROM, so this image is the same for every chip. OpenSBI takes the
+# builds the ROM, so this image is the same for every design. OpenSBI takes the
 # DTB embedded in its fw_payload.
 
 .section .text

@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// Chip device map, matching framework.system.device.DeviceParams.
+// Design device map, matching framework.system.device.DeviceParams.
 #define CLINT_BASE 0x02000000UL
 #define PLIC_BASE 0x0C000000UL
 

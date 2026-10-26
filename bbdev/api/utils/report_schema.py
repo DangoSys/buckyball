@@ -16,13 +16,13 @@ CATEGORIES = {
 
 
 def report_directory(run):
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", run["chip"]):
-        raise ValueError("chip must be a safe directory name")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", run["design"]):
+        raise ValueError("design must be a safe directory name")
     timestamp = datetime.fromisoformat(run["timestamp"].replace("Z", "+00:00"))
     if timestamp.utcoffset() is None:
         raise ValueError("timestamp must include a timezone")
-    folder = timestamp.astimezone(timezone.utc).strftime("%Y-%m-%d-%H-%M")
-    return Path(run["chip"]) / folder
+    folder = run["id"]
+    return Path(run["design"]) / folder
 
 
 def nonempty(value, label):
@@ -48,7 +48,7 @@ def number(value, label, *, positive=False, integer=False):
 
 
 def validate_run(run):
-    if run["schema_version"] != 2:
+    if run["schema_version"] != 3:
         raise ValueError("invalid schema_version")
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", run["id"]):
         raise ValueError("run id must be a safe file name")
@@ -57,9 +57,9 @@ def validate_run(run):
         raise ValueError("timestamp must include a timezone")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", run["repository"]):
         raise ValueError("repository must be owner/name")
-    if not re.fullmatch(r"[0-9a-f]{40}", run["commit"]):
+    if run["commit"] is not None and not re.fullmatch(r"[0-9a-f]{40}", run["commit"]):
         raise ValueError("commit must be a full 40-character SHA")
-    for key in ("branch", "chip", "backend", "config_hash", "producer"):
+    for key in ("branch", "design", "backend", "config_hash", "producer"):
         nonempty(run[key], key)
     if run["clock_hz"] is not None:
         number(run["clock_hz"], "clock_hz", positive=True)
@@ -95,7 +95,9 @@ def validate_run(run):
     if targets - set(run["verification_targets"]):
         raise ValueError("verification results contain undeclared targets")
     names = set()
-    for model in run["models"]:
+    for model in run["workloads"]:
+        if model["kind"] not in {"model", "core", "ball"}:
+            raise ValueError("invalid workload kind")
         if model["latency_ms"] is not None:
             number(model["latency_ms"], "latency_ms", positive=True)
         if model["throughput"] is not None:
@@ -115,10 +117,10 @@ def validate_run(run):
                 raise ValueError("accuracy must be in [0,1]")
             nonempty(model["accuracy_metric"], "accuracy_metric")
         counter = model["counter"]
-        if counter not in ("riscv-cycle", "x86-tsc"):
+        if counter not in ("riscv-cycle", "rtl-cycle", "x86-tsc"):
             raise ValueError(f"unknown model counter: {counter}")
-        count_field = "cycles" if counter == "riscv-cycle" else "ticks"
-        other = "ticks" if counter == "riscv-cycle" else "cycles"
+        count_field = "cycles" if counter != "x86-tsc" else "ticks"
+        other = "ticks" if counter != "x86-tsc" else "cycles"
         if other in model:
             raise ValueError("model must not mix cycle and tick fields")
         if model["status"] == "pass":
@@ -129,7 +131,12 @@ def validate_run(run):
                 raise ValueError("passing model cannot contain an error")
         else:
             nonempty(model["error"], "model error")
-            if model[count_field] is not None or model["operators"]:
+            if (
+                model[count_field] is not None
+                or model["operators"]
+                or model["latency_ms"] is not None
+                or model["throughput"] is not None
+            ):
                 raise ValueError(
                     "failed models cannot contain performance measurements"
                 )
@@ -144,7 +151,7 @@ def validate_run(run):
                 raise ValueError("unknown operator category")
             if op["counter"] != counter or other in op:
                 raise ValueError("operator counter differs from its model")
-            unit = "cycle" if counter == "riscv-cycle" else "tick"
+            unit = "cycle" if counter != "x86-tsc" else "tick"
             opposite = "tick" if unit == "cycle" else "cycle"
             if f"start_{opposite}" in op or f"end_{opposite}" in op:
                 raise ValueError("operator mixes cycle and tick intervals")
@@ -162,37 +169,57 @@ def validate_run(run):
 
 
 def submission_errors(run):
-    missing = []
-    if run["area"] is None:
-        missing.append("Area：缺少面积报告")
-    elif not run["area"]["constraints_met"]:
-        missing.append("Area：综合约束未满足")
-    if not run["models"]:
-        missing.append("Performance：没有模型结果")
-    for model in run["models"]:
-        if model["status"] != "pass":
-            missing.append(f"Performance：{model['name']} 未通过")
-        for key, label in (
-            ("accuracy", "精度"),
-            ("latency_ms", "延迟"),
-            ("throughput", "吞吐"),
-        ):
-            if model[key] is None:
-                missing.append(f"Performance：{model['name']} 缺少{label}")
-    expected = set(run["verification_targets"])
-    actual = {result["target"] for result in run["verification"]}
-    if not expected or expected != actual:
-        missing.append("Coverage：验证项不完整")
-    for result in run["verification"]:
-        if result["status"] != "pass" or result["coverage"] is None:
-            missing.append(f"Coverage：{result['target']} 未通过或缺少覆盖率报告")
-    if run.get("provenance", {}).get("source_dirty", False):
-        missing.append("源码包含未提交修改")
-    return missing
+    errors = []
+    if not run["workloads"] and not run["verification"] and run["area"] is None:
+        errors.append("没有测量或验证结果")
+    if run["commit"] is None and not run.get("provenance", {}).get("executable_sha256"):
+        errors.append("缺少源码版本或执行产物哈希")
+    return errors
 
 
 def validate_submission(run):
     validate_run(run)
+    if run["verification"] or run["verification_targets"]:
+        raise ValueError(
+            "verification results belong in test reports, not the leaderboard"
+        )
+    if run["backend"] == "dc":
+        if run["area"] is None or run["workloads"]:
+            raise ValueError(
+                "DC submissions require an area measurement without model results"
+            )
+        if run["commit"] is None:
+            raise ValueError("DC area report requires a source revision")
+    else:
+        if run["area"] is not None:
+            raise ValueError(
+                "area measurements must be submitted as a separate DC report"
+            )
+        if run["backend"] != "p2e" or not run["workloads"]:
+            raise ValueError("leaderboard requires FPGA end-to-end model results")
+        provenance = run["provenance"]
+        for field in ("bitstream_sha256", "executable_sha256"):
+            if not re.fullmatch(r"[0-9a-f]{64}", provenance.get(field, "")):
+                raise ValueError(f"FPGA model report requires {field}")
+        for result in run["workloads"]:
+            if (
+                result["kind"] != "model"
+                or result["benchmark"]["scope"] != "model_execution"
+            ):
+                raise ValueError(
+                    "core, Ball and operator tests are not leaderboard model runs"
+                )
+            if result["counter"] != "riscv-cycle":
+                raise ValueError(
+                    "FPGA model performance requires the device cycle counter"
+                )
+            number(
+                result["benchmark"]["samples"],
+                "benchmark samples",
+                positive=True,
+                integer=True,
+            )
+            nonempty(result["report_url"], "raw end-to-end benchmark log")
     missing = submission_errors(run)
     if missing:
         raise ValueError(f"submission blocked for {run['id']}: {'; '.join(missing)}")

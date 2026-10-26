@@ -1,2 +1,0 @@
-expected_assertion = "Virtual LSU requires Bare or Sv39 mode"
-invalid_case = 4

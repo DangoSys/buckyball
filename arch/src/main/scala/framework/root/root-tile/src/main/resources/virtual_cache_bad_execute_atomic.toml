@@ -1,2 +1,0 @@
-expected_assertion = "Virtual instruction word requires unsigned 64 bit read without atomic"
-invalid_case = 7

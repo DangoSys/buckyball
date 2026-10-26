@@ -3,6 +3,7 @@ import json
 import os
 import shlex
 import sys
+import tempfile
 from pathlib import Path
 
 from motia import FlowContext, queue
@@ -19,7 +20,7 @@ from utils.stream_run import stream_run_logger_async
 
 config = {
     "name": "config-install",
-    "description": "install all chip configs under examples/chips",
+    "description": "install all design configs under examples/designs",
     "flows": ["config"],
     "triggers": [queue("config.install")],
     "enqueues": [],
@@ -39,113 +40,91 @@ def _load_script(name: str):
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = Path(get_buckyball_path())
-    chips = bbdir / "examples" / "chips"
+    designs = bbdir / "examples" / "designs"
 
-    selected = input_data.get("chip")
-    tops = [chips / selected / "configs" / "chip.toml"] if selected else sorted(chips.glob("*/configs/chip.toml"))
+    selected = input_data.get("design")
+    tops = (
+        [designs / selected / "configs" / "design.toml"]
+        if selected
+        else sorted(designs.glob("*/configs/design.toml"))
+    )
     if any(not top.is_file() for top in tops):
-        raise ValueError(f"unknown chip: {selected}")
+        raise ValueError(f"design {selected!r} has no configs/design.toml assembly")
     if not tops:
-        raise ValueError(f"no configs/chip.toml under {chips}")
+        raise ValueError(f"no configs/design.toml under {designs}")
 
     toml2json = _load_script("1_toml2json.py")
     derive = _load_script("2_parameter_derivation.py")
 
-    # step 1: generate chip config JSONs from toml files
+    # step 1: generate design config JSONs from toml files
     json_outs: list[Path] = []
     for top in tops:
-        data = toml2json.toml2json(top)
-        out = top.parent / "generated" / "config" / "config.json"
+        data = toml2json.design2json(top)
+        out = top.parent.parent / "output" / "generated" / "config" / "config.json"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        out.write_text(
+            json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
         json_outs.append(out)
-        ctx.logger.info(f"Wrote chip config JSON: {out}")
+        ctx.logger.info(f"Wrote design config JSON: {out}")
 
     # step 2: derive computed parameters from config JSONs
     derived_outs: list[Path] = []
     for top, json_path in zip(tops, json_outs):
-        chip = top.parent.parent.name
+        design = top.parent.parent.name
         data = json.loads(json_path.read_text(encoding="utf-8"))
         derived_path = json_path.parent / "derived.json"
-        derive.write_derived(data, bbdir, chip, derived_path)
+        derive.write_derived(data, bbdir, design, derived_path)
         derived_outs.append(derived_path)
         ctx.logger.info(f"Wrote derived config: {derived_path}")
 
-    # step 3.1: generate chip_pb2.py from chip.proto
+    # step 3.1: generate design_pb2.py from design.proto
     scripts = Path(scripts_dir)
-    cmd = (
-        f"protoc -I{shlex.quote(str(scripts / 'proto'))} "
-        f"--python_out={shlex.quote(str(scripts))} "
-        f"{shlex.quote(str(scripts / 'proto' / 'chip.proto'))}"
-    )
-    ctx.logger.info(f"Running protoc: {cmd}")
-    result = await stream_run_logger_async(
-        cmd=cmd,
-        logger=ctx.logger,
-        stdout_prefix="protoc",
-        stderr_prefix="protoc",
-        task_scope=origin_tid,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"protoc failed with returncode={result.returncode}")
-    ctx.logger.info(f"Generated chip python bindings: {scripts / 'chip_pb2.py'}")
+    with tempfile.TemporaryDirectory(prefix="bbdev-proto-") as generated:
+        schemas = [
+            scripts / "proto" / "design.proto",
+            scripts / "proto" / "hardware.proto",
+            *sorted(
+                Path(bbdir).glob("examples/components/balls/*/configs/*_params.proto")
+            ),
+            *sorted(
+                Path(bbdir).glob("examples/components/cores/*/configs/*_params.proto")
+            ),
+        ]
+        includes = sorted({schema.parent for schema in schemas})
+        cmd = " ".join(
+            [
+                "protoc",
+                *(f"-I{shlex.quote(str(directory))}" for directory in includes),
+                f"--python_out={shlex.quote(generated)}",
+                *(shlex.quote(str(schema)) for schema in schemas),
+            ]
+        )
+        ctx.logger.info(f"Running protoc: {cmd}")
+        result = await stream_run_logger_async(
+            cmd=cmd,
+            logger=ctx.logger,
+            stdout_prefix="protoc",
+            stderr_prefix="protoc",
+            task_scope=origin_tid,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"protoc failed with returncode={result.returncode}")
+        for source in Path(generated).glob("*_pb2.py"):
+            content = source.read_bytes()
+            destination = scripts / source.name
+            if not destination.is_file() or destination.read_bytes() != content:
+                destination.write_bytes(content)
+    ctx.logger.info(f"Generated design python bindings: {scripts / 'design_pb2.py'}")
 
-    # step 3.2: generate chip.pb for all components build
+    # step 3.2: design.pb, the one input of every build system
     json2proto = _load_script("3_json2proto.py")
     pb_outs: list[Path] = []
     for json_path, derived_path in zip(json_outs, derived_outs):
-        out = json_path.parent / "chip.pb"
-        json2proto.write_chip_pb(json_path, derived_path, out, bbdir)
+        out = json_path.parent.parent / "design.pb"
+        json2proto.write_design_pb(json_path, derived_path, out, bbdir)
         pb_outs.append(out)
-        ctx.logger.info(f"Wrote chip protobuf: {out}")
-
-    # step 4: translate PB to different build systems
-    step4 = _load_script("4_install.py")
-    installed: list[dict[str, str]] = []
-    for top, src_pb, json_path in zip(tops, pb_outs, json_outs):
-        chip_name = top.parent.parent.name
-        chip = step4.load_chip(src_pb)
-        gen = top.parent / "generated"
-
-        # A. TO Arch BUILD SYSTEM
-        arch = step4.install_arch(src_pb, gen)
-        ctx.logger.info(f"Installed arch pb: {arch}")
-
-        # B. TO BEMU BUILD SYSTEM
-        bemu = step4.install_bemu(chip, bbdir, gen)
-        ctx.logger.info(f"Installed bemu crate: {bemu}")
-
-        bebop = step4.install_bebop(gen)
-        ctx.logger.info(f"Installed bebop crate: {bebop}")
-
-        # C. TO Workload BUILD SYSTEM
-        workload = step4.install_workload(chip, bbdir, chip_name, gen)
-        ctx.logger.info(f"Installed workload defs: {workload}")
-
-        default_design = Path(json.loads(json_path.read_text(encoding="utf-8"))["designs"]["_file"]).resolve()
-        designs_dir = top.parent / "designs"
-        if not designs_dir.is_dir():
-            raise ValueError(f"missing {designs_dir}")
-        for design in sorted(designs_dir.glob("*.toml")):
-            if design.resolve() == default_design:
-                continue
-            vdata = toml2json.toml2json(top, design=design)
-            vjson = gen / "config" / f"{design.stem}.json"
-            vjson.write_text(json.dumps(vdata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            vderived = gen / "config" / f"{design.stem}.derived.json"
-            derive.write_derived(vdata, bbdir, chip_name, vderived)
-            vpb = json2proto.write_chip_pb(vjson, vderived, gen / f"{design.stem}.pb", bbdir)
-            ctx.logger.info(f"Installed arch variant pb: {vpb}")
-
-        installed.append(
-            {
-                "chip": chip_name,
-                "arch": str(arch),
-                "bemu": str(bemu),
-                "bebop": str(bebop),
-                "workload": str(workload),
-            }
-        )
+        ctx.logger.info(f"Wrote design protobuf: {out}")
 
     await check_result(
         ctx,
@@ -155,8 +134,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "install",
             "json": [str(p) for p in json_outs],
             "derived": [str(p) for p in derived_outs],
-            "pb2": str(scripts / "chip_pb2.py"),
-            "install": installed,
+            "pb2": str(scripts / "design_pb2.py"),
+            "design_pb": [str(p) for p in pb_outs],
         },
         trace_id=origin_tid,
     )

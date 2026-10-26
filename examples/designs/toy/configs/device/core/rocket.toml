@@ -1,0 +1,12 @@
+component = "rocket"
+physical_address_bits = 36
+hart_id_bits = 1
+page_levels = 3
+pmp_entries = 16
+virtual_memory = true
+supervisor = true
+user = true
+floating_point = true
+atomics = true
+multiply_divide = true
+external_home = false

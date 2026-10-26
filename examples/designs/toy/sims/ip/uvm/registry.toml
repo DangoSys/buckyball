@@ -1,0 +1,7 @@
+[[ips]]
+ip = "axis"
+config = "default"
+
+[[ips]]
+ip = "axis"
+config = "configs/axis16.toml"

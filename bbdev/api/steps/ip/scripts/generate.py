@@ -11,7 +11,9 @@ if str(Path(__file__).resolve().parents[2] / "dc" / "scripts") not in sys.path:
 
 from tapeout import SramGeom, get_tapeout_contract
 from macro_compiler import run_macro_compiler
+from replace import source_scope
 from sram_compiler import generate_sram_dbs, leaf_names_from_macros
+
 
 def pad_mems_conf(text: str) -> str:
     lines = []
@@ -55,8 +57,15 @@ def parse_mems(text: str) -> list[tuple[str, int, int]]:
         if not line:
             continue
         parts = line.split()
-        if len(parts) < 6 or parts[0] != "name" or parts[2] != "depth" or parts[4] != "width":
-            raise ValueError(f"mems.conf:{i}: expected 'name <id> depth <n> width <n> ...', got {line!r}")
+        if (
+            len(parts) < 6
+            or parts[0] != "name"
+            or parts[2] != "depth"
+            or parts[4] != "width"
+        ):
+            raise ValueError(
+                f"mems.conf:{i}: expected 'name <id> depth <n> width <n> ...', got {line!r}"
+            )
         try:
             depth = int(parts[3])
             width = int(parts[5])
@@ -92,7 +101,9 @@ def module_insts(text: str) -> dict[str, Counter[str]]:
     return out
 
 
-def check_mapping(*, mems_text: str, macros_v: Path, mdf: dict[str, tuple[int, int]]) -> None:
+def check_mapping(
+    *, mems_text: str, macros_v: Path, mdf: dict[str, tuple[int, int]]
+) -> None:
     if not macros_v.is_file():
         raise FileNotFoundError(f"missing macros verilog: {macros_v}")
     insts = module_insts(macros_v.read_text())
@@ -159,7 +170,9 @@ def geoms_from_macros(
     return geoms
 
 
-def check_bitwrite_contract(geoms: list[SramGeom], mdf: Path, macros_v: Path, sram_table: dict[str, SramGeom]) -> None:
+def check_bitwrite_contract(
+    geoms: list[SramGeom], mdf: Path, macros_v: Path, sram_table: dict[str, SramGeom]
+) -> None:
     raw = json.loads(mdf.read_text())
     if not isinstance(raw, list):
         raise ValueError(f"mdf must be a list: {mdf}")
@@ -185,7 +198,9 @@ def check_bitwrite_contract(geoms: list[SramGeom], mdf: Path, macros_v: Path, sr
         mask_name = p.get("mask port name")
         if g.bitwrite:
             if mask_name != "BWEN":
-                raise ValueError(f"{g.name}: bitwrite requires mask port BWEN, got {mask_name!r}")
+                raise ValueError(
+                    f"{g.name}: bitwrite requires mask port BWEN, got {mask_name!r}"
+                )
             if p.get("mask port polarity") != "active low":
                 raise ValueError(f"{g.name}: BWEN polarity must be active low")
             if p.get("mask granularity") != 1:
@@ -195,7 +210,9 @@ def check_bitwrite_contract(geoms: list[SramGeom], mdf: Path, macros_v: Path, sr
     used = {g.name for g in geoms}
     for geom in sram_table.values():
         if geom.bitwrite and geom.name not in used:
-            raise RuntimeError(f"bitwrite sram {geom.name} not instantiated in {macros_v}")
+            raise RuntimeError(
+                f"bitwrite sram {geom.name} not instantiated in {macros_v}"
+            )
 
 
 def _leaf_paths(cache_dir: Path, name: str, corner: str) -> dict[str, str]:
@@ -210,8 +227,11 @@ def _leaf_paths(cache_dir: Path, name: str, corner: str) -> dict[str, str]:
 def generate_sram(
     *,
     bbdir: str | Path,
-    chip: str,
+    design: str,
+    selection: str,
     build_dir: str | Path,
+    top_module: str,
+    source_list: str | Path,
     out_dir: str | Path | None = None,
 ) -> dict:
     bbdir = Path(bbdir).resolve()
@@ -219,8 +239,16 @@ def generate_sram(
     src = build_dir / "mems.conf"
     if not src.is_file():
         raise FileNotFoundError(f"missing elaborator mems.conf: {src}")
-    padded = pad_mems_conf(src.read_text())
-    contract = get_tapeout_contract(bbdir, chip)
+    mems = src.read_text()
+    parse_mems(mems)
+    reachable, _ = source_scope(Path(source_list).read_text().splitlines(), top_module)
+    selected = "\n".join(
+        line
+        for line in mems.splitlines()
+        if line.strip() and line.split()[1] in reachable
+    )
+    padded = pad_mems_conf(selected) if selected else ""
+    contract = get_tapeout_contract(bbdir, design, selection=selection)
     if out_dir is None:
         dest = build_dir / "ip-generate"
     else:
@@ -233,35 +261,43 @@ def generate_sram(
     firrtl = dest / "sram_macros.fir"
     mems_out.write_text(padded)
     arch_dir = bbdir / "arch"
-    run_macro_compiler(
-        mems_conf=mems_out,
-        mdf=contract.sram_mdf,
-        verilog=verilog,
-        firrtl=firrtl,
-        arch_dir=arch_dir,
-    )
-    check_mapping(
-        mems_text=padded,
-        macros_v=verilog,
-        mdf=load_mdf(contract.sram_mdf),
-    )
-    geoms = geoms_from_macros(
-        macros_v=verilog,
-        sram_table=contract.sram_table,
-        mdf=contract.sram_mdf,
-    )
-    check_bitwrite_contract(geoms, contract.sram_mdf, verilog, contract.sram_table)
+    if padded:
+        run_macro_compiler(
+            mems_conf=mems_out,
+            mdf=contract.sram_mdf,
+            verilog=verilog,
+            firrtl=firrtl,
+            arch_dir=arch_dir,
+        )
+        check_mapping(
+            mems_text=padded,
+            macros_v=verilog,
+            mdf=load_mdf(contract.sram_mdf),
+        )
+        geoms = geoms_from_macros(
+            macros_v=verilog,
+            sram_table=contract.sram_table,
+            mdf=contract.sram_mdf,
+        )
+        check_bitwrite_contract(geoms, contract.sram_mdf, verilog, contract.sram_table)
+    else:
+        verilog.write_text("")
+        firrtl.write_text("")
+        geoms = []
     ip_db = build_dir.parent / f"{build_dir.name}-ip-db"
-    db_paths, corner_tag = generate_sram_dbs(
-        geoms=geoms,
-        process=contract.sram_process,
-        corner=contract.sram_corner,
-        cache_dir=ip_db,
-        lc_shell=contract.lc_shell,
-    )
+    if geoms:
+        db_paths, corner_tag = generate_sram_dbs(
+            geoms=geoms,
+            process=contract.sram_process,
+            corner=contract.sram_corner,
+            cache_dir=ip_db,
+            lc_shell=contract.lc_shell,
+        )
+    else:
+        db_paths, corner_tag = [], contract.sram_corner
     names = [g.name for g in geoms]
     man = {
-        "chip": chip,
+        "design": design,
         "sram_mdf": str(contract.sram_mdf),
         "mems_conf": str(mems_out),
         "sram_macros_v": str(verilog),
@@ -269,10 +305,7 @@ def generate_sram(
         "sram_corner": corner_tag,
         "ip_db": str(ip_db),
         "leaves": names,
-        "leaf_paths": {
-            g.name: _leaf_paths(ip_db, g.name, corner_tag)
-            for g in geoms
-        },
+        "leaf_paths": {g.name: _leaf_paths(ip_db, g.name, corner_tag) for g in geoms},
         "link_dbs": [str(p) for p in db_paths],
         "leaf_count": len(names),
         "mem_count": sum(1 for line in padded.splitlines() if line.strip()),

@@ -4,6 +4,51 @@ import json
 import re
 from pathlib import Path
 
+
+def source_scope(
+    source_paths: list[str | Path], top_module: str
+) -> tuple[set[str], set[Path]]:
+    paths = [Path(path).resolve() for path in source_paths]
+    modules: dict[str, Path] = {}
+    texts: dict[str, str] = {}
+    for path in paths:
+        text = re.sub(r"/\*.*?\*/|//[^\n]*", "", path.read_text(), flags=re.S)
+        matches = list(
+            re.finditer(
+                r"^\s*(?:\(\*.*?\*\)\s*)*module\s+([A-Za-z_][A-Za-z0-9_$]*)\b",
+                text,
+                re.M,
+            )
+        )
+        for match in matches:
+            name = match.group(1)
+            if name in modules:
+                raise RuntimeError(
+                    f"duplicate module {name}: {modules[name]} vs {path}"
+                )
+            modules[name] = path
+            end = re.search(r"\bendmodule\b", text[match.end() :]).end() + match.end()
+            texts[name] = text[match.end() : end]
+
+    if top_module not in modules:
+        raise ValueError(f"synthesis top is not defined in source list: {top_module}")
+
+    reachable = {top_module}
+    pending = [top_module]
+    while pending:
+        cur = pending.pop()
+        for child, _inst in re.findall(
+            r"\b([A-Za-z_][A-Za-z0-9_$]*)\s*(?:#\s*\(.*?\)\s*)?([A-Za-z_][A-Za-z0-9_$]*)\s*\(",
+            texts[cur],
+            re.M | re.S,
+        ):
+            if child in modules and child not in reachable:
+                reachable.add(child)
+                pending.append(child)
+
+    return reachable, {modules[name] for name in reachable}
+
+
 def replace_sources(
     *,
     source_paths: list[str],
@@ -16,45 +61,9 @@ def replace_sources(
     paths = [Path(path).resolve() for path in source_paths]
     macros = Path(sram_macros_v).resolve()
 
-    modules: dict[str, Path] = {}
-    texts: dict[str, str] = {}
-    for path in paths:
-        text = path.read_text()
-        match = re.search(
-            r"^\s*(?:\(\*.*?\*\)\s*)*module\s+([A-Za-z_][A-Za-z0-9_$]*)\b",
-            text,
-            re.M,
-        )
-        if match is None:
-            stripped = re.sub(r"/\*.*?\*/|//.*?$", "", text, flags=re.M | re.S)
-            if re.search(r"\bmodule\b", stripped):
-                raise RuntimeError(f"no module declaration: {path}")
-            continue
-        name = match.group(1)
-        if name in modules:
-            raise RuntimeError(f"duplicate module {name}: {modules[name]} vs {path}")
-        modules[name] = path
-        texts[name] = text
-
-    if top_module not in modules:
-        raise ValueError(f"synthesis top is not defined in source list: {top_module}")
     if not macros.is_file():
         raise FileNotFoundError(f"missing sram_macros.v: {macros}")
-
-    reachable = {top_module}
-    pending = [top_module]
-    while pending:
-        cur = pending.pop()
-        for child, _inst in re.findall(
-            r"^\s*([A-Za-z_][A-Za-z0-9_$]*)\s*(?:#\s*\(.*?\)\s*)?([A-Za-z_][A-Za-z0-9_$]*)\s*\(",
-            texts[cur],
-            re.M | re.S,
-        ):
-            if child in modules and child not in reachable:
-                reachable.add(child)
-                pending.append(child)
-
-    selected_paths = {modules[name] for name in reachable}
+    reachable, selected_paths = source_scope(paths, top_module)
     selected = [path for path in paths if path in selected_paths]
     if macros not in selected:
         selected.append(macros)

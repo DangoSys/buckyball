@@ -11,7 +11,9 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-dc_scripts_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "dc", "scripts"))
+dc_scripts_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "dc", "scripts")
+)
 if dc_scripts_path not in sys.path:
     sys.path.insert(0, dc_scripts_path)
 
@@ -40,20 +42,35 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         error = "missing fixed DC analysis output directory"
     elif not isinstance(activity_path, str) or not activity_path:
         error = "missing required --activity"
-    elif not isinstance(activity_format, str) or activity_format not in {"saif", "vcd", "fsdb"}:
+    elif not isinstance(activity_format, str) or activity_format not in {
+        "saif",
+        "vcd",
+        "fsdb",
+    }:
         error = "missing or invalid --format; expected saif, vcd, or fsdb"
     elif shutil.which("pt_shell") is None:
         error = "pt_shell is not on PATH"
     else:
         error = None
     if error:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "pt", "error": error}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "pt", "error": error},
+            trace_id=origin_tid,
+        )
         return
 
     try:
         netlist = os.path.join(analysis_dir, "outputs", f"{top_module}.v")
         sdc = os.path.join(analysis_dir, "outputs", f"{top_module}.sdc")
-        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("chip"), top_module)
+        contract = get_tapeout_contract(
+            get_buckyball_path(),
+            input_data.get("design"),
+            top_module,
+            selection=input_data["target"],
+        )
         start_ns, end_ns = resolve_power_window(
             contract,
             input_data.get("start_ns", input_data.get("start-ns")),
@@ -63,7 +80,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "target_library": contract.target_library,
             "synthetic_library": contract.synthetic_library,
             "link_library": contract.link_library,
-            "max_cores": contract.max_cores,
+            "max_threads": contract.max_threads,
         }
         run_config = write_run_tcl(
             os.path.join(analysis_dir, "power-run.tcl"),
@@ -82,7 +99,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         script = contract.power_script
     except (OSError, ValueError) as exc:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "pt", "error": str(exc)}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "pt", "error": str(exc)},
+            trace_id=origin_tid,
+        )
         return
 
     result = await stream_run_logger_async(

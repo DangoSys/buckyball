@@ -1,0 +1,5 @@
+[parameters]
+xLen = 64
+fLen = 64
+
+[defines]

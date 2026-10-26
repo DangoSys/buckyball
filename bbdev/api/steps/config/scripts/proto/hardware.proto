@@ -1,0 +1,158 @@
+syntax = "proto2";
+package buckyball.config;
+option java_package = "buckyball.config";
+option java_multiple_files = true;
+
+message ChiHardware {
+  required uint32 node_id_bits = 1;
+  required uint32 address_bits = 2;
+  required uint32 data_bits = 3;
+}
+message AxiHardware {
+  required uint32 address_bits = 1;
+  required uint32 data_bits = 2;
+  required uint32 id_bits = 3;
+}
+message TrackingHardware {
+  required uint32 entries = 1;
+  required uint32 address_bits = 2;
+  required uint32 id_bits = 3;
+  required uint32 line_bytes = 4;
+  required uint32 max_ranges = 5;
+}
+message RegionHardware {
+  required uint64 base = 1;
+  required uint64 bytes = 2;
+  required bool cacheable = 3;
+  required bool executable = 4;
+  required bool readable = 5;
+  required bool writable = 6;
+  required bool atomic = 7;
+  required bool normal = 8;
+}
+message CacheHardware {
+  required uint32 address_bits = 1;
+  required uint32 line_bytes = 2;
+  required uint32 sets = 3;
+  required uint32 ways = 4;
+  required uint32 id_bits = 5;
+  required uint32 metadata_bits = 6;
+  required uint32 response_depth = 7;
+}
+message RnfHardware {
+  required uint32 node_id = 1;
+  required uint32 cache_lines = 2;
+  required uint32 home_id = 3;
+  required uint32 home_count = 4;
+  required uint32 banks = 5;
+  required bool line_result = 6;
+  required bool probe = 7;
+  reserved 8;
+}
+message HomeHardware {
+  required CacheHardware cache = 1;
+  required uint32 agents = 2;
+  required uint32 mshr_entries = 3;
+  required uint32 home_id = 4;
+  required ChiHardware requesters = 5;
+}
+message PreparationHardware {
+  required ChiHardware bus = 1;
+  required uint32 contexts = 2;
+  required uint32 max_ranges = 3;
+  required uint32 id_bits = 4;
+  required uint32 beat_bytes = 5;
+}
+message TransportHardware {
+  required TrackingHardware tracking = 1;
+  required PreparationHardware prepared = 2;
+  required AxiHardware axi = 3;
+  repeated RegionHardware regions = 4;
+}
+
+
+message DdrHardware {
+  required ChiHardware line = 1;
+  required uint32 clients = 2;
+  required uint32 slots_per_client = 3;
+  required uint32 data_bits = 4;
+  required uint32 id_bits = 5;
+  required uint32 id_base = 6;
+  // DDR address map; the top `model` bytes hold the model image, the rest is
+  // what the CPUs run in.
+  required uint64 base = 7;
+  required uint64 bytes = 8;
+  required uint64 model = 9;
+}
+message BootRomHardware {
+  required uint64 base = 1;
+  required uint64 bytes = 2;
+  repeated sint32 image = 3;
+}
+message ClintHardware {
+  repeated uint32 hart_ids = 1;
+  required uint64 base = 2;
+  required uint64 bytes = 3;
+  required uint32 tick_cycles = 4;
+}
+message PlicHardware {
+  repeated uint32 hart_ids = 1;
+  required uint64 base = 2;
+  required uint64 bytes = 3;
+  required uint32 sources = 4;
+  required uint32 priority_bits = 5;
+}
+message ScuHardware {
+  required uint64 base_address = 1;
+  required uint64 stride_bytes = 2;
+  required uint64 total_size_bytes = 3;
+  required uint32 max_harts = 4;
+}
+message SimMemoryHardware {
+  reserved 1, 2;
+  required uint32 line_bytes = 3;
+  required uint64 clock_hz = 4;
+}
+message SimHardware {
+  required bool diff_test = 1;
+  required SimMemoryHardware memory = 2;
+  reserved 3;
+}
+
+message MemoryAccessConfig {
+  reserved 1;
+  required uint32 access_tag_bits = 2;
+  required uint32 translation_entries = 3;
+  required uint32 result_line_bits = 4;
+  reserved 5;
+  repeated RegionHardware regions = 6;
+}
+message DCacheConfig {
+  required RnfHardware cache = 1;
+  required TrackingHardware tracking = 2;
+}
+message UncachedConfig {
+  required uint32 ports = 1;
+  required AxiHardware axi = 2;
+}
+message MemoryConfig {
+  reserved 1;
+  required UncachedConfig uncached = 6;
+  required MemoryAccessConfig access = 2;
+  required RnfHardware icache = 3;
+  required DCacheConfig dcache = 4;
+  required HomeHardware home = 5;
+}
+message FetchConfig { required uint32 instruction_bytes = 1; }
+message FpuConfig { required uint32 f_len = 1; }
+message InterconnectConfig {
+  required AxiHardware axi = 1;
+  required uint32 slots = 2;
+}
+message C2CConfig {
+  required bool enabled = 1;
+  required uint32 peer_cores = 2;
+  required AxiHardware axi = 3;
+}
+message TBusConfig { repeated uint32 bank_nodes = 1; }
+message ControllerConfig { required bool moves = 1; }

@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
+from utils.path import _design_name
 
 from utils.report_schema import (
     report_directory,
@@ -12,21 +13,12 @@ from utils.report_schema import (
 )
 
 
-def source_context(repo, chip):
+def source_context(repo, design):
     repo = Path(repo)
-
-    def plain(value):
-        if isinstance(value, dict):
-            return {key: plain(item) for key, item in value.items() if key != "_file"}
-        if isinstance(value, list):
-            return [plain(item) for item in value]
-        return value
-
-    config = json.loads(
-        (
-            repo / f"examples/chips/{chip}/configs/generated/config/config.json"
-        ).read_text()
-    )
+    design = _design_name(design)
+    config = (
+        repo / "examples/designs" / design / "output/generated/design.pb"
+    ).read_bytes()
 
     def git(*args):
         return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
@@ -35,10 +27,8 @@ def source_context(repo, chip):
         "repository": "DangoSys/buckyball",
         "branch": git("branch", "--show-current") or git("rev-parse", "HEAD"),
         "commit": git("rev-parse", "HEAD"),
-        "chip": chip,
-        "config_hash": hashlib.sha256(
-            json.dumps(plain(config), sort_keys=True).encode()
-        ).hexdigest(),
+        "design": design,
+        "config_hash": hashlib.sha256(config).hexdigest(),
         "provenance": {
             "source_dirty": bool(
                 git(
@@ -49,6 +39,7 @@ def source_context(repo, chip):
                 )
             ),
             "workflow_url": None,
+            "comparable": True,
         },
     }
 
@@ -56,8 +47,8 @@ def source_context(repo, chip):
 def new_report(context, producer, trace_id, backend):
     now = datetime.now(timezone.utc)
     return {
-        "schema_version": 2,
-        "id": f"{context['chip']}-{producer.replace('.', '-')}-{trace_id}",
+        "schema_version": 3,
+        "id": f"{context['design']}-{producer.replace('.', '-')}-{trace_id}",
         "timestamp": now.isoformat().replace("+00:00", "Z"),
         **context,
         "producer": producer,
@@ -66,7 +57,7 @@ def new_report(context, producer, trace_id, backend):
         "area": None,
         "verification_targets": [],
         "verification": [],
-        "models": [],
+        "workloads": [],
         "artifacts": {},
     }
 
@@ -108,9 +99,10 @@ def verify_artifacts(report, directory):
         if row["report_url"] is not None
     )
     references.extend(
-        model["trace_url"]
-        for model in report["models"]
-        if model["trace_url"] is not None
+        model[field]
+        for model in report["workloads"]
+        for field in ("trace_url", "report_url")
+        if model[field] is not None
     )
     for url in references:
         if not url.startswith(prefix):

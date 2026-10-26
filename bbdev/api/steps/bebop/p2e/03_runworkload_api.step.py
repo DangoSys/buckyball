@@ -1,4 +1,4 @@
-from pathlib import Path
+from utils.event_common import require_target
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
 from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
@@ -14,35 +14,29 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    if not isinstance(body.get("reuse-runtime", False), bool):
-        return ApiResponse(status=400, body={"error": "reuse-runtime must be a boolean"})
-    image = body.get("image", "")
-    manifest = body.get("load-manifest", "")
-    bitstream = body.get("bitstream", "")
-    if not all(isinstance(value, str) for value in (image, manifest, bitstream)):
-        return ApiResponse(status=400, body={"error": "image, load-manifest and bitstream must be strings"})
-    if bool(image) == bool(manifest) or not bitstream:
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    if not body.get("image") or not body.get("bitstream"):
         return ApiResponse(
-            status=400,
-            body={
-                "success": False,
-                "failure": True,
-                "returncode": 400,
-                "message": "exactly one of image and load-manifest, and bitstream, are required",
-            },
+            status=400, body={"error": "image and bitstream are required"}
         )
-    if manifest and body.get("diff", False):
-        return ApiResponse(status=400, body={"error": "load-manifest cannot use single-ELF diff"})
-    if not Path(bitstream).is_file():
-        return ApiResponse(status=400, body={"error": f"P2E bitstream is not a file: {bitstream}"})
+    bitstream = body["bitstream"]
     if body.get("reuse-runtime", False):
         try:
-            validate_runtime_reuse(bitstream, bool(body.get("diff", False)),
-                                   bool(body.get("itrace", False)), bool(body.get("mtrace", False)))
+            validate_runtime_reuse(
+                bitstream,
+                bool(body.get("diff", False)),
+                bool(body.get("itrace", False)),
+                bool(body.get("mtrace", False)),
+            )
         except (ValueError, OSError) as error:
             return ApiResponse(status=400, body={"error": str(error)})
-    await ctx.enqueue({
-        "topic": "bebop.p2e.runworkload",
-        "data": {**body, "_trace_id": ctx.trace_id},
-    })
+    await ctx.enqueue(
+        {
+            "topic": "bebop.p2e.runworkload",
+            "data": {**body, "_trace_id": ctx.trace_id, "target": selection},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

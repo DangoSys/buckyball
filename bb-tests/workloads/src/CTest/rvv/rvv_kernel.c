@@ -1,4 +1,5 @@
 #include <bbhw/isa/isa.h>
+#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 

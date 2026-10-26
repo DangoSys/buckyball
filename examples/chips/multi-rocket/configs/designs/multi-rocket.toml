@@ -1,4 +1,0 @@
-# Multi-Rocket: a main tile only.
-
-[main_tile]
-include = "tiles/32core.toml"

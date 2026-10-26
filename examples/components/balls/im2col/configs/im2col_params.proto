@@ -1,0 +1,11 @@
+syntax = "proto3";
+package buckyball.balls.im2col;
+option java_package = "buckyball.balls.im2col";
+option java_multiple_files = true;
+
+message Params {
+  optional int32 inputWidth = 1;
+  optional int32 maxIter = 2;
+  optional int32 maxKSize = 3;
+  optional int32 maxPadding = 4;
+}

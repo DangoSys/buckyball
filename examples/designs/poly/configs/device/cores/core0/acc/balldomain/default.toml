@@ -1,0 +1,9 @@
+[[balls]]
+id = 0
+name = "F32AddBall"
+component = "f32add"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "F32ADD", funct7 = 76 },
+]

@@ -1,0 +1,24 @@
+[tapeout]
+top = "RedmuleBall"
+sram_process = "smic180"
+sram_mdf = "ip/smic180_sram_library.mdf.json"
+constraints_sdc = "area/constraints.sdc"
+target_library = "/home/bb-runner/Code/eda/D_libraries/SMIC180/SCC018UG_UHD_RVT_V0.4a/SCC018UG_UHD_RVT_V0p4a/liberty/1.8v/scc018ug_uhd_rvt_ss_v1p62_125c_ccs.db"
+synthetic_library = [
+  "/home/bb-runner/Code/eda/A_packages/tools/syn/R-2020.09-SP5/libraries/syn/dw_foundation.sldb",
+  "/home/bb-runner/Code/eda/A_packages/tools/syn/R-2020.09-SP5/libraries/syn/standard.sldb",
+]
+link_library = []
+max_threads = 8
+power_format = "vcd"
+power_start_ns = "1000000"
+power_end_ns = "5000000"
+dc_script = "area/dc.tcl"
+power_script = "../../../../../bbdev/api/steps/dc/scripts/ptpx.tcl"
+power_strip_path = "GatePowerHarness.dut"
+
+sram_corner = "ss"
+lc_shell = "/home/bb-runner/Code/eda/A_packages/tools/lc/R-2020.09-SP5/bin/lc_shell"
+
+
+sram = []

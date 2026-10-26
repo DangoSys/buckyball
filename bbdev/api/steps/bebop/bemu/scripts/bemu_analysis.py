@@ -13,22 +13,13 @@ if str(Path(__file__).resolve().parents[4]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
 
 
-def abs_log_dir(value: object) -> Path:
-    if not isinstance(value, str) or not value:
-        raise ValueError("log-dir must be an absolute path")
-    path = Path(value)
-    if not path.is_absolute():
-        raise ValueError(f"log-dir must be an absolute path: {value}")
-    return path
-
-
 def _hex_u(value: object, field: str, line_no: int) -> int:
     if not isinstance(value, str) or not value.startswith("0x"):
         raise ValueError(f"bdb.ndjson:{line_no}: {field} must be a 0x hex string")
     return int(value, 16)
 
 
-def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
+def design_maps(bbdir: str, design: str) -> tuple[dict[int, str], set[int], int]:
     system_isa = {
         0: "fence",
         1: "barrier",
@@ -38,68 +29,34 @@ def chip_maps(bbdir: str, chip: str) -> tuple[dict[int, str], set[int], int]:
         34: "mmio_set",
         35: "mvin_mmio",
     }
-    path = (
-        Path(bbdir)
-        / "examples"
-        / "chips"
-        / chip
-        / "configs"
-        / "generated"
-        / "config"
-        / "config.json"
-    )
-    data = json.loads(path.read_text(encoding="utf-8"))
-    cores = []
-    for tile in data["designs"]["tiles"]:
-        cores.extend(tile["cores"])
-    if len(cores) != 1:
-        # isomorphic tiles share the same core pkg; take first unique balldomain+_file
-        seen = []
-        uniq = []
-        for core in cores:
-            key = core["balldomain"]["_file"]
-            if key not in seen:
-                seen.append(key)
-                uniq.append(core)
-        if len(uniq) != 1:
-            raise ValueError(f"chip {chip} has no unique topology core")
-        core = uniq[0]
-    else:
-        core = cores[0]
+    from utils.path import load_design_config
 
-    ball = core["balldomain"]
-    isa = ball["ballISA"]
-    ball_path = ball["_file"]
-
+    data = load_design_config(bbdir, design)
+    configurations = {
+        (
+            p.config.balldomain.SerializeToString(deterministic=True),
+            p.config.mem.bank.entries,
+        ): p.config
+        for p in data.profiles
+    }
+    if len(configurations) != 1:
+        raise ValueError(
+            f"design {design} requires a unique instruction map and bank depth for this analysis"
+        )
+    config = next(iter(configurations.values()))
     names: dict[int, str] = dict(system_isa)
     matrix: set[int] = set()
-    seen: set[int] = set()
-    for entry in isa:
-        if not isinstance(entry, dict):
-            raise ValueError(f"ballISA entry must be a table: {ball_path}")
-        funct = entry.get("funct7")
-        mnemonic = entry.get("mnemonic")
-        if not isinstance(funct, int) or funct < 0:
-            raise ValueError(f"ballISA funct7 must be a non-negative int: {ball_path}")
-        if not isinstance(mnemonic, str) or not mnemonic:
-            raise ValueError(
-                f"ballISA mnemonic must be a non-empty string: {ball_path}"
-            )
-        if funct in seen:
-            raise ValueError(f"duplicate ballISA funct7 {funct}: {ball_path}")
-        if funct in system_isa:
-            raise ValueError(
-                f"ballISA funct7 {funct} ({mnemonic}) collides with ISA {system_isa[funct]}: {ball_path}"
-            )
-        seen.add(funct)
-        names[funct] = mnemonic.lower()
-        if mnemonic in {"MATRIX", "MATRIX_F32", "SMATMUL_OS"}:
-            matrix.add(funct)
-
-    mem = core["memdomain"]
-    bank = mem["bank"]
-    entries = bank["entries"]
-    return names, matrix, entries
+    for instance in config.balldomain.balls:
+        for instruction in instance.instructions:
+            funct, mnemonic = instruction.funct7, instruction.mnemonic
+            if funct in names:
+                raise ValueError(
+                    f"design {design}: duplicate or reserved funct7 {funct}"
+                )
+            names[funct] = mnemonic.lower()
+            if mnemonic in {"MATRIX", "MATRIX_F32", "SMATMUL_OS"}:
+                matrix.add(funct)
+    return names, matrix, config.mem.bank.entries
 
 
 def _mnk(rs1: int, rs2: int) -> tuple[int, int, int]:
@@ -118,7 +75,7 @@ def analysis_dir(
     if bank_depth <= 0:
         raise ValueError(f"bank_depth must be a positive int, got {bank_depth}")
     if not log_dir.is_dir():
-        raise ValueError(f"log-dir is not a directory: {log_dir}")
+        raise ValueError(f"run is not a directory: {log_dir}")
     bdb = log_dir / "bdb.ndjson"
     if not bdb.is_file():
         raise ValueError(f"missing bdb.ndjson: {bdb}")
@@ -218,22 +175,22 @@ def write_report(log_dir: Path, text: str) -> Path:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--chip", required=True)
-    parser.add_argument("--log-dir", required=True, type=Path)
+    parser.add_argument("--design", required=True)
+    parser.add_argument("--run", required=True)
     parser.add_argument("--bbdir", type=Path)
     parser.add_argument("--itrace", action="store_true")
     parser.add_argument("--mtrace", action="store_true")
     args = parser.parse_args(argv)
     if not args.itrace and not args.mtrace:
         raise SystemExit("need --itrace and/or --mtrace")
-    log_dir = abs_log_dir(str(args.log_dir))
     api_root = Path(__file__).resolve().parents[4]
     if str(api_root) not in sys.path:
         sys.path.insert(0, str(api_root))
-    from utils.path import get_buckyball_path
+    from utils.path import get_buckyball_path, run_log_dir
 
     bbdir = args.bbdir if args.bbdir is not None else Path(get_buckyball_path())
-    names, matrix, depth = chip_maps(str(bbdir), args.chip)
+    log_dir = run_log_dir(bbdir, args.run)
+    names, matrix, depth = design_maps(str(bbdir), args.design)
     text = analysis_dir(
         log_dir,
         names=names,

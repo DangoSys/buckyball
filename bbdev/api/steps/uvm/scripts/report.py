@@ -1,25 +1,26 @@
-import tomllib
 from pathlib import Path
 
 from utils.reports import new_report, attachment, finish_report
+from utils.path import load_design_config
 from .uvm_common import dashboard_summary, load_ip
 
 
-def verification_targets(repo, chip, ball=None, ip=None, target=None):
+def verification_targets(repo, design, ball=None, ip=None):
     if ip is not None:
         return [
             f"ip/{ip}/{item['name']}"
-            for item in load_ip(str(repo), ip, target, chip)["targets"]
+            for profile in load_ip(str(repo), ip, design)
+            for item in profile["targets"]
         ]
     if ball is not None:
         return [f"ball/{ball}"]
-    config = tomllib.loads(
-        (Path(repo) / f"examples/chips/{chip}/configs/chip.toml").read_text()
-    )["uvm"]
-    targets = [f"ball/{ball}" for ball in config["balls"]]
-    for ip in config["ips"]:
+    config = load_design_config(repo, design).verification
+    targets = [f"ball/{ball}" for ball in config.balls]
+    for ip in config.ips:
         targets.extend(
-            f"ip/{ip}/{target['name']}" for target in load_ip(str(repo), ip, chip=chip)["targets"]
+            f"ip/{ip}/{target['name']}"
+            for profile in load_ip(str(repo), ip, design=design)
+            for target in profile["targets"]
         )
     return targets
 
@@ -48,7 +49,8 @@ def coverage_report(context, trace_id, info, output, expected_targets):
             report["verification_targets"].append(target)
             if (
                 result.get("expected_assertions")
-                and target.split("/")[-1] in result["expected_assertions"]
+                and target.removeprefix(f"ip/{result['ip']}/")
+                in result["expected_assertions"]
             ):
                 report["verification"].append(
                     {

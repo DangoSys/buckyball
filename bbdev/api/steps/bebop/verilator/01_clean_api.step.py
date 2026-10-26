@@ -1,6 +1,6 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path, rtl_dir
+from utils.event_common import require_design
 
 config = {
     "name": "bebop-verilator-clean-api",
@@ -12,15 +12,20 @@ config = {
 
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = req.body or {}
     try:
-        chip = require_chip(body)
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    try:
+        design = require_design(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-    build_dir = rtl_dir(bbdir, chip, "verilog", body.get("output_dir"))
-    data = {"chip": chip, "output_dir": build_dir}
+    data = {"design": design}
     await ctx.enqueue(
-        {"topic": "bebop.verilator.clean", "data": {**data, "_trace_id": ctx.trace_id}}
+        {
+            "topic": "bebop.verilator.clean",
+            "data": {**data, "_trace_id": ctx.trace_id, "target": selection},
+        }
     )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

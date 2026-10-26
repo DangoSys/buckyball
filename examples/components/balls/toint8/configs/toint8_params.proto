@@ -1,0 +1,7 @@
+syntax = "proto3";
+package buckyball.balls.toint8;
+option java_package = "buckyball.balls.toint8";
+option java_multiple_files = true;
+
+message Params {
+}

@@ -1,0 +1,20 @@
+[model]
+manifest = ""
+library = ""
+
+[[tests]]
+name = "tss"
+top = "tss_tb"
+test = "protocol_test"
+filelist = "filelist.f"
+timeout_ns = 200000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line","cond","tgl"]
+functional_groups = ["tss_pkg::model::behavior"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

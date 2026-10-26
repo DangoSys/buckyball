@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+
 # bbdev/mcp -> repo root
 def repo_path() -> Path:
     return Path(__file__).resolve().parents[2]
@@ -40,6 +41,8 @@ def log_path() -> Path:
 
 def state_dir() -> Path:
     return api_path() / "data" / "state_store.db"
+
+
 _proc: Optional[subprocess.Popen] = None
 _port: Optional[int] = None
 _log_fh = None
@@ -123,7 +126,7 @@ def _http(
 
 def _ready(port: int) -> bool:
     try:
-        code, _ = _http("GET", f"http://127.0.0.1:{port}/compiler/build", timeout=2)
+        code, _ = _http("GET", f"http://127.0.0.1:{port}/stack/build", timeout=2)
         return code != 404
     except Exception:
         return False
@@ -133,7 +136,16 @@ def _stop() -> None:
     global _proc, _port, _log_fh
     if _port is not None and bbdev_path().is_file():
         subprocess.run(
-            ["nix", "develop", "--command", str(bbdev_path()), "stop", "--server", "--port", str(_port)],
+            [
+                "nix",
+                "develop",
+                "--command",
+                str(bbdev_path()),
+                "stop",
+                "--server",
+                "--port",
+                str(_port),
+            ],
             cwd=str(repo_path()),
             capture_output=True,
             text=True,
@@ -186,7 +198,16 @@ def _ensure() -> int:
     log_path().parent.mkdir(parents=True, exist_ok=True)
     _log_fh = open(log_path(), "a", encoding="utf-8")
     _proc = subprocess.Popen(
-        ["nix", "develop", "--command", str(bbdev_path()), "start", "--server", "--port", str(port)],
+        [
+            "nix",
+            "develop",
+            "--command",
+            str(bbdev_path()),
+            "start",
+            "--server",
+            "--port",
+            str(port),
+        ],
         cwd=str(repo_path()),
         stdout=_log_fh,
         stderr=_log_fh,
@@ -212,9 +233,8 @@ def _ensure() -> int:
             except RuntimeError as e:
                 msg = str(e)
                 if (
-                    ("need" in msg and "Motia worker" in msg)
-                    or "engine::workers::list failed" in msg
-                ):
+                    "need" in msg and "Motia worker" in msg
+                ) or "engine::workers::list failed" in msg:
                     time.sleep(1)
                     continue
                 _stop()
@@ -352,162 +372,97 @@ def _load_toml(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _balldomain_path(chip: str, balldomain: Optional[str]) -> Path:
+def _balldomain_path(design: str, balldomain: Optional[str]) -> Path:
     if balldomain:
         raw = Path(balldomain)
         if raw.is_absolute() or len(raw.parts) > 1:
             return (repo_path() / raw).resolve()
-    derived = repo_path() / "examples" / "chips" / chip / "configs/generated/config/derived.json"
+    derived = (
+        repo_path()
+        / "examples"
+        / "designs"
+        / design
+        / "output/generated/config/derived.json"
+    )
     cfg = json.loads(derived.read_text(encoding="utf-8"))
-    domains = {core["balldomain_base_dir"] for core in cfg["cores"]}
+    domains = {thread["balldomain_base_dir"] for thread in cfg["threads"]}
     if len(domains) != 1:
-        raise ValueError(f"chip {chip} has multiple BallDomains; provide an explicit TOML path")
+        raise ValueError(
+            f"design {design} has multiple BallDomains; provide an explicit TOML path"
+        )
     directory = repo_path() / domains.pop()
     if balldomain:
-        return directory / (balldomain if balldomain.endswith(".toml") else f"{balldomain}.toml")
-    core_file = repo_path() / cfg["cores"][0]["config_path"]
-    include = _load_toml(core_file)["balldomain"]
-    return (core_file.parent / include).resolve()
+        return directory / (
+            balldomain if balldomain.endswith(".toml") else f"{balldomain}.toml"
+        )
+    thread_file = repo_path() / cfg["threads"][0]["config_path"]
+    include = _load_toml(thread_file)["balldomain"]
+    return (thread_file.parent / include).resolve()
 
 
 def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
-    mappings = cfg.get("ballIdMappings", [])
-    if not isinstance(mappings, list):
-        raise ValueError(f"{path}: ballIdMappings must be an array")
-    isa = cfg.get("ballISA")
-    if not isinstance(isa, list):
-        raise ValueError(f"{path}: missing ballISA")
-    for i, e in enumerate(isa):
-        if not isinstance(e, dict):
-            raise ValueError(f"{path}: ballISA[{i}] must be a table")
-        if not isinstance(e.get("mnemonic"), str) or not e.get("mnemonic"):
-            raise ValueError(f"{path}: ballISA[{i}].mnemonic invalid")
-        if not isinstance(e.get("funct7"), int) or e.get("funct7") < 0:
-            raise ValueError(f"{path}: ballISA[{i}].funct7 invalid")
-        if not isinstance(e.get("bid"), int) or e.get("bid") < 0:
-            raise ValueError(f"{path}: ballISA[{i}].bid invalid")
+    from ball_normalize import normalize_ball_domain
 
-    ids = [m.get("ballId") for m in mappings]
-    names = [m.get("ballName") for m in mappings]
-    id_set = set(ids)
-
-    missing_config = []
-    bad_bw = []
-    for m in mappings:
-        name = m.get("ballName")
-        if not m.get("ballClass"):
-            bad_bw.append({"ballName": name, "error": "missing ballClass"})
-        in_bw, out_bw = m.get("inBW"), m.get("outBW")
-        if (
-            not isinstance(in_bw, int)
-            or in_bw <= 0
-            or not isinstance(out_bw, int)
-            or out_bw <= 0
-        ):
-            bad_bw.append({"ballName": name, "inBW": in_bw, "outBW": out_bw})
-        config = m.get("config")
-        cfg_path = Path(config["_file"])
-        if not cfg_path.is_file():
-            missing_config.append({"ballName": name, "resolved": str(cfg_path)})
-    funct7s = [e.get("funct7") for e in isa]
-    mnemonics = [e.get("mnemonic") for e in isa]
-    bids = [e.get("bid") for e in isa]
-
-    orphan = sorted(id_set - set(bids))
-    unknown = sorted(set(bids) - id_set)
-
-    def dups(xs):
-        return sorted(x for x in set(xs) if xs.count(x) > 1)
-
+    domain = normalize_ball_domain({"balldomain": cfg})
+    balls = domain["balls"]
     checks = {
-        "ballNum_matches_count": {
-            "pass": cfg.get("ballNum") == len(mappings),
-            "expected": len(mappings),
-            "actual": cfg.get("ballNum"),
+        "instance_contract": {"pass": True, "count": len(balls)},
+        "every_ball_has_instructions": {
+            "pass": all(ball["instructions"] for ball in balls),
+            "empty": [ball["id"] for ball in balls if not ball["instructions"]],
         },
-        "ballId_strict_increment": {"pass": ids == list(range(len(ids))), "ids": ids},
-        "ballId_no_duplicates": {
-            "pass": len(ids) == len(set(ids)),
-            "duplicates": dups(ids),
-        },
-        "ballName_no_duplicates": {
-            "pass": len(names) == len(set(names)),
-            "duplicates": dups(names),
-        },
-        "funct7_no_duplicates": {
-            "pass": len(funct7s) == len(set(funct7s)),
-            "duplicates": dups(funct7s),
-        },
-        "mnemonic_no_duplicates": {
-            "pass": len(mnemonics) == len(set(mnemonics)),
-            "duplicates": dups(mnemonics),
-        },
-        "isa_bid_in_mappings": {"pass": not unknown, "unknown_bids": unknown},
-        "every_ball_has_isa": {"pass": not orphan, "ballIds_without_isa": orphan},
-        "ball_config_files_exist": {
-            "pass": not missing_config,
-            "missing": missing_config,
-        },
-        "bandwidth_contract": {"pass": not bad_bw, "invalid": bad_bw},
     }
-
-    id_to_isa: Dict[Any, list] = {}
-    for e in isa:
-        id_to_isa.setdefault(e.get("bid"), []).append(e)
-    balls = [
-        {
-            "ballId": m.get("ballId"),
-            "ballName": m.get("ballName"),
-            "ballClass": m.get("ballClass"),
-            "inBW": m.get("inBW"),
-            "outBW": m.get("outBW"),
-            "config": m.get("config"),
-            "isa": [
-                {"mnemonic": e.get("mnemonic"), "funct7": e.get("funct7")}
-                for e in id_to_isa.get(m.get("ballId"), [])
-            ],
-        }
-        for m in mappings
-    ]
-
     return {
-        "passed": all(c["pass"] for c in checks.values()),
-        "chip_balldomain": str(path.relative_to(repo_path())),
+        "passed": all(check["pass"] for check in checks.values()),
+        "design_balldomain": str(path.relative_to(repo_path())),
         "checks": checks,
         "balls": balls,
     }
 
 
-def _validate_chip(chip: str, balldomain: Optional[str]) -> Dict[str, Any]:
+def _validate_design(design: str, balldomain: Optional[str]) -> Dict[str, Any]:
     scripts = repo_path() / "bbdev/api/steps/config/scripts"
     sys.path.insert(0, str(scripts))
     from ball_normalize import normalize_ball_domain
-    spec = importlib.util.spec_from_file_location("ball_validation_topology", scripts / "2_parameter_derivation.py")
+
+    spec = importlib.util.spec_from_file_location(
+        "ball_validation_topology", scripts / "2_parameter_derivation.py"
+    )
     topology = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(topology)
-    expanded = repo_path() / "examples/chips" / chip / "configs/generated/config/config.json"
+    expanded = (
+        repo_path()
+        / "examples/designs"
+        / design
+        / "output/generated/config/config.json"
+    )
     config = json.loads(expanded.read_text(encoding="utf-8"))
-    selected = _balldomain_path(chip, balldomain) if balldomain is not None else None
+    selected = _balldomain_path(design, balldomain) if balldomain is not None else None
     results = []
-    for index, core in enumerate(topology.iter_cores(config["designs"])):
-        raw = core.get("balldomain")
+    for index, thread in enumerate(topology.iter_threads(config["device"])):
+        raw = thread.get("balldomain")
         if not isinstance(raw, dict) or not raw.get("_file"):
-            raise ValueError(f"Core {index}: missing expanded BallDomain")
+            raise ValueError(f"Thread {index}: missing expanded BallDomain")
         path = Path(raw["_file"]).resolve()
         if selected is not None and path != selected:
             continue
         try:
-            domain = normalize_ball_domain(core)
+            domain = normalize_ball_domain(thread)
             if domain is None:
                 raise ValueError("missing effective BallDomain")
             result = _validate_domain(path, domain)
         except ValueError as error:
             result = {"passed": False, "error": str(error)}
-        results.append({"core_index": index, "core_config": core["_file"], **result})
+        results.append(
+            {"thread_index": index, "thread_config": thread["_file"], **result}
+        )
     if not results:
-        raise ValueError(f"No expanded core matches BallDomain {selected}")
-    return {"chip": chip, "passed": all(result["passed"] for result in results), "cores": results}
-
+        raise ValueError(f"No expanded thread matches BallDomain {selected}")
+    return {
+        "design": design,
+        "passed": all(result["passed"] for result in results),
+        "threads": results,
+    }
 
 
 atexit.register(_stop)
@@ -520,4 +475,4 @@ err = _err
 need = _need
 opt = _opt
 balldomain_path = _balldomain_path
-validate_balldomains = _validate_chip
+validate_balldomains = _validate_design

@@ -6,18 +6,38 @@ import re
 
 from utils.process_registry import set_current_task_scope
 
-def require_chip(data: dict) -> str:
-    chip = data.get("chip")
-    if not isinstance(chip, str) or not chip:
-        raise ValueError("Missing required parameter: --chip")
+
+def require_design(data: dict) -> str:
+    design = data.get("design")
+    if not isinstance(design, str) or not design:
+        raise ValueError("Missing required parameter: --design")
     extra = data.get("config")
     if isinstance(extra, str) and extra and extra != "None":
         raise ValueError(
-            "do not pass --config; mill class comes from chip config sims"
+            "do not pass --config; mill class comes from design config sims"
         )
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", chip):
-        raise ValueError(f"invalid chip: {chip}")
-    return chip
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", design):
+        raise ValueError(f"invalid design: {design}")
+    return design
+
+
+def require_target(data: dict, kinds=("device", "core")) -> str:
+    selected = [kind for kind in ("device", "core", "ip", "ball") if kind in data]
+    if len(selected) != 1:
+        raise ValueError(
+            "Specify exactly one of --device, --core <entry>, --ip <name>, --ball <name> after --design"
+        )
+    kind = selected[0]
+    if kind not in kinds:
+        raise ValueError(f"--{kind} is not supported by this operation")
+    value = data[kind]
+    if kind == "device":
+        if value is not True:
+            raise ValueError("--device is a flag and takes no value")
+        return "device"
+    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+        raise ValueError(f"--{kind} requires an entry name")
+    return f"{kind}/{value}"
 
 
 def get_origin_trace_id(input_data, ctx):
@@ -26,12 +46,18 @@ def get_origin_trace_id(input_data, ctx):
     iii 0.7+ assigns a new trace_id per handler invocation, so the API step's
     trace_id must be forwarded explicitly via input_data["_trace_id"].
     """
-    trace_id = input_data["_trace_id"] if isinstance(input_data, dict) and "_trace_id" in input_data else ctx.trace_id
+    trace_id = (
+        input_data["_trace_id"]
+        if isinstance(input_data, dict) and "_trace_id" in input_data
+        else ctx.trace_id
+    )
     set_current_task_scope(trace_id)
     return trace_id
 
 
-async def check_result(ctx, returncode, continue_run=False, extra_fields=None, trace_id=None):
+async def check_result(
+    ctx, returncode, continue_run=False, extra_fields=None, trace_id=None
+):
     """
     Check returncode, create appropriate result objects and set state.
 

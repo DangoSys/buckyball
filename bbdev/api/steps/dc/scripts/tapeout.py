@@ -1,4 +1,4 @@
-"""Resolve chip-owned tapeout flow contracts."""
+"""Resolve design-owned tapeout flow contracts."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import shlex
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from utils.path import design_resource_dir
 
 
 def _tcl_word(value: str) -> str:
@@ -29,18 +30,18 @@ class SramGeom:
 
 @dataclass(frozen=True)
 class TapeoutContract:
-    chip: str
+    design: str
     root: Path
     dc_script: Path
     constraints_sdc: Path
     power_script: Path
-    power_sim_script: Path
+    power_sim_script: Path | None
     sram_mdf: Path
     top_module: str
     target_library: str
     synthetic_library: list[str]
     link_library: list[str]
-    max_cores: int
+    max_threads: int
     power_format: str
     power_start_ns: str | None
     power_end_ns: str | None
@@ -60,8 +61,16 @@ def _p(root: Path, value: str) -> Path:
 def resolve_power_window(
     contract: TapeoutContract, start_ns: object | None, end_ns: object | None
 ) -> tuple[str | None, str | None]:
-    start = str(start_ns) if start_ns is not None and str(start_ns) != "" else contract.power_start_ns
-    end = str(end_ns) if end_ns is not None and str(end_ns) != "" else contract.power_end_ns
+    start = (
+        str(start_ns)
+        if start_ns is not None and str(start_ns) != ""
+        else contract.power_start_ns
+    )
+    end = (
+        str(end_ns)
+        if end_ns is not None and str(end_ns) != ""
+        else contract.power_end_ns
+    )
     if (start is None) != (end is None):
         raise ValueError("power start_ns and end_ns must be supplied together")
     if start is not None:
@@ -84,8 +93,14 @@ def clock_period_ns(contract: TapeoutContract) -> float:
     return period
 
 
-def get_tapeout_contract(bbdir: str | os.PathLike[str], chip: str, top: str | None = None) -> TapeoutContract:
-    root = Path(bbdir) / "examples" / "chips" / chip / "tapeout"
+def get_tapeout_contract(
+    bbdir: str | os.PathLike[str],
+    design: str,
+    top: str | None = None,
+    *,
+    selection: str,
+) -> TapeoutContract:
+    root = design_resource_dir(bbdir, design, "tapeout", selection=selection)
     with (root / "config.toml").open("rb") as f:
         s = tomllib.load(f)["tapeout"]
 
@@ -96,23 +111,29 @@ def get_tapeout_contract(bbdir: str | os.PathLike[str], chip: str, top: str | No
             raise ValueError(f"duplicate tapeout.sram name {name}")
         bitwrite = row["bitwrite"] if "bitwrite" in row else False
         if not isinstance(bitwrite, bool):
-            raise ValueError(f"tapeout.sram {name}: bitwrite must be bool, got {bitwrite!r}")
-        sram_table[name] = SramGeom(name, row["words"], row["mux"], row["bits"], bitwrite)
+            raise ValueError(
+                f"tapeout.sram {name}: bitwrite must be bool, got {bitwrite!r}"
+            )
+        sram_table[name] = SramGeom(
+            name, row["words"], row["mux"], row["bits"], bitwrite
+        )
 
     pw = s.get("power_workload")
     return TapeoutContract(
-        chip=chip,
+        design=design,
         root=root,
         dc_script=_p(root, s["dc_script"]),
         constraints_sdc=_p(root, s["constraints_sdc"]),
         power_script=_p(root, s["power_script"]),
-        power_sim_script=_p(root, s["power_sim_script"]),
+        power_sim_script=(
+            _p(root, s["power_sim_script"]) if "power_sim_script" in s else None
+        ),
         sram_mdf=_p(root, s["sram_mdf"]),
         top_module=top or s["top"],
         target_library=str(_p(root, s["target_library"])),
         synthetic_library=[str(_p(root, p)) for p in s["synthetic_library"]],
         link_library=[str(_p(root, p)) for p in s.get("link_library", [])],
-        max_cores=s["max_cores"],
+        max_threads=s["max_threads"],
         power_format=s["power_format"],
         power_start_ns=s.get("power_start_ns"),
         power_end_ns=s.get("power_end_ns"),
@@ -146,6 +167,10 @@ def write_run_tcl(path: str | os.PathLike[str], values: dict[str, object]) -> Pa
 def write_run_env(path: str | os.PathLike[str], values: dict[str, object]) -> Path:
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    lines = [f"{key}={shlex.quote(str(value))}" for key, value in values.items() if value is not None]
+    lines = [
+        f"{key}={shlex.quote(str(value))}"
+        for key, value in values.items()
+        if value is not None
+    ]
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return output

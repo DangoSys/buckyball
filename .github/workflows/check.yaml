@@ -59,6 +59,7 @@ jobs:
       - name: Check pre-commit
         shell: zsh {0}
         run: |
+          set -euo pipefail
           root=~/Code/buckyball
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
@@ -72,27 +73,27 @@ jobs:
           cd "${root}"
           nix develop -c bbdev config --install
 
-  chip-check:
-    name: ${{ matrix.chip }}
+  design-check:
+    name: ${{ matrix.design }}
     needs: pre-commit
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
         include:
-          - chip: toy
+          - design: toy
             run_bemu_tests: true
             run_verilator_tests: true
-          - chip: pebble
+          - design: pebble
             run_bemu_tests: true
             run_verilator_tests: true
-          - chip: goban
+          - design: goban
             run_bemu_tests: true
             run_verilator_tests: true
-          - chip: poly
+          - design: poly
             run_bemu_tests: true
             run_verilator_tests: true
-          - chip: multi-rocket
+          - design: multi-rocket
             run_bemu_tests: true
             run_verilator_tests: true
     env:
@@ -100,7 +101,7 @@ jobs:
     steps:
       - name: Print information
         run: |
-          echo "chip=${{ matrix.chip }}"
+          echo "design=${{ matrix.design }}"
           echo "event=${{ github.event_name }}"
           echo "sha=${CHECKOUT_SHA}"
           echo "ref=${CHECKOUT_REF}"
@@ -130,9 +131,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev compiler --build '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev workload --clean '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev workload --build '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev stack --build '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev workload --clean '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev workload --build '--design ${{ matrix.design }} --device'
 
       - name: bemu tests
         if: matrix.run_bemu_tests
@@ -141,9 +142,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test bare-tests --jobs 16 --clean-before'
-          nix develop -c bbdev kernel --build '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-bemu --batch '--chip ${{ matrix.chip }} --test linux-tests --jobs 16'
+          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device --test bare-tests --jobs 16 --clean-before --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/bemu-bare.xml"
+          nix develop -c bbdev kernel --build '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device --test linux-tests --jobs 16 --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/bemu-linux.xml"
 
       - name: verilator tests
         if: matrix.run_verilator_tests
@@ -152,10 +153,10 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-verilator --clean '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-verilator --build '--jobs 100 --chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-verilator --batch '--chip ${{ matrix.chip }} --test bare-tests --diff --jobs 16 --clean-before'
+          nix develop -c bbdev bebop-verilator --clean '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device --diff'
+          nix develop -c bbdev bebop-verilator --build '--jobs 100 --design ${{ matrix.design }} --device --diff'
+          nix develop -c bbdev bebop-verilator --batch "--design ${{ matrix.design }} --device --test bare-tests --diff --jobs 16 --clean-before --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/verilator-bare.xml"
 
       - name: Detect bebop JUnit files
         if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
@@ -163,7 +164,9 @@ jobs:
         shell: zsh {0}
         run: |
           root="${BB_ROOT/#\~/$HOME}"
-          files=("${root}/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-"*.xml(N))
+          reports="${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "directory=${reports}" >> "$GITHUB_OUTPUT"
+          files=("${reports}/"*.xml(N))
           if (( ${#files} == 0 )); then
             echo "found=false" >> "$GITHUB_OUTPUT"
           else
@@ -174,8 +177,8 @@ jobs:
         if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
-          check_name: "bebop nextest (${{ matrix.chip }})"
+          report_paths: "${{ steps.junit.outputs.directory }}/*.xml"
+          check_name: "bebop regression (${{ matrix.design }})"
           detailed_summary: true
           include_passed: true
 
@@ -188,8 +191,8 @@ jobs:
           HTTPS_PROXY: ""
           NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
         with:
-          name: bebop-nextest-junit-${{ matrix.chip }}
-          path: "~/Code/buckyball/bebop/target/${{ matrix.chip }}/nextest/junit-bbdev-*.xml"
+          name: bebop-junit-${{ matrix.design }}
+          path: "${{ steps.junit.outputs.directory }}/*.xml"
 
       - name: Exit repo lock
         if: always()

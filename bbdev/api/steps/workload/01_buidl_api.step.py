@@ -1,3 +1,4 @@
+from utils.event_common import require_target
 import os
 import re
 import sys
@@ -20,7 +21,11 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "stable", "ctest", "mlirtest", "soctest"}
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    allowed = {"device", "core", "design", "ctest", "mlirtest", "soctest"}
     unknown = sorted((k for k in body if k not in allowed))
     if unknown:
         return ApiResponse(
@@ -29,24 +34,18 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "error": f"Unknown workload build parameter(s): {', '.join(unknown)}"
             },
         )
-    chip = body.get("chip")
-    if not chip:
+    design = body.get("design")
+    if not design:
         return ApiResponse(
             status=400,
-            body={"error": "Missing required parameter: --chip must be specified"},
+            body={"error": "Missing required parameter: --design must be specified"},
         )
-    if not isinstance(chip, str) or not re.fullmatch("[A-Za-z0-9_-]+", chip):
-        return ApiResponse(status=400, body={"error": f"Invalid chip: {chip}"})
-    chip_dir = Path(get_buckyball_path()) / "examples" / "chips" / chip
-    if not chip_dir.is_dir():
+    if not isinstance(design, str) or not re.fullmatch("[A-Za-z0-9_-]+", design):
+        return ApiResponse(status=400, body={"error": f"Invalid design: {design}"})
+    design_dir = Path(get_buckyball_path()) / "examples" / "designs" / design
+    if not design_dir.is_dir():
         return ApiResponse(
-            status=400, body={"error": f"Workload chip does not exist: {chip}"}
-        )
-    stable = body.get("stable", False)
-    if not isinstance(stable, bool):
-        return ApiResponse(
-            status=400,
-            body={"error": "Invalid parameter: stable must be a boolean flag"},
+            status=400, body={"error": f"Workload design does not exist: {design}"}
         )
     ctest = body.get("ctest", False)
     mlirtest = body.get("mlirtest", False)
@@ -62,13 +61,15 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={"error": "--ctest, --mlirtest and --soctest are mutually exclusive"},
         )
     data = {
-        "chip": chip,
-        "stable": stable,
+        "design": design,
         "ctest": ctest,
         "mlirtest": mlirtest,
         "soctest": soctest,
     }
     await ctx.enqueue(
-        {"topic": "workload.build", "data": {**data, "_trace_id": ctx.trace_id}}
+        {
+            "topic": "workload.build",
+            "data": {**data, "_trace_id": ctx.trace_id, "target": selection},
+        }
     )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

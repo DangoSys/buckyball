@@ -1,0 +1,35 @@
+component = "pebble"
+accelerator = "acc/default.toml"
+threads = []
+hartId = 0
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "memory/pebble.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "interconnect/pebble.toml"
+c2c = "c2c/pebble.toml"
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+enable = false
+bankWidth = 128
+bankEntries = 1024
+virtualBankCount = 24
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+memCycles = 10
+
+[compiler]
+name = "pebble"
+component = "pebble"

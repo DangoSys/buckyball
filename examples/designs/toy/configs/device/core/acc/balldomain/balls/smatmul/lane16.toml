@@ -1,0 +1,7 @@
+InputNum = 16
+inputWidth = 8
+lane = 16
+wsReuseCores = 2
+outputWidth = 32
+numMulThreads = 16
+numCasThreads = 16

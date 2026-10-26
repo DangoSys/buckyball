@@ -1,18 +1,18 @@
 # FireSim Workflow
 
-FireSim FPGA simulation. All commands take `--chip`; mill class comes from
-`examples/chips/<chip>/configs/chip.toml` `[sims].firesim`.
+FireSim FPGA simulation. All commands take `--design`; mill class comes from
+`examples/designs/<design>/configs/design.toml` `[sims].firesim`.
 
-Manager YAMLs are generated per chip under `scripts/yaml/<chip>/`.
+Manager YAMLs are generated per design under `scripts/yaml/<design>/`.
 
 ## Commands
 
 ```bash
-bbdev firesim --enumeratefpgas '--chip toy'
-bbdev firesim --buildbitstream '--chip toy'
-bbdev firesim --infrasetup '--chip toy'
-bbdev firesim --runworkload '--chip toy'
+bbdev firesim --enumeratefpgas '--design toy'
+bbdev firesim --buildbitstream '--design toy'
+bbdev firesim --infrasetup '--design toy'
+bbdev firesim --runworkload '--design toy'
 ```
 
 `buildbitstream` takes hours. `infrasetup` / `runworkload` require a prior
-bitstream under `thirdparty/firesim/deploy/results-build` for that chip recipe.
+bitstream under `thirdparty/firesim/deploy/results-build` for that design recipe.

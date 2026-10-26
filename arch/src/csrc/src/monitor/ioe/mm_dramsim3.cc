@@ -99,12 +99,9 @@ void mm_dramsim3_t::tick(bool reset,
                          bool w_last,
 
                          bool r_ready, bool b_ready) {
-  ar_ready_cache = !reset && mem->WillAcceptTransaction(ar_addr, false);
-  aw_ready_cache =
-      !reset && !store_inflight && mem->WillAcceptTransaction(aw_addr, true);
-
-  bool ar_fire = ar_valid && ar_ready_cache;
-  bool aw_fire = aw_valid && aw_ready_cache;
+  // Consume only the READY values presented to RTL before this clock edge.
+  bool ar_fire = !reset && ar_valid && ar_ready();
+  bool aw_fire = !reset && aw_valid && aw_ready();
   bool w_fire = !reset && w_valid && w_ready();
   bool r_fire = !reset && r_valid() && r_ready;
   bool b_fire = !reset && b_valid() && b_ready;
@@ -153,6 +150,10 @@ void mm_dramsim3_t::tick(bool reset,
 
   mem->ClockTick();
   cycle++;
+
+  ar_ready_cache = !reset && mem->WillAcceptTransaction(ar_addr, false);
+  aw_ready_cache =
+      !reset && !store_inflight && mem->WillAcceptTransaction(aw_addr, true);
 
   if (reset) {
     while (!bresp.empty())

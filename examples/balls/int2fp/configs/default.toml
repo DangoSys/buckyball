@@ -1,5 +1,0 @@
-# Int2Fp Ball Configuration
-
-[ball]
-inputType = "INT32"
-outputType = "FP32"

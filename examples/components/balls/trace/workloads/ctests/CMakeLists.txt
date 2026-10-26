@@ -1,0 +1,4 @@
+add_buckyball_ctest(bdb_counter_start_stop_test.c)
+add_buckyball_ctest(bdb_counter_read_active_test.c)
+add_buckyball_ctest(bdb_counter_nested_pair_test.c)
+add_buckyball_ctest(bdb_counter_multi_id_test.c)

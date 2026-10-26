@@ -1,5 +1,0 @@
-# Boom-only core configuration
-
-memdomain = "memdomains/default.toml"
-balldomain = "balldomains/default.toml"
-cpu = "cpu/default.toml"

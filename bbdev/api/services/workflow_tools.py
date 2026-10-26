@@ -12,7 +12,14 @@ class WorkflowAPITool(Tool):
         return "call_workflow_api"
 
     def get_description(self) -> str:
-        return "Call internal workflow API endpoints.\n    Available endpoints:\n    - /verilator/verilog: Generate Verilog\n    - /verilator/build: Build verilator (params: jobs)\n    - /verilator/sim: Run simulation (params: binary, batch)\n    - /workload/clean: Clean workload output directory\n    - /workload/build: Build workload (params: chip, stable, ctest, mlirtest)\n    - /model/build: Build model recipe (params: chip, model, ctrace, dtrace)"
+        return (
+            "Call internal workflow API endpoints.\n    Available endpoints:\n    -"
+            " /verilator/verilog: Generate Verilog\n    - /verilator/build: Build"
+            " verilator (params: jobs)\n    - /verilator/sim: Run simulation (params:"
+            " binary, batch)\n    - /workload/clean: Clean workload output directory\n "
+            "   - /workload/build: Build workload (params: design, stable, ctest,"
+            " mlirtest)\n    - /model/build: Build model recipe (params: design, model)"
+        )
 
     def get_parameters(self) -> Dict[str, Any]:
         return {

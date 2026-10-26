@@ -1,0 +1,45 @@
+#include "buckyball.h"
+#include <bbhw/isa/isa.h>
+#include <dma.h>
+#include <isa/gemmini.h>
+#include <stdio.h>
+
+#define DIM 16
+
+static elem_t mat_a[DIM * DIM] __attribute__((aligned(64)));
+static elem_t mat_b[DIM * DIM] __attribute__((aligned(64)));
+static result_t mat_c[DIM * DIM] __attribute__((aligned(64)));
+static result_t expected[DIM * DIM] __attribute__((aligned(64)));
+
+int main() {
+#ifdef MULTITHREAD
+  multithread(MULTITHREAD);
+#endif
+
+  printf("=== Gemmini OS CISC Basic Test ===\n");
+
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
+  cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
+
+  // Publish CPU inputs before the CISC command starts its DMA chain.
+  bb_gemmini_config(0, 0, 0, 0, 0);
+  bb_gemmini_loop_ws_config_bounds(1, 1, 1);
+  bb_gemmini_loop_ws_config_addr_a((uintptr_t)mat_a);
+  bb_gemmini_loop_ws_config_addr_b((uintptr_t)mat_b);
+  bb_gemmini_loop_ws_config_addr_d(0);
+  bb_gemmini_loop_ws_config_addr_c((uintptr_t)mat_c);
+  bb_gemmini_loop_ws_config_strides_ab(DIM, DIM);
+  bb_gemmini_loop_ws_config_strides_dc(0, DIM * 4);
+  bb_gemmini_loop_ws(0, 1, 2, 1);
+
+  if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
+    printf("Gemmini OS CISC Basic Test PASSED\n");
+    return 0;
+  }
+  printf("Gemmini OS CISC Basic Test FAILED\n");
+  return 1;
+}

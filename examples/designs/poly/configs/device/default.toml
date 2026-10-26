@@ -1,0 +1,32 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+
+[[cores]]
+include = "cores/core0/default.toml"
+
+[[cores]]
+include = "cores/core1/default.toml"
+
+[[cores]]
+include = "cores/core2/default.toml"
+
+[[cores]]
+include = "cores/core3/default.toml"
+
+[[cores]]
+include = "cores/core4/default.toml"
+
+[[cores]]
+include = "cores/core5/default.toml"
+
+[[cores]]
+include = "cores/core6/default.toml"
+
+[[cores]]
+include = "cores/core7/default.toml"
+
+[[cores]]
+include = "cores/core8/default.toml"

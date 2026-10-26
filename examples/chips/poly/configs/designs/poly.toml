@@ -1,9 +1,0 @@
-# Poly: a CPU main tile and 8 homogeneous compute tiles, each
-# 1 controller + 2 Attention + 3 FFN cores.
-
-[main_tile]
-include = "tiles/main.toml"
-
-[[tiles]]
-include = "tiles/compute.toml"
-count = 8

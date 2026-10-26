@@ -3,25 +3,11 @@
 
 #include <stdint.h>
 
-// String macros (from xcustom.h)
-// #define STR1(x) #x
-// #ifndef STR
-// #define STR(x) STR1(x)
-// #endif
-
-#define CAT_(A, B) A##B
-#define CAT(A, B) CAT_(A, B)
-
 // Data type for matrix elements
 typedef int8_t elem_t;
 typedef int32_t result_t;
 
-#define MULTICORE_INIT(hart_id)                                                \
-  __attribute__((constructor)) static void _multicore_init() {                 \
-    multicore(hart_id);                                                        \
-  }
-
-static inline void multicore(int target_hart_id) {
+static inline void multithread(int target_hart_id) {
   int hart_id;
   asm volatile("csrr %0, mhartid" : "=r"(hart_id));
 

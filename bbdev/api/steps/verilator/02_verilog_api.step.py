@@ -1,10 +1,11 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 
 config = {
     "name": "verilator-verilog-api",
-    "description": "generate chip verilog code",
+    "description": "generate design verilog code",
     "flows": ["verilator"],
     "triggers": [api("POST", "/verilator/verilog")],
     "enqueues": ["verilator.verilog"],
@@ -13,29 +14,28 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-
-    if body.get("balltype"):
-        return ApiResponse(
-            status=400,
-            body={
-                "error": "ball-only verilog belongs to uvm; use bbdev uvm --verilog",
-            },
-        )
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
 
     try:
-        chip = require_chip(body)
+        design = require_design(body)
     except ValueError as e:
         return ApiResponse(
             status=400,
             body={
                 "status": "error",
                 "message": str(e),
-                "example": 'bbdev verilator --verilog "--chip toy"',
+                "example": 'bbdev verilator --verilog "--design toy"',
             },
         )
 
-    data = {"chip": chip}
-    if body.get("output_dir"):
-        data["output_dir"] = body["output_dir"]
-    await ctx.enqueue({"topic": "verilator.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
+    data = {"design": design}
+    await ctx.enqueue(
+        {
+            "topic": "verilator.verilog",
+            "data": {**data, "_trace_id": ctx.trace_id, "target": selection},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

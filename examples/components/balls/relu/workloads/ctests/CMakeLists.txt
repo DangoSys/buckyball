@@ -1,0 +1,1 @@
+add_buckyball_ctest(relu_i32_16x16_test.c)

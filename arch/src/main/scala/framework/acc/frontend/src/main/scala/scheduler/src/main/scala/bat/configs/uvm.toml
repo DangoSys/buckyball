@@ -1,0 +1,6 @@
+[parameters]
+bankIdBits = 4
+virtualBanks = 4
+robEntries = 4
+
+[defines]

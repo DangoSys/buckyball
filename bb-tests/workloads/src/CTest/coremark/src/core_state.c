@@ -28,8 +28,8 @@ Topic: Description
 implementation is used instead, trading speed of direct coding for ease of
 maintenance.
 
-        Since the main goal of using a state machine in CoreMark is to excercise
-the switch/if behaviour, we are using a small moore machine.
+        Since the main goal of using a state machine in CoreMark is to
+excercise the switch/if behaviour, we are using a small moore machine.
 
         In particular, this machine tests type of string input,
         trying to determine whether the input is a number or something else.

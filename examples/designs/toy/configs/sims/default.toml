@@ -1,0 +1,15 @@
+diffTest = false
+
+[memory]
+lineBytes = 64
+clockHz = 1000000000
+
+[targets.device]
+config = "examples.designs.toy.sims.device.DeviceConfig"
+stack_name = "toy"
+regression = "sims/device/regression"
+kernel = "sims/device/workloads/kernel"
+tapeout = "sims/device/tapeout"
+
+[verification]
+registry = "../../sims/ip/uvm/registry.toml"

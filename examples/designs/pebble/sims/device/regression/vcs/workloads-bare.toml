@@ -1,0 +1,11 @@
+[workloads]
+tests = [
+  "pebble-core0-soctest-clint_timer_interrupt-baremetal",
+  "pebble-core0-soctest-clint_software_interrupt-baremetal",
+  "pebble-core0-soctest-clint_supervisor_timer-baremetal",
+  "pebble-core0-soctest-time_csr_clock-baremetal",
+  "pebble-core0-soctest-time_csr_permissions-baremetal",
+  "pebble-core0-soctest-lrsc_word-baremetal",
+  "pebble-core0-soctest-lrsc_translated-baremetal",
+  "pebble-core0-soctest-plic_register_access-baremetal",
+]

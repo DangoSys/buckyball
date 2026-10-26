@@ -66,3 +66,8 @@ skills-lock.json
 .mcp.json
 .tmp
 *.egg-info/
+
+# VCS run artifacts
+ucli.key
+cm.log
+tr_db.log

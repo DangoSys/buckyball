@@ -1,3 +1,5 @@
+from pathlib import Path
+from utils.path import design_output_root
 import os
 import shlex
 import struct
@@ -9,8 +11,8 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path, log_dir, rtl_dir, workloads_output_root
+from utils.event_common import require_design
+from utils.path import get_buckyball_path, log_dir, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
 from utils.event_common import check_result, get_origin_trace_id
@@ -62,7 +64,10 @@ def validate_bbsim_elf(path: str) -> tuple[bool, str]:
                 if p_paddr < dram_base or p_paddr + p_memsz > dram_base + dram_size:
                     return (
                         False,
-                        f"load segment {index} at 0x{p_paddr:x} is outside BBSimDRAM [0x{dram_base:x}, 0x{dram_base + dram_size:x})",
+                        (
+                            f"load segment {index} at 0x{p_paddr:x} is outside"
+                            f" BBSimDRAM [0x{dram_base:x}, 0x{dram_base + dram_size:x})"
+                        ),
                     )
     except (OSError, struct.error):
         return (False, "cannot read a valid ELF64 program-header table")
@@ -74,19 +79,24 @@ def validate_bbsim_elf(path: str) -> tuple[bool, str]:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
     bbdir = get_buckyball_path()
-    build_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("output_dir"))
+    build_dir = rtl_dir(
+        bbdir,
+        design,
+        "verilog",
+        selection=input_data["target"],
+    )
     ctx.logger.info(f"Using build directory: {build_dir}")
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     binary_name = input_data.get("binary", "")
@@ -100,7 +110,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     coverage = input_data.get("coverage", False)
-    workload_root = workloads_output_root(bbdir)
+    workload_root = str(
+        Path(design_output_root(bbdir, design, selection=input_data["target"]))
+        / "workloads"
+    )
     binary_path = search_workload(workload_root, binary_name)
     ctx.logger.info(f"binary_path: {binary_path}")
     if binary_path is None:
@@ -125,7 +138,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "error": "unsupported_elf",
                 "binary": binary_path,
-                "detail": f"direct Verilator requires a baremetal RISC-V ELF in BBSimDRAM; {elf_error}. Use bebop-verilator for Linux ELFs",
+                "detail": (
+                    "direct Verilator requires a baremetal RISC-V ELF in BBSimDRAM;"
+                    f" {elf_error}. Use bebop-verilator for Linux ELFs"
+                ),
             },
             trace_id=origin_tid,
         )
@@ -133,12 +149,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     topname = "BBSimHarness"
     run_log = log_dir(
         bbdir,
-        chip,
+        design,
         "verilog",
         timestamp,
         "verilator",
         binary_name,
-        input_data.get("output_dir"),
+        selection=input_data["target"],
     )
     waveform_dir = os.path.join(run_log, "waveform")
     os.makedirs(run_log, exist_ok=True)
@@ -218,7 +234,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     dasm_cmd = shlex.join([dasm_bin, "dasm"])
-    sim_cmd = f"export LD_LIBRARY_PATH={shlex.quote(ld_lib_path)}:$LD_LIBRARY_PATH; export BDB_SIM_META={shlex.quote(meta_path)}; {shlex.join(sim_args)} 2> >({dasm_cmd} > {shlex.quote(os.path.join(run_log, 'disasm.log'))})"
+    sim_cmd = (
+        f"export LD_LIBRARY_PATH={shlex.quote(ld_lib_path)}:$LD_LIBRARY_PATH; export"
+        f" BDB_SIM_META={shlex.quote(meta_path)}; {shlex.join(sim_args)} 2>"
+        f" >({dasm_cmd} > {shlex.quote(os.path.join(run_log, 'disasm.log'))})"
+    )
     script_dir = os.path.dirname(__file__)
     result = await stream_run_logger_async(
         cmd=sim_cmd,

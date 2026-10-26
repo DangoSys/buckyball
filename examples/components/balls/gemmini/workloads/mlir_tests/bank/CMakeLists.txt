@@ -1,0 +1,13 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+set(_params "${BUCKYBALL_ISA_DIR}/${BUCKYBALL_MLIR_ACTIVE_TARGET}/params.h")
+file(STRINGS "${_params}" _bank_lines REGEX "^#define BANK_LINES ")
+string(REGEX REPLACE ".* " "" _lines "${_bank_lines}")
+if(_lines LESS 16)
+  message(FATAL_ERROR
+    "Gemmini BankOp test requires BANK_LINES >= 16 (got ${_lines})")
+endif()
+add_buckyball_mlir_test(gemmini_compute_preloaded_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+add_buckyball_mlir_test(gemmini_compute_accumulated_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})

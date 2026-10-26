@@ -1,18 +1,10 @@
 from __future__ import annotations
-import argparse
-import os
 import re
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
-
-
-def _repo(raw: str | Path) -> Path:
-    root = Path(raw).resolve()
-    if not root.is_dir():
-        raise ValueError(f"repo does not exist: {root}")
-    return root
 
 
 def _run(
@@ -20,12 +12,11 @@ def _run(
     *,
     cwd: Path,
     prefix: str,
-    env: dict | None = None,
     logger: object | None = None,
     task_scope: str | None = None,
 ) -> None:
     if logger is None:
-        result = subprocess.run(cmd, cwd=cwd, env=env)
+        result = subprocess.run(cmd, cwd=cwd)
     else:
         from utils.stream_run import stream_run_logger
 
@@ -36,156 +27,70 @@ def _run(
             stdout_prefix=prefix,
             stderr_prefix=prefix,
             task_scope=task_scope,
-            env=env,
         )
     if result.returncode != 0:
         raise RuntimeError(f"command failed ({result.returncode}): {' '.join(cmd)}")
 
 
-def _cmake_defs(repo: Path, chip: str) -> dict[str, str]:
-    path = (
-        repo
-        / "examples"
-        / "chips"
-        / chip
-        / "configs"
-        / "generated"
-        / "workload"
-        / "cmake.defs"
-    )
-    if not path.is_file():
-        raise RuntimeError(f"missing {path}; run bbdev config --install")
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        key, sep, value = line.partition("=")
-        if not sep:
-            raise RuntimeError(f"bad cmake.defs line in {path}: {line!r}")
-        if key in values:
-            raise RuntimeError(f"duplicate cmake.defs key {key} in {path}")
-        values[key] = value
-    required = ("BUCKYBALL_WORKLOAD_CHIP", "BUCKYBALL_CHIP_PB")
-    missing = [k for k in required if k not in values]
-    if missing:
-        raise RuntimeError(f"{path} missing {missing}")
-    return values
-
-
-def _require_riscv() -> Path:
-    raw = os.environ.get("RISCV", "")
-    if not raw:
-        raise RuntimeError("RISCV is unset; enter nix develop")
-    root = Path(raw)
-    if not root.is_dir():
-        raise RuntimeError(f"RISCV is not a directory: {root}")
-    return root
-
-
-def _workload_src(repo: Path) -> Path:
-    src = repo / "bb-tests" / "workloads"
-    cmake = src / "CMakeLists.txt"
-    if not cmake.is_file():
-        raise RuntimeError(f"missing {cmake}")
-    return src
-
-
-def _workload_build_dir(repo: Path, instance: str) -> Path:
-    return repo / "bb-tests" / "workloads" / "build" / instance
-
-
 def build_workload(
     repo: str | Path,
-    chip: str,
+    design: str,
     *,
-    instance: str | None = None,
-    chip_pb: str | Path | None = None,
+    selection: str,
     ctest: bool = False,
     mlirtest: bool = False,
     soctest: bool = False,
-    stable: bool = False,
     logger: object | None = None,
     task_scope: str | None = None,
 ) -> None:
-    if not re.fullmatch("[A-Za-z0-9_-]+", chip):
-        raise ValueError(f"invalid chip: {chip}")
-    build_instance = instance or chip
-    if not re.fullmatch("[A-Za-z0-9_-]+", build_instance):
-        raise ValueError(f"invalid workload build instance: {build_instance}")
-    if (instance is None) != (chip_pb is None):
-        raise ValueError("workload variant requires both instance and chip_pb")
+    if not re.fullmatch("[A-Za-z0-9_-]+", design):
+        raise ValueError(f"invalid design: {design}")
     if sum((ctest, mlirtest, soctest)) > 1:
         raise ValueError("--ctest, --mlirtest and --soctest are mutually exclusive")
-    root = _repo(repo)
-    defs = _cmake_defs(root, chip)
-    if chip_pb is not None:
-        selected_pb = Path(chip_pb).resolve()
-        if not selected_pb.is_file():
-            raise RuntimeError(f"missing {selected_pb}")
-        defs["BUCKYBALL_WORKLOAD_CHIP"] = build_instance
-        defs["BUCKYBALL_WORKLOAD_SOURCE_CHIP"] = chip
-        defs["BUCKYBALL_CHIP_PB"] = str(selected_pb)
-    compiler_build = (
+    root = Path(repo).resolve()
+    design_pb = root / "examples/designs" / design / "output/generated/design.pb"
+    sys.path.insert(0, str(root))
+    from stack.scripts.design import load
+
+    target = load(design_pb).simulations[selection]
+    if not target.directory:
+        raise ValueError(f"{design}: unregistered simulation entry {selection}")
+    defs = {
+        "BUCKYBALL_WORKLOAD_DESIGN": design,
+        "BUCKYBALL_DESIGN_PB": str(design_pb),
+    }
+    defs["BUCKYBALL_WORKLOAD_SCOPE"] = (
+        "ctest"
+        if ctest
+        else "mlirtest" if mlirtest else "soctest" if soctest else "all"
+    )
+    defs["BUCKYBALL_SIM_TARGET"] = selection
+    defs["BUCKYBALL_DESIGN_WORKLOAD_DIR"] = str(root / target.workloads)
+    defs["BUCKYBALL_WORKLOAD_OUTPUT"] = str(
+        root / "examples/designs" / design / "output/sims" / selection / "workloads"
+    )
+    tools = {}
+    for name in (
+        "cmake",
+        "riscv64-unknown-elf-gcc",
+        "riscv64-unknown-elf-g++",
+        "riscv64-unknown-elf-objcopy",
+        "riscv64-unknown-linux-gnu-gcc",
+        "riscv64-unknown-linux-gnu-g++",
+    ):
+        executable = shutil.which(name)
+        if executable is None:
+            raise FileNotFoundError(f"{name} is required; enter nix develop")
+        tools[name] = str(Path(executable).absolute())
+    source = root / "bb-tests" / "workloads"
+    build = (
         root
-        / "stack"
-        / "compiler"
-        / "thirdparty"
-        / "buddy-mlir"
-        / "build"
-        / build_instance
+        / "examples/designs"
+        / design
+        / "output/sims"
+        / selection
+        / "workloads-build"
     )
-    riscv = _require_riscv()
-    project_python = riscv / "bin" / "python3"
-    python = (
-        str(project_python) if project_python.is_file() else shutil.which("python3")
-    )
-    if not python:
-        raise RuntimeError("python3 not in PATH; enter nix develop")
-    linux_cc = riscv / "bin" / "riscv64-unknown-linux-gnu-gcc"
-    linux_cxx = riscv / "bin" / "riscv64-unknown-linux-gnu-g++"
-    if not linux_cc.is_file() or not linux_cxx.is_file():
-        raise RuntimeError(f"missing RISC-V linux toolchain under {riscv / 'bin'}")
-    source_root = _workload_src(root)
-    build_root = _workload_build_dir(root, build_instance)
-    env = os.environ.copy()
-    env["PATH"] = f"{riscv / 'bin'}:{env.get('PATH', '')}"
-    env["RISCV"] = str(riscv)
-    env["CC"] = str(linux_cc)
-    env["CXX"] = str(linux_cxx)
-    if not (ctest or soctest):
-        compiler_config = {}
-        for line in (compiler_build / "CMakeCache.txt").read_text().splitlines():
-            key, sep, value = line.partition("=")
-            name = key.split(":")[0]
-            if sep and name in ("BUDDY_EXTERNAL_DIALECTS_DIR", "BUCKYBALL_CHIP_PB"):
-                if name in compiler_config:
-                    raise RuntimeError(f"duplicate {name} in compiler CMakeCache.txt")
-                compiler_config[name] = value
-        if (
-            Path(compiler_config["BUDDY_EXTERNAL_DIALECTS_DIR"]).resolve()
-            != root / "stack" / "compiler"
-        ):
-            raise RuntimeError("compiler does not use this repository's stack/compiler")
-        if (
-            Path(compiler_config["BUCKYBALL_CHIP_PB"]).resolve()
-            != Path(defs["BUCKYBALL_CHIP_PB"]).resolve()
-        ):
-            raise RuntimeError("compiler Chip.pb does not match the workload Chip.pb")
-        _run(
-            [
-                "cmake",
-                "--build",
-                str(compiler_build),
-                "--target",
-                "buddy-opt",
-                "buddy-translate",
-            ],
-            cwd=root,
-            env=env,
-            prefix="workload compiler",
-            logger=logger,
-            task_scope=task_scope,
-        )
-    src = source_root
-    build = build_root
     target = (
         "sync-ctest-bin"
         if ctest
@@ -197,67 +102,39 @@ def build_workload(
     )
     build.mkdir(parents=True, exist_ok=True)
     cmake_args = [
-        "cmake",
+        tools["cmake"],
         "-G",
         "Ninja",
         "-DCMAKE_BUILD_TYPE=Release",
         "-DCMAKE_C_FLAGS_RELEASE=-O2 -UNDEBUG",
         "-DCMAKE_CXX_FLAGS_RELEASE=-O2 -UNDEBUG",
         "-S",
-        str(src),
+        str(source),
         "-B",
         str(build),
-        f"-DPython3_EXECUTABLE={python}",
-        f"-DCMAKE_C_COMPILER={linux_cc}",
-        f"-DCMAKE_CXX_COMPILER={linux_cxx}",
+        f"-DPython3_EXECUTABLE={sys.executable}",
+        f"-DCMAKE_C_COMPILER={tools['riscv64-unknown-linux-gnu-gcc']}",
+        f"-DCMAKE_CXX_COMPILER={tools['riscv64-unknown-linux-gnu-g++']}",
     ]
-    if not (ctest or soctest):
-        cmake_args.append(f"-DBUCKYBALL_STABLE={'ON' if stable else 'OFF'}")
+    for variable, executable in (
+        ("ELF_CC", "riscv64-unknown-elf-gcc"),
+        ("ELF_CXX", "riscv64-unknown-elf-g++"),
+        ("ELF_OBJCOPY", "riscv64-unknown-elf-objcopy"),
+    ):
+        cmake_args.append(f"-D{variable}={tools[executable]}")
     for key, value in defs.items():
         cmake_args.append(f"-D{key}={value}")
     _run(
         cmake_args,
         cwd=root,
-        env=env,
         prefix="workload configure",
         logger=logger,
         task_scope=task_scope,
     )
-    ninja = ["ninja", "-C", str(build), f"-j{1}"]
-    ninja.append(target)
     _run(
-        ninja,
+        [tools["cmake"], "--build", str(build), "--parallel", "1", "--target", target],
         cwd=root,
-        env=env,
         prefix="workload build",
         logger=logger,
         task_scope=task_scope,
     )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Build chip workloads")
-    parser.add_argument("--repo", type=Path, required=True)
-    parser.add_argument("--chip", required=True)
-    parser.add_argument("--instance")
-    parser.add_argument("--chip-pb", type=Path)
-    scope = parser.add_mutually_exclusive_group()
-    scope.add_argument("--ctest", action="store_true")
-    scope.add_argument("--mlirtest", action="store_true")
-    scope.add_argument("--soctest", action="store_true")
-    parser.add_argument("--stable", action="store_true")
-    args = parser.parse_args()
-    build_workload(
-        args.repo,
-        args.chip,
-        instance=args.instance,
-        chip_pb=args.chip_pb,
-        ctest=args.ctest,
-        mlirtest=args.mlirtest,
-        soctest=args.soctest,
-        stable=args.stable,
-    )
-
-
-if __name__ == "__main__":
-    main()

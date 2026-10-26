@@ -1,0 +1,42 @@
+# Linux programs installed into the pebble rootfs, each with the hart it runs on.
+set(BUCKYBALL_KERNEL_PROGRAMS
+  0 pebble-pebble-mlirtest-core_mega_matmul-linux
+  0 pebble-pebble-mlirtest-core_mega_conv2d-linux
+  0 pebble-pebble-mlirtest-core_lookup_channel_i8-linux
+  0 pebble-pebble-mlirtest-core_generic_matmul_i8-linux
+  0 pebble-pebble-mlirtest-core_linear_int8-linux
+  0 pebble-pebble-mlirtest-core_linear_chain_i8-linux
+  0 pebble-pebble-mlirtest-core_mega_conv2d_k5_tail-linux
+  0 pebble-pebble-mlirtest-core_mega_matmul_m17_k65_n17-linux
+  0 pebble-pebble-ctest-mvin_2d_test-linux
+  0 pebble-pebble-ctest-mvin_2d_pixel_stride_test-linux
+  0 pebble-pebble-ctest-mvin_mvout_acc_test-linux
+  0 pebble-pebble-ctest-mvin_mvout_test-linux
+  0 pebble-pebble-ctest-mvin_mvout_stride_test-linux
+  0 pebble-pebble-ctest-mvin_mvout_unaligned_test-linux
+  0 pebble-pebble-ctest-mvin_unaligned_test-linux
+  0 pebble-pebble-mlirtest-linalg_mega_conv2d_k3_c16-linux
+  0 pebble-pebble-mlirtest-core_mega_conv2d_s2_depthwise_s2-linux
+  0 pebble-pebble-mlirtest-core_mega_global_avg_conv_exact-linux
+  0 pebble-pebble-mlirtest-core_mega_global_avg_conv2_exact-linux
+  0 pebble-pebble-mlirtest-core_mega_global_avg_7x7_c288_exact-linux
+  0 pebble-pebble-mlirtest-core_mega_se_gate_conv-linux
+  0 pebble-pebble-ctest-mega_conv_pipeline_test-linux
+  0 pebble-pebble-ctest-residual_add_lut_test-linux
+  0 pebble-pebble-ctest-maxpool_im2col_test-linux
+  0 pebble-pebble-ctest-se_gate_lut_test-linux
+  0 pebble-pebble-ctest-int8mul_large_gate_row_test-linux
+  0 pebble-pebble-ctest-dual_smatmul_matadd_test-linux
+  0 pebble-pebble-ctest-dual_conv_add_int2fp_test-linux
+  0 pebble-pebble-mlirtest-bank_matadd_i32_elementwise-linux
+  0 pebble-pebble-mlirtest-bank_int8add_identity_scale-linux
+  0 pebble-pebble-mlirtest-bank_lut_identity_table-linux
+  0 pebble-pebble-mlirtest-bank_int8mul_unit_gate-linux
+  0 pebble-pebble-mlirtest-bank_maxpool_k3_padded_spatial-linux
+  0 pebble-pebble-mlirtest-bank_smatmul_bias_two_terms-linux
+  0 pebble-pebble-mlirtest-bank_int2fp_unit_scale-linux
+  0 pebble-pebble-mlirtest-bank_quant_i32_pack16-linux
+  0 pebble-pebble-mlirtest-bank_quant_f32_pack16-linux
+  0 pebble-pebble-mlirtest-bank_im2col_k3_padded_bank_windows-linux
+  0 pebble-pebble-mlirtest-bank_transpose_i8_packed_matrix-linux
+  PARENT_SCOPE)

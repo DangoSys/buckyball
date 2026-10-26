@@ -1,6 +1,6 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path, rtl_dir
+from utils.event_common import require_design
 
 config = {
     "name": "bebop-verilator-build-api",
@@ -12,29 +12,24 @@ config = {
 
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = request.body or {}
-    unsupported = [name for name in ("vsrc_dir", "output_dir") if name in body]
-    if unsupported:
-        return ApiResponse(
-            status=400,
-            body={
-                "error": f"Unsupported parameter(s): {', '.join(unsupported)}. Use --vsrc-dir/--output-dir."
-            },
-        )
     try:
-        chip = require_chip(body)
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    try:
+        design = require_design(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
     data = {
-        "chip": chip,
+        "design": design,
         "jobs": body.get("jobs", 16),
         "diff": bool(body.get("diff", False)),
-        "vsrc_dir": rtl_dir(
-            bbdir, chip, "verilog", body.get("vsrc-dir") or body.get("output-dir")
-        ),
     }
     await ctx.enqueue(
-        {"topic": "bebop.verilator.build", "data": {**data, "_trace_id": ctx.trace_id}}
+        {
+            "topic": "bebop.verilator.build",
+            "data": {**data, "_trace_id": ctx.trace_id, "target": selection},
+        }
     )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

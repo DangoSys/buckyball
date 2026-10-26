@@ -10,7 +10,7 @@ from common import submit, err, fmt, need
 def register(mcp):
     @mcp.tool()
     def bbdev_bebop_p2e_runworkload(
-        chip: str,
+        design: str,
         image: str = "",
         bitstream: str = "",
         itrace: bool = False,
@@ -19,20 +19,18 @@ def register(mcp):
         ctrace: bool = False,
         reuse_runtime: bool = False,
         diff: bool = False,
-        load_manifest: str = "",
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
-        """Cold-load one hex image or a validated binary load manifest on P2E."""
-        if bool(image) == bool(load_manifest):
-            return err("exactly one of image and load_manifest is required")
-        if load_manifest and diff:
-            return err("load_manifest cannot use single-ELF diff")
-        for n, v in (("chip", chip), ("bitstream", bitstream)):
+        """Cold-load one hex image on P2E."""
+        for n, v in (("design", design), ("image", image), ("bitstream", bitstream)):
             if e := need(n, v):
                 return err(e)
-        params: Dict[str, Any] = {"chip": chip, "image": image, "bitstream": bitstream}
-        if load_manifest:
-            params.pop("image")
-            params["load-manifest"] = load_manifest
+        params: Dict[str, Any] = {
+            "design": design,
+            "image": image,
+            "bitstream": bitstream,
+        }
         if itrace:
             params["itrace"] = True
         if mtrace:
@@ -45,4 +43,8 @@ def register(mcp):
             params["ctrace"] = True
         if diff:
             params["diff"] = True
+        if device:
+            params["device"] = True
+        if core is not None:
+            params["core"] = core
         return fmt(submit("/bebop/p2e/runworkload", params))

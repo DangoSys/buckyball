@@ -1,0 +1,37 @@
+[model]
+manifest = "src/csrc/Cargo.toml"
+library = "libmesh_reference_model"
+
+[[tests]]
+functional_groups = []
+name = "router"
+top = "router_tb"
+test = "protocol_test"
+filelist = "router.f"
+timeout_ns = 500000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = []
+name = "shared"
+top = "shared_tb"
+test = "protocol_test"
+filelist = "shared.f"
+timeout_ns = 500000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

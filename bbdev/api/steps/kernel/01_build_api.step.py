@@ -1,4 +1,7 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
+
+from utils.event_common import require_design
 
 config = {
     "name": "kernel-build-api",
@@ -11,13 +14,18 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    memory = body.get("guest-memory-mib", 512)
-    if isinstance(memory, bool) or not str(memory).isdigit() or not 1 <= int(memory) <= 16384:
-        return ApiResponse(status=400, body={"error": "guest-memory-mib must be an integer in 1..16384 (P2E DDR capacity)"})
-    storage = body.get("model-storage", "initramfs")
-    if storage not in ("initramfs", "ddr"):
-        return ApiResponse(status=400, body={"error": "model-storage must be initramfs or ddr"})
-    if storage == "ddr" and (not body.get("model") or int(memory) >= 16384):
-        return ApiResponse(status=400, body={"error": "ddr requires --model and guest-memory-mib < 16384"})
-    await ctx.enqueue({"topic": "kernel.build", "data": {**body, "_trace_id": ctx.trace_id}})
+    try:
+        selection = require_target(body, ("device",))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    try:
+        require_design(body)
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    await ctx.enqueue(
+        {
+            "topic": "kernel.build",
+            "data": {**body, "_trace_id": ctx.trace_id, "target": selection},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

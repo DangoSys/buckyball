@@ -5,7 +5,7 @@
 // These functions are called from the RTL via DPI-C when software writes to
 // the SCU registers (0x6000_0000 for sim_exit, 0x6002_0000 for UART).
 //
-// The SCU (System Control Unit) is instantiated per-tile inside BBTile and
+// The SCU (System Control Unit) is instantiated per-core inside BBCore and
 // intercepts MMIO writes before they reach the system bus.
 //
 // DPI-C functions (implemented in mmio.cc):

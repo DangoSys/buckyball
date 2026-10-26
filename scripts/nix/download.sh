@@ -24,9 +24,7 @@ begin_step "0-2" "submodules init"
 cd ${BBDIR}
 git submodule update --init --progress \
   arch/thirdparty/gemmini \
-  arch/thirdparty/rocket-chip \
   arch/thirdparty/berkeley-hardfloat \
-  bb-tests/workloads/lib/kernel \
   bbdev \
   bebop \
   stack \
@@ -37,11 +35,10 @@ git submodule update --init --progress \
   thirdparty/waveform-mcp \
   .agents/skills \
   .agents/mcps
-git -C ${BBDIR}/arch/thirdparty/rocket-chip submodule sync -- dependencies/cde
-git -C ${BBDIR}/arch/thirdparty/rocket-chip submodule update --init --progress dependencies/cde
-git submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
-  bb-tests/thirdparty/linux \
-  bb-tests/thirdparty/opensbi
+git -C ${BBDIR}/stack submodule update --init --progress engine os/linux
+git -C ${BBDIR}/stack submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
+  os/thirdparty/linux \
+  os/thirdparty/opensbi
 begin_step "0-4" "buddy-mlir llvm init"
-git -C ${BBDIR}/stack submodule update --init --progress compiler/thirdparty/buddy-mlir
-git -C ${BBDIR}/stack/compiler/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm
+git -C ${BBDIR}/stack submodule update --init --progress thirdparty/buddy-mlir
+git -C ${BBDIR}/stack/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

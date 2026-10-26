@@ -6,6 +6,9 @@ Builds the P2E VVAC runtime case via bebop CLI:
   2. Run bebop build p2e with rtl_dir and out_dir
   3. Validate generated bitstream and runtime artifacts
 """
+
+from utils.path import runner_manifest
+
 import os
 import shlex
 import shutil
@@ -19,8 +22,8 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, get_buckyball_path, rtl_dir
+from utils.event_common import require_design
+from utils.path import bebop_target_dir, get_buckyball_path, rtl_dir
 from steps.bebop.p2e.scripts.timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
@@ -40,67 +43,100 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bebop_dir = f"{bbdir}/bebop"
 
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
-    vsrc_dir = rtl_dir(bbdir, chip, "p2e", input_data.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir, design, "p2e", input_data.get("vsrc_dir"), selection=input_data["target"]
+    )
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     diff = bool(input_data.get("diff", False))
     stop_after = input_data.get("stop_after")
-    build_dir = (
-        input_data.get("output_dir")
-        or f"{bebop_dir}/build/{chip}{'-diff' if diff else ''}-{timestamp}"
+    build_dir = input_data.get("output_dir") or str(
+        Path(bbdir)
+        / "examples/designs"
+        / design
+        / "output/p2e"
+        / f"{timestamp}{'-diff' if diff else ''}"
     )
     build_path = Path(build_dir).resolve()
-    build_root = (Path(bebop_dir) / "build").resolve()
+    build_root = (Path(bbdir) / "examples/designs" / design / "output/p2e").resolve()
     if build_root not in build_path.parents:
         raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
     if stop_after and build_path.exists():
-        raise ValueError(f"Resource assessment requires a fresh output_dir: {build_path}")
+        raise ValueError(
+            f"Resource assessment requires a fresh output_dir: {build_path}"
+        )
     if build_path.exists():
         shutil.rmtree(build_path)
     build_path.mkdir(parents=True)
 
-    manifest = Path(bbdir) / "examples" / "chips" / chip / "generated" / "bebop" / "Cargo.toml"
+    manifest = runner_manifest(bbdir, design, input_data["target"])
     features = ["p2e"]
     for trace in ("itrace", "mtrace"):
         if input_data.get(trace, False):
             features.append(f"bebop-p2e/{trace}")
     build_env = {
         **os.environ,
-        **bebop_cargo_env(bbdir, chip),
         "VSRC_PATH": vsrc_dir,
         "OUT_PATH": str(build_path),
-        "CARGO_TARGET_DIR": os.path.join(bebop_dir, "target", f"{chip}-p2e{'-diff' if diff else ''}"),
     }
     if diff:
         features.append("bemu")
-    build_cmd = shlex.join([
-        "nix", "develop", "--ignore-env",
-        "--keep-env-var", "HOME",
-        "--keep-env-var", "ALL_PROXY",
-        "--keep-env-var", "CARGO_TARGET_DIR",
-        "--keep-env-var", "VSRC_PATH",
-        "--keep-env-var", "OUT_PATH",
-        "-c", "env", "-u", "LD_LIBRARY_PATH", "cargo", "run", "--release",
-        "--manifest-path", str(manifest),
-        "--bin", "bebop",
-        "--features", ",".join(features),
-        "--", "build", "p2e",
-        "--rtl-dir", vsrc_dir,
-        "--out-dir", build_dir,
-        *(["--diff"] if diff else []),
-        *(["--itrace"] if input_data.get("itrace", False) else []),
-        *(["--mtrace"] if input_data.get("mtrace", False) else []),
-        *(["--stop-after", stop_after] if stop_after else []),
-    ])
+    build_cmd = shlex.join(
+        [
+            "nix",
+            "develop",
+            "--ignore-env",
+            "--keep-env-var",
+            "HOME",
+            "--keep-env-var",
+            "ALL_PROXY",
+            "--keep-env-var",
+            "VSRC_PATH",
+            "--keep-env-var",
+            "OUT_PATH",
+            "-c",
+            "env",
+            "-u",
+            "LD_LIBRARY_PATH",
+            "cargo",
+            "run",
+            "--release",
+            "--manifest-path",
+            str(manifest),
+            "--target-dir",
+            bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
+            "--bin",
+            "bebop",
+            "--features",
+            ",".join(features),
+            "--",
+            "build",
+            "p2e",
+            "--design-dir",
+            str(Path(bbdir) / "examples/designs" / design),
+            "--entry-dir",
+            str(Path(manifest).parent),
+            "--rtl-dir",
+            vsrc_dir,
+            "--out-dir",
+            build_dir,
+            *(["--diff"] if diff else []),
+            *(["--itrace"] if input_data.get("itrace", False) else []),
+            *(["--mtrace"] if input_data.get("mtrace", False) else []),
+            *(["--stop-after", stop_after] if stop_after else []),
+        ]
+    )
     build_cmd = f"cd {shlex.quote(bbdir)} && {build_cmd}"
     ctx.logger.info("Building bebop p2e runtime case ...")
     build_result = await stream_run_logger_async(
@@ -113,7 +149,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
 
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
-    libvctb_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so")
+    libvctb_path = os.path.join(
+        build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm", "libvCtb.so"
+    )
     bitstream_path = os.path.join(build_dir, "fpgaCompDir", "bitstream.bit")
     runtime_path = os.path.join(build_dir, "bebop-p2e")
     extra_fields = {
@@ -129,9 +167,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     }
     if stop_after:
         extra_fields = {
-            "task": "resource-assessment", "stop_after": stop_after,
-            "runtime_ready": False, "vsrc_dir": vsrc_dir, "build_dir": build_dir,
-            "diff": diff, "timestamp": timestamp,
+            "task": "resource-assessment",
+            "stop_after": stop_after,
+            "runtime_ready": False,
+            "vsrc_dir": vsrc_dir,
+            "build_dir": build_dir,
+            "diff": diff,
+            "timestamp": timestamp,
         }
     else:
         extra_fields["runtime_ready"] = build_result.returncode == 0

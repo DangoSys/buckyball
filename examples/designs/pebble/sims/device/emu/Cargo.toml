@@ -1,0 +1,83 @@
+[workspace]
+
+[package]
+name = "bebop-sim-pebble-device"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+autotests = false
+
+# The model of this simulation entry; the runners below are built from it.
+[lib]
+name = "simulation"
+
+[[bin]]
+name = "bebop"
+path = "../../../../../../bebop/src/main.rs"
+
+[[bin]]
+name = "bebop-bemu"
+path = "../../../../../../bebop/src/bin/bebop-bemu.rs"
+required-features = ["bemu"]
+
+[[bin]]
+name = "bebop-verilator"
+path = "../../../../../../bebop/src/bin/bebop-verilator.rs"
+required-features = ["verilator"]
+
+[[bin]]
+name = "bebop-p2e"
+path = "../../../../../../bebop/src/bin/bebop-p2e.rs"
+required-features = ["p2e"]
+
+[[test]]
+name = "test_bemu"
+path = "../../../../../../bebop/tests/test_bemu.rs"
+harness = false
+required-features = ["bemu"]
+
+[[test]]
+name = "test_verilator"
+path = "../../../../../../bebop/tests/test_verilator.rs"
+harness = false
+required-features = ["verilator"]
+
+[[test]]
+name = "test_p2e"
+path = "../../../../../../bebop/tests/test_p2e.rs"
+harness = false
+required-features = ["p2e"]
+
+[[bin]]
+name = "bebop-vcs"
+path = "../../../../../../bebop/src/bin/bebop-vcs.rs"
+
+[[test]]
+name = "test_vcs"
+path = "../../../../../../bebop/tests/test_vcs.rs"
+harness = false
+
+[features]
+bemu = ["bebop/bemu"]
+verilator = ["bebop/verilator", "dep:bebop-verilator"]
+p2e = ["bebop/p2e"]
+
+[dependencies]
+bebop = { path = "../../../../../../bebop" }
+bebop-verilator = { path = "../../../../../../bebop/src/nodes/verilator", optional = true }
+bebop-bemu = { path = "../../../../../../bebop/src/nodes/bemu" }
+bebop-design-pebble = { path = "../../../emu" }
+clap = { version = "4", features = ["derive"] }
+
+[build-dependencies]
+bebop-sim-build = { path = "../../../../../../bebop/src/nodes/lib/sim-build" }
+
+[dev-dependencies]
+bebop-report = { path = "../../../../../../bebop/src/nodes/lib/report" }
+libtest-mimic = "0.8"
+assert_cmd = "2"
+walkdir = "2"
+predicates = "3"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }

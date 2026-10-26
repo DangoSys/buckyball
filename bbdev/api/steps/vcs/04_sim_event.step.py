@@ -1,3 +1,4 @@
+from utils.path import design_output_root
 import os
 import shlex
 import sys
@@ -11,11 +12,14 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path, log_dir, rtl_dir, workload_build_dir, workloads_output_root
+from utils.event_common import require_design
+from utils.path import (
+    get_buckyball_path,
+    log_dir,
+    bebop_bin_path,
+)
 from utils.search_workload import search_workload
 from utils.stream_run import stream_run_logger_async
-
 
 config = {
     "name": "vcs-sim",
@@ -26,65 +30,76 @@ config = {
 }
 
 
-def _resolve_binary(bbdir: str, chip: str, binary: str) -> str | None:
+def _resolve_binary(bbdir: str, design: str, binary: str, selection: str) -> str | None:
     if os.path.isfile(binary):
         return os.path.abspath(binary)
-    for root in (
-        workloads_output_root(bbdir),
-        os.path.join(workload_build_dir(bbdir, chip), "src"),
-    ):
-        found = search_workload(root, binary)
-        if found:
-            return found
-    return None
+    return search_workload(
+        str(Path(design_output_root(bbdir, design, selection=selection)) / "workloads"),
+        binary,
+    )
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as exc:
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid)
+        await check_result(
+            ctx, 1, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid
+        )
         return
     binary_name = input_data.get("binary")
     if not isinstance(binary_name, str) or not binary_name:
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": "missing binary"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            extra_fields={"task": "sim", "error": "missing binary"},
+            trace_id=origin_tid,
+        )
         return
     bbdir = get_buckyball_path()
-    binary = _resolve_binary(bbdir, chip, binary_name)
+    binary = _resolve_binary(bbdir, design, binary_name, input_data["target"])
     if binary is None:
-        await check_result(ctx, 1, extra_fields={"task": "sim", "error": f"binary not found: {binary_name}"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            extra_fields={"task": "sim", "error": f"binary not found: {binary_name}"},
+            trace_id=origin_tid,
+        )
         return
-    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
-    artifact_dir = Path(build_dir) / "vcs"
+    artifact_dir = (
+        Path(design_output_root(bbdir, design, selection=input_data["target"])) / "vcs"
+    )
     simv = artifact_dir / "simv"
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    run_log = Path(log_dir(
-        bbdir, chip, "tapeout", timestamp, "vcs", binary_name,
-        input_data.get("output_dir"),
-    ))
-    run_log.mkdir(parents=True)
-    timeout_ns = input_data.get("timeout_ns", input_data.get("timeout-ns", "100000000"))
-    if float(timeout_ns) <= 0:
-        raise ValueError("timeout-ns must be a positive number")
-    wave = input_data.get("waveform", input_data.get("wave"))
-    wave_arg = "+vcd" if str(wave).lower() == "vcd" else ("+vpd" if wave else "")
-    command = " ".join(
-        [
-            "env -u LD_LIBRARY_PATH",
-            shlex.quote(str(simv)),
-            "+permissive",
-            f"+elf={shlex.quote(binary)}",
-            "+batch" if input_data.get("batch", False) else "",
-            wave_arg,
-            f"+dramsim_ini_dir={shlex.quote(str(Path(bbdir) / 'result/share/dramsim3/configs'))}",
-            f"+dramsim_outdir={shlex.quote(str(run_log / 'dramsim'))}",
-            f"+timeout-ns={shlex.quote(str(timeout_ns))}",
-            "+permissive-off",
-        ]
+    run_log = Path(
+        log_dir(
+            bbdir,
+            design,
+            "tapeout",
+            timestamp,
+            "vcs",
+            binary_name,
+            selection=input_data["target"],
+        )
     )
+    run_log.mkdir(parents=True)
+    command = [
+        bebop_bin_path(bbdir, design, "vcs", selection=input_data["target"]),
+        "--simv",
+        str(simv),
+        "--elf",
+        binary,
+        "--dram-configs",
+        str(Path(bbdir) / "result/share/dramsim3/configs"),
+        "--log-dir",
+        str(run_log),
+    ]
+    wave = input_data.get("wave", False)
+    if wave:
+        command.extend(["--wave", "vpd" if wave is True else str(wave).lower()])
     result = await stream_run_logger_async(
-        cmd=command,
+        cmd=shlex.join(command),
         logger=ctx.logger,
         cwd=artifact_dir,
         stdout_prefix="vcs sim",
@@ -93,6 +108,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     await check_result(
         ctx,
         result.returncode,
-        extra_fields={"task": "sim", "simv": str(simv), "binary": binary, "log_dir": str(run_log)},
+        extra_fields={
+            "task": "sim",
+            "simv": str(simv),
+            "binary": binary,
+            "log_dir": str(run_log),
+        },
         trace_id=origin_tid,
     )

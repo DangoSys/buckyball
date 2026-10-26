@@ -129,17 +129,17 @@ fi
 if run_step "2"; then
   begin_step "2" "Compiler installation"
   cd "$BBDIR"
-  bbdev compiler --build '--chip toy'
+  bbdev stack --build '--design toy'
 fi
 
 if run_step "3"; then
   begin_step "3" "RTL source pre-compile"
-  bbdev verilator --verilog '--chip toy'
+  bbdev verilator --verilog '--design toy'
 fi
 
 if run_step "4"; then
   begin_step "4" "bb-tests pre-compile sources"
-  bbdev workload --build '--chip toy'
+  bbdev workload --build '--design toy'
 fi
 
 if run_step "5"; then

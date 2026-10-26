@@ -21,23 +21,26 @@ typedef int32_t result_t;
 #define FIELD(val, start_bit, end_bit)                                         \
   (((val) & ((2UL << ((end_bit) - (start_bit))) - 1)) << (start_bit))
 
-// rs1 bank field helpers (10-bit each)
+// rs1 bank fields: 10-bit sources and 9-bit architectural destination.
 #define BB_BANK0(id) FIELD(id, 0, 9)
 #define BB_BANK1(id) FIELD(id, 10, 19)
-#define BB_BANK2(id) FIELD(id, 20, 29)
+#define BB_BANK2(id) FIELD(id, 20, 28)
+// The architectural destination also supplies an old-value read operand.
+#define BB_READ_WR_OLD (1ULL << 29)
+#define BB_UPDATE_WR (1ULL << 63)
 
-// rs1 iter field (34-bit, bits 30-63)
-#define BB_ITER(n) FIELD(n, 30, 63)
+// rs1 iter field (33-bit, bits 30-62); bit 63 declares an in-place update.
+#define BB_ITER(n) FIELD(n, 30, 62)
 
 // funct7 encoding: [6:4]=enable, [3:0]=opcode
 // enable: 000=none, 001=1rd, 010=1wr, 011=1rd+1wr, 100=2rd+1wr
 //         101/110/111 = none (extended opcode space)
 
 // Generic RISC-V custom instruction macro (funct3 always 0x3 = CUSTOM3_RS1_RS2)
-#ifdef BUCKYBALL_ANT_HOST
-#include <ant_stream.h>
+#ifdef BUCKYBALL_STREAM
+#include <stream.h>
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
-  ant_emit((func7), (uint64_t)(rs1_val), (uint64_t)(rs2_val))
+  stream_emit((func7), (uint64_t)(rs1_val), (uint64_t)(rs2_val))
 #else
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 3, %c2, x0, %0, %1"                 \
@@ -51,7 +54,6 @@ typedef int32_t result_t;
 #include "01_barrier.c"
 #include "12_kernel.c"
 #include "13_mvover.c"
-#include "14_task.c"
 #include "16_mvout.c"
 #include "32_mset.c"
 #include "33_mvin.c"

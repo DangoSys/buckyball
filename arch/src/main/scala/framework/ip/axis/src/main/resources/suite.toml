@@ -1,0 +1,54 @@
+[model]
+manifest = "src/csrc/Cargo.toml"
+library = "libaxis_reference_model"
+
+[[tests]]
+name = "arbiter"
+functional_groups = ["arbiter_pkg::coverage::behavior"]
+top = "arbiter_tb"
+test = "protocol_test"
+filelist = "arbiter/filelist.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+name = "master"
+functional_groups = ["axis_pkg::coverage::behavior"]
+top = "master_tb"
+test = "protocol_test"
+filelist = "master/filelist.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+name = "slave"
+functional_groups = ["axis_pkg::coverage::behavior"]
+top = "slave_tb"
+test = "protocol_test"
+filelist = "slave/filelist.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

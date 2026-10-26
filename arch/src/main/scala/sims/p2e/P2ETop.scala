@@ -1,16 +1,22 @@
 package sims.p2e
 
+import chisel3.experimental.hierarchy.public
+
+import chisel3.experimental.hierarchy.instantiable
+
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
+
+import _root_.configs.GlobalConfig
+
 import chisel3._
 import chisel3.experimental.Analog
 import chisel3.util._
-import memcore.bus.axi4
-import memcore.memory.queue.Queue
+import framework.ip.bus.axi4
+import framework.lib.queue.Queue
 import sims.soc.{SimSoc, SystemTarget}
 
-/** A chip on the P2E board: the System over the 16-GiB DDR4 macro at 0x80000000. */
-abstract class P2ETarget(pb: String) extends SystemTarget(pb) {
-  override val dramBytes: BigInt = BigInt(16) << 30
-}
+/** A design on the P2E board: the System over the 16-GiB DDR4 macro at 0x80000000. */
+abstract class P2ETarget(b: GlobalConfig) extends SystemTarget(b)
 
 /** Board pins of the P2E top; bebop's Tcl drives `sys_rstn`/`soc_hold` and reads the status pins. */
 class P2ETopIO extends Bundle {
@@ -46,7 +52,9 @@ class P2ETopIO extends Bundle {
 }
 
 /** AXI slave port of the DDR4 macro, as named on the macro (`<prefix>_ddr4_s_axi_*`). */
-class Ddr4AxiSlave(idBits: Int) extends Bundle {
+class Ddr4AxiSlave(port: Int) extends Bundle {
+  val idBits = XepicDdr4Dc1.portIdBits(port)
+
   val awid    = Input(UInt(idBits.W))
   val awaddr  = Input(UInt(64.W))
   val awlen   = Input(UInt(8.W))
@@ -86,10 +94,14 @@ class Ddr4AxiSlave(idBits: Int) extends Bundle {
   val rvalid  = Output(Bool())
 }
 
+object XepicDdr4Dc1 { val portIdBits = Seq(11, 4) }
+
 /** The board DDR4 controller; vcom replaces this stub with the `xepic_ddr4_dc1` netlist macro. */
+@instantiable
 class XepicDdr4Dc1 extends BlackBox {
   override def desiredName = "xepic_ddr4_dc1"
 
+  @public
   val io = IO(new Bundle {
     val sys_rstn               = Input(Bool())
     val c0_sys_clk_p           = Input(Bool())
@@ -121,8 +133,10 @@ class XepicDdr4Dc1 extends BlackBox {
     val axi_clk                = Input(Clock())
     val c0_ddr4_ui_clk         = Output(Clock())
     // Flattened as the macro's `s0_ddr4_s_axi_*` and `s1_ddr4_s_axi_*` ports.
-    val s0_ddr4_s_axi          = new Ddr4AxiSlave(11)
-    val s1_ddr4_s_axi          = new Ddr4AxiSlave(4)
+    val s0_ddr4_s_axi          =
+      new Ddr4AxiSlave(0)
+    val s1_ddr4_s_axi          =
+      new Ddr4AxiSlave(1)
   })
 
 }
@@ -132,19 +146,26 @@ class XepicDdr4Dc1 extends BlackBox {
  * narrow bursts, so only lanes move: beat k of a burst starting at A uses lane (A + 16k)[4].
  * CPU 0x80000000 is DDR offset 0, and the System's IDs widen to the macro's 11 bits.
  */
-class P2EDdrAdapter(system: axi4.Params, base: BigInt) extends Module {
-  require(system.dataBits == 128, "P2E DDR adapter maps 16-byte beats onto the 32-byte macro bus")
-  require(system.idBits <= 11)
+@instantiable
+class P2EDdrAdapter(b: GlobalConfig) extends Module {
+  val system = b.device.ddr.axi
+  val base   = b.device.ddr.base
 
+  require(system.dataBits == 128, "P2E DDR adapter maps 16-byte beats onto the 32-byte macro bus")
+  require(system.idBits <= XepicDdr4Dc1.portIdBits.head)
+
+  @public
   val io = IO(new Bundle {
-    val in  = Flipped(new axi4.Port(system))
-    val out = Flipped(new Ddr4AxiSlave(11))
+    val in  = Flipped(new axi4.Port(b.device.ddr.axi))
+    val out =
+      Flipped(new Ddr4AxiSlave(0))
   })
 
   val lanes = 1 << system.idBits
 
   // Write lanes: W beats follow AW order, so queue each accepted burst's first lane.
-  val writeLane  = Module(new Queue(Bool(), 8))
+  val writeLane = Instantiate(new Queue(Bool(), 8, false, false))
+
   val writeOdd   = RegInit(false.B)
   val writeUpper = writeLane.io.deq.bits ^ writeOdd
   io.out.awid            := io.in.aw.bits.id
@@ -222,10 +243,14 @@ class P2EDdrAdapter(system: axi4.Params, base: BigInt) extends Module {
  * DDR adapter and the System, all on `user_clk`. The SoC leaves reset only after calibration and
  * after the host releases `soc_hold`.
  */
-class P2EHarness(target: SystemTarget, diffTest: Boolean) extends RawModule {
+@instantiable
+class P2EHarness(b: GlobalConfig, target: SystemTarget) extends RawModule {
+  val diffTest = b.sim.diffTest
+
+  @public
   val io = FlatIO(new P2ETopIO)
 
-  val ddr = Module(new XepicDdr4Dc1)
+  val ddr = Instantiate(new XepicDdr4Dc1)
   ddr.io.sys_rstn        := io.sys_rstn
   ddr.io.c0_sys_clk_p    := io.c0_sys_clk_p
   ddr.io.c0_sys_clk_n    := io.c0_sys_clk_n
@@ -257,8 +282,11 @@ class P2EHarness(target: SystemTarget, diffTest: Boolean) extends RawModule {
   val socReset = !io.sys_rstn || !ddr.io.c0_init_calib_complete || io.soc_hold
 
   withClockAndReset(io.user_clk, socReset) {
-    val soc     = Module(new SimSoc(target, diffTest))
-    val adapter = Module(new P2EDdrAdapter(soc.axiParams, target.dramBase))
+    val soc     = Instantiate(new SimSoc(
+      b,
+      target
+    ))
+    val adapter = Instantiate(new P2EDdrAdapter(b))
     adapter.io.in <> soc.io.axi
     ddr.io.s0_ddr4_s_axi <> adapter.io.out
   }
@@ -273,9 +301,16 @@ class P2EHarness(target: SystemTarget, diffTest: Boolean) extends RawModule {
 }
 
 /** The P2E top module bebop's vvac/vcom flow builds; `P2ETop.top` is the harness. */
-class P2ETop(target: SystemTarget, diffTest: Boolean) extends RawModule {
-  val io  = IO(new P2ETopIO)
-  val top = Module(new P2EHarness(target, diffTest))
+class P2ETop(b: GlobalConfig, target: SystemTarget) extends RawModule {
+  val diffTest = b.sim.diffTest
+
+  val io = IO(new P2ETopIO)
+
+  val top = Instantiate(new P2EHarness(
+    b,
+    target
+  ))
+
   // The DDR4 data pins stay on the macro inside `top`: vcom binds the macro's own pins, and a top
   // inout driving the macro is rejected.
   for ((name, port) <- io.elements) port match {

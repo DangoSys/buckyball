@@ -1,9 +1,0 @@
-[designs]
-include = "designs/multi-rocket.toml"
-
-[sims]
-verilator = "sims.verilator.MultiRocketVerilatorTarget"
-
-[uvm]
-balls = []
-ips = ["axis"]

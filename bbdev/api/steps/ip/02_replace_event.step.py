@@ -12,7 +12,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.event_common import check_result, get_origin_trace_id, require_chip
+from utils.event_common import check_result, get_origin_trace_id, require_design
 from utils.path import get_buckyball_path, rtl_dir
 from replace import replace_sources
 
@@ -28,7 +28,7 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
         consumer = input_data.get("consumer") or "dc"
         if consumer not in {"dc", "yosys"}:
             raise ValueError("consumer must be dc or yosys")
@@ -37,11 +37,23 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             raise ValueError("top must be a non-empty string")
 
         bbdir = Path(get_buckyball_path()).resolve()
-        build_dir = Path(rtl_dir(bbdir, chip, "tapeout" if consumer == "dc" else "verilog", input_data.get("output_dir"))).resolve()
+        build_dir = Path(
+            rtl_dir(
+                bbdir,
+                design,
+                "tapeout" if consumer == "dc" else "verilog",
+                input_data.get("output_dir"),
+                selection=input_data["target"],
+            )
+        ).resolve()
         source_list_path = build_dir / f"{consumer}_sources.list"
         if not source_list_path.is_file():
             raise FileNotFoundError(f"missing source list: {source_list_path}")
-        sources = [line.strip() for line in source_list_path.read_text().splitlines() if line.strip()]
+        sources = [
+            line.strip()
+            for line in source_list_path.read_text().splitlines()
+            if line.strip()
+        ]
         if not sources:
             raise ValueError(f"empty source list: {source_list_path}")
 
@@ -88,26 +100,34 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 ctx,
                 1,
                 continue_run=False,
-                extra_fields={"task": "ip.replace", "error": "next_topic must be a non-empty string"},
+                extra_fields={
+                    "task": "ip.replace",
+                    "error": "next_topic must be a non-empty string",
+                },
                 trace_id=origin_tid,
             )
             return failure_result
-        await check_result(ctx, 0, continue_run=True, extra_fields=extra, trace_id=origin_tid)
+        await check_result(
+            ctx, 0, continue_run=True, extra_fields=extra, trace_id=origin_tid
+        )
         await ctx.enqueue(
             {
                 "topic": next_topic,
                 "data": {
                     **input_data,
-                    "chip": chip,
+                    "design": design,
                     "consumer": consumer,
                     "top": top_module,
                     "source_list": result["source_list"],
                     "replace_manifest": result["replace_manifest"],
                     "generate_manifest": str(generate_manifest),
                     "_trace_id": origin_tid,
+                    "target": input_data["target"],
                 },
             }
         )
         return
 
-    await check_result(ctx, 0, continue_run=False, extra_fields=extra, trace_id=origin_tid)
+    await check_result(
+        ctx, 0, continue_run=False, extra_fields=extra, trace_id=origin_tid
+    )

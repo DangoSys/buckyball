@@ -1,3 +1,5 @@
+from pathlib import Path
+from utils.path import design_output_root
 import os
 import shlex
 import shutil
@@ -20,7 +22,7 @@ from tapeout import get_tapeout_contract, resolve_power_window, write_run_env
 
 config = {
     "name": "dc-sim",
-    "description": "rerun chip-owned simulation and produce activity for PTPX",
+    "description": "rerun design-owned simulation and produce activity for PTPX",
     "flows": ["dc"],
     "triggers": [queue("dc.sim")],
     "enqueues": ["pt.run"],
@@ -37,22 +39,48 @@ def _first(data: dict, *names: str):
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    chip = input_data.get("chip")
+    design = input_data.get("design")
     top_module = input_data.get("top") or "DigitalTop"
     analysis_dir = input_data.get("analysis_dir")
     if not isinstance(analysis_dir, str) or not analysis_dir:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "missing analysis directory"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "sim", "error": "missing analysis directory"},
+            trace_id=origin_tid,
+        )
         return
 
     try:
-        contract = get_tapeout_contract(get_buckyball_path(), input_data.get("chip"), top_module)
+        contract = get_tapeout_contract(
+            get_buckyball_path(),
+            input_data.get("design"),
+            top_module,
+            selection=input_data["target"],
+        )
     except (OSError, ValueError) as exc:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "sim", "error": str(exc)},
+            trace_id=origin_tid,
+        )
         return
 
     activity_format = str(_first(input_data, "format") or contract.power_format).lower()
     if activity_format not in {"saif", "vcd", "fsdb"}:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"unsupported activity format: {activity_format}"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": f"unsupported activity format: {activity_format}",
+            },
+            trace_id=origin_tid,
+        )
         return
 
     # An explicit activity file is retained as a debugging escape hatch. Normal
@@ -60,38 +88,118 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     explicit_activity = _first(input_data, "activity")
     if explicit_activity:
         if not os.path.isfile(explicit_activity):
-            await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"activity file does not exist: {explicit_activity}"}, trace_id=origin_tid)
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={
+                    "task": "sim",
+                    "error": f"activity file does not exist: {explicit_activity}",
+                },
+                trace_id=origin_tid,
+            )
             return
-        await ctx.enqueue({"topic": "pt.run", "data": {**input_data, "activity": explicit_activity, "format": activity_format, "_trace_id": origin_tid}})
+        await ctx.enqueue(
+            {
+                "topic": "pt.run",
+                "data": {
+                    **input_data,
+                    "activity": explicit_activity,
+                    "format": activity_format,
+                    "_trace_id": origin_tid,
+                    "target": input_data["target"],
+                },
+            }
+        )
+        return
+
+    if contract.power_sim_script is None:
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": f"design {design} has no gate-level power simulation entry; provide an activity file",
+            },
+            trace_id=origin_tid,
+        )
         return
 
     if shutil.which("bash") is None:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "bash is required for chip power_sim.sh"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": "bash is required for design power_sim.sh",
+            },
+            trace_id=origin_tid,
+        )
         return
 
     activity_dir = os.path.join(analysis_dir, "activity")
     os.makedirs(activity_dir, exist_ok=True)
     workload_name = _first(input_data, "workload") or contract.power_workload
     if not workload_name:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "missing workload name; pass --workload <built ELF name>"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": "missing workload name; pass --workload <built ELF name>",
+            },
+            trace_id=origin_tid,
+        )
         return
     if os.path.isabs(str(workload_name)):
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "workload must be a built ELF name, not an absolute path"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": "workload must be a built ELF name, not an absolute path",
+            },
+            trace_id=origin_tid,
+        )
         return
-    if not chip:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": "missing chip"}, trace_id=origin_tid)
+    if not design:
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "sim", "error": "missing design"},
+            trace_id=origin_tid,
+        )
         return
     bbdir = get_buckyball_path()
     workload = None
     for root in (
-        workloads_output_root(bbdir),
-        os.path.join(workload_build_dir(bbdir, chip), "src"),
+        str(
+            Path(design_output_root(bbdir, design, selection=input_data["target"]))
+            / "workloads"
+        ),
+        os.path.join(
+            workload_build_dir(bbdir, design, selection=input_data["target"]), "src"
+        ),
     ):
         workload = search_workload(root, str(workload_name))
         if workload:
             break
     if not workload:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": f"workload not found for chip {chip}: {workload_name}"}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "error": f"workload not found for design {design}: {workload_name}",
+            },
+            trace_id=origin_tid,
+        )
         return
     try:
         start_ns, end_ns = resolve_power_window(
@@ -100,7 +208,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             _first(input_data, "end_ns", "end-ns"),
         )
     except ValueError as exc:
-        await check_result(ctx, 1, continue_run=False, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"task": "sim", "error": str(exc)},
+            trace_id=origin_tid,
+        )
         return
     netlist = os.path.join(input_data.get("area_dir") or "", f"{top_module}.v")
     sdc = os.path.join(input_data.get("area_dir") or "", f"{top_module}.sdc")
@@ -112,7 +226,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "ACTIVITY_FILE": activity_path,
             "ACTIVITY_FORMAT": activity_format,
             "TOP": top_module,
-            "CONFIG": chip,
+            "CONFIG": design,
             "NETLIST": netlist,
             "SDC": sdc,
             "WORKLOAD": workload,
@@ -123,8 +237,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
 
     ctx.logger.info(
-        f"Running chip-owned power simulation for {contract.chip}; "
-        f"format={activity_format}, workload={workload or '<chip default>'}, "
+        f"Running design-owned power simulation for {contract.design}; "
+        f"format={activity_format}, workload={workload or '<design default>'}, "
         f"window={start_ns or '<auto>'}..{end_ns or '<auto>'} ns"
     )
     result = await stream_run_logger_async(
@@ -136,7 +250,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     if result.returncode == 0 and not os.path.isfile(activity_path):
         result.returncode = 1
-        error = f"chip power simulation completed without producing {activity_path}"
+        error = f"design power simulation completed without producing {activity_path}"
     else:
         error = None
     await check_result(
@@ -145,7 +259,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "sim",
-            "chip": contract.chip,
+            "design": contract.design,
             "power_sim_script": str(contract.power_sim_script),
             "activity": activity_path,
             "format": activity_format,
@@ -157,4 +271,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         trace_id=origin_tid,
     )
     if result.returncode == 0:
-        await ctx.enqueue({"topic": "pt.run", "data": {**input_data, "activity": activity_path, "format": activity_format, "strip_path": contract.power_strip_path, "_trace_id": origin_tid}})
+        await ctx.enqueue(
+            {
+                "topic": "pt.run",
+                "data": {
+                    **input_data,
+                    "activity": activity_path,
+                    "format": activity_format,
+                    "strip_path": contract.power_strip_path,
+                    "_trace_id": origin_tid,
+                    "target": input_data["target"],
+                },
+            }
+        )

@@ -1,0 +1,82 @@
+# Per-thread DMA transport values follow the existing Pebble configuration.
+
+[tracking]
+entries = 24
+addressBits = 44
+idBits = 8
+lineBytes = 64
+maxRanges = 8
+
+
+[prepared]
+contexts = 24
+maxRanges = 8
+idBits = 8
+beatBytes = 16
+
+[prepared.bus]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+
+
+
+[axi]
+addressBits = 44
+dataBits = 128
+idBits = 4
+
+
+[[regions]]
+base = 0x80000000
+bytes = 0x400000000
+cacheable = true
+executable = true
+readable = true
+writable = true
+atomic = true
+normal = true
+
+
+[[regions]]
+base = 0x10000
+bytes = 0x10000
+cacheable = true
+executable = true
+readable = true
+writable = false
+atomic = false
+normal = true
+
+
+[[regions]]
+base = 0x2000000
+bytes = 0x10000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false
+
+
+[[regions]]
+base = 0xc000000
+bytes = 0x4000000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false
+
+
+[[regions]]
+base = 0x60000000
+bytes = 0x10000000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false

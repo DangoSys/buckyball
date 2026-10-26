@@ -1,0 +1,3 @@
+add_buckyball_ctest(transpose_i8_16x16_test.c)
+add_buckyball_ctest(transpose_i8_16x32_test.c)
+add_buckyball_ctest(transpose_i32_8x16_test.c)

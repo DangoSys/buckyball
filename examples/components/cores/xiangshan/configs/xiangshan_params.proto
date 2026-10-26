@@ -1,0 +1,10 @@
+syntax = "proto2";
+import "hardware.proto";
+package buckyball.components.xiangshan;
+option java_package = "buckyball.components.xiangshan";
+option java_multiple_files = true;
+message Params {
+  required uint32 node_id = 1;
+  required uint32 home_id = 2;
+  required buckyball.config.RnfHardware dma_cache = 3;
+}

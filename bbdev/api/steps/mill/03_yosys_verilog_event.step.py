@@ -13,18 +13,12 @@ if utils_path not in sys.path:
 step_path = os.path.dirname(__file__)
 if step_path not in sys.path:
     sys.path.insert(0, step_path)
-mill_dir = os.path.dirname(__file__)
-mill_scripts = os.path.join(mill_dir, "scripts")
-if mill_dir not in sys.path:
-    sys.path.insert(0, mill_dir)
-if mill_scripts not in sys.path:
-    sys.path.insert(0, mill_scripts)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.path import rtl_out
-import mill as mill_run
+from steps.mill.scripts.mill import elaborate_cmd
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -47,7 +41,9 @@ def load_yosys_config():
 
 def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
     def _build_stub_from_header(src_path: str, content: str, force_blackbox: bool):
-        m = re.search(r"module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\)\s*;", content, re.S)
+        m = re.search(
+            r"module\s+([A-Za-z_][A-Za-z0-9_]*)\s*\((.*?)\)\s*;", content, re.S
+        )
         if m is None:
             raise RuntimeError(f"invalid module header format: {src_path}")
         mod_name = m.group(1)
@@ -60,7 +56,9 @@ def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
         for path in sv_files:
             with open(path, "r") as f:
                 content = f.read()
-            for m in re.finditer(r"^\s*module\s+([A-Za-z_][A-Za-z0-9_]*)\b", content, re.M):
+            for m in re.finditer(
+                r"^\s*module\s+([A-Za-z_][A-Za-z0-9_]*)\b", content, re.M
+            ):
                 defined.add(m.group(1))
         return defined
 
@@ -70,14 +68,18 @@ def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
         names = []
         with open(extern_path, "r") as f:
             for line in f:
-                m = re.match(r"\s*//\s*external module\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", line)
+                m = re.match(
+                    r"\s*//\s*external module\s+([A-Za-z_][A-Za-z0-9_]*)\s*$", line
+                )
                 if m:
                     names.append(m.group(1))
         return names
 
     def _collect_ports(mod_name, sv_files):
         ports = set()
-        inst_re = re.compile(rf"\b{mod_name}\b\s+[A-Za-z_][A-Za-z0-9_]*\s*\((.*?)\)\s*;", re.S)
+        inst_re = re.compile(
+            rf"\b{mod_name}\b\s+[A-Za-z_][A-Za-z0-9_]*\s*\((.*?)\)\s*;", re.S
+        )
         port_re = re.compile(r"\.([A-Za-z_][A-Za-z0-9_]*)\s*\(")
         for path in sv_files:
             with open(path, "r") as f:
@@ -153,19 +155,23 @@ def prepare_yosys_verilog(build_dir: str, yosys_log_dir: str, logger):
 
     if dpi_stubbed:
         logger.info(
-            f"Stubbed {len(dpi_stubbed)} DPI modules: {', '.join(dpi_stubbed[:10])}{'...' if len(dpi_stubbed) > 10 else ''}"
+            f"Stubbed {len(dpi_stubbed)} DPI modules:"
+            f" {', '.join(dpi_stubbed[:10])}{'...' if len(dpi_stubbed) > 10 else ''}"
         )
     if pattern_stubbed:
         logger.info(
-            f"Stubbed {len(pattern_stubbed)} pattern modules: {', '.join(pattern_stubbed[:10])}{'...' if len(pattern_stubbed) > 10 else ''}"
+            f"Stubbed {len(pattern_stubbed)} pattern modules:"
+            f" {', '.join(pattern_stubbed[:10])}{'...' if len(pattern_stubbed) > 10 else ''}"
         )
     if ext_stubbed:
         logger.info(
-            f"Stubbed {len(ext_stubbed)} external modules: {', '.join(ext_stubbed[:10])}{'...' if len(ext_stubbed) > 10 else ''}"
+            f"Stubbed {len(ext_stubbed)} external modules:"
+            f" {', '.join(ext_stubbed[:10])}{'...' if len(ext_stubbed) > 10 else ''}"
         )
     if skipped:
         logger.info(
-            f"Skipped {len(skipped)} unsupported files: {', '.join(skipped[:10])}{'...' if len(skipped) > 10 else ''}"
+            f"Skipped {len(skipped)} unsupported files:"
+            f" {', '.join(skipped[:10])}{'...' if len(skipped) > 10 else ''}"
         )
     logger.info(f"Prepared yosys source list: {source_list_path}")
     return source_list_path
@@ -176,22 +182,30 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch = os.path.join(bbdir, "arch")
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "verilog", input_data.get("output_dir"),
+            bbdir,
+            design,
+            "verilog",
+            input_data.get("output_dir"),
+            selection=input_data["target"],
         )
         os.makedirs(build_dir, exist_ok=True)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         returncode = (
             await stream_run_logger_async(
-            cmd=mill_run.elaborate_cmd(
-                "sims.verilator.Elaborate", mill_config, build_dir, seq_mem=True,
-            ),
-            logger=ctx.logger,
-            cwd=arch,
-            stdout_prefix="yosys verilog",
-            stderr_prefix="yosys verilog",
+                cmd=elaborate_cmd(
+                    design,
+                    input_data["target"],
+                    "verilog",
+                    build_dir,
+                    seq_mem=True,
+                ),
+                logger=ctx.logger,
+                cwd=arch,
+                stdout_prefix="yosys verilog",
+                stderr_prefix="yosys verilog",
             )
         ).returncode
     except (ValueError, RuntimeError) as error:
@@ -214,9 +228,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
     yosys_cfg = load_yosys_config()
     top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
-    yosys_log_dir = input_data.get("log_dir") or log_dir(
-        bbdir, chip, "synth", datetime.now().strftime("%Y-%m-%d-%H-%M"),
-        "yosys", top_module, input_data.get("output_dir"),
+    yosys_log_dir = log_dir(
+        bbdir,
+        design,
+        "synth",
+        datetime.now().strftime("%Y-%m-%d-%H-%M"),
+        "yosys",
+        top_module,
+        input_data.get("output_dir"),
+        selection=input_data["target"],
     )
     ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")
     mem_conf = os.path.join(build_dir, "mems.conf")
@@ -245,7 +265,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx,
         0,
         continue_run=need_ip,
-        extra_fields={"task": "verilog", "source_list": source_list_path, "mem_conf": mem_conf},
+        extra_fields={
+            "task": "verilog",
+            "source_list": source_list_path,
+            "mem_conf": mem_conf,
+        },
         trace_id=origin_tid,
     )
     if not need_ip:
@@ -256,13 +280,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "topic": "ip.generate",
             "data": {
                 **input_data,
-                "chip": chip,
+                "design": design,
                 "consumer": "yosys",
                 "top": top_module,
-                "log_dir": yosys_log_dir,
+                "analysis_dir": yosys_log_dir,
                 "next_topic": "yosys.synth",
                 "task": "run",
                 "_trace_id": origin_tid,
+                "target": input_data["target"],
             },
         }
     )

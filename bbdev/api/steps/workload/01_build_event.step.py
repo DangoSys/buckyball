@@ -21,6 +21,13 @@ if _spec is None or _spec.loader is None:
     raise RuntimeError(f"cannot load {_workload_build_path}")
 workload_build = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(workload_build)
+
+_stack_build_path = os.path.join(
+    os.path.dirname(__file__), "..", "stack", "scripts", "build.py"
+)
+_spec = importlib.util.spec_from_file_location("stack_build_module", _stack_build_path)
+stack_build = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(stack_build)
 config = {
     "name": "workload-build",
     "description": "build workload",
@@ -34,8 +41,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     allowed = {
-        "chip",
-        "stable",
+        "target",
+        "device",
+        "core",
+        "design",
         "ctest",
         "mlirtest",
         "soctest",
@@ -52,46 +61,35 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    chip = input_data.get("chip")
-    if not chip:
-        ctx.logger.error("Missing required parameter: chip must be specified")
+    design = input_data.get("design")
+    if not design:
+        ctx.logger.error("Missing required parameter: design must be specified")
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
-    if not isinstance(chip, str) or not re.fullmatch("[A-Za-z0-9_-]+", chip):
-        ctx.logger.error(f"Invalid chip: {chip}")
+    if not isinstance(design, str) or not re.fullmatch("[A-Za-z0-9_-]+", design):
+        ctx.logger.error(f"Invalid design: {design}")
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "invalid_chip", "chip": chip},
+            extra_fields={"error": "invalid_design", "design": design},
             trace_id=origin_tid,
         )
         return
-    chip_dir = Path(bbdir) / "examples" / "chips" / chip
-    if not chip_dir.is_dir():
-        ctx.logger.error(f"Workload chip does not exist: {chip}")
+    design_dir = Path(bbdir) / "examples" / "designs" / design
+    if not design_dir.is_dir():
+        ctx.logger.error(f"Workload design does not exist: {design}")
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "unknown_chip", "chip": chip},
-            trace_id=origin_tid,
-        )
-        return
-    stable = input_data.get("stable", False)
-    if not isinstance(stable, bool):
-        ctx.logger.error("Invalid parameter: stable must be a boolean flag")
-        await check_result(
-            ctx,
-            1,
-            continue_run=False,
-            extra_fields={"error": "invalid_stable", "stable": stable},
+            extra_fields={"error": "unknown_design", "design": design},
             trace_id=origin_tid,
         )
         return
@@ -119,13 +117,21 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
+        # Workloads link the device runtime; MLIR tests compile with its plugins.
+        stack_build.build_design(
+            bbdir,
+            design=design,
+            selection=input_data["target"],
+            logger=ctx.logger,
+            task_scope=origin_tid,
+        )
         workload_build.build_workload(
             bbdir,
-            chip,
+            design,
+            selection=input_data["target"],
             ctest=ctest,
             mlirtest=mlirtest,
             soctest=soctest,
-            stable=stable,
             logger=ctx.logger,
             task_scope=origin_tid,
         )
@@ -137,7 +143,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "error": "workload_build_failed",
-                "chip": chip,
+                "design": design,
                 "detail": str(error),
             },
             trace_id=origin_tid,
@@ -148,7 +154,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         0,
         continue_run=False,
         extra_fields={
-            "chip": chip,
+            "design": design,
             "ctest": ctest,
             "mlirtest": mlirtest,
             "soctest": soctest,

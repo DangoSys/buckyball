@@ -16,27 +16,28 @@ extern "C" void scu_sim_exit(std::uint32_t hart, std::uint32_t code) {
 }
 
 extern "C" void scu_uart_rx_sample(std::uint32_t, std::uint32_t,
-                                     std::uint32_t *valid,
-                                     std::uint32_t *data) {
+                                   std::uint32_t *valid, std::uint32_t *data) {
   *valid = 0;
   *data = 0;
 }
 
+extern "C" void dpi_ant_trace(std::uint32_t, std::uint32_t, std::uint32_t,
+                              std::uint32_t, std::uint32_t, std::uint32_t,
+                              std::uint32_t, std::uint32_t) {}
 extern "C" void dpi_itrace(std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t) {}
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t) {}
 extern "C" void dpi_mtrace(std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t, std::uint32_t, std::uint32_t,
-                            std::uint32_t) {}
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t, std::uint32_t, std::uint32_t,
+                           std::uint32_t) {}
 extern "C" void dpi_pmctrace(std::uint32_t, std::uint32_t, std::uint32_t,
-                              std::uint32_t) {}
-extern "C" void dpi_mem_pmctrace(std::uint32_t, std::uint32_t,
-                                  std::uint32_t, std::uint32_t) {}
-extern "C" void dpi_mtrace_issue(std::uint32_t, std::uint32_t,
-                                  std::uint32_t, std::uint32_t,
-                                  std::uint32_t, std::uint32_t) {}
+                             std::uint32_t) {}
+extern "C" void dpi_mem_pmctrace(std::uint32_t, std::uint32_t, std::uint32_t,
+                                 std::uint32_t) {}
+extern "C" void dpi_mtrace_issue(std::uint32_t, std::uint32_t, std::uint32_t,
+                                 std::uint32_t, std::uint32_t, std::uint32_t) {}

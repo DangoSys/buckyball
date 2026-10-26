@@ -1,4 +1,4 @@
-# Shared PrimeTime PX implementation. Chip tapeout/power.tcl files are thin
+# Shared PrimeTime PX implementation. Design tapeout/power.tcl files are thin
 # wrappers; this reports only standard-cell dynamic power.
 if {![info exists RUN_CONFIG] || $RUN_CONFIG eq ""} { error "bbdev must pass -x {set RUN_CONFIG <power-run.tcl>}" }
 source [file normalize $RUN_CONFIG]

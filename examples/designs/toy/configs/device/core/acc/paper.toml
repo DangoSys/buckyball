@@ -1,0 +1,7 @@
+source = "../../../.."
+# Toy ACC Configuration (default)
+
+balldomain = "balldomain/default.toml"
+memdomain = "memdomain/paper.toml"
+frontend = "frontend/toy.toml"
+gpdomain = "gpdomain/toy.toml"

@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev bebop-verilator --build '--jobs 16 --chip toy'")
+run_bbdev_case("bbdev bebop-verilator --build '--jobs 16 --design toy'")

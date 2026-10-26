@@ -1,0 +1,37 @@
+[model]
+manifest = ""
+library = ""
+
+[[tests]]
+name = "interconnect"
+top = "interconnect_tb"
+test = "protocol_test"
+filelist = "interconnect/filelist.f"
+timeout_ns = 2000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = ["interconnect_pkg::routing_model::behavior", "interconnect_pkg::routing_model::load"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+name="decoder"
+top="decoder_tb"
+test="protocol_test"
+filelist="decoder/filelist.f"
+timeout_ns=200000
+wall_timeout_s=120
+kind="functional"
+rtl_scopes=["dut"]
+metrics=["line","cond","tgl"]
+functional_groups=["decoder_pkg::model::behavior"]
+sink_ready=1
+sink_stall=3
+designs=[]
+plusargs=[]
+assertion=""

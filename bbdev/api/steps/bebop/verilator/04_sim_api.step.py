@@ -1,7 +1,7 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path
+from utils.event_common import require_design
 
 config = {
     "name": "bebop-verilator-sim-api",
@@ -14,8 +14,10 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    if "batch" in body:
-        return ApiResponse(status=400, body={"error": "Unsupported parameter: batch"})
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
     binary = body.get("binary", "")
     if not binary:
         return ApiResponse(
@@ -28,15 +30,15 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
     try:
-        chip = require_chip(body)
+        design = require_design(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
-    data = {**body, "chip": chip, "_trace_id": ctx.trace_id}
-    if "vsrc-dir" in data:
-        data["vsrc_dir"] = data.pop("vsrc-dir")
-    await ctx.enqueue({
-        "topic": "bebop.verilator.sim",
-        "data": data,
-    })
+    data = {**body, "design": design, "_trace_id": ctx.trace_id}
+    await ctx.enqueue(
+        {
+            "topic": "bebop.verilator.sim",
+            "data": {**(data), "target": selection},
+        }
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

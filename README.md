@@ -52,13 +52,13 @@ nix develop
 Run Verilator simulation test to verify installation:
 
 ```bash
-bbdev verilator --run '--jobs 16 --chip toy --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --batch'
+bbdev verilator --run '--jobs 16 --design toy --device --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --batch'
 ```
 
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--chip toy --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace'
+bbdev bebop-verilator --run '--design toy --device --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace'
 ```
 
 ## Tutorial

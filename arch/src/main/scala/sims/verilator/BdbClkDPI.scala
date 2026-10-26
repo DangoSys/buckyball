@@ -25,6 +25,7 @@ class BdbClkDPI extends BlackBox with HasBlackBoxInline {
       |  input wire clock,
       |  input wire reset
       |);
+      |`ifndef BEBOP_PARALLEL
       |  reg [63:0] cnt;
       |  always @(posedge clock) begin
       |    if (reset) begin
@@ -35,6 +36,7 @@ class BdbClkDPI extends BlackBox with HasBlackBoxInline {
       |      cnt <= cnt + 64'd1;
       |    end
       |  end
+      |`endif
       |endmodule
     """.stripMargin
   )

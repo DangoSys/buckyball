@@ -1,0 +1,4 @@
+# Pebble SMatMul Ball Configuration
+
+tileRows = 8
+tileCols = 16

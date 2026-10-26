@@ -1,6 +1,0 @@
-[workloads]
-tests = [
-  "omni-attention-ctest-chip-interconnect-baremetal",
-  "omni-attention-ctest-chip-reservation-baremetal",
-  "omni-attention-ctest-chip-backpressure-baremetal",
-]

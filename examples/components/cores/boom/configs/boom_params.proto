@@ -1,0 +1,7 @@
+syntax = "proto2";
+package buckyball.components.boom;
+option java_package = "buckyball.components.boom";
+option java_multiple_files = true;
+message Params {
+  required string profile = 1;
+}

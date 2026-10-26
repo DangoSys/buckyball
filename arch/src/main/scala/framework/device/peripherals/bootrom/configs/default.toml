@@ -1,0 +1,4 @@
+base = 0x10000
+bytes = 0x10000
+image = "arch/src/main/resources/bootrom/bootrom.rv64.img"
+entry = 0x80000000

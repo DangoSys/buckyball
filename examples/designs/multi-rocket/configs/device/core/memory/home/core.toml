@@ -1,0 +1,13 @@
+agents = 64
+mshrEntries = 8
+homeId = 96
+requesters = "default"
+
+[cache]
+addressBits = 44
+lineBytes = 64
+sets = 64
+ways = 4
+idBits = 8
+metadataBits = 4
+responseDepth = 2

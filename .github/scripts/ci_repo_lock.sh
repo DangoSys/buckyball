@@ -31,20 +31,20 @@ repo_reset() {
   git clean -ffd
 
   rm -rf arch/out
-  rm -rf stack/compiler/thirdparty/buddy-mlir/llvm/build
-  rm -rf stack/compiler/thirdparty/buddy-mlir/build
+  rm -rf stack/thirdparty/buddy-mlir/llvm/build
+  rm -rf stack/thirdparty/buddy-mlir/build
 
   git submodule sync
   git submodule update --init --force
 
   # submodules in submodules we used need update by hands
-  git -C arch/thirdparty/rocket-chip submodule sync -- dependencies/cde
-  git -C arch/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
+  git -C examples/components/cores/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
+  git -C examples/components/cores/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
 
   git -C stack submodule sync
-  git -C stack submodule update --init --force -- compiler/thirdparty/buddy-mlir
-  git -C stack/compiler/thirdparty/buddy-mlir submodule sync
-  git -C stack/compiler/thirdparty/buddy-mlir submodule update --init --force -- llvm
+  git -C stack submodule update --init --force -- thirdparty/buddy-mlir
+  git -C stack/thirdparty/buddy-mlir submodule sync
+  git -C stack/thirdparty/buddy-mlir submodule update --init --force -- llvm
 
   git submodule foreach 'git clean -ffd'
   have_sha="$(git rev-parse HEAD)"

@@ -1,0 +1,517 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+
+[[cores]]
+include = "core/default.toml"
+hartId = 0
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 1
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 2
+
+[[cores]]
+include = "core/default.toml"
+hartId = 1
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 3
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 4
+
+[[cores]]
+include = "core/default.toml"
+hartId = 2
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 5
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 6
+
+[[cores]]
+include = "core/default.toml"
+hartId = 3
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 7
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 8
+
+[[cores]]
+include = "core/default.toml"
+hartId = 4
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 9
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 10
+
+[[cores]]
+include = "core/default.toml"
+hartId = 5
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 11
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 12
+
+[[cores]]
+include = "core/default.toml"
+hartId = 6
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 13
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 14
+
+[[cores]]
+include = "core/default.toml"
+hartId = 7
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 15
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 16
+
+[[cores]]
+include = "core/default.toml"
+hartId = 8
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 17
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 18
+
+[[cores]]
+include = "core/default.toml"
+hartId = 9
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 19
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 20
+
+[[cores]]
+include = "core/default.toml"
+hartId = 10
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 21
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 22
+
+[[cores]]
+include = "core/default.toml"
+hartId = 11
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 23
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 24
+
+[[cores]]
+include = "core/default.toml"
+hartId = 12
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 25
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 26
+
+[[cores]]
+include = "core/default.toml"
+hartId = 13
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 27
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 28
+
+[[cores]]
+include = "core/default.toml"
+hartId = 14
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 29
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 30
+
+[[cores]]
+include = "core/default.toml"
+hartId = 15
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 31
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 32
+
+[[cores]]
+include = "core/default.toml"
+hartId = 16
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 33
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 34
+
+[[cores]]
+include = "core/default.toml"
+hartId = 17
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 35
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 36
+
+[[cores]]
+include = "core/default.toml"
+hartId = 18
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 37
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 38
+
+[[cores]]
+include = "core/default.toml"
+hartId = 19
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 39
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 40
+
+[[cores]]
+include = "core/default.toml"
+hartId = 20
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 41
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 42
+
+[[cores]]
+include = "core/default.toml"
+hartId = 21
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 43
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 44
+
+[[cores]]
+include = "core/default.toml"
+hartId = 22
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 45
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 46
+
+[[cores]]
+include = "core/default.toml"
+hartId = 23
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 47
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 48
+
+[[cores]]
+include = "core/default.toml"
+hartId = 24
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 49
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 50
+
+[[cores]]
+include = "core/default.toml"
+hartId = 25
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 51
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 52
+
+[[cores]]
+include = "core/default.toml"
+hartId = 26
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 53
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 54
+
+[[cores]]
+include = "core/default.toml"
+hartId = 27
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 55
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 56
+
+[[cores]]
+include = "core/default.toml"
+hartId = 28
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 57
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 58
+
+[[cores]]
+include = "core/default.toml"
+hartId = 29
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 59
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 60
+
+[[cores]]
+include = "core/default.toml"
+hartId = 30
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 61
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 62
+
+[[cores]]
+include = "core/default.toml"
+hartId = 31
+
+[cores.memory]
+
+[cores.memory.icache]
+include = "core/memory/icache/shared.toml"
+nodeId = 63
+
+[cores.memory.dcache]
+
+[cores.memory.dcache.cache]
+include = "core/memory/dcache/shared.toml"
+nodeId = 64

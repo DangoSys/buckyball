@@ -1,0 +1,5 @@
+[workloads]
+tests = [
+  "toy-rocket-ctest-gemmini_loop_subrob-baremetal",
+  "toy-rocket-ctest-gemmini_loop_mmio-baremetal",
+]

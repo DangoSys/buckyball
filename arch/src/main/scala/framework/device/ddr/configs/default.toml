@@ -1,0 +1,13 @@
+clients = 2
+slotsPerClient = 4
+dataBits = 128
+idBits = 4
+idBase = 0
+base = 0x80000000
+bytes = 0x20000000
+model = 0
+
+[line]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256

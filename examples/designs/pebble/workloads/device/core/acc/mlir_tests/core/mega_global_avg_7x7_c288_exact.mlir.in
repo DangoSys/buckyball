@@ -1,0 +1,16 @@
+memref.global "private" constant @input : memref<1x7x7x288xi8> = dense<"0x@PEBBLE_GAP_C288_INPUT_HEX@"> alignment = 64
+
+func.func private @poison_reused_banks() -> ()
+func.func private @check_result(memref<1x1x1x288xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero = arith.constant 0 : i8
+  %input = memref.get_global @input : memref<1x7x7x288xi8>
+  func.call @poison_reused_banks() : () -> ()
+  %source_tensor = bufferization.to_tensor %input restrict : memref<1x7x7x288xi8> to tensor<1x7x7x288xi8>
+  %source_matrix = tensor.collapse_shape %source_tensor [[0, 1, 2], [3]] : tensor<1x7x7x288xi8> into tensor<49x288xi8>
+  %average = custom.op "global_avg_i8"(%source_tensor) {input_scale = 0.0578813739 : f32, output_scale = 0.0106952852 : f32} : (tensor<1x7x7x288xi8>) -> tensor<1x1x1x288xi8>
+  %memory = bufferization.to_buffer %average : tensor<1x1x1x288xi8> to memref<1x1x1x288xi8>
+  func.call @check_result(%memory) : (memref<1x1x1x288xi8>) -> ()
+  return %zero : i8
+}

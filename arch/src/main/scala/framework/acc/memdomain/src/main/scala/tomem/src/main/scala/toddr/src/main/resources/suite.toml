@@ -1,0 +1,54 @@
+[model]
+manifest="src/csrc/Cargo.toml"
+library="libdma_reference"
+
+[[tests]]
+functional_groups = ["dma_pkg::env::behavior"]
+name = "dma"
+top = "dma_tb"
+test = "protocol_test"
+filelist = "toddr/filelist.f"
+timeout_ns = 2000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = ["dma_pkg::env::behavior"]
+name = "read_dma"
+top = "read_dma_tb"
+test = "protocol_test"
+filelist = "read_dma/filelist.f"
+timeout_ns = 2000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = ["dma_pkg::env::behavior"]
+name = "write_dma"
+top = "write_dma_tb"
+test = "protocol_test"
+filelist = "write_dma/filelist.f"
+timeout_ns = 2000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

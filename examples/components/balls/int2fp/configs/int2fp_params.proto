@@ -1,0 +1,9 @@
+syntax = "proto3";
+package buckyball.balls.int2fp;
+option java_package = "buckyball.balls.int2fp";
+option java_multiple_files = true;
+
+message Params {
+  optional string inputType = 1;
+  optional string outputType = 2;
+}

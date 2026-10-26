@@ -1,0 +1,48 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x8xf16>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %two = arith.constant 2 : index
+  %eight = arith.constant 8 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %pos_one = arith.constant 1.0 : f16
+  %neg_one = arith.constant -1.0 : f16
+  %pos_half = arith.constant 0.5 : f16
+  %neg_half = arith.constant -0.5 : f16
+  %a = memref.alloc() alignment = 64 : memref<@BB_BANK_LINES@x8xf16>
+  %b = memref.alloc() alignment = 64 : memref<8x8xf16>
+  %c = memref.alloc() alignment = 64 : memref<@BB_BANK_LINES@x8xf16>
+  scf.for %row = %zero to %rows step %one {
+    %parity = arith.remui %row, %two : index
+    %odd = arith.cmpi eq, %parity, %one : index
+    %value = arith.select %odd, %neg_one, %pos_one : f16
+    scf.for %lane = %zero to %eight step %one {
+      memref.store %value, %a[%row, %lane] : memref<@BB_BANK_LINES@x8xf16>
+    }
+  }
+  scf.for %k = %zero to %eight step %one {
+    scf.for %lane = %zero to %eight step %one {
+      %parity = arith.remui %lane, %two : index
+      %odd = arith.cmpi eq, %parity, %one : index
+      %value = arith.select %odd, %neg_half, %pos_half : f16
+      memref.store %value, %b[%k, %lane] : memref<8x8xf16>
+    }
+  }
+  %a_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %c_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %loaded_a = buckyball.bank_mvin %a, %a_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x8xf16>
+  %loaded_b = buckyball.bank_mvin %b, %b_bank <{depth = 8 : i64, stride = 1 : i64}> : memref<8x8xf16>
+  %result = buckyball.bank_custom "matmul_f16" (%loaded_a, %loaded_b) -> %c_bank
+      {rows = @BB_BANK_LINES@ : i64, k = 8 : i64, op1_base = 0 : i64, op2_base = 0 : i64, wr_base = 0 : i64}
+  %stored = buckyball.bank_mvout %c, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x8xf16>
+  buckyball.bank_release %loaded_a
+  buckyball.bank_release %loaded_b
+  buckyball.bank_release %stored
+  func.call @check_result(%c) : (memref<@BB_BANK_LINES@x8xf16>) -> ()
+  memref.dealloc %a : memref<@BB_BANK_LINES@x8xf16>
+  memref.dealloc %b : memref<8x8xf16>
+  memref.dealloc %c : memref<@BB_BANK_LINES@x8xf16>
+  return %zero_i8 : i8
+}

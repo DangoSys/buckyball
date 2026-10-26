@@ -11,7 +11,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import get_buckyball_path, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
@@ -27,14 +27,14 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    chip = require_chip(input_data)
+    design = require_design(input_data)
     bbdir = get_buckyball_path()
     arch_dir = f"{bbdir}/arch"
     build_dir = rtl_dir(
         bbdir,
-        chip,
+        design,
         "verilog",
-        input_data.get("output_dir"),
+        selection=input_data["target"],
     )
     coverage = input_data.get("coverage", False)
     ctx.logger.info(f"Using build directory: {build_dir}")
@@ -131,7 +131,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # Run verilator
     # ==================================================================================
     verilator_cmd = (
-        f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --noassert -Wno-fatal "
+        f"verilator -MMD -cc --vpi --trace -O3 --x-assign fast --x-initial fast --assert -Wno-fatal "
         f"--trace-fst --trace-threads 1 --output-split 10000 --output-split-cfuncs 100 "
         f"--unroll-count 256 "
         f"{'--coverage-line ' if coverage else ''}"
@@ -193,7 +193,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         await ctx.enqueue(
             {
                 "topic": "verilator.sim",
-                "data": {**input_data, "output_dir": build_dir, "task": "run"},
+                "data": {**input_data, "task": "run", "target": input_data["target"]},
             }
         )
 

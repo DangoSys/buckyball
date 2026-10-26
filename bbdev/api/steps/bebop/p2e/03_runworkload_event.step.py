@@ -4,10 +4,14 @@ bebop p2e runworkload event handler
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
   1. Resolve image name to .hex file under bb-tests/output/
   2. Validate bitstream .bit file path
-  3. Run bebop run p2e --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>]
+  3. Run bebop --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>]
 """
 
+from utils.path import runner_manifest
+
+
 import glob
+import hashlib
 import os
 import re
 import shlex
@@ -22,8 +26,8 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-from utils.event_common import require_chip
-from utils.path import bebop_cargo_env, get_buckyball_path, log_dir
+from utils.event_common import require_design
+from utils.path import bebop_target_dir, bebop_bin_path, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from resolve_image import resolve_image
@@ -58,21 +62,20 @@ def case_uses_multi_fpga(build_dir: str) -> bool:
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
     image_name = input_data.get("image", "")
-    manifest_path = input_data.get("load-manifest", "")
     bitstream = input_data.get("bitstream", "")
     multi_fpga = bool(input_data.get("multi-fpga", False))
     fpga_location = (
@@ -135,28 +138,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             return
         wave = True
     try:
-        if bool(image_name) == bool(manifest_path):
-            raise ValueError("exactly one of image and load-manifest is required")
-        if manifest_path and diff:
-            raise ValueError("load-manifest cannot use single-ELF diff")
-        if manifest_path:
-            manifest_path = str(Path(manifest_path).resolve(strict=True))
-            if not Path(manifest_path).is_file():
-                raise ValueError("load-manifest must be a regular JSON file")
-            image_path = None
-            elf_path = None
-            image_name = Path(manifest_path).stem
-        else:
-            image_path = resolve_image(bbdir, image_name, chip)
-            image_base = os.path.splitext(image_path)[0]
-            elf_path = f"{image_base}.elf" if os.path.isfile(f"{image_base}.elf") else image_base
-            if diff and not os.path.isfile(elf_path):
-                raise ValueError(f"workload ELF for P2E DiffTest not found: {elf_path}")
+        image_path = resolve_image(bbdir, image_name, design)
+        image_base = os.path.splitext(image_path)[0]
+        elf_path = (
+            f"{image_base}.elf" if os.path.isfile(f"{image_base}.elf") else image_base
+        )
     except (ValueError, OSError, TypeError) as error:
         ctx.logger.error(str(error))
-        await check_result(ctx, 1, continue_run=False,
-                           extra_fields={"error": "invalid_cold_load_inputs", "message": str(error)},
-                           trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "invalid_cold_load_inputs", "message": str(error)},
+            trace_id=origin_tid,
+        )
         return
     if not bitstream or not os.path.isfile(bitstream):
         ctx.logger.error(f"bitstream .bit file not found: {bitstream}")
@@ -185,7 +180,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx.logger.info(f"Detected multi-FPGA P2E case: {build_dir}")
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = log_dir(
-        bbdir, chip, "p2e", timestamp, "p2e", image_name, input_data.get("vsrc_dir")
+        bbdir,
+        design,
+        "p2e",
+        timestamp,
+        "p2e",
+        image_name,
+        input_data.get("vsrc_dir"),
+        selection=input_data["target"],
     )
     os.makedirs(run_log, exist_ok=True)
     runtime_lib_dir = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm")
@@ -209,18 +211,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    manifest = os.path.join(
-        bbdir, "examples", "chips", chip, "generated", "bebop", "Cargo.toml"
-    )
-    build_env = {**os.environ, **bebop_cargo_env(bbdir, chip), "OUT_PATH": build_dir}
-    if diff:
-        build_env["CARGO_TARGET_DIR"] = os.path.join(
-            bebop_dir, "target", f"{chip}-p2e-diff"
-        )
+    manifest = str(runner_manifest(bbdir, design, input_data["target"]))
+    build_env = {**os.environ, "OUT_PATH": build_dir}
     reuse_runtime = input_data.get("reuse-runtime", False)
     if reuse_runtime:
-        validate_runtime_reuse(bitstream, diff, bool(input_data.get("itrace", False)), bool(input_data.get("mtrace", False)))
-        ctx.logger.info(f"Reusing selected P2E runtime without rebuilding: {bebop_p2e_path}")
+        validate_runtime_reuse(
+            bitstream,
+            diff,
+            bool(input_data.get("itrace", False)),
+            bool(input_data.get("mtrace", False)),
+        )
+        ctx.logger.info(
+            f"Reusing selected P2E runtime without rebuilding: {bebop_p2e_path}"
+        )
     else:
         modes = trace_modes(bitstream)
         features = ["p2e"]
@@ -239,8 +242,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "--keep-env-var",
                 "ALL_PROXY",
                 "--keep-env-var",
-                "CARGO_TARGET_DIR",
-                "--keep-env-var",
                 "OUT_PATH",
                 "-c",
                 "cargo",
@@ -248,8 +249,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "--release",
                 "--manifest-path",
                 manifest,
+                "--target-dir",
+                bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
                 "--bin",
-                "bebop",
+                "bebop-p2e",
                 "--features",
                 ",".join(features),
             ]
@@ -272,16 +275,50 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 trace_id=origin_tid,
             )
             return
-        target_release = os.path.join(build_env["CARGO_TARGET_DIR"], "release")
+        target_release = os.path.join(
+            bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
+            "release",
+        )
         staged_runtime = f"{bebop_p2e_path}.new"
-        shutil.copy2(os.path.join(target_release, "bebop"), staged_runtime)
+        shutil.copy2(os.path.join(target_release, "bebop-p2e"), staged_runtime)
         os.replace(staged_runtime, bebop_p2e_path)
-    run_args = ["nix", "develop", "-c", "env", "-u", "LD_LIBRARY_PATH", bebop_p2e_path,
-                "run", "p2e", "--bitstream", bitstream, "--log-dir", run_log,
-                "--fpga-location", fpga_location]
-    run_args += ["--load-manifest", manifest_path] if manifest_path else ["--image", image_path]
+        rust_library = Path(target_release) / "deps/libbebop_p2e.so"
+        shutil.copy2(rust_library, Path(runtime_lib_dir) / "libbebop_p2e.so")
+        design_libraries = Path(bbdir) / "examples/designs" / design / "output/lib"
+        design_libraries.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(rust_library, design_libraries / "libbebop_p2e.so")
+    installed_runtime = Path(
+        bebop_bin_path(bbdir, design, "p2e", selection=input_data["target"])
+    )
+    installed_runtime.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(bebop_p2e_path, installed_runtime)
+    run_args = [
+        "nix",
+        "develop",
+        "-c",
+        "env",
+        "-u",
+        "LD_LIBRARY_PATH",
+        bebop_p2e_path,
+        "--bitstream",
+        bitstream,
+        "--log-dir",
+        run_log,
+        "--fpga-location",
+        fpga_location,
+    ]
+    run_args += ["--image", image_path]
     run_cmd = f"cd {shlex.quote(bbdir)} && {shlex.join(run_args)}"
-    report_context = source_context(bbdir, chip)
+    report_context = source_context(bbdir, design)
+    with open(bitstream, "rb") as source:
+        report_context["provenance"]["bitstream_sha256"] = hashlib.file_digest(
+            source, "sha256"
+        ).hexdigest()
+    with open(image_path, "rb") as source:
+        report_context["provenance"]["executable_sha256"] = hashlib.file_digest(
+            source, "sha256"
+        ).hexdigest()
+
     if multi_fpga:
         run_cmd += " --multi-fpga"
     if wave:
@@ -305,9 +342,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     uart_logs = sorted(Path(run_log).glob("uart_hart_*.log"))
     try:
-        report_path = performance_report(bbdir, report_context, origin_tid, "p2e", run_log, "\n".join(path.read_text() for path in uart_logs), run_result.returncode)
+        report_path = performance_report(
+            bbdir,
+            report_context,
+            origin_tid,
+            "p2e",
+            run_log,
+            "\n".join(path.read_text() for path in uart_logs),
+            run_result.returncode,
+        )
     except (OSError, ValueError, KeyError) as error:
-        await check_result(ctx, 1, extra_fields={"task": "report", "log_dir": run_log, "error": str(error)}, trace_id=origin_tid)
+        await check_result(
+            ctx,
+            1,
+            extra_fields={"task": "report", "log_dir": run_log, "error": str(error)},
+            trace_id=origin_tid,
+        )
         return
     await check_result(
         ctx,
@@ -317,7 +367,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "runworkload",
             "report_path": report_path,
             "image": image_path,
-            "load_manifest": manifest_path or None,
             "bitstream": bitstream,
             "build_dir": build_dir,
             "log_dir": run_log,

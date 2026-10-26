@@ -1,0 +1,6 @@
+add_buckyball_ctest(quant_f32_to_i8_test.c)
+add_buckyball_ctest(quant_i32_to_i8_test.c)
+add_buckyball_ctest(toint8_i8_rounding_test.c)
+add_buckyball_ctest(toint8_i8_rows_test.c)
+add_buckyball_ctest(toint8_i8_scale_rows_test.c)
+add_buckyball_ctest(toint8_i8_signed_test.c)

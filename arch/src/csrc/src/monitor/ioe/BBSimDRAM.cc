@@ -97,10 +97,12 @@ static void load_elf_to_mem(const char *path, uint8_t *data, uint64_t mem_base,
   fflush(stdout);
 }
 
-extern "C" void *
-bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
-                  long long int line_size, long long int id_bits,
-                  long long int clock_hz, long long int mem_base) {
+extern "C" void *bbsim_memory_init(int device_id, long long int mem_size,
+                                   long long int word_size,
+                                   long long int line_size,
+                                   long long int id_bits,
+                                   long long int clock_hz,
+                                   long long int mem_base) {
   mm_t *mm;
   s_vpi_vlog_info info;
 
@@ -125,11 +127,11 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
     abort();
   }
 
-  while (chip_id >= (int)mem_data.size())
+  while (device_id >= (int)mem_data.size())
     mem_data.push_back(std::map<long long int, backing_data_t>());
 
-  if (mem_data[chip_id].find(mem_base) != mem_data[chip_id].end()) {
-    assert(mem_data[chip_id][mem_base].size == (size_t)mem_size);
+  if (mem_data[device_id].find(mem_base) != mem_data[device_id].end()) {
+    assert(mem_data[device_id][mem_base].size == (size_t)mem_size);
   } else {
     uint8_t *data = (uint8_t *)mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
                                     MAP_SHARED | MAP_ANONYMOUS, -1, 0);
@@ -143,13 +145,13 @@ bbsim_memory_init(int chip_id, long long int mem_size, long long int word_size,
       load_elf_to_mem(elf_file.c_str(), data, (uint64_t)mem_base,
                       (uint64_t)mem_size);
 
-    mem_data[chip_id][mem_base] = {data, (size_t)mem_size};
+    mem_data[device_id][mem_base] = {data, (size_t)mem_size};
   }
 
   // External AXI memory is always modeled by DRAMSim3.  Internal SRAMs are
   // modeled separately by the generated Verilog memory models.
   mm = (mm_t *)(new mm_dramsim3_t(
-      mem_base, mem_size, word_size, line_size, mem_data[chip_id][mem_base],
+      mem_base, mem_size, word_size, line_size, mem_data[device_id][mem_base],
       memory_ini, local_ini_dir, dramsim_outdir, 1 << id_bits, clock_hz));
 
   channels.push_back(mm);

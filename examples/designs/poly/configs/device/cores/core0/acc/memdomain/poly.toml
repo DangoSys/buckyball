@@ -1,0 +1,20 @@
+[bank]
+layoutEnable = true
+num = 4
+width = 128
+entries = 1024
+maskLen = 16
+requestPorts = 3
+
+[dma]
+busWidth = 128
+
+[mmio]
+enable = false
+bankNum = 1
+bankEntries = 1
+bankWidth = 128
+readWidth = 8
+
+[mem]
+addrLen = 39

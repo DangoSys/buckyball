@@ -1,0 +1,71 @@
+[model]
+manifest = "src/csrc/Cargo.toml"
+library = "libant_ref"
+
+[[tests]]
+functional_groups = []
+name = "ant"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = []
+name = "control"
+top = "control_tb"
+test = "protocol_test"
+filelist = "control.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = []
+name = "service"
+top = "service_tb"
+test = "protocol_test"
+filelist = "service.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+functional_groups = []
+name = "tls"
+top = "tls_tb"
+test = "protocol_test"
+filelist = "tls.f"
+timeout_ns = 100000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["tiles[0].dut", "tiles[1].dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

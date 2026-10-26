@@ -2,7 +2,9 @@
 #define _BB_MVOUT_H_
 
 #include "isa.h"
+#if defined(__linux__)
 #include <dma.h>
+#endif
 
 #define BB_MVOUT_FUNC7 16
 

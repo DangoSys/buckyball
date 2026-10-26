@@ -9,7 +9,7 @@ makefile_dir := $(patsubst %/,%,$(dir $(makefile_path)))
 chipyard_dir := $(abspath $(makefile_dir)/../../../../../../../arch/thirdparty/chipyard)
 
 # These point at the main class of the target's Chisel generator
-DESIGN_PACKAGE ?= firechip.chip
+DESIGN_PACKAGE ?= firechip.design
 DESIGN ?= FireSim
 
 # Override to use our custom config package

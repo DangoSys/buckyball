@@ -8,8 +8,15 @@ from common import submit, err, fmt, need, opt
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_bebop_p2e_clean(chip: str) -> str:
+    def bbdev_bebop_p2e_clean(
+        design: str, device: bool = False, core: str | None = None
+    ) -> str:
         """Clean bebop-p2e build. POST /bebop/p2e/clean."""
-        if e := need("chip", chip):
+        if e := need("design", design):
             return err(e)
-        return fmt(submit("/bebop/p2e/clean", {"chip": chip}))
+        request = {"design": design}
+        if device:
+            request["device"] = True
+        if core is not None:
+            request["core"] = core
+        return fmt(submit("/bebop/p2e/clean", request))

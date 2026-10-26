@@ -1,0 +1,14 @@
+diffTest = false
+
+[memory]
+lineBytes = 64
+clockHz = 1000000000
+
+[targets.device]
+config = "examples.designs.multirocket.sims.device.DeviceConfig"
+stack_name = "multi-rocket"
+regression = "sims/device/regression"
+kernel = "sims/device/workloads/kernel"
+
+[verification]
+registry = "../../sims/ip/uvm/registry.toml"

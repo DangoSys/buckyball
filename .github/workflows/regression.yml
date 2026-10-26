@@ -63,26 +63,26 @@ jobs:
           nix develop -c bbdev config --install
 
   eval-area-power:
-    name: eval-area-power-${{ matrix.chip }}
+    name: eval-area-power-${{ matrix.design }}
     needs: gate
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
         include:
-          - chip: toy
+          - design: toy
             run_area: true
             run_power: false
-          - chip: pebble
+          - design: pebble
             run_area: true
             run_power: false
-          - chip: goban
+          - design: goban
             run_area: true
             run_power: false
-          - chip: poly
+          - design: poly
             run_area: true
             run_power: false
-          - chip: multi-rocket
+          - design: multi-rocket
             run_area: true
             run_power: false
     env:
@@ -111,7 +111,7 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev dc --area '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev dc --area '--design ${{ matrix.design }} --device'
 
       - name: DC power
         if: matrix.run_power
@@ -123,7 +123,7 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev dc --power '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev dc --power '--design ${{ matrix.design }} --device'
 
       - name: Exit repo lock
         if: always() && (matrix.run_area || matrix.run_power)
@@ -135,22 +135,22 @@ jobs:
             exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
   verification:
-    name: verification-${{ matrix.chip }}
+    name: verification-${{ matrix.design }}
     needs: gate
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
         include:
-          - chip: toy
+          - design: toy
             run_uvm: true
-          - chip: pebble
+          - design: pebble
             run_uvm: true
-          - chip: goban
+          - design: goban
             run_uvm: true
-          - chip: poly
+          - design: poly
             run_uvm: true
-          - chip: multi-rocket
+          - design: multi-rocket
             run_uvm: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -168,7 +168,7 @@ jobs:
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
-      - name: Chip UVM
+      - name: Design UVM
         if: matrix.run_uvm
         shell: zsh {0}
         run: |
@@ -178,8 +178,8 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev bebop-verilator --verilog '--chip ${{ matrix.chip }}'
-          nix develop -c bbdev uvm --run '--chip ${{ matrix.chip }}'
+          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev uvm --run '--design ${{ matrix.design }} --device'
 
       - name: Exit repo lock
         if: always() && matrix.run_uvm
@@ -191,7 +191,7 @@ jobs:
             exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
   fpga-bitstream:
-    name: fpga-bitstream-${{ matrix.chip }}
+    name: fpga-bitstream-${{ matrix.design }}
     needs: gate
     runs-on: check
     timeout-minutes: 720
@@ -199,15 +199,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - chip: toy
+          - design: toy
             build_bitstream: true
-          - chip: pebble
+          - design: pebble
             build_bitstream: true
-          - chip: goban
+          - design: goban
             build_bitstream: true
-          - chip: poly
+          - design: poly
             build_bitstream: true
-          - chip: multi-rocket
+          - design: multi-rocket
             build_bitstream: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -231,14 +231,14 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          for build_dir in "${root}"/bebop/build/"${{ matrix.chip }}"-*(N); do
+          for build_dir in "${root}"/bebop/build/"${{ matrix.design }}"-*(N); do
             rm -rf "${build_dir}"
           done
-          nix develop -c bbdev bebop-p2e --verilog '--chip ${{ matrix.chip }} --diff'
-          nix develop -c bbdev bebop-p2e --buildbitstream '--chip ${{ matrix.chip }} --diff'
-          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          nix develop -c bbdev bebop-p2e --verilog '--design ${{ matrix.design }} --device --diff'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--design ${{ matrix.design }} --device --diff'
+          bits=("${root}"/bebop/build/"${{ matrix.design }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
-            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.design }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
@@ -254,26 +254,26 @@ jobs:
             exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
   fpga-check:
-    name: fpga-check-${{ matrix.chip }}
+    name: fpga-check-${{ matrix.design }}
     needs: fpga-bitstream
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
         include:
-          - chip: toy
+          - design: toy
             run_fpga_bare: true
             run_fpga_linux: true
-          - chip: pebble
+          - design: pebble
             run_fpga_bare: true
             run_fpga_linux: true
-          - chip: goban
+          - design: goban
             run_fpga_bare: true
             run_fpga_linux: false
-          - chip: poly
+          - design: poly
             run_fpga_bare: true
             run_fpga_linux: false
-          - chip: multi-rocket
+          - design: multi-rocket
             run_fpga_bare: true
             run_fpga_linux: false
     env:
@@ -298,23 +298,23 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          bits=("${root}"/bebop/build/"${{ matrix.design }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
-            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.design }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
 
           if [[ "${{ matrix.run_fpga_bare }}" == "true" ]]; then
-            nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev workload --build "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev workload --tohex "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test bare-tests --diff"
+            nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device"
+            nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device"
+            nix develop -c bbdev workload --tohex "--design ${{ matrix.design }} --device"
+            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --test bare-tests --diff"
           fi
 
           if [[ "${{ matrix.run_fpga_linux }}" == "true" ]]; then
-            nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }}"
-            nix develop -c bbdev bebop-p2e --batch "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --test linux-tests --diff"
+            nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device"
+            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --test linux-tests --diff"
           fi
 
       - name: Exit repo lock
@@ -327,20 +327,20 @@ jobs:
             exit "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
   eval-performance:
-    name: eval-performance-${{ matrix.chip }}-${{ matrix.model }}
+    name: eval-performance-${{ matrix.design }}-${{ matrix.model }}
     needs: fpga-bitstream
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
         include:
-          - chip: pebble
+          - design: pebble
             model: lenet
-          - chip: pebble
+          - design: pebble
             model: mobilenet
-          # - chip: pebble
+          # - design: pebble
           #   model: resnet
-          # - chip: pebble
+          # - design: pebble
           #   model: yolo
     env:
       BB_ROOT: ~/Code/buckyball
@@ -366,9 +366,9 @@ jobs:
             echo "ERROR: eval-performance requires a real model, got model=none" >&2
             exit 1
           fi
-          nix develop -c bbdev compiler --build "--chip ${{ matrix.chip }}"
-          nix develop -c bbdev workload --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
-          nix develop -c bbdev kernel --build "--chip ${{ matrix.chip }} --model ${{ matrix.model }}"
+          nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device"
+          nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device --model ${{ matrix.model }}"
+          nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device --model ${{ matrix.model }}"
 
       - name: Model performance
         shell: zsh {0}
@@ -376,13 +376,13 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          bits=("${root}"/bebop/build/"${{ matrix.chip }}"-*/fpgaCompDir/bitstream.bit(N))
+          bits=("${root}"/bebop/build/"${{ matrix.design }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
-            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.chip }}, got ${#bits}" >&2
+            echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.design }}, got ${#bits}" >&2
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev bebop-p2e --runworkload "--chip ${{ matrix.chip }} --bitstream ${bits[1]} --model ${{ matrix.model }}"
+          nix develop -c bbdev bebop-p2e --runworkload "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --model ${{ matrix.model }}"
 
       - name: Exit repo lock
         if: always()

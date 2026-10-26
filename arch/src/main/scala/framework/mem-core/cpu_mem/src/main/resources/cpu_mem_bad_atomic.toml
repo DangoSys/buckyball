@@ -1,1 +1,0 @@
-expected_assertion = "CPU memory port does not accept Fence or unknown atomics"

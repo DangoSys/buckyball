@@ -1,0 +1,42 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %mod = arith.constant 31 : index
+  %rows = arith.constant @BB_BANK_LINES@ : index
+  %lanes = arith.constant @BB_BANK_I8_LANES@ : index
+  %ratio = arith.constant 1.0 : f32
+  %a = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %b = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %out = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  scf.for %row = %zero to %rows step %one {
+    scf.for %lane = %zero to %lanes step %one {
+      %row_mod = arith.remui %row, %mod : index
+      %r = arith.index_cast %row_mod : index to i32
+      %l = arith.index_cast %lane : index to i32
+      %a32 = arith.subi %l, %r : i32
+      %b32 = arith.subi %r, %l : i32
+      %a8 = arith.trunci %a32 : i32 to i8
+      %b8 = arith.trunci %b32 : i32 to i8
+      memref.store %a8, %a[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+      memref.store %b8, %b[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+    }
+  }
+  %a_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %out_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %a_loaded = buckyball.bank_mvin %a, %a_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %b_loaded = buckyball.bank_mvin %b, %b_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %result = buckyball.bank_custom "add_i8" (%a_loaded, %b_loaded) -> %out_bank args(%ratio, %ratio : f32, f32) {rows = @BB_BANK_LINES@ : i64, relu = false}
+  %stored = buckyball.bank_mvout %out, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  buckyball.bank_release %a_loaded
+  buckyball.bank_release %b_loaded
+  buckyball.bank_release %stored
+  func.call @check_result(%out) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+  memref.dealloc %a : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %b : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  memref.dealloc %out : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  return %zero_i8 : i8
+}

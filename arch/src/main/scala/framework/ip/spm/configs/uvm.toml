@@ -1,0 +1,6 @@
+[parameters]
+base = "4096"
+bytes = 256
+dataBits = 128
+
+[defines]

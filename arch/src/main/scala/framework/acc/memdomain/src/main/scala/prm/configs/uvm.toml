@@ -1,0 +1,27 @@
+[parameters]
+diffTest = false
+
+[parameters.memory]
+sharedPorts = 0
+bankNum = 2
+bankLayoutEnable = false
+bankWidth = 128
+bankEntries = 8
+bankMaskLen = 16
+virtualBankCount = 4
+sharedEnable = false
+sharedEntries = 0
+sharedBankEntries = 0
+sharedBankNum = 0
+sharedInputChannels = 0
+sharedDefaultGroupCount = 0
+bankRequestPorts = 1
+dma_buswidth = 128
+memAddrLen = 44
+mmioEnable = false
+mmioBankNum = 0
+mmioBankEntries = 0
+mmioBankWidth = 0
+mmioReadWidth = 0
+
+[defines]

@@ -1,0 +1,13 @@
+syntax = "proto3";
+package buckyball.balls.vector;
+option java_package = "buckyball.balls.vector";
+option java_multiple_files = true;
+
+message Params {
+  optional int32 InputNum = 1;
+  optional int32 inputWidth = 2;
+  optional int32 lane = 3;
+  optional int32 outputWidth = 4;
+  optional int32 numMulThreads = 5;
+  optional int32 numCasThreads = 6;
+}

@@ -1,0 +1,10 @@
+[parameters]
+addressBits = 44
+lineBytes = 64
+sets = 4
+ways = 2
+idBits = 8
+metadataBits = 4
+responseDepth = 2
+
+[defines]

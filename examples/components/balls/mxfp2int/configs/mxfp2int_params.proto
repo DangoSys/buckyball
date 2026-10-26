@@ -1,0 +1,8 @@
+syntax = "proto3";
+package buckyball.balls.mxfp2int;
+option java_package = "buckyball.balls.mxfp2int";
+option java_multiple_files = true;
+
+message Params {
+  optional string mxfpFormat = 1;
+}

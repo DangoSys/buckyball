@@ -1,4 +1,0 @@
-# Toy: a main tile only.
-
-[main_tile]
-include = "tiles/default.toml"

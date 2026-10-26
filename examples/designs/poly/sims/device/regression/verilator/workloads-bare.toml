@@ -1,0 +1,19 @@
+[workloads]
+tests = [
+  "poly-main-ctest-design-ant_mesh_move-multicore-baremetal",
+  "poly-main-ctest-design-ant_mesh_private-multicore-baremetal",
+  "poly-main-ctest-design-ant_mesh_shared-multicore-baremetal",
+  "poly-main-ctest-f32add_groups-baremetal",
+  "poly-main-ctest-corelink_lease-baremetal",
+  "poly-main-ctest-design-controllers-multicore-baremetal",
+  "poly-main-ctest-design-ant_mxmm-multicore-baremetal",
+  "poly-main-ctest-design-ant_shared-multicore-baremetal",
+  "poly-main-ctest-design-ant_bank_rows-multicore-baremetal",
+  "poly-main-ctest-design-ant_parallel-multicore-baremetal",
+  "poly-main-ctest-design-ant_bank-multicore-baremetal",
+  "poly-main-ctest-design-ant_highpa-multicore-baremetal",
+  "poly-main-ctest-design-ant_corelink-multicore-baremetal",
+  "poly-main-ctest-design-ant_corelink_bank-multicore-baremetal",
+  "poly-main-ctest-design-ant_corelink_reduce-multicore-baremetal",
+  "poly-main-ctest-design-ant_coherence-multicore-baremetal",
+]

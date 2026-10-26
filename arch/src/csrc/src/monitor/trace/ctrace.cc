@@ -162,3 +162,27 @@ extern "C" void dpi_backdoor_put_write_done(unsigned int bank_id,
     fflush(ctrace_fp);
   }
 }
+
+// RTL calls this when a Ball instruction writes a bank: logs the bank hash
+extern "C" void dpi_btrace(unsigned int inst_id_lo, unsigned int inst_id_hi,
+                           unsigned int thread_id_lo, unsigned int thread_id_hi,
+                           unsigned int owner_thread_id_lo,
+                           unsigned int owner_thread_id_hi,
+                           unsigned int w0_vbank, unsigned int w0_hash) {
+  if (!bdb_trace_on(BDB_TR_BANKTRACE)) {
+    return;
+  }
+  init_ctrace();
+  if (ctrace_fp) {
+    fprintf(ctrace_fp,
+            "{\"type\":\"banktrace\",\"clk\":%llu,\"event\":\"btrace\","
+            "\"inst_id\":%llu,\"thread_id\":%llu,\"owner_thread_id\":%llu,"
+            "\"vbank\":%u,\"hash\":\"0x%08X\"}\n",
+            (unsigned long long)bdb_rtl_clk,
+            ((unsigned long long)inst_id_hi << 32) | inst_id_lo,
+            ((unsigned long long)thread_id_hi << 32) | thread_id_lo,
+            ((unsigned long long)owner_thread_id_hi << 32) | owner_thread_id_lo,
+            w0_vbank, w0_hash);
+    fflush(ctrace_fp);
+  }
+}

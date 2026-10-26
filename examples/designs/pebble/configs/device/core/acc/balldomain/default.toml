@@ -1,0 +1,102 @@
+[[balls]]
+id = 0
+name = "TransposeBall"
+component = "transpose"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "TRANSPOSE", funct7 = 49 },
+]
+
+[[balls]]
+id = 1
+name = "SMatMulBall"
+component = "smatmul"
+param = "balls/smatmul/8x16.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SMATMUL_OS", funct7 = 65 },
+  { mnemonic = "SMATMUL_BIAS", funct7 = 17 },
+]
+
+[[balls]]
+id = 2
+name = "Im2colBall"
+component = "im2col"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "IM2COL", funct7 = 48 },
+]
+
+[[balls]]
+id = 3
+name = "ToInt8Ball"
+component = "toint8"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 51 },
+  { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
+]
+
+[[balls]]
+id = 4
+name = "Int2FpBall"
+component = "int2fp"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT32_TO_FP32", funct7 = 68 },
+]
+
+[[balls]]
+id = 5
+name = "LutBall"
+component = "lut"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "LUT", funct7 = 66 },
+]
+
+[[balls]]
+id = 6
+name = "MaxPoolBall"
+component = "maxpool"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MAXPOOL", funct7 = 50 },
+]
+
+[[balls]]
+id = 7
+name = "Int8AddBall"
+component = "int8add"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT8ADD", funct7 = 69 },
+  { mnemonic = "INT8ADD_RELU", funct7 = 70 },
+]
+
+[[balls]]
+id = 8
+name = "Int8MulBall"
+component = "int8mul"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT8MUL", funct7 = 71 },
+]
+
+[[balls]]
+id = 9
+name = "MatAddBall"
+component = "matadd"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MATADD", funct7 = 72 },
+]

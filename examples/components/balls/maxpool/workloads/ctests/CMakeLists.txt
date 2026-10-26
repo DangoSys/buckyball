@@ -1,0 +1,2 @@
+add_buckyball_ctest(maxpool_window_test.c)
+add_buckyball_ctest(maxpool_offset_test.c)

@@ -1,0 +1,46 @@
+# Linux programs installed into the toy rootfs, each with the hart it runs on.
+set(BUCKYBALL_KERNEL_PROGRAMS
+  0 toy-toy-ctest-redmule_f16_test-linux
+  0 toy-toy-ctest-redmule_f16_chain_test-linux
+  0 toy-toy-ctest-redmule_f16_edges_test-linux
+  0 toy-toy-ctest-redmule_f16_fused_test-linux
+  0 toy-toy-mlirtest-ball_redmule_f16_chain-linux
+  0 toy-toy-mlirtest-bank_redmule_f16_rows-linux
+  0 toy-toy-mlirtest-base_dma_group-linux
+  0 toy-toy-mlirtest-base_mset_transfer-linux
+  0 toy-toy-ctest-mvin_mvout_group_test-linux
+  0 toy-toy-ctest-mset_transfer_test-linux
+  0 toy-toy-ctest-rvv_ball-linux
+  0 toy-toy-ctest-rvv_kernel-linux
+  0 toy-toy-ctest-gemmini_accumulated_16x16_test-linux
+  0 toy-toy-mlirtest-ball_gemmini_accumulated_command_16x16-linux
+  0 toy-toy-mlirtest-bank_gemmini_conv_tail-linux
+  0 toy-toy-mlirtest-bank_gemmini_conv_direct_weight-linux
+  0 toy-toy-mlirtest-bank_gemmini_conv_round-linux
+  0 toy-toy-ctest-mvin_2d_test-linux
+  0 toy-toy-ctest-mvin_mvout_acc_test-linux
+  0 toy-toy-ctest-mvin_mvout_test-linux
+  0 toy-toy-ctest-mvin_mvout_stride_test-linux
+  0 toy-toy-ctest-mvin_mvout_unaligned_test-linux
+  0 toy-toy-ctest-mvin_unaligned_test-linux
+  0 toy-toy-ctest-bdb_counter_start_stop_test-linux
+  0 toy-toy-ctest-bdb_counter_read_active_test-linux
+  0 toy-toy-ctest-bdb_counter_nested_pair_test-linux
+  0 toy-toy-ctest-bdb_counter_multi_id_test-linux
+  0 toy-toy-mlirtest-ball_bdb_counter_start_read_stop-linux
+  0 toy-toy-ctest-gemmini_os_cisc_basic_test-linux
+  0 toy-toy-ctest-gemmini_os_cisc_atranspose_test-linux
+  0 toy-toy-ctest-gemmini_os_cisc_btranspose_test-linux
+  0 toy-toy-ctest-gemmini_os_cisc_shift_test-linux
+  0 toy-toy-ctest-gemmini_os_risc_atranspose_test-linux
+  0 toy-toy-ctest-gemmini_os_risc_btranspose_test-linux
+  0 toy-toy-ctest-gemmini_os_risc_abtranspose_test-linux
+  0 toy-toy-ctest-gemmini_os_risc_shift_test-linux
+  0 toy-toy-ctest-gemmini_ws_cisc_conv_test-linux
+  0 toy-toy-ctest-gemmini_ws_risc_basic_test-linux
+  0 toy-toy-ctest-relu_i32_16x16_test-linux
+  0 toy-toy-mlirtest-ball_relu_i32_16row-linux
+  0 toy-toy-mlirtest-bank_relu_i32_mixed_sign-linux
+  0 toy-toy-mlirtest-bank_gemmini_compute_preloaded_bank_tiles-linux
+  0 toy-toy-mlirtest-bank_gemmini_compute_accumulated_bank_tiles-linux
+  PARENT_SCOPE)

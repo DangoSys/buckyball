@@ -1,0 +1,5 @@
+base = 0xc000000
+bytes = 0x4000000
+sources = 1
+priorityBits = 3
+hartIds = [0, 1, 2, 3, 4, 5, 6, 7, 8]

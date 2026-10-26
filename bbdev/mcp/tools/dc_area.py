@@ -9,8 +9,18 @@ from common import err, fmt, opt, submit
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_dc_area(chip: Optional[str] = None, top: Optional[str] = None) -> str:
+    def bbdev_dc_area(
+        design: Optional[str] = None,
+        top: Optional[str] = None,
+        device: bool = False,
+        core: str | None = None,
+    ) -> str:
         """Run DC synthesis and area reporting. Defaults to DigitalTop."""
-        if not chip:
-            return err("chip is required")
-        return fmt(submit("/dc/area", opt({}, chip=chip, top=top)))
+        if not design:
+            return err("design is required")
+        request = opt({}, design=design, top=top)
+        if device:
+            request["device"] = True
+        if core is not None:
+            request["core"] = core
+        return fmt(submit("/dc/area", request))

@@ -1,0 +1,6 @@
+add_buckyball_ctest(int2fp_tensor_values_test.c)
+add_buckyball_ctest(int2fp_tensor_groups_test.c)
+add_buckyball_ctest(int2fp_tensor_rows_test.c)
+add_buckyball_ctest(int2fp_channel_lanes_test.c)
+add_buckyball_ctest(int2fp_channel_base_test.c)
+add_buckyball_ctest(int2fp_channel_two_rows_test.c)

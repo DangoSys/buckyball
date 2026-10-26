@@ -50,7 +50,8 @@ in
     '';
   };
 
-  # RISC-V Linux toolchain: inject static libc -L only for gcc/g++. Wrapping ar/nm/…
+  # RISC-V Linux toolchain: inject static libc -L only for gcc/g++ linking with
+  # -static; shared objects (models) link the shared glibc. Wrapping ar/nm/…
   # breaks Kbuild/busybox (ar must not see linker -L flags).
   riscv-linux-gcc = let
     cc = pkgs.pkgsCross.riscv64.stdenv.cc;
@@ -63,7 +64,8 @@ in
       case "$name" in
         riscv64-unknown-linux-gnu-gcc|riscv64-unknown-linux-gnu-g++|riscv64-unknown-linux-gnu-c++)
           echo '#!${pkgs.stdenv.shell}' > $out/bin/$name
-          echo 'exec "'"$f"'" -L${libcStatic}/lib "$@"' >> $out/bin/$name
+          echo 'case " $* " in *" -static "*) exec "'"$f"'" -L${libcStatic}/lib "$@" ;; esac' >> $out/bin/$name
+          echo 'exec "'"$f"'" "$@"' >> $out/bin/$name
           chmod +x $out/bin/$name
           ;;
         *)

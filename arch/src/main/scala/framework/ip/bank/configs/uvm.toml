@@ -1,0 +1,7 @@
+[parameters]
+dataBits = 32
+banks = 4
+entriesPerBank = 16
+tagBits = 8
+
+[defines]

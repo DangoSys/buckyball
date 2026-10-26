@@ -10,7 +10,7 @@ from common import err, fmt, opt, submit
 def register(mcp):
     @mcp.tool()
     def bbdev_dc_power(
-        chip: Optional[str] = None,
+        design: Optional[str] = None,
         top: Optional[str] = None,
         activity: Optional[str] = None,
         activity_format: Optional[str] = None,
@@ -18,29 +18,36 @@ def register(mcp):
         workload: Optional[str] = None,
         start_ns: Optional[str] = None,
         end_ns: Optional[str] = None,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
-        """Run DC synthesis, chip-owned activity simulation, and PrimeTime PX.
+        """Run DC synthesis, design-owned activity simulation, and PrimeTime PX.
 
         Omit activity/activity_format for the normal rerun-and-measure flow.
         Supply both only as a debugging override.
         """
-        if not chip:
-            return err("chip is required")
+        if not design:
+            return err("design is required")
         if bool(activity) != bool(activity_format):
             return err("activity and activity_format must be provided together")
+        request = opt(
+            {},
+            design=design,
+            top=top,
+            activity=activity,
+            format=activity_format,
+            strip_path=strip_path,
+            workload=workload,
+            start_ns=start_ns,
+            end_ns=end_ns,
+        )
+        if device:
+            request["device"] = True
+        if core is not None:
+            request["core"] = core
         return fmt(
             submit(
                 "/dc/power",
-                opt(
-                    {},
-                    chip=chip,
-                    top=top,
-                    activity=activity,
-                    format=activity_format,
-                    strip_path=strip_path,
-                    workload=workload,
-                    start_ns=start_ns,
-                    end_ns=end_ns,
-                ),
+                request,
             )
         )

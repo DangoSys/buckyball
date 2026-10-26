@@ -1,7 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_chip
-
+from utils.event_common import require_design, require_target
 
 config = {
     "name": "vcs-verilog-api",
@@ -13,10 +12,8 @@ config = {
 
 
 def _request_data(body: dict) -> dict:
-    chip = require_chip(body)
-    data = {"chip": chip}
-    if body.get("output_dir"):
-        data["output_dir"] = body["output_dir"]
+    design = require_design(body)
+    data = {"design": design, "target": require_target(body)}
     return data
 
 
@@ -25,5 +22,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         data = _request_data(req.body or {})
     except ValueError as exc:
         return ApiResponse(status=400, body={"error": str(exc)})
-    await ctx.enqueue({"topic": "vcs.verilog", "data": {**data, "_trace_id": ctx.trace_id}})
+    await ctx.enqueue(
+        {"topic": "vcs.verilog", "data": {**data, "_trace_id": ctx.trace_id}}
+    )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

@@ -1,0 +1,60 @@
+component = "goban"
+implementation = "rocket.toml"
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "memory/goban.toml"
+dmaCache = "memory/dma-cache/shared.toml"
+tbus = "tbus/default.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "interconnect/goban.toml"
+c2c = "c2c/goban.toml"
+controller = "controller/goban.toml"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+enable = true
+entries = 16384
+inputChannels = 52
+defaultGroupCount = 1
+virtualBankCount = 64
+memCycles = 10
+bankEntries = 1024
+bankWidth = 128
+
+[tss]
+base = 0x20000
+bytes = 0x4000
+dataBits = 128
+
+[[threads]]
+id = 0
+name = "matmul0"
+component = "matmul"
+include = "../../../../../components/threads/matmul/configs/default.toml"
+
+[[threads]]
+id = 1
+name = "matmul1"
+component = "matmul"
+include = "../../../../../components/threads/matmul/configs/default.toml"
+
+[[threads]]
+id = 2
+name = "matmul2"
+component = "matmul"
+include = "../../../../../components/threads/matmul/configs/default.toml"
+
+[[threads]]
+id = 3
+name = "matmul3"
+component = "matmul"
+include = "../../../../../components/threads/matmul/configs/default.toml"

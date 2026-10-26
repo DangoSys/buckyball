@@ -1,0 +1,5 @@
+uncached = "default"
+icache = "icache/shared.toml"
+access = "access/goban.toml"
+dcache = "dcache/goban.toml"
+home = "home/goban.toml"

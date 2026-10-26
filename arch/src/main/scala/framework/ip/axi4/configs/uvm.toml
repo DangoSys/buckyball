@@ -1,0 +1,17 @@
+[parameters]
+addressBits = 32
+dataBits = 64
+idBits = 3
+masters = 3
+slots = 2
+
+[[parameters.regions]]
+base="4096"
+bytes="256"
+[[parameters.regions]]
+base="8192"
+bytes="512"
+[[parameters.regions]]
+base="12288"
+bytes="1024"
+[defines]

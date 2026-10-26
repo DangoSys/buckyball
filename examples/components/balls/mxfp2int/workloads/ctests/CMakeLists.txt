@@ -1,0 +1,1 @@
+add_buckyball_ctest(mxfp4_e8m0_two_block_test.c)

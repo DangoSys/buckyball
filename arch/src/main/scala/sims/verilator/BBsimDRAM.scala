@@ -1,48 +1,49 @@
 package sims.verilator
 
+import _root_.configs.GlobalConfig
+
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.experimental.IntParam
 import chisel3.util.HasBlackBoxInline
-import memcore.bus.axi4.{Params => AxiParams, Port => AxiPort}
+import framework.ip.bus.axi4.{Params => AxiParams, Port => AxiPort}
 
 @instantiable
-class BBSimDRAM(
-  memSize:     BigInt,
-  lineSize:    Int,
-  clockFreqHz: BigInt,
-  memBase:     BigInt,
-  params:      AxiParams,
-  chipId:      Int)
+class BBSimDRAM(b: GlobalConfig, deviceId: Int)
     extends BlackBox(
       Map(
-        "MEM_SIZE"  -> IntParam(memSize),
-        "LINE_SIZE" -> IntParam(lineSize),
-        "ADDR_BITS" -> IntParam(params.addressBits),
-        "DATA_BITS" -> IntParam(params.dataBits),
-        "ID_BITS"   -> IntParam(params.idBits),
-        "CLOCK_HZ"  -> IntParam(clockFreqHz),
-        "MEM_BASE"  -> IntParam(memBase),
-        "CHIP_ID"   -> IntParam(chipId)
+        "MEM_SIZE"  -> IntParam(b.device.ddr.bytes),
+        "LINE_SIZE" -> IntParam(b.sim.memory.lineBytes),
+        "ADDR_BITS" -> IntParam(b.device.ddr.axi.addressBits),
+        "DATA_BITS" -> IntParam(b.device.ddr.axi.dataBits),
+        "ID_BITS"   -> IntParam(b.device.ddr.axi.idBits),
+        "CLOCK_HZ"  -> IntParam(b.sim.memory.clockHz),
+        "MEM_BASE"  -> IntParam(b.device.ddr.base),
+        "DEVICE_ID" -> IntParam(deviceId)
       )
     )
     with HasBlackBoxInline {
+  val memSize     = b.device.ddr.bytes
+  val lineSize    = b.sim.memory.lineBytes
+  val clockFreqHz = b.sim.memory.clockHz
+  val memBase     = b.device.ddr.base
+  val axiParams   = b.device.ddr.axi
 
   @public
   val io = IO(new Bundle {
     val clock = Input(Clock())
     val reset = Input(Reset())
-    val axi   = Flipped(new AxiPort(params))
+    val axi   = Flipped(new AxiPort(b.device.ddr.axi))
   })
 
-  require(Set(64, 128).contains(params.dataBits), "BBSimDRAM supports 64 or 128 bit AXI beats")
+  require(Set(64, 128).contains(axiParams.dataBits), "BBSimDRAM supports 64 or 128 bit AXI beats")
 
   setInline(
     "BBSimDRAM.v",
     """
       |import "DPI-C" function chandle bbsim_memory_init
       |(
-      |  input int chip_id,
+      |  input int device_id,
       |  input longint mem_size,
       |  input longint word_size,
       |  input longint line_size,
@@ -98,7 +99,7 @@ class BBSimDRAM(
       |              CLOCK_HZ = 100000,
       |              STRB_BITS = DATA_BITS/8,
       |              MEM_BASE = 0,
-      |              CHIP_ID = 0)(
+      |              DEVICE_ID = 0)(
       |  input                  clock,
       |  input                  reset,
       |  output                 axi_aw_ready,
@@ -191,7 +192,7 @@ class BBSimDRAM(
       |
       |  always @(posedge clock) begin
       |    if (!initialized) begin
-      |      channel = bbsim_memory_init(CHIP_ID, MEM_SIZE, WORD_SIZE, LINE_SIZE, ID_BITS, CLOCK_HZ, MEM_BASE);
+      |      channel = bbsim_memory_init(DEVICE_ID, MEM_SIZE, WORD_SIZE, LINE_SIZE, ID_BITS, CLOCK_HZ, MEM_BASE);
       |      initialized = 1'b1;
       |    end
       |

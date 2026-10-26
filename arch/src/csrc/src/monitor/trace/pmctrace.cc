@@ -21,10 +21,12 @@ static void init_pmctrace() {
 // DPI-C function for Ball PMC trace
 // Called when a Ball completes a task, reports elapsed cycles
 extern "C" void dpi_pmctrace(unsigned int ball_id, unsigned int rob_id,
-                             unsigned long long elapsed) {
+                             unsigned int elapsed_lo, unsigned int elapsed_hi) {
   if (!bdb_trace_on(BDB_TR_PMCTRACE)) {
     return;
   }
+  const unsigned long long elapsed =
+      ((unsigned long long)elapsed_hi << 32) | elapsed_lo;
   init_pmctrace();
 
   if (pmctrace_fp) {

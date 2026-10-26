@@ -13,11 +13,12 @@ if step_dir not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
-from scripts.uvm_common import run_uvm
+from scripts.run import run_verification
+from scripts.ball import run_design
 
 config = {
     "name": "uvm-build",
-    "description": "Build a Ball UVM simulation",
+    "description": "Build a UVM simulation",
     "flows": ["uvm"],
     "triggers": [queue("uvm.build")],
     "enqueues": [],
@@ -29,16 +30,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
 
     try:
-        info = await asyncio.to_thread(
-            run_uvm,
-            bbdir,
-            input_data["chip"],
-            input_data.get("ball"),
-            input_data.get("ip"),
-            ctx,
-            False,
-            input_data.get("target"),
-        )
+        if input_data.get("ball") is not None:
+            info = await asyncio.to_thread(
+                run_design, bbdir, input_data["design"], input_data["ball"], ctx, False
+            )
+        else:
+            info = await asyncio.to_thread(
+                run_verification,
+                bbdir,
+                input_data.get("design"),
+                input_data.get("ip"),
+                ctx,
+                False,
+            )
     except Exception as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -52,7 +56,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     await check_result(
         ctx,
-        0,
+        1 if info.get("failures") else 0,
         continue_run=False,
         extra_fields={"task": "build", **info},
         trace_id=origin_tid,

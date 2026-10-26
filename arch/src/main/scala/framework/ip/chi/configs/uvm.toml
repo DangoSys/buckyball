@@ -1,0 +1,19 @@
+[parameters]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+linkFlitBits = 32
+credits = 4
+nodeId = 1
+homeId = 64
+records = 4
+banks = 2
+cacheLines = 8
+homeCount = 1
+lineResult = false
+probe = false
+sramSlots = 8
+sramLines = 256
+sramRxDepth = 4
+
+[defines]

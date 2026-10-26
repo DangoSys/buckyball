@@ -28,6 +28,9 @@
 #define TLB_SATP_MODE_BARE 0UL
 #define TLB_PMPCFG_NAPOT 0x18UL
 #define TLB_PMPCFG_RWX 0x07UL
+#define TLB_MSTATUS_MPRV (1UL << 17)
+#define TLB_MSTATUS_MPP (3UL << 11)
+#define TLB_MSTATUS_MPP_S (1UL << 11)
 
 #define TLB_DIM 16
 
@@ -116,10 +119,15 @@ static void tlb_enable_sv39(void) {
   tlb_fence_rw();
   asm volatile("csrw satp, %0" ::"r"(satp_val) : "memory");
   asm volatile("sfence.vma" ::: "memory");
+  uintptr_t status;
+  asm volatile("csrr %0, mstatus" : "=r"(status));
+  status = (status & ~TLB_MSTATUS_MPP) | TLB_MSTATUS_MPRV | TLB_MSTATUS_MPP_S;
+  asm volatile("csrw mstatus, %0" ::"r"(status) : "memory");
   tlb_fence_rw();
 }
 
 static void tlb_disable_vm(void) {
+  asm volatile("csrc mstatus, %0" ::"r"(TLB_MSTATUS_MPRV) : "memory");
   uint64_t satp_val = TLB_SATP_MODE_BARE << 60;
   tlb_fence_rw();
   asm volatile("csrw satp, %0" ::"r"(satp_val) : "memory");
@@ -160,8 +168,8 @@ static int tlb_finish(const char *name, int passed) {
 }
 
 static void tlb_select_hart(void) {
-#ifdef MULTICORE
-  multicore(MULTICORE);
+#ifdef MULTITHREAD
+  multithread(MULTITHREAD);
 #endif
 }
 

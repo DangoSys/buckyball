@@ -1,0 +1,9 @@
+[workspace]
+
+[package]
+name = "bebop-design-toy"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bebop-bemu = { path = "../../../../bebop/src/nodes/bemu" }

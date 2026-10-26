@@ -1,6 +1,7 @@
+from utils.event_common import require_target
+import os
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from utils.event_common import require_chip
-from utils.path import get_buckyball_path, rtl_dir
+from utils.event_common import require_design
 
 config = {
     "name": "bebop-verilator-batch-api",
@@ -12,13 +13,21 @@ config = {
 
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
-    bbdir = get_buckyball_path()
     body = request.body or {}
     try:
-        chip = require_chip(body)
+        selection = require_target(body, ("device",))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    try:
+        design = require_design(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
     diff = bool(body.get("diff", False))
+    junit = body.get("junit")
+    if junit is not None and (not isinstance(junit, str) or not os.path.isabs(junit)):
+        return ApiResponse(
+            status=400, body={"error": "junit must be an absolute file path"}
+        )
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
@@ -30,18 +39,22 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if test_type not in ("bare-tests", "linux-tests"):
         return ApiResponse(
             status=400,
-            body={"error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"},
+            body={
+                "error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"
+            },
         )
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", body.get("vsrc_dir"))
     data = {
-        "chip": chip,
-        "vsrc_dir": vsrc_dir,
+        "design": design,
         "test": test_type,
+        "junit": junit,
         "jobs": body.get("jobs", 1),
         "clean-before": body.get("clean-before", body.get("clean_before", False)),
         "diff": diff,
     }
     await ctx.enqueue(
-        {"topic": "bebop.verilator.batch", "data": {**data, "_trace_id": ctx.trace_id}}
+        {
+            "topic": "bebop.verilator.batch",
+            "data": {**data, "_trace_id": ctx.trace_id, "target": selection},
+        }
     )
     return ApiResponse(status=202, body={"trace_id": ctx.trace_id})

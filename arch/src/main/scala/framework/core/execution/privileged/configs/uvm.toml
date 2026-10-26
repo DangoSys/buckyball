@@ -1,0 +1,5 @@
+[parameters.permission]
+addressBits = 44
+entries = 16
+
+[defines]

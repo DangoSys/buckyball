@@ -10,7 +10,7 @@ def register(mcp):
     @mcp.tool()
     def bbdev_bebop_verilator_sim(
         binary: str,
-        chip: str,
+        design: str,
         itrace: bool = False,
         mtrace: bool = False,
         pmctrace: bool = False,
@@ -18,14 +18,16 @@ def register(mcp):
         banktrace: bool = False,
         no_wave: bool = False,
         diff: bool = False,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
         """Run one workload on bebop-verilator. POST /bebop/verilator/sim."""
-        for n, v in (("binary", binary), ("chip", chip)):
+        for n, v in (("binary", binary), ("design", design)):
             if e := need(n, v):
                 return err(e)
         params: Dict[str, Any] = {
             "binary": binary,
-            "chip": chip,
+            "design": design,
             "itrace": itrace,
             "mtrace": mtrace,
             "pmctrace": pmctrace,
@@ -34,4 +36,8 @@ def register(mcp):
             "no-wave": no_wave,
             "diff": diff,
         }
+        if device:
+            params["device"] = True
+        if core is not None:
+            params["core"] = core
         return fmt(submit("/bebop/verilator/sim", params))

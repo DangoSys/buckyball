@@ -1,3 +1,4 @@
+from utils.path import design_output_root
 import os
 import shutil
 import sys
@@ -9,8 +10,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, rtl_dir
-
+from utils.path import get_buckyball_path
 
 config = {
     "name": "vcs-clean",
@@ -24,9 +24,15 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
-    chip = input_data.get("chip")
-    build_dir = rtl_dir(bbdir, chip, "tapeout", input_data.get("output_dir"))
-    artifact_dir = os.path.join(build_dir, "vcs")
+    design = input_data.get("design")
+    artifact_dir = os.path.join(
+        design_output_root(bbdir, design, selection=input_data["target"]), "vcs"
+    )
     if os.path.isdir(artifact_dir):
         shutil.rmtree(artifact_dir)
-    await check_result(ctx, 0, extra_fields={"task": "clean", "artifact_dir": artifact_dir}, trace_id=origin_tid)
+    await check_result(
+        ctx,
+        0,
+        extra_fields={"task": "clean", "artifact_dir": artifact_dir},
+        trace_id=origin_tid,
+    )

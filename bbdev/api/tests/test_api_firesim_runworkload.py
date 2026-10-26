@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev firesim --runworkload '--chip toy'")
+run_bbdev_case("bbdev firesim --runworkload '--design toy'")

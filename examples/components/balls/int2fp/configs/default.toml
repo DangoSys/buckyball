@@ -1,0 +1,4 @@
+# Int2Fp Ball Configuration
+
+inputType = "INT32"
+outputType = "FP32"

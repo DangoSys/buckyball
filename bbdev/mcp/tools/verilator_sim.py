@@ -11,7 +11,7 @@ def register(mcp):
     @mcp.tool()
     def bbdev_verilator_sim(
         binary: str,
-        chip: str,
+        design: str,
         batch: bool = False,
         coverage: bool = False,
         no_wave: bool = False,
@@ -20,14 +20,16 @@ def register(mcp):
         pmctrace: bool = False,
         ctrace: bool = False,
         banktrace: bool = False,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
         """Run one workload on non-bebop Verilator. POST /verilator/sim."""
-        for n, v in (("binary", binary), ("chip", chip)):
+        for n, v in (("binary", binary), ("design", design)):
             if e := need(n, v):
                 return err(e)
         params: Dict[str, Any] = {
             "binary": binary,
-            "chip": chip,
+            "design": design,
             "batch": batch,
             "no-wave": no_wave,
             "itrace": itrace,
@@ -38,4 +40,8 @@ def register(mcp):
         }
         if coverage:
             params["coverage"] = True
+        if device:
+            params["device"] = True
+        if core is not None:
+            params["core"] = core
         return fmt(submit("/verilator/sim", params))

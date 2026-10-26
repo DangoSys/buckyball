@@ -1,8 +1,0 @@
-factory = "examples.cores.attention.AttentionCore"
-# Attention Core Configuration (default)
-
-balldomain = "balldomains/default.toml"
-memdomain = "memdomains/default.toml"
-frontend = "frontends/default.toml"
-rvv = "rvv/default.toml"
-cpu = "cpu/default.toml"

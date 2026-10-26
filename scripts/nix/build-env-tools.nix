@@ -30,6 +30,8 @@ let
       cp libdramsim3.so $out/lib/
       cp src/*.h ext/headers/*.h ext/headers/*.hpp $out/include/
       cp -r configs $out/share/dramsim3/
+      # VCS compiles these with the EDA host toolchain instead of linking the nix library.
+      cp -r src ext $out/share/dramsim3/
       runHook postInstall
     '';
   };
@@ -79,6 +81,7 @@ let
 in
 {
   verilator = pkgs.verilator;
+  espresso = pkgs.espresso;
 
   dramsim3 = dramsim3;
 

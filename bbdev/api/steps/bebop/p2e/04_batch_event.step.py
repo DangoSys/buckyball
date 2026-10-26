@@ -7,11 +7,15 @@ Runs bebop p2e batch regression (aligned with runworkload):
   3. Run the P2E regression harness serially on one FPGA
 """
 
+from utils.path import runner_manifest
+from pathlib import Path
+from utils.path import design_output_root
+
+
 import os
 import re
 import shlex
 import sys
-from pathlib import Path
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -20,7 +24,7 @@ if utils_path not in sys.path:
 bebop_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if bebop_path not in sys.path:
     sys.path.insert(0, bebop_path)
-from utils.path import bebop_cargo_env, get_buckyball_path, workloads_output_root
+from utils.path import bebop_target_dir, get_buckyball_path, workloads_output_root
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from utils.workload_manifest import resolve_workload_toml
@@ -69,23 +73,27 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    chip = input_data.get("chip")
-    if not chip:
-        ctx.logger.error("Missing required parameter: chip must be specified")
+    design = input_data.get("design")
+    if not design:
+        ctx.logger.error("Missing required parameter: design must be specified")
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
-    elf_root = workloads_output_root(bbdir)
-    cargo_env = bebop_cargo_env(bbdir, chip)
+    elf_root = str(
+        Path(design_output_root(bbdir, design, selection=input_data["target"]))
+        / "workloads"
+    )
     test_type = input_data.get("test", "bare-tests")
     diff = bool(input_data.get("diff", False))
     try:
-        workload_toml = resolve_workload_toml(chip, "p2e", test_type, bbdir, diff=diff)
+        workload_toml = resolve_workload_toml(
+            design, "p2e", test_type, bbdir, diff=diff, selection=input_data["target"]
+        )
     except ValueError as e:
         ctx.logger.error(str(e))
         await check_result(
@@ -95,7 +103,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "error": "invalid_regression",
                 "test": test_type,
-                "chip": chip,
+                "design": design,
             },
             trace_id=origin_tid,
         )
@@ -104,23 +112,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"Running {test_type} with workload config: {workload_toml} diff={diff}"
     )
     ctx.logger.info(f"P2E case dir (from bitstream): {build_dir}")
-    manifest = Path(bebop_dir) / "Cargo.toml"
+    manifest = runner_manifest(bbdir, design, input_data["target"])
     features = ["p2e"]
-    runtime_env = {**os.environ.copy(), **cargo_env}
+    runtime_env = os.environ.copy()
     if diff:
-        manifest = (
-            Path(bbdir)
-            / "examples"
-            / "chips"
-            / chip
-            / "generated"
-            / "bebop"
-            / "Cargo.toml"
-        )
         features.append("bemu")
-        runtime_env["CARGO_TARGET_DIR"] = os.path.join(
-            bebop_dir, "target", f"{chip}-p2e-diff"
-        )
     feature_arg = ",".join(features)
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(
@@ -144,7 +140,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     cargo_out = f'''--config="env.OUT_PATH='{build_dir}'"'''
-    build_cmd = f"nix develop -c cargo {cargo_out} build --release --manifest-path {shlex.quote(str(manifest))} --features {shlex.quote(feature_arg)} --tests"
+    build_cmd = (
+        f"nix develop -c cargo {cargo_out} build --release --target-dir"
+        f" {shlex.quote(bebop_target_dir(bbdir, design, 'p2e', selection=input_data['target']))}"
+        f" --manifest-path {shlex.quote(str(manifest))} --features"
+        f" {shlex.quote(feature_arg)} --tests"
+    )
     ctx.logger.info("Building bebop p2e (tests)...")
     build_result = await stream_run_logger_async(
         cmd=build_cmd,
@@ -179,7 +180,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if diff:
         harness_args.append("--diff")
     harness = shlex.join(harness_args)
-    test_cmd = f"nix develop -c cargo {cargo_out} test --release --manifest-path {shlex.quote(str(manifest))} --features {shlex.quote(feature_arg)} --test test_p2e {harness}"
+    test_cmd = (
+        f"nix develop -c cargo {cargo_out} test --release --target-dir"
+        f" {shlex.quote(bebop_target_dir(bbdir, design, 'p2e', selection=input_data['target']))}"
+        f" --manifest-path {shlex.quote(str(manifest))} --features"
+        f" {shlex.quote(feature_arg)} --test test_p2e {harness}"
+    )
     ctx.logger.info(f"Running bebop p2e regression: {test_cmd}")
     run_result = await stream_run_logger_async(
         cmd=test_cmd,
@@ -192,7 +198,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     extra_fields = {
         "task": "batch",
         "backend": "p2e",
-        "chip": chip,
+        "design": design,
         "bitstream": bitstream,
         "build_dir": build_dir,
         "test_type": test_type,

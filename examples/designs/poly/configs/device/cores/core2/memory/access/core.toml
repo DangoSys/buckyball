@@ -1,0 +1,52 @@
+translationEntries = 16
+accessTagBits = 6
+resultLineBits = 0
+[[regions]]
+base = 0x80000000
+bytes = 0x400000000
+cacheable = true
+executable = true
+readable = true
+writable = true
+atomic = true
+normal = true
+
+[[regions]]
+base = 0x10000
+bytes = 0x10000
+cacheable = true
+executable = true
+readable = true
+writable = false
+atomic = false
+normal = true
+
+[[regions]]
+base = 0x2000000
+bytes = 0x10000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false
+
+[[regions]]
+base = 0xc000000
+bytes = 0x4000000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false
+
+[[regions]]
+base = 0x60000000
+bytes = 0x10000000
+cacheable = false
+executable = false
+readable = true
+writable = true
+atomic = false
+normal = false

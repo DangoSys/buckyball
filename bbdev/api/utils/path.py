@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 
@@ -15,85 +16,131 @@ def get_buckyball_path():
     return root
 
 
-def _chip_name(chip):
-    if not isinstance(chip, str) or not chip or chip == "None":
-        raise ValueError("missing required parameter: chip")
-    if not re.fullmatch("[A-Za-z0-9_.-]+", chip):
-        raise ValueError(f"invalid chip name: {chip}")
-    return chip
+def _design_name(design):
+    if not isinstance(design, str) or not design or design == "None":
+        raise ValueError("missing required parameter: design")
+    if not re.fullmatch("[A-Za-z0-9_.-]+", design):
+        raise ValueError(f"invalid design name: {design}")
+    return design
 
 
-def chip_output_root(bbdir, chip):
-    chip = _chip_name(chip)
-    return os.path.join(bbdir, "bb-tests", "output", chip)
+def design_output_root(bbdir, design, *, selection):
+    design = _design_name(design)
+    return os.path.join(bbdir, "examples/designs", design, "output/sims", selection)
 
 
 def workloads_output_root(bbdir):
     return os.path.join(bbdir, "bb-tests", "output")
 
 
-def workload_build_dir(bbdir, chip):
-    chip = _chip_name(chip)
-    return os.path.join(bbdir, "bb-tests", "workloads", "build", chip)
+def workload_build_dir(bbdir, design, *, selection):
+    design = _design_name(design)
+    return os.path.join(
+        design_output_root(bbdir, design, selection=selection), "workloads-build"
+    )
 
 
-def workload_tests_root(bbdir, chip):
-    return os.path.join(chip_output_root(bbdir, chip), "workloads", "src")
+def workload_tests_root(bbdir, design, *, selection):
+    return os.path.join(
+        design_output_root(bbdir, design, selection=selection), "workloads", "src"
+    )
 
 
-def bebop_target_dir(bbdir, chip):
-    chip = _chip_name(chip)
-    return os.path.join(bbdir, "bebop", "target", chip)
+def bebop_target_dir(bbdir, design, backend, *, selection):
+    design = _design_name(design)
+    if backend not in {"bemu", "verilator", "p2e", "vcs"}:
+        raise ValueError(f"unknown Bebop backend: {backend}")
+    return os.path.join(
+        bbdir,
+        "examples",
+        "designs",
+        design,
+        "output",
+        "sims",
+        selection,
+        "emu",
+        backend,
+        "target",
+    )
 
 
-def bebop_cargo_env(bbdir, chip):
-    return {"CARGO_TARGET_DIR": bebop_target_dir(bbdir, chip)}
+def bebop_bin_path(bbdir, design, backend, *, selection):
+    design = _design_name(design)
+    if backend not in {"bemu", "verilator", "p2e", "vcs"}:
+        raise ValueError(f"unknown Bebop backend: {backend}")
+    return os.path.join(
+        bbdir,
+        "examples",
+        "designs",
+        design,
+        "output",
+        "sims",
+        selection,
+        "bin",
+        f"bebop-{backend}",
+    )
 
 
-def chip_arch_root(bbdir, chip):
-    return os.path.join(bbdir, "arch", "build", _chip_name(chip))
+def design_arch_root(bbdir, design, *, selection):
+    return os.path.join(
+        bbdir,
+        "examples/designs",
+        _design_name(design),
+        "output/sims",
+        selection,
+        "arch",
+    )
 
 
-def sim_name(bbdir, chip, product):
-    if product == "verilog" or product == "synth":
-        sim_key = "verilator"
-    elif product == "tapeout":
-        sim_key = "tapeout"
-    elif product == "p2e":
-        sim_key = "p2e"
-    elif product == "firesim":
-        sim_key = "firesim"
-    else:
-        raise ValueError(f"invalid rtl product: {product}")
+def load_design_config(bbdir, design):
+    sys.path.insert(0, str(Path(bbdir) / "bbdev/api/steps/config/scripts"))
+    import design_pb2
+
     path = (
         Path(bbdir)
-        / "examples"
-        / "chips"
-        / _chip_name(chip)
-        / "configs"
-        / "generated"
-        / "config"
-        / "config.json"
+        / "examples/designs"
+        / _design_name(design)
+        / "output/generated/design.pb"
     )
-    if not path.is_file():
-        raise ValueError(f"missing {path}; run bbdev config --install")
-    sims = json.loads(path.read_text(encoding="utf-8"))["sims"]
-    if sim_key not in sims:
-        raise ValueError(f"chip {chip!r} has no sims.{sim_key} in {path}")
-    name = sims[sim_key]
-    return name
+    return design_pb2.Design.FromString(path.read_bytes())
 
 
-def rtl_dir(bbdir, chip, product, output_dir=None):
-    if output_dir:
-        return output_dir
-    return os.path.join(chip_arch_root(bbdir, chip), sim_name(bbdir, chip, product))
+def simulation_target(bbdir, design, selection):
+    config = load_design_config(bbdir, design)
+    if selection not in config.simulations:
+        raise ValueError(
+            f"design {design!r} has no registered simulation entry {selection!r}"
+        )
+    return config.simulations[selection]
 
 
-def rtl_out(bbdir, chip, product, output_dir=None):
-    name = sim_name(bbdir, chip, product)
-    out = output_dir or os.path.join(chip_arch_root(bbdir, chip), name)
-    return (name, out)
+def runner_manifest(bbdir, design, selection):
+    """The simulation entry's emu crate: its model and the runners built from it."""
+    return Path(bbdir) / simulation_target(bbdir, design, selection).emu / "Cargo.toml"
+
+
+def design_resource_dir(bbdir, design, name, *, selection):
+    resources = simulation_target(bbdir, design, selection).resources
+    if name not in resources:
+        raise ValueError(f"{design}/{selection} has no registered {name} directory")
+    return Path(bbdir) / resources[name]
+
+
+def sim_name(bbdir, design, product, *, selection):
+    target = simulation_target(bbdir, design, selection)
+    return "P2ETop" if product == "p2e" else target.top
+
+
+def rtl_dir(bbdir, design, product, output_dir=None, *, selection):
+    name = sim_name(bbdir, design, product, selection=selection)
+    return output_dir or os.path.join(
+        design_arch_root(bbdir, design, selection=selection), name
+    )
+
+
+def rtl_out(bbdir, design, product, output_dir=None, *, selection):
+    name = sim_name(bbdir, design, product, selection=selection)
+    return name, rtl_dir(bbdir, design, product, output_dir, selection=selection)
 
 
 def _log_part(value, what):
@@ -106,9 +153,21 @@ def _log_part(value, what):
     return value
 
 
-def log_dir(bbdir, chip, product, stamp, tool, name, output_dir=None):
-    chip = _chip_name(chip)
+def log_dir(
+    bbdir, design, product, stamp, tool, name, output_dir=None, *, selection=None
+):
+    design = _design_name(design)
     stamp = _log_part(stamp, "timestamp")
     tool = _log_part(tool, "tool")
     name = _log_part(os.path.basename(name), "name")
-    return os.path.join(bbdir, "log", f"{stamp}-{chip}-{tool}-{name}")
+    if selection is not None:
+        name = _log_part(selection.replace("/", "-"), "target") + "-" + name
+    return os.path.join(bbdir, "log", f"{stamp}-{design}-{tool}-{name}")
+
+
+def run_log_dir(bbdir, run):
+    root = (Path(bbdir) / "log").resolve()
+    path = (root / _log_part(run, "run")).resolve()
+    if path.parent != root:
+        raise ValueError(f"run must name a directory under {root}: {run!r}")
+    return path

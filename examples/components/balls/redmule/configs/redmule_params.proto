@@ -1,0 +1,8 @@
+syntax = "proto3";
+package buckyball.balls.redmule;
+option java_package = "buckyball.balls.redmule";
+option java_multiple_files = true;
+
+message Params {
+  optional int32 lanes = 1;
+}

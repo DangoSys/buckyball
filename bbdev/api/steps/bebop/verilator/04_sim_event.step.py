@@ -4,6 +4,10 @@ bebop verilator event handler
 Run a guest ELF through Verilator.
 """
 
+from pathlib import Path
+from utils.path import design_output_root
+
+
 import json
 import os
 import shlex
@@ -18,13 +22,13 @@ if utils_path not in sys.path:
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import (
     bebop_target_dir,
+    bebop_bin_path,
     get_buckyball_path,
     log_dir,
     rtl_dir,
-    workloads_output_root,
 )
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
@@ -41,42 +45,47 @@ config = {
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
-    if "batch" in input_data:
-        raise ValueError("Unsupported parameter: batch")
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
             ctx,
             1,
             continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
     diff = bool(input_data.get("diff", False))
-    vsrc_dir = rtl_dir(bbdir, chip, "verilog", input_data.get("vsrc_dir"))
+    vsrc_dir = rtl_dir(
+        bbdir,
+        design,
+        "verilog",
+        selection=input_data["target"],
+    )
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     build_dir = bebop_dir
-    chip = input_data.get("chip")
+    design = input_data.get("design")
     if diff:
-        if not isinstance(chip, str) or not chip:
+        if not isinstance(design, str) or not design:
             ctx.logger.error(
-                "Missing required parameter: --chip (required with --diff)"
+                "Missing required parameter: --design (required with --diff)"
             )
             await check_result(
                 ctx,
                 1,
                 continue_run=False,
-                extra_fields={"error": "missing_chip"},
+                extra_fields={"error": "missing_design"},
                 trace_id=origin_tid,
             )
             return
-    bebop_bin = os.path.join(bebop_target_dir(bbdir, chip), "release", "bebop")
+    bebop_bin = bebop_bin_path(
+        bbdir, design, "verilator", selection=input_data["target"]
+    )
     if not os.path.isfile(bebop_bin):
         ctx.logger.error(f"bebop binary does not exist: {bebop_bin}")
         await check_result(
@@ -87,7 +96,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    target_dir = bebop_target_dir(bbdir, chip)
+    target_dir = bebop_target_dir(
+        bbdir, design, "verilator", selection=input_data["target"]
+    )
     marker_path = build_marker_path(target_dir)
     try:
         marker = read_build_marker(target_dir)
@@ -118,7 +129,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     expect_vsrc = os.path.abspath(vsrc_dir)
     expect_bin = os.path.abspath(bebop_bin)
     if (
-        marker.get("config") != chip
+        marker.get("config") != design
         or marker.get("vsrc_dir") != expect_vsrc
         or marker.get("binary") != expect_bin
         or (bool(marker.get("diff", False)) != diff)
@@ -142,11 +153,23 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     binary_name = input_data.get("binary", "")
     try:
-        binary_path = search_workload(workloads_output_root(bbdir), binary_name)
+        binary_path = search_workload(
+            str(
+                Path(design_output_root(bbdir, design, selection=input_data["target"]))
+                / "workloads"
+            ),
+            binary_name,
+        )
     except ValueError as error:
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "binary_resolution_error", "binary": binary_name, "message": str(error)},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "error": "binary_resolution_error",
+                "binary": binary_name,
+                "message": str(error),
+            },
             trace_id=origin_tid,
         )
         return
@@ -164,12 +187,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = log_dir(
         bbdir,
-        chip,
+        design,
         "verilog",
         timestamp,
         "verilator",
         binary_name,
-        input_data.get("vsrc_dir"),
+        selection=input_data["target"],
     )
     os.makedirs(run_log, exist_ok=True)
     wave_arg = (
@@ -181,18 +204,28 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     for trace_name in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace"):
         if input_data.get(trace_name, False):
             trace_args += f" --{trace_name}"
-    run_cmd = f"{shlex.quote(bebop_bin)} run verilator --elf={shlex.quote(binary_path)} --log-dir={shlex.quote(run_log)}{(' --diff' if diff else '')}{wave_arg}{trace_args}"
+    run_cmd = (
+        f"{shlex.quote(bebop_bin)} --elf={shlex.quote(binary_path)}"
+        f" --log-dir={shlex.quote(run_log)}{(' --diff' if diff else '')}{wave_arg}{trace_args}"
+    )
     if diff:
         dram_library = f"{bbdir}/result/lib/libdramsim3.so"
-        dram_rpath = subprocess.check_output(
-            ["patchelf", "--print-rpath", dram_library], text=True
-        ).strip().split(os.pathsep)
+        dram_rpath = (
+            subprocess.check_output(
+                ["patchelf", "--print-rpath", dram_library], text=True
+            )
+            .strip()
+            .split(os.pathsep)
+        )
         cpp_libraries = [
-            os.path.join(path, "libstdc++.so.6") for path in dram_rpath
+            os.path.join(path, "libstdc++.so.6")
+            for path in dram_rpath
             if os.path.isfile(os.path.join(path, "libstdc++.so.6"))
         ]
         if len(cpp_libraries) != 1:
-            raise ValueError(f"DRAMSim requires one C++ runtime in its RPATH: {dram_rpath}")
+            raise ValueError(
+                f"DRAMSim requires one C++ runtime in its RPATH: {dram_rpath}"
+            )
         preload = os.pathsep.join(
             (
                 path
@@ -212,7 +245,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"export LD_PRELOAD={shlex.quote(preload)} && "
             f"exec {run_cmd}"
         )
-        run_cmd = f"cd {shlex.quote(bbdir)} && nix develop -c sh -c {shlex.quote(run_inner)}"
+        run_cmd = (
+            f"cd {shlex.quote(bbdir)} && nix develop -c sh -c {shlex.quote(run_inner)}"
+        )
     ctx.logger.info(f"Running bebop verilator (diff={diff}): {run_cmd}")
     stdout_prefix = "bebop verilator difftest" if diff else "bebop verilator"
     stderr_prefix = stdout_prefix
@@ -231,7 +266,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "verilator",
             "backend": "guest-elf",
             "diff": diff,
-            "chip": chip,
+            "design": design,
             "binary": binary_path,
             "log_dir": run_log,
             "bank_diff": os.path.join(run_log, "diff.ndjson") if diff else None,

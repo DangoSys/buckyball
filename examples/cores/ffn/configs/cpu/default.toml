@@ -1,2 +1,0 @@
-kind = "ant"
-config = "../../../ant/configs/cpu/default.toml"

@@ -1,0 +1,8 @@
+ddr = "ddr/pebble.toml"
+bootrom = "default"
+clint = "default"
+plic = "default"
+scu = "default"
+
+[[cores]]
+include = "core/default.toml"

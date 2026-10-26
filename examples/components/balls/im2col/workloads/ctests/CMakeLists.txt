@@ -1,0 +1,8 @@
+add_buckyball_ctest(im2col_window_test.c)
+add_buckyball_ctest(im2col_k1_test.c)
+add_buckyball_ctest(im2col_k3_test.c)
+add_buckyball_ctest(im2col_k3_pad_test.c)
+add_buckyball_ctest(im2col_k3_asym_pad_test.c)
+add_buckyball_ctest(im2col_k3_partial_test.c)
+add_buckyball_ctest(im2col_k5_test.c)
+add_buckyball_ctest(im2col_k7_test.c)

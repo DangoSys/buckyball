@@ -1,4 +1,0 @@
-[workloads]
-tests = [
-  "fw_payload-h5-omni-linux.hex",
-]

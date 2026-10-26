@@ -1,6 +1,7 @@
+from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 
 config = {
     "name": "dc-verilog-api",
@@ -13,14 +14,19 @@ config = {
 
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
-    chip = require_chip(body)
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    design = require_design(body)
     await ctx.enqueue(
         {
             "topic": "dc.verilog",
             "data": {
-                "chip": chip,
+                "design": design,
                 "top": body.get("top") or "DigitalTop",
                 "_trace_id": ctx.trace_id,
+                "target": selection,
             },
         }
     )

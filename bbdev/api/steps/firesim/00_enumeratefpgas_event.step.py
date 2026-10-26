@@ -9,14 +9,14 @@ if utils_path not in sys.path:
 
 from utils.path import get_buckyball_path, sim_name
 from utils.stream_run import stream_run_logger_async
-from utils.event_common import check_result, get_origin_trace_id, require_chip
+from utils.event_common import check_result, get_origin_trace_id, require_design
 
 scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
 from firesim_env import setup_firesim_env
-from chip_yaml import firesim_cmd, prepare_yamls
+from design_yaml import firesim_cmd, prepare_yamls
 
 config = {
     "name": "firesim-enumeratefpgas",
@@ -32,9 +32,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
 
     try:
-        chip = require_chip(input_data)
-        target_config = sim_name(bbdir, chip, "firesim")
-        yaml_dir = prepare_yamls(bbdir, chip, target_config)
+        design = require_design(input_data)
+        target_config = sim_name(
+            bbdir, design, "firesim", selection=input_data["target"]
+        )
+        yaml_dir = prepare_yamls(bbdir, design, target_config)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
@@ -47,7 +49,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     env = setup_firesim_env()
-    ctx.logger.info(f"firesim enumeratefpgas chip={chip}")
+    ctx.logger.info(f"firesim enumeratefpgas design={design}")
     result = await stream_run_logger_async(
         cmd=firesim_cmd("enumeratefpgas", yaml_dir),
         logger=ctx.logger,
@@ -60,6 +62,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx,
         result.returncode,
         continue_run=False,
-        extra_fields={"chip": chip, "yaml_dir": yaml_dir},
+        extra_fields={"design": design, "yaml_dir": yaml_dir},
         trace_id=origin_tid,
     )

@@ -1,3 +1,4 @@
+from utils.event_common import require_target
 import os
 import sys
 
@@ -10,8 +11,8 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.path import get_buckyball_path
-from bemu_analysis import abs_log_dir, chip_maps
+from utils.path import get_buckyball_path, run_log_dir
+from bemu_analysis import design_maps
 
 config = {
     "name": "bebop-bemu-analysis-api",
@@ -20,6 +21,7 @@ config = {
     "triggers": [api("POST", "/bebop/bemu/analysis")],
     "enqueues": ["bebop.bemu.analysis"],
 }
+
 
 def _fail(message: str, status: int = 400) -> ApiResponse:
     return ApiResponse(
@@ -35,16 +37,20 @@ def _fail(message: str, status: int = 400) -> ApiResponse:
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    allowed = {"chip", "log-dir", "log_dir", "itrace", "mtrace"}
+    try:
+        selection = require_target(body, ("device", "core"))
+    except ValueError as error:
+        return ApiResponse(status=400, body={"error": str(error)})
+    allowed = {"device", "core", "design", "run", "itrace", "mtrace"}
     unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return _fail(f"unknown parameter(s): {', '.join(unknown)}")
 
-    chip = body.get("chip", "")
-    if not chip:
-        return _fail("chip parameter is required")
+    design = body.get("design", "")
+    if not design:
+        return _fail("design parameter is required")
     try:
-        chip_maps(get_buckyball_path(), chip)
+        design_maps(get_buckyball_path(), design)
     except ValueError as e:
         return _fail(str(e))
 
@@ -53,9 +59,8 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if not itrace and not mtrace:
         return _fail("need --itrace and/or --mtrace")
 
-    log_dir = body.get("log-dir", body.get("log_dir", ""))
     try:
-        log_dir = str(abs_log_dir(log_dir))
+        run_log_dir(get_buckyball_path(), body.get("run"))
     except ValueError as e:
         return _fail(str(e))
 
@@ -63,11 +68,12 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         {
             "topic": "bebop.bemu.analysis",
             "data": {
-                "chip": chip,
-                "log-dir": log_dir,
+                "design": design,
+                "run": body["run"],
                 "itrace": itrace,
                 "mtrace": mtrace,
                 "_trace_id": ctx.trace_id,
+                "target": selection,
             },
         }
     )

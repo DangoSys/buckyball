@@ -1,1 +1,0 @@
-add_buckyball_ctests(matadd_i32_16row_test.c)

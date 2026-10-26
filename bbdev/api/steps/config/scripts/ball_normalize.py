@@ -1,37 +1,45 @@
-"""Validate and copy external Ball mappings."""
+"""Validate Ball instances and their directly owned instructions."""
 
 from copy import deepcopy
 from typing import Any
 
 
-def normalize_ball_domain(core: dict[str, Any]) -> dict[str, Any] | None:
-    raw = core.get("balldomain")
+def normalize_ball_domain(thread: dict[str, Any]) -> dict[str, Any] | None:
+    raw = thread.get("balldomain")
     if raw is None:
         return None
-    if not isinstance(raw, dict):
-        raise ValueError("Ball domain must be a table")
     domain = deepcopy(raw)
-    mappings = domain.get("ballIdMappings")
-    isa = domain.get("ballISA")
-    if not isinstance(mappings, list) or not isinstance(isa, list):
-        raise ValueError("Ball domain requires ballIdMappings and ballISA lists")
-    if any(not isinstance(entry, dict) for entry in isa):
-        raise ValueError("Ball ISA entries must be tables")
-    if type(domain.get("ballNum")) is not int or domain["ballNum"] != len(mappings):
-        raise ValueError("ballNum must equal the number of mappings")
-    for index, mapping in enumerate(mappings):
-        if not isinstance(mapping, dict) or type(mapping.get("ballId")) is not int or mapping["ballId"] != index:
-            raise ValueError("Ball IDs must enumerate mappings without gaps or reordering")
-        if "builtin" in mapping:
-            raise ValueError("Ball mappings must select external Balls")
-        klass = mapping.get("ballClass")
-        config = mapping.get("config")
-        if not isinstance(klass, str) or not klass.startswith("examples.balls."):
-            raise ValueError("external Ball class must be under examples.balls")
-        if not isinstance(config, dict) or not isinstance(config.get("_file"), str) or not isinstance(config.get("ball"), dict):
-            raise ValueError("external Ball requires a resolved config with [ball] parameters")
-        if any(type(mapping.get(key)) is not int or mapping[key] <= 0 for key in ("inBW", "outBW")):
-            raise ValueError("external Ball inBW/outBW must be positive integers")
-    if any(entry.get("funct7") == 15 or entry.get("mnemonic") == "RUN_KERNEL" for entry in isa):
-        raise ValueError("RUN_KERNEL is a global control instruction, not a Ball instruction")
+    balls = domain["balls"]
+    ids, names, codes = set(), set(), set()
+    for ball in balls:
+        identity, name = ball["id"], ball["name"]
+        if type(identity) is not int or not 0 <= identity < 32 or identity in ids:
+            raise ValueError(f"Invalid or duplicate Ball ID: {identity}")
+        if name in names:
+            raise ValueError(f"Duplicate Ball instance name: {name}")
+        ids.add(identity)
+        names.add(name)
+        if not ball["component"].isidentifier():
+            raise ValueError(f"Invalid Ball component: {ball['component']}")
+        port = ball["port"]
+        if any(
+            type(port[key]) is not int or port[key] <= 0 for key in ("inBW", "outBW")
+        ):
+            raise ValueError(
+                "Ball input and output bandwidths must be positive integers"
+            )
+        if any(
+            type(port[key]) is not int or port[key] < 0
+            for key in ("mmioReadBW", "mmioWriteBW")
+        ):
+            raise ValueError("Ball MMIO bandwidths must be non-negative integers")
+        mnemonics = set()
+        for instruction in ball["instructions"]:
+            code, mnemonic = instruction["funct7"], instruction["mnemonic"]
+            if type(code) is not int or not 0 <= code < 128 or code in codes:
+                raise ValueError(f"Invalid or duplicate instruction encoding: {code}")
+            if mnemonic in mnemonics or code == 15 or mnemonic == "RUN_KERNEL":
+                raise ValueError(f"Invalid or duplicate Ball instruction: {mnemonic}")
+            codes.add(code)
+            mnemonics.add(mnemonic)
     return domain

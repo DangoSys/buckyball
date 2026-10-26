@@ -1,0 +1,14 @@
+[parameters]
+clients=2
+slotsPerClient=4
+dataBits=128
+idBits=4
+idBase=0
+base="2147483648"
+bytes="536870912"
+model="0"
+[parameters.line]
+nodeIdBits=7
+addressBits=44
+dataBits=256
+[defines]

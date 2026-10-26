@@ -7,19 +7,13 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-mill_dir = os.path.dirname(__file__)
-mill_scripts = os.path.join(mill_dir, "scripts")
-if mill_dir not in sys.path:
-    sys.path.insert(0, mill_dir)
-if mill_scripts not in sys.path:
-    sys.path.insert(0, mill_scripts)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import get_buckyball_path
 from utils.path import rtl_out
 from steps.bebop.p2e.scripts.timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
-import mill as mill_run
+from steps.mill.scripts.mill import elaborate_cmd
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -36,25 +30,29 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch = os.path.join(bbdir, "arch")
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "p2e", input_data.get("output_dir"),
+            bbdir,
+            design,
+            "p2e",
+            input_data.get("output_dir"),
+            selection=input_data["target"],
         )
         shutil.rmtree(build_dir, ignore_errors=True)
         os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         prefix = "bebop p2e verilog"
-        command = mill_run.elaborate_cmd("sims.p2e.Elaborate", mill_config, build_dir)
+        command = elaborate_cmd(design, input_data["target"], "p2e", build_dir)
         if input_data.get("diff"):
             command += " --difftest"
         returncode = (
             await stream_run_logger_async(
-            cmd=command,
-            logger=ctx.logger,
-            cwd=arch,
-            stdout_prefix=prefix,
-            stderr_prefix=prefix,
+                cmd=command,
+                logger=ctx.logger,
+                cwd=arch,
+                stdout_prefix=prefix,
+                stderr_prefix=prefix,
             )
         ).returncode
         if returncode == 0:
@@ -62,12 +60,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     except (ValueError, RuntimeError) as error:
         ctx.logger.error(str(error))
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_chip", "detail": str(error)},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "missing_design", "detail": str(error)},
             trace_id=origin_tid,
         )
         return
-    ctx.logger.info(f"Using P2E chip: {chip}")
+    ctx.logger.info(f"Using P2E design: {design}")
     ctx.logger.info(f"Using P2E output directory: {build_dir}")
 
     await check_result(
@@ -76,7 +76,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         continue_run=False,
         extra_fields={
             "task": "verilog",
-            "chip": chip,
+            "design": design,
             "output_dir": build_dir,
             "top_module": "P2ETop",
         },

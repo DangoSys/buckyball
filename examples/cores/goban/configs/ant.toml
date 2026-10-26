@@ -1,6 +1,0 @@
-factory = "examples.cores.goban.AntGobanCore"
-balldomain = "balldomains/default.toml"
-memdomain = "memdomains/default.toml"
-frontend = "frontends/default.toml"
-rvv = "rvv/default.toml"
-cpu = "cpu/ant.toml"

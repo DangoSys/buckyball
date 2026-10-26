@@ -1,0 +1,36 @@
+func.func private @check_result(memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %four = arith.constant 4 : index
+  %sixteen = arith.constant 16 : index
+  %rows = arith.constant @BB_QUANT_I32_OUTPUT_ROWS@ : index
+  %scale = arith.constant 1.0 : f32
+  %input = memref.alloc() : memref<@BB_BANK_LINES@x4xf32>
+  %output = memref.alloc() : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  scf.for %position = %zero to %rows step %one {
+    scf.for %channel = %zero to %sixteen step %one {
+      %base = arith.muli %position, %sixteen : index
+      %linear = arith.addi %base, %channel : index
+      %value_i32 = arith.index_cast %linear : index to i32
+      %value = arith.sitofp %value_i32 : i32 to f32
+      %row_base = arith.muli %position, %four : index
+      %channel_row = arith.divui %channel, %four : index
+      %row = arith.addi %row_base, %channel_row : index
+      %lane = arith.remui %channel, %four : index
+      memref.store %value, %input[%row, %lane] : memref<@BB_BANK_LINES@x4xf32>
+    }
+  }
+  %input_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %output_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %loaded_input = buckyball.bank_mvin %input, %input_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x4xf32>
+  %result = buckyball.bank_custom "fp32_to_int8" (%loaded_input) -> %output_bank args(%scale : f32) {rows = @BB_BANK_LINES@ : i64}
+  %stored = buckyball.bank_mvout %output, %result <{depth = @BB_QUANT_I32_OUTPUT_ROWS@ : i64, stride = 1 : i64}> : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  func.call @check_result(%output) : (memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
+  buckyball.bank_release %loaded_input
+  buckyball.bank_release %stored
+  memref.dealloc %input : memref<@BB_BANK_LINES@x4xf32>
+  memref.dealloc %output : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
+  return %zero_i8 : i8
+}

@@ -1,0 +1,6 @@
+[parameters]
+dataBits = 32
+inputs = 2
+
+[defines]
+AXIS_DATA_BITS = "dataBits"

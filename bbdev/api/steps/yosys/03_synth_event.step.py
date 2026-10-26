@@ -10,7 +10,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import rtl_dir, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
@@ -24,7 +24,9 @@ config = {
 }
 
 
-def dynamic_power_report(power_report: str, activity_source: str) -> tuple[str, float] | None:
+def dynamic_power_report(
+    power_report: str, activity_source: str
+) -> tuple[str, float] | None:
     """Return OpenSTA's internal-plus-switching power, excluding leakage."""
     match = re.search(
         r"^Total\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)\s+([0-9.eE+-]+)",
@@ -36,38 +38,53 @@ def dynamic_power_report(power_report: str, activity_source: str) -> tuple[str, 
     internal, switching, _leakage, _total = (float(value) for value in match.groups())
     dynamic = internal + switching
     return (
-        "OpenSTA dynamic power\n"
-        f"  Activity source: {activity_source}\n"
-        f"  Internal: {internal:.6e} W\n"
-        f"  Switching: {switching:.6e} W\n"
-        f"  Dynamic (internal + switching): {dynamic:.6e} W\n",
+        (
+            "OpenSTA dynamic power\n"
+            f"  Activity source: {activity_source}\n"
+            f"  Internal: {internal:.6e} W\n"
+            f"  Switching: {switching:.6e} W\n"
+            f"  Dynamic (internal + switching): {dynamic:.6e} W\n"
+        ),
         dynamic,
     )
 
 
 def load_yosys_config():
-    config_path = os.path.join(os.path.dirname(__file__), "scripts", "yosys-config.yaml")
+    config_path = os.path.join(
+        os.path.dirname(__file__), "scripts", "yosys-config.yaml"
+    )
     if os.path.exists(config_path):
         with open(config_path, "r") as f:
             config = yaml.safe_load(f) or {}
             # Keep paths portable between the Nix shell and explicit user
             # configurations while retaining normal YAML scalar values.
             if isinstance(config.get("liberty"), str):
-                config["liberty"] = os.path.expandvars(os.path.expanduser(config["liberty"]))
+                config["liberty"] = os.path.expandvars(
+                    os.path.expanduser(config["liberty"])
+                )
             if isinstance(config.get("vcd"), str) and config["vcd"]:
                 config["vcd"] = os.path.expandvars(os.path.expanduser(config["vcd"]))
             return config
     return {}
 
+
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     try:
-        chip = require_chip(input_data)
-        build_dir = rtl_dir(bbdir, chip, "synth", input_data.get("output_dir"))
+        design = require_design(input_data)
+        build_dir = rtl_dir(
+            bbdir,
+            design,
+            "synth",
+            input_data.get("output_dir"),
+            selection=input_data["target"],
+        )
     except ValueError as exc:
         await check_result(
-            ctx, 1, continue_run=False,
+            ctx,
+            1,
+            continue_run=False,
             extra_fields={"task": "synth", "error": str(exc)},
             trace_id=origin_tid,
         )
@@ -85,7 +102,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctx,
             1,
             continue_run=False,
-            extra_fields={"task": "synth", "error": "missing prepared yosys source list"},
+            extra_fields={
+                "task": "synth",
+                "error": "missing prepared yosys source list",
+            },
             trace_id=origin_tid,
         )
         return failure_result
@@ -104,8 +124,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return failure_result
 
     stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    yosys_output_dir = input_data.get("log_dir") or log_dir(
-        bbdir, chip, "synth", stamp, "yosys", top_module, input_data.get("output_dir"),
+    yosys_output_dir = input_data.get("analysis_dir") or log_dir(
+        bbdir,
+        design,
+        "synth",
+        stamp,
+        "yosys",
+        top_module,
+        input_data.get("output_dir"),
+        selection=input_data["target"],
     )
     os.makedirs(yosys_output_dir, exist_ok=True)
     ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
@@ -122,11 +149,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if liberty and os.path.exists(liberty):
             f.write(f"dfflibmap -liberty {liberty}\n")
             f.write(f"abc -liberty {liberty}\n")
-            f.write(f"tee -o {yosys_output_dir}/hierarchy_report.txt stat -liberty {liberty}\n")
+            f.write(
+                f"tee -o {yosys_output_dir}/hierarchy_report.txt stat -liberty"
+                f" {liberty}\n"
+            )
             f.write("flatten\n")
             f.write("opt\n")
             f.write(f"stat -liberty {liberty}\n")
-            f.write(f"tee -o {yosys_output_dir}/area_report.txt stat -liberty {liberty}\n")
+            f.write(
+                f"tee -o {yosys_output_dir}/area_report.txt stat -liberty {liberty}\n"
+            )
             f.write(f"write_verilog {yosys_output_dir}/synth_netlist.v\n")
         else:
             f.write(f"tee -o {yosys_output_dir}/hierarchy_report.txt stat\n")
@@ -154,7 +186,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     dynamic_power_report_file = f"{yosys_output_dir}/dynamic_power_report.txt"
     sta_returncode = 0
 
-    if liberty and os.path.exists(liberty) and os.path.exists(netlist_file) and result.returncode == 0:
+    if (
+        liberty
+        and os.path.exists(liberty)
+        and os.path.exists(netlist_file)
+        and result.returncode == 0
+    ):
         clock_period = yosys_cfg.get("clock_period", 10.0)
         clock_name = yosys_cfg.get("clock_name", "clock")
         vcd = input_data.get("vcd") or yosys_cfg.get("vcd")
@@ -182,10 +219,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             # naming convention.  Some small modules are combinational and
             # therefore have no clock at all.
             f.write(f"set bb_clock_port [get_ports -quiet {clock_name}]\n")
-            f.write("if {[llength $bb_clock_port] == 0} { set bb_clock_port [get_ports -quiet *clk*] }\n")
-            f.write(f"if {{[llength $bb_clock_port] > 0}} {{ create_clock $bb_clock_port -name clk -period {clock_period} }}\n")
-            f.write(f"report_checks -path_delay max -format full > {timing_report_file}\n")
-            f.write(f"report_checks -path_delay max -format full\n")
+            f.write(
+                "if {[llength $bb_clock_port] == 0} { set bb_clock_port [get_ports"
+                " -quiet *clk*] }\n"
+            )
+            f.write(
+                "if {[llength $bb_clock_port] > 0} { create_clock $bb_clock_port"
+                f" -name clk -period {clock_period} }}\n"
+            )
+            f.write(
+                f"report_checks -path_delay max -format full > {timing_report_file}\n"
+            )
+            f.write("report_checks -path_delay max -format full\n")
             if vcd and os.path.exists(vcd):
                 f.write(f"read_vcd {vcd} -scope {top_module}\n")
                 extra["power_activity_source"] = vcd
@@ -194,11 +239,17 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 input_duty = yosys_cfg.get("input_duty", 0.5)
                 clock_activity = yosys_cfg.get("clock_activity", 1.0)
                 clock_duty = yosys_cfg.get("clock_duty", 0.5)
-                f.write(f"set_power_activity -input -activity {input_activity} -duty {input_duty}\n")
+                f.write(
+                    f"set_power_activity -input -activity {input_activity} -duty"
+                    f" {input_duty}\n"
+                )
                 # OpenSTA expects the clock collection after ``-clock``.
                 # Applying the default rate to all clocks keeps this usable
                 # for generated designs whose clock port is renamed.
-                f.write(f"if {{[llength [all_clocks]] > 0}} {{ set_power_activity -clock [all_clocks] -activity {clock_activity} -duty {clock_duty} }}\n")
+                f.write(
+                    "if {[llength [all_clocks]] > 0} { set_power_activity -clock"
+                    f" [all_clocks] -activity {clock_activity} -duty {clock_duty} }}\n"
+                )
                 extra["power_activity_source"] = "default"
             f.write(f"report_power -digits 4 > {power_report_file}\n")
             f.write("exit\n")

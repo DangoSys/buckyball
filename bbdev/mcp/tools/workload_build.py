@@ -9,18 +9,24 @@ def register(mcp):
 
     @mcp.tool()
     def bbdev_workload_build(
-        chip: str,
+        design: str,
         ctest: bool = False,
         mlirtest: bool = False,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
-        """Build workloads for a chip. POST /workload/build."""
-        if e := need("chip", chip):
+        """Build workloads for a design. POST /workload/build."""
+        if e := need("design", design):
             return err(e)
-        params: Dict[str, Any] = {"chip": chip}
+        params: Dict[str, Any] = {"design": design}
         if ctest and mlirtest:
             return err("ctest and mlirtest cannot be used together")
         if ctest:
             params["ctest"] = True
         if mlirtest:
             params["mlirtest"] = True
+        if device:
+            params["device"] = True
+        if core is not None:
+            params["core"] = core
         return fmt(submit("/workload/build", params))

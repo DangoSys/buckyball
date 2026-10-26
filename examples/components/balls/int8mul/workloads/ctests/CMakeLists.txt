@@ -1,0 +1,2 @@
+add_buckyball_ctest(int8mul_per_channel_gate_test.c)
+add_buckyball_ctest(int8mul_large_gate_row_test.c)

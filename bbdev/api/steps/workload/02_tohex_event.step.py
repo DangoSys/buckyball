@@ -9,14 +9,14 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path, workload_tests_root
 from utils.stream_run import stream_run_logger_async
 
 config = {
     "name": "workload-tohex",
-    "description": "convert all -baremetal ELF files under chip workload output to hex",
+    "description": "convert all -baremetal ELF files under design workload output to hex",
     "flows": ["workload"],
     "triggers": [queue("workload.tohex")],
     "enqueues": [],
@@ -27,18 +27,22 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
     except ValueError as error:
         ctx.logger.error(str(error))
         await check_result(
-            ctx, 1, continue_run=False,
-            extra_fields={"error": "missing_chip"},
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={"error": "missing_design"},
             trace_id=origin_tid,
         )
         return
 
     script = f"{bbdir}/bbdev/api/steps/workload/scripts/elf2hex.py"
-    search_root = Path(workload_tests_root(bbdir, chip))
+    search_root = Path(
+        workload_tests_root(bbdir, design, selection=input_data["target"])
+    )
 
     ctx.logger.info("Search root", {"path": str(search_root)})
 

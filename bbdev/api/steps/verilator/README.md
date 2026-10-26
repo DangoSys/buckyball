@@ -26,10 +26,10 @@ must be run with `bebop-verilator` instead.
 **Example**:
 ```bash
 # bbdev wrapper
-bbdev verilator --run "--chip toy --jobs 16 --binary toy-toy-ctest-mvin_mvout_test-baremetal --batch"
+bbdev verilator --run "--design toy --jobs 16 --binary toy-toy-ctest-mvin_mvout_test-baremetal --batch"
 
 # Raw command
-curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"chip":"toy", "jobs":8, "binary":"toy-toy-ctest-mvin_mvout_test-baremetal", "batch":true}'
+curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"design":"toy", "jobs":8, "binary":"toy-toy-ctest-mvin_mvout_test-baremetal", "batch":true}'
 ```
 
 

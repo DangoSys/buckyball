@@ -1,0 +1,57 @@
+[parameters]
+diffTest = false
+
+[parameters.frontend]
+ownerId = 7
+commandDataBits = 64
+rob_entries = 4
+bank_alias_enable = true
+rs_out_of_order_response = true
+bank_id_len = 4
+vbank_id_upper_bound = 3
+shared_bank_id_base = 16
+iter_len = 16
+sub_rob_enable = false
+sub_rob_depth = 4
+
+[parameters.memory]
+sharedPorts = 0
+bankNum = 2
+bankLayoutEnable = true
+bankWidth = 128
+bankEntries = 8
+bankMaskLen = 16
+virtualBankCount = 4
+sharedEnable = false
+sharedEntries = 0
+sharedBankEntries = 0
+sharedBankNum = 0
+sharedInputChannels = 0
+sharedDefaultGroupCount = 0
+bankRequestPorts = 1
+dma_buswidth = 128
+memAddrLen = 44
+mmioEnable = false
+mmioBankNum = 0
+mmioBankEntries = 0
+mmioBankWidth = 0
+mmioReadWidth = 0
+
+[parameters.permission]
+addressBits = 44
+entries = 16
+
+[parameters.gp]
+enable = false
+laneNumber = 1
+vLen = 128
+eLen = 64
+iBufWords = 16
+memoryPorts = 1
+
+[parameters.rob]
+entries = 4
+dataBits = 64
+retireWidth = 4
+
+[defines]

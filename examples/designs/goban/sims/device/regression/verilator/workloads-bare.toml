@@ -1,0 +1,7 @@
+[workloads]
+tests = [
+  "goban-matmul-ctest-design-matmul_threads-baremetal",
+  "goban-core0-soctest-clint_timer_interrupt-baremetal",
+  "goban-core0-soctest-clint_software_interrupt-baremetal",
+  "goban-core0-soctest-plic_register_access-baremetal",
+]

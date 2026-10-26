@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev bebop-p2e --clean '--chip toy'")
+run_bbdev_case("bbdev bebop-p2e --clean '--design toy'")

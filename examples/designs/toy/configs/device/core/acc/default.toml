@@ -1,0 +1,6 @@
+source = "../../../.."
+balldomain = "balldomain/default.toml"
+memdomain = "memdomain/toy.toml"
+frontend = "frontend/toy.toml"
+gpdomain = "gpdomain/toy.toml"
+transport = "default"

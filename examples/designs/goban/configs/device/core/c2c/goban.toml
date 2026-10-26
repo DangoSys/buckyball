@@ -1,0 +1,3 @@
+enabled = false
+peerCores = 1
+axi = "default"

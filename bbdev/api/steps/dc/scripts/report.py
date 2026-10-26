@@ -21,7 +21,11 @@ def area_report(context, trace_id, report_dir, contract):
         "status": "pass",
         "cell_um2": float(values[0]),
         "scope": contract.top_module,
-        "conditions": f"DC · {Path(contract.target_library).name} · SDC {hashlib.sha256(contract.constraints_sdc.read_bytes()).hexdigest()}",
+        "conditions": (
+            f"DC · {Path(contract.target_library).name} · library SHA256 "
+            f"{hashlib.sha256(Path(contract.target_library).read_bytes()).hexdigest()} · SDC "
+            f"{hashlib.sha256(contract.constraints_sdc.read_bytes()).hexdigest()}"
+        ),
         "constraints_met": "(VIOLATED)" not in constraints,
         "report_url": attachment(report, output, report_dir / "area.rpt", "area.rpt"),
         "constraints_report_url": attachment(

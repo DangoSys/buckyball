@@ -1,0 +1,20 @@
+[model]
+manifest = "src/csrc/Cargo.toml"
+library = "librvv_reference_model"
+
+[[tests]]
+functional_groups = []
+name = "topkernel"
+top = "topkernel_tb"
+test = "protocol_test"
+filelist = "topkernel.f"
+timeout_ns = 40000000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

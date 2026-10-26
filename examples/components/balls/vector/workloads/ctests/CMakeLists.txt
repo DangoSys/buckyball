@@ -1,0 +1,1 @@
+add_buckyball_ctest(vecmat16_atranspose_16x16_test.c)

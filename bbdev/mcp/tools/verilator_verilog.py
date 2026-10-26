@@ -7,8 +7,15 @@ from common import submit, err, fmt, need
 
 def register(mcp):
     @mcp.tool()
-    def bbdev_verilator_verilog(chip: str) -> str:
+    def bbdev_verilator_verilog(
+        design: str, device: bool = False, core: str | None = None
+    ) -> str:
         """Generate Verilog for non-bebop Verilator. POST /verilator/verilog."""
-        if e := need("chip", chip):
+        if e := need("design", design):
             return err(e)
-        return fmt(submit("/verilator/verilog", {"chip": chip}))
+        request = {"design": design}
+        if device:
+            request["device"] = True
+        if core is not None:
+            request["core"] = core
+        return fmt(submit("/verilator/verilog", request))

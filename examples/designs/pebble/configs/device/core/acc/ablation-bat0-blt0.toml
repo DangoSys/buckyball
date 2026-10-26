@@ -1,0 +1,8 @@
+source = "../../../.."
+# Pebble accelerator profile
+
+balldomain = "balldomain/default.toml"
+memdomain = "memdomain/blt-off.toml"
+frontend = "frontend/bat-off-rob24.toml"
+gpdomain = "default"
+transport = "default"

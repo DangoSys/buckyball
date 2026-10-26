@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Emit behavioral models for FIRRTL externalized sequential memories.
 
-These models are used only by gate-level activity simulation when a chip has
+These models are used only by gate-level activity simulation when a design has
 not yet supplied PDK SRAM macro simulation collateral.  They retain the
 external-memory interface from ``mems.conf`` so the DC netlist is simulated
 with functional memories rather than X-producing black boxes.
@@ -14,7 +14,9 @@ import re
 from pathlib import Path
 
 
-def write_masked(lines: list[str], *, addr: str, data: str, mask: str, width: int, gran: int) -> None:
+def write_masked(
+    lines: list[str], *, addr: str, data: str, mask: str, width: int, gran: int
+) -> None:
     lines.extend(
         [
             f"      for (int i = 0; i < {width // gran}; i++) begin",
@@ -39,8 +41,20 @@ def emit(name: str, depth: int, width: int, ports: str, mask_gran: int | None) -
             "    if (RW0_en) begin",
             "      if (RW0_wmode) begin",
         ]
-        write_masked(lines, addr="RW0_addr", data="RW0_wdata", mask="RW0_wmask", width=width, gran=mask_gran or width)
-        lines += ["      end", "      RW0_rdata <= memory[RW0_addr];", "    end", "  end"]
+        write_masked(
+            lines,
+            addr="RW0_addr",
+            data="RW0_wdata",
+            mask="RW0_wmask",
+            width=width,
+            gran=mask_gran or width,
+        )
+        lines += [
+            "      end",
+            "      RW0_rdata <= memory[RW0_addr];",
+            "    end",
+            "  end",
+        ]
     elif ports == "rw":
         lines += [
             "  input logic [$clog2(" + str(depth) + ")-1:0] RW0_addr,",
@@ -68,9 +82,21 @@ def emit(name: str, depth: int, width: int, ports: str, mask_gran: int | None) -
         ]
         if has_mask:
             lines.append(f"  input logic [{width // mask_gran - 1}:0] W0_mask")
-        lines += [");", f"  logic [{width - 1}:0] memory [0:{depth - 1}];", "  always @(posedge R0_clk) if (R0_en) R0_data <= memory[R0_addr];", "  always @(posedge W0_clk) if (W0_en) begin"]
+        lines += [
+            ");",
+            f"  logic [{width - 1}:0] memory [0:{depth - 1}];",
+            "  always @(posedge R0_clk) if (R0_en) R0_data <= memory[R0_addr];",
+            "  always @(posedge W0_clk) if (W0_en) begin",
+        ]
         if has_mask:
-            write_masked(lines, addr="W0_addr", data="W0_data", mask="W0_mask", width=width, gran=mask_gran or width)
+            write_masked(
+                lines,
+                addr="W0_addr",
+                data="W0_data",
+                mask="W0_mask",
+                width=width,
+                gran=mask_gran or width,
+            )
         else:
             lines.append("    memory[W0_addr] <= W0_data;")
         lines += ["  end"]
@@ -109,7 +135,9 @@ def main() -> int:
         )
     if not models:
         raise ValueError(f"no memories found in {args.mem_conf}")
-    args.output.write_text("`timescale 1ns/1ps\n\n" + "\n".join(models), encoding="utf-8")
+    args.output.write_text(
+        "`timescale 1ns/1ps\n\n" + "\n".join(models), encoding="utf-8"
+    )
     return 0
 
 

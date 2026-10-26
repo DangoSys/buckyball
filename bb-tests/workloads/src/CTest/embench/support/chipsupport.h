@@ -1,4 +1,4 @@
-/* Buckyball chip support header for Embench
+/* Buckyball design support header for Embench
 
    Adapted for Buckyball baremetal environment.
 
@@ -7,7 +7,7 @@
 #ifndef CHIPSUPPORT_H
 #define CHIPSUPPORT_H
 
-/* Chip initialization function */
-void initialise_chip(void);
+/* Design initialization function */
+void initialise_design(void);
 
 #endif /* CHIPSUPPORT_H */

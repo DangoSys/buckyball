@@ -151,7 +151,7 @@ typedef struct RESULTS_S {
   core_portable port;
 } core_results;
 
-/* Multicore execution handling */
+/* Multithread execution handling */
 #if (MULTITHREAD > 1)
 ee_u8 core_start_parallel(core_results *res);
 ee_u8 core_stop_parallel(core_results *res);

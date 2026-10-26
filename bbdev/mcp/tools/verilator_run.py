@@ -11,7 +11,7 @@ def register(mcp):
     @mcp.tool()
     def bbdev_verilator_run(
         binary: str,
-        chip: str,
+        design: str,
         batch: bool = False,
         coverage: bool = False,
         no_wave: bool = False,
@@ -21,15 +21,17 @@ def register(mcp):
         pmctrace: bool = False,
         ctrace: bool = False,
         banktrace: bool = False,
+        device: bool = False,
+        core: str | None = None,
     ) -> str:
         """Full non-bebop Verilator flow. POST /verilator/run."""
         if e := need("binary", binary):
             return err(e)
-        if e := need("chip", chip):
+        if e := need("design", design):
             return err(e)
         params: Dict[str, Any] = {
             "binary": binary,
-            "chip": chip,
+            "design": design,
             "batch": batch,
             "coverage": coverage,
             "no-wave": no_wave,
@@ -41,4 +43,8 @@ def register(mcp):
         }
         if jobs is not None:
             params["jobs"] = jobs
+        if device:
+            params["device"] = True
+        if core is not None:
+            params["core"] = core
         return fmt(submit("/verilator/run", params))

@@ -1,9 +1,0 @@
-[designs]
-include = "designs/toy.toml"
-
-[sims]
-verilator = "sims.verilator.ToyVerilatorTarget"
-
-[uvm]
-balls = ["gemmini"]
-ips = ["axis", "memdomain"]

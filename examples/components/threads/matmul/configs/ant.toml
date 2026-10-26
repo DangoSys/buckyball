@@ -1,0 +1,5 @@
+source = ".."
+balldomain = "balldomains/default.toml"
+memdomain = "memdomains/default.toml"
+frontend = "frontends/default.toml"
+gpdomain = "gpdomain/default.toml"

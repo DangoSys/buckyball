@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "fw_payload-h1-goban-linux.hex",
+]

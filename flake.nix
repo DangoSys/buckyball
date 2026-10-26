@@ -21,10 +21,12 @@
           };
 
           defaultShell = pkgs.mkShell {
+            nativeBuildInputs = [ pkgs.pkg-config ];
             # this is needed to build LLVM/libc++, disable the nix injected hardening
             hardeningDisable = [ "libcxxhardeningfast" ];
 
             buildInputs = with pkgs; [
+              SDL2
               clibs.zlib-dev
               clibs.zlib
               clibs.lz4-dev
@@ -43,13 +45,16 @@
               clibs.libdwarf
 
               compiler.flatbuffers
+              compiler.tomlplusplus
               compiler.numactl
 
               rustTools.cargoNextest
 
-              # protoc for bbdev config --install (chip.proto -> chip.pb)
+              # protoc for bbdev config --install (design.proto -> design.pb)
               pkgs.protobuf
+              tools.espresso
               pkgs.zsh
+              pkgs.gersemi
 
               pkgs.xorg-server
               pkgs.jdk8
@@ -73,9 +78,6 @@
 
               # Verilator build acceleration: ccache via OBJCACHE
               export OBJCACHE=ccache
-
-              export CUDA_HOME="${pkgs.cuda.cudatoolkit}"
-              export CPATH="''${CUDA_HOME}/include''${CPATH:+:$CPATH}"
 
               export CC="${pkgs.systemTools.clang}/bin/clang"
               export CXX="${pkgs.systemTools.clang}/bin/clang++"
@@ -127,6 +129,7 @@
             name = "buckyball-environment";
             paths = with pkgs; [
               tools.verilator
+              tools.espresso
               tools.dramsim3
               tools.ccache
               tools.lld
@@ -147,6 +150,7 @@
               # python environment
               python.python3Packages
               pkgs."pre-commit"
+              pkgs.gersemi
               # clang-format for pre-commit (language: system)
               pkgs.clang-tools
               (pkgs.runCommand "clang-kernel" {} ''
@@ -173,6 +177,7 @@
               kernel.e2fsprogs
 
               # C libraries (headers + link libs)
+              pkgs.SDL2
               clibs.zlib-dev
               clibs.zlib
               clibs.lz4-dev
@@ -192,6 +197,7 @@
 
               # Compiler tools
               compiler.flatbuffers
+              compiler.tomlplusplus
               compiler.numactl
 
               # Scala tools
@@ -212,20 +218,11 @@
               systemTools.git
               systemTools.pnpm
 
-              # CUDA toolkit (12.8, matches host driver) + host g++-13
-              cuda.cudatoolkit
-              cuda.gcc13
             ];
           };
 
           # nix develop
           devShells.default = defaultShell;
-
-          devShells.vm = pkgs.mkShell {
-            inputsFrom = [ defaultShell ];
-            nativeBuildInputs = [ pkgs.pkg-config ];
-            packages = [ pkgs.SDL2 ];
-          };
 
           # default + EDA tools / sky130
           devShells.full = pkgs.mkShell {

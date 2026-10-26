@@ -16,7 +16,11 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
 from utils.port import reserve_port
 from utils.process import clean_python_caches, stop_workspace_servers, terminate_group
-from utils.workers import assert_sole_workspace_workers, motia_worker_count, write_server_ports
+from utils.workers import (
+    assert_sole_workspace_workers,
+    motia_worker_count,
+    write_server_ports,
+)
 
 workflow_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "api")
 workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,88 +29,256 @@ workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Operations with string values accept sub-arguments; True means boolean-only (no sub-args).
 WORKFLOW_COMMANDS = {
     "verilator": {
-        "clean": 'Clean build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate verilog files. Args: "--chip <chip> [--output-dir <dir>]"',
-        "build": 'Build simulation executable. Args: "--chip <chip> [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run simulation. Args: "--chip <chip> --binary <path> [--batch] [--output-dir <dir>]"',
-        "run": 'Integrated build+sim+run. Args: "--chip <chip> --binary <path> [--batch] [--jobs <num>] [--output-dir <dir>]"',
-        "cosim": 'Run cosimulation. Args: "--binary <path> [--batch]"',
+        "clean": (
+            'Clean build directory. Args: "--design <design> (--device | --core'
+            ' <entry>)"'
+        ),
+        "verilog": (
+            'Generate verilog files. Args: "--design <design> (--device | --core'
+            ' <entry>)"'
+        ),
+        "build": (
+            'Build simulation executable. Args: "--design <design> (--device | --core'
+            ' <entry>) [--jobs <num>]"'
+        ),
+        "sim": (
+            "Run a built simulation on a baremetal workload of the entry. Args:"
+            ' "--design <design> (--device | --core <entry>) --binary <workload name>'
+            " [--batch] [--no-wave] [--coverage] [--itrace] [--mtrace] [--pmctrace]"
+            ' [--ctrace] [--banktrace]"'
+        ),
+        "run": (
+            'Generate RTL, build and run. Args: "--design <design> (--device | --core'
+            " <entry>) --binary <workload name> [--jobs <num>] [--batch] [--no-wave]"
+            ' [--coverage] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
+        ),
     },
     "vcs": {
-        "clean": 'Clean VCS artifacts. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate RTL for VCS. Args: "--chip <chip> [--output-dir <dir>]"',
-        "build": 'Build VCS simulation executable. Args: "--chip <chip> [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run a built VCS simulation. Args: "--chip <chip> --binary <path> [--batch] [--output-dir <dir>]"',
-        "run": 'Generate RTL, build, and run VCS. Args: "--chip <chip> --binary <path> [--batch] [--jobs <num>] [--output-dir <dir>]"',
+        "clean": (
+            'Clean the entry VCS build. Args: "--design <design> (--device | --core'
+            ' <entry>)"'
+        ),
+        "verilog": (
+            'Generate the entry tapeout RTL for VCS. Args: "--design <design> (--device'
+            ' | --core <entry>)"'
+        ),
+        "build": (
+            'Build the entry VCS simv. Args: "--design <design> (--device | --core'
+            ' <entry>) [--jobs <num>]"'
+        ),
+        "sim": (
+            'Run a built simv on a baremetal workload of the entry. Args: "--design'
+            " <design> (--device | --core <entry>) --binary <workload name> [--batch]"
+            ' [--wave]"'
+        ),
+        "run": (
+            'Generate RTL, build and run VCS. Args: "--design <design> (--device |'
+            ' --core <entry>) --binary <workload name> [--jobs <num>] [--batch]"'
+        ),
     },
     "workload": {
-        "clean": 'Clean workload output directory. Args: "--chip <chip>"',
-        "build": 'Build test workloads. Args: "--chip <chip> [--stable] [--ctest|--mlirtest|--soctest]"',
-        "tohex": 'Convert chip workload ELF to hex. Args: "--chip <chip>"',
+        "clean": (
+            'Clean workload output directory. Args: "--design <design> (--device |'
+            ' --core <entry>)"'
+        ),
+        "build": (
+            'Build test workloads. Args: "--design <design> (--device | --core <entry>)'
+            ' [--ctest|--mlirtest|--soctest]"'
+        ),
+        "tohex": (
+            'Convert design workload ELF to hex. Args: "--design <design> (--device |'
+            ' --core <entry>)"'
+        ),
     },
     "model": {
-        "build": 'Build model recipes (all chip models when --model is omitted). Args: "--chip <chip> [--model <directory-name>] [--ctrace] [--dtrace]"',
+        "build": (
+            "Build model recipes on the device of a design (all its models when --model"
+            ' is omitted). Args: "--design <design> [--model <name>]"'
+        ),
     },
     "kernel": {
-        "build": 'Build RISC-V kernel + rootfs. Args: "[--chip <chip>] [--model <name>] [--interactive] [--hart-count <n>] [--guest-memory-mib <n>] [--model-storage initramfs|ddr]"; --model requires --chip',
+        "build": (
+            "Build RISC-V kernel + rootfs carrying the Linux programs of a design."
+            ' Args: "--design <design> --device [--interactive]"'
+        ),
     },
     "firesim": {
-        "enumeratefpgas": 'Enumerate FPGAs. Args: "--chip <chip>"',
-        "buildbitstream": 'Build bitstream. Args: "--chip <chip>"',
-        "infrasetup": 'Infrasetup. Args: "--chip <chip>"',
-        "runworkload": 'Run workload. Args: "--chip <chip>"',
+        "enumeratefpgas": (
+            'Enumerate FPGAs. Args: "--design <design> (--device | --core <entry>)"'
+        ),
+        "buildbitstream": (
+            'Build bitstream. Args: "--design <design> (--device | --core <entry>)"'
+        ),
+        "infrasetup": (
+            'Infrasetup. Args: "--design <design> (--device | --core <entry>)"'
+        ),
+        "runworkload": (
+            'Run workload. Args: "--design <design> (--device | --core <entry>)"'
+        ),
     },
-    "compiler": {
-        "build": 'Build compiler. Args: "--chip <chip>"',
+    "stack": {
+        "build": (
+            'Build a registered simulation stack. Args: "--design <design> (--device |'
+            ' --core <entry>)"'
+        ),
     },
     "bebop-bemu": {
-        "sim": 'Run Bebop emulator simulation. Model args: "--chip <chip> --model <model> [--reuse-simulator] [--itrace] [--mtrace]". ELF args: "--chip <chip> --binary <file-name> [--disasm] [--tool-profile] [--itrace] [--mtrace]"; resolves files in the selected chip workload/kernel outputs',
-        "analysis": 'Analyze itrace/mtrace in an existing log dir. Args: "--chip <chip> --log-dir <abs> --itrace|--mtrace"',
-        "batch": 'Run Bebop BEMU batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--jobs <num>] [--clean-before]"',
+        "sim": (
+            'Run Bebop emulator simulation. Args: "--design <design> (--device | --core'
+            " <entry>) --binary <file-name> [--disasm] [--tool-profile] [--itrace]"
+            ' [--mtrace]"; resolves files in the selected design workload/kernel'
+            " outputs"
+        ),
+        "analysis": (
+            'Analyze itrace/mtrace in an existing log dir. Args: "--design <design>'
+            ' (--device | --core <entry>) --run <name> --itrace|--mtrace"'
+        ),
+        "batch": (
+            'Run Bebop BEMU batch regression. Args: "--design <design> --device --test'
+            ' <bare-tests|linux-tests> [--jobs <num>] [--clean-before]"'
+        ),
     },
     "bebop-verilator": {
-        "clean": 'Clean Bebop Verilator build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop Verilog files. Args: "--chip <chip> [--diff] [--main-only] [--output-dir <dir>]"',
-        "build": 'Build Bebop Verilator simulation executable. Args: "--chip <chip> [--diff] [--jobs <num>] [--output-dir <dir>]"',
-        "sim": 'Run Bebop Verilator simulation. Args: "--chip <chip> --binary <path> [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "run": 'Integrated Bebop Verilator build+sim+run. Args: "--binary <path> [--diff] [--jobs <num>] [--chip <chip>] [--log-dir <dir>] [--fst-dir <dir>] [--no-wave]"',
-        "batch": 'Run Bebop Verilator batch regression. Args: "--chip <chip> --test <bare-tests|linux-tests> [--diff] [--clean-before]"',
+        "clean": (
+            'Clean the entry RTL. Args: "--design <design> (--device | --core <entry>)"'
+        ),
+        "verilog": (
+            'Generate the entry RTL. Args: "--design <design> (--device | --core'
+            ' <entry>) [--diff]"'
+        ),
+        "build": (
+            'Build the entry Verilator runner. Args: "--design <design> (--device |'
+            ' --core <entry>) [--diff] [--jobs <num>]"'
+        ),
+        "sim": (
+            'Run a built runner on a workload of the entry. Args: "--design <design>'
+            " (--device | --core <entry>) --binary <workload name> [--diff] [--no-wave]"
+            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
+        ),
+        "run": (
+            'Generate RTL, build and run. Args: "--design <design> (--device | --core'
+            " <entry>) --binary <workload name> [--diff] [--jobs <num>] [--no-wave]"
+            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
+        ),
+        "batch": (
+            'Run the entry regression. Args: "--design <design> --device --test'
+            " <bare-tests|linux-tests> [--diff] [--jobs <num>] [--clean-before]"
+            ' [--junit <file>]"'
+        ),
     },
     "bebop-vcs": {
-        "verilog": 'Generate Bebop VCS RTL once. Args: "--chip <chip>"',
-        "build": 'Build the reusable Bebop VCS simv. Args: "--chip <chip> [--jobs <num>]"',
-        "batch": 'Run Bebop VCS workload batch. Args: "--chip <chip> --test <bare-tests|linux-tests>"',
+        "sim": (
+            'Run one SoC workload through the Bebop VCS node. Args: "--design <design>'
+            ' (--device | --core <entry>) --binary <name> [--wave]"'
+        ),
+        "verilog": (
+            'Generate Bebop VCS RTL once. Args: "--design <design> (--device | --core'
+            ' <entry>)"'
+        ),
+        "build": (
+            'Build the reusable Bebop VCS simv. Args: "--design <design> (--device |'
+            ' --core <entry>) [--jobs <num>]"'
+        ),
+        "batch": (
+            'Run design-owned VCS regression. Args: "--design <design> --device --test'
+            ' <bare-tests|linux-tests> [--jobs <num>] [--junit <absolute-path>]"'
+        ),
     },
     "bebop-p2e": {
-        "clean": 'Clean Bebop P2E build directory. Args: "--chip <chip> [--output-dir <dir>]"',
-        "verilog": 'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--chip <chip> [--diff] [--output-dir <dir>]"',
-        "buildbitstream": 'Build Bebop P2E runtime case. Args: "--chip <chip> [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir <dir>] [--stop-after vsyn|vcom]"; stop-after produces resource assessment only, not a runnable case',
-        "runworkload": 'Cold-load Bebop P2E workload. Args: "--chip <chip> (--image <hex-workload-name> | --load-manifest <json-path>) --bitstream <path> [--fpga-location <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff (image only)] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"',
-        "batch": 'Run Bebop P2E batch regression. Args: "--chip <chip> --bitstream <path> --test <bare-tests|linux-tests> [--diff] [--fpga-location <N.X>]"',
+        "clean": (
+            'Clean Bebop P2E build directory. Args: "--design <design> (--device |'
+            ' --core <entry>) [--output-dir <dir>]"'
+        ),
+        "verilog": (
+            'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--design'
+            ' <design> (--device | --core <entry>) [--diff] [--output-dir <dir>]"'
+        ),
+        "buildbitstream": (
+            'Build Bebop P2E runtime case. Args: "--design <design> (--device | --core'
+            " <entry>) [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir"
+            ' <dir>] [--stop-after vsyn|vcom]"; stop-after produces resource assessment'
+            " only, not a runnable case"
+        ),
+        "runworkload": (
+            'Cold-load Bebop P2E workload. Args: "--design <design> (--device | --core'
+            " <entry>) --image <hex-workload-name> --bitstream <path> [--fpga-location"
+            " <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace]"
+            ' [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"'
+        ),
+        "batch": (
+            'Run Bebop P2E batch regression. Args: "--design <design> --device'
+            " --bitstream <path> --test <bare-tests|linux-tests> [--diff]"
+            ' [--fpga-location <N.X>]"'
+        ),
     },
     "dc": {
-        "verilog": 'Generate top-scoped DC RTL under arch/build/<chip>/<config>. Args: "--chip <chip> [--top <module>]"',
-        "area": 'Generate RTL, run DC synthesis, and report area under log/<timestamp>/<chip>/<config>/area. Args: "--chip <chip> [--top <module>]".',
-        "power": 'Generate RTL, run chip-owned power simulation, then run PrimeTime PX under log/<timestamp>/<chip>/<config>/power. Args: "--chip <chip> [--top <module>] [--workload <built ELF name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format <saif|vcd|fsdb>]".',
+        "verilog": (
+            "Generate top-scoped DC RTL under arch/build/<design>/<config>. Args:"
+            ' "--design <design> (--device | --core <entry>) [--top <module>]"'
+        ),
+        "area": (
+            "Generate RTL, run DC synthesis, and report area under"
+            ' log/<timestamp>/<design>/<config>/area. Args: "--design <design>'
+            ' (--device | --core <entry>) [--top <module>]".'
+        ),
+        "power": (
+            "Generate RTL, run design-owned power simulation, then run PrimeTime PX"
+            ' under log/<timestamp>/<design>/<config>/power. Args: "--design <design>'
+            " (--device | --core <entry>) [--top <module>] [--workload <built ELF"
+            " name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format"
+            ' <saif|vcd|fsdb>]".'
+        ),
     },
     "ip": {
-        "generate": 'Generate SRAM macros from elaborator mems.conf under arch/build/<chip>/<config>. Args: "--chip <chip> [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>] [--next-topic <topic>]"',
-        "replace": 'Assemble top-scoped synthesis RTL plus SRAM macros under arch/build/<chip>/<config>. Args: "--chip <chip> [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>] [--next-topic <topic>]"',
+        "generate": (
+            "Generate SRAM macros from elaborator mems.conf under"
+            ' arch/build/<design>/<config>. Args: "--design <design> (--device | --core'
+            " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
+            ' [--next-topic <topic>]"'
+        ),
+        "replace": (
+            "Assemble top-scoped synthesis RTL plus SRAM macros under"
+            ' arch/build/<design>/<config>. Args: "--design <design> (--device | --core'
+            " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
+            ' [--next-topic <topic>]"'
+        ),
     },
     "yosys": {
-        "run": 'Run yosys flow. Args: "[--top <top_module>] [--chip <chip>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
-        "verilog": 'Generate verilog for yosys flow. Args: "[--chip <chip>] [--output-dir <dir>] [--log-dir <dir>]"',
-        "synth": 'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>] [--log-dir <dir>] [--vcd <file>]"',
+        "run": (
+            'Run yosys flow. Args: "[--top <top_module>] [--design <design> (--device |'
+            ' --core <entry>)] [--output-dir <dir>] [--vcd <file>]"'
+        ),
+        "verilog": (
+            'Generate verilog for yosys flow. Args: "[--design <design> (--device |'
+            ' --core <entry>)] [--output-dir <dir>]"'
+        ),
+        "synth": (
+            'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>]'
+            ' [--vcd <file>]"'
+        ),
     },
     "uvm": {
-        "verilog": 'Generate isolated Ball RTL for UVM. Args: "--balltype <type> --output-dir <dir>"',
-        "build": 'Build a Ball or IP UVM simulation. Args: "--chip <chip> [--ball <name> | --ip <name> [--target <target>]]"',
-        "run": 'Build and run a Ball or IP UVM simulation. Args: "--chip <chip> [--ball <name> | --ip <name> [--target <target>]]"',
+        "verilog": (
+            'Generate isolated Ball RTL for UVM. Args: "--balltype <type> --output-dir'
+            ' <dir>"'
+        ),
+        "build": (
+            'Build a Ball or IP UVM simulation. Args: "[--design <design>] (--device |'
+            ' --ball <name> | --ip <name>)"'
+        ),
+        "run": (
+            'Build and run a Ball or IP UVM simulation. Args: "[--design <design>]'
+            ' (--device | --ball <name> | --ip <name>)"'
+        ),
     },
     "config": {
-        "install": 'Install chip configurations. Args: "[--chip <chip>]"',
+        "install": (
+            'Install design configurations. Args: "[--design <design> (--device |'
+            ' --core <entry>)]"'
+        ),
     },
 }
+
 
 def make_iii_config(
     port: int,
@@ -135,11 +307,16 @@ def make_iii_config(
             "exporter: memory\n      level: warn\n      logs_console_output: false",
         )
     if not exec_module:
-        marker = "\n  # ── Exec Module (Python) ───────────────────────────────────────────────"
+        marker = (
+            "\n  # ── Exec Module (Python)"
+            " ───────────────────────────────────────────────"
+        )
         if marker not in content:
             raise RuntimeError("failed to remove ExecModule from iii config")
         content = content.split(marker, 1)[0].rstrip() + "\n"
     else:
+        # Configuration generation must not restart active batch workers.
+        content = content.replace("      watch:\n        - steps/**/*.py\n", "")
         motia_exec = "PYTHONUNBUFFERED=1 PYTHONPATH=. .venv/bin/motia dev --dir steps"
         single = f"      exec:\n        - {motia_exec}\n"
         if single not in content:
@@ -208,7 +385,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
     # start / stop
     subparsers.add_parser("start", parents=[common], help="Start dev server")
-    stop_parser = subparsers.add_parser("stop", parents=[common], help="Stop dev server")
+    stop_parser = subparsers.add_parser(
+        "stop", parents=[common], help="Stop dev server"
+    )
     stop_parser.add_argument("--all", action="store_true", help="Stop all servers")
 
     # Build workflow subcommands from WORKFLOW_COMMANDS table
@@ -257,7 +436,8 @@ def _normalize_workflow_args(argv: list[str]) -> list[str]:
             op_name, _value = token[2:].split("=", 1)
             if op_name in operations and operations[op_name] is not True:
                 raise ValueError(
-                    f"--{op_name} sub-arguments must be passed as a separate quoted string"
+                    f"--{op_name} sub-arguments must be passed as a separate quoted"
+                    " string"
                 )
         if token.startswith("--") and "=" not in token:
             op_name = token[2:]
@@ -266,7 +446,11 @@ def _normalize_workflow_args(argv: list[str]) -> list[str]:
                 j = i + 1
                 while j < len(argv):
                     next_token = argv[j]
-                    next_key = next_token[2:].split("=", 1)[0] if next_token.startswith("--") else ""
+                    next_key = (
+                        next_token[2:].split("=", 1)[0]
+                        if next_token.startswith("--")
+                        else ""
+                    )
                     if next_key in operations:
                         break
                     values.append(next_token)
@@ -352,40 +536,52 @@ def _parse_sub_args(arg_string: str) -> dict:
                 i += 1
         else:
             raise ValueError(f"Unexpected argument: {token}")
+    unknown = args_dict.keys() & {"log-dir", "log_dir", "fst-dir", "fst_dir"}
+    if unknown:
+        raise ValueError(f"Unknown parameter(s): {', '.join(sorted(unknown))}")
     if "arguments" in args_dict:
         values = json.loads(args_dict["arguments"])
-        if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
+        if not isinstance(values, list) or not all(
+            isinstance(value, str) for value in values
+        ):
             raise ValueError("arguments must be a JSON list of strings")
         args_dict["arguments"] = values
     return args_dict
 
 
 def wait_for_http(url: str, check_fn, timeout: int, error_msg: str):
-    """Poll an HTTP endpoint until check_fn(response) returns True, or timeout."""
-    for _ in range(timeout):
-        try:
-            resp = requests.get(
-                url, timeout=1, proxies={"http": None, "https": None, "all": None}
-            )
-            if check_fn(resp):
-                return True
-        except requests.exceptions.ConnectionError:
-            pass
-        except requests.exceptions.RequestException:
-            return True  # non-connection error means server is reachable
-        time.sleep(1)
+    """Wait for an actual HTTP response satisfying the readiness predicate."""
+    deadline = time.monotonic() + timeout
+    with requests.Session() as session:
+        session.trust_env = False
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                response = session.get(url, timeout=min(1, remaining))
+                if check_fn(response):
+                    return True
+            except requests.exceptions.RequestException:
+                pass
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(1, remaining))
     print(error_msg)
     return False
 
-# If you find that bbdev has failed without any logs, 
+
+# If you find that bbdev has failed without any logs,
 # you can disable these log filters. These contain the bbdev runtime logs.
 def forward_iii_output(pipe, active_event: threading.Event, quiet: bool = False):
     """Forward task output to stdout. In quiet mode, suppress engine infrastructure logs."""
     for line in iter(pipe.readline, ""):
         if not active_event.is_set():
             continue
-        if quiet:
-            # Suppress engine infrastructure INFO/WARN; pass everything else
+        if quiet and not any(
+            marker in line for marker in ("ERROR", "error:", "Error:")
+        ):
+            # Preserve failures even when infrastructure progress is suppressed.
             if any(
                 module in line
                 for module in (
@@ -472,7 +668,9 @@ def run_server_mode(args, cmd_info):
                 if proc.poll() is not None:
                     sys.exit(proc.returncode or 1)
                 try:
-                    n = assert_sole_workspace_workers(worker_port, repo_root, min_local=need)
+                    n = assert_sole_workspace_workers(
+                        worker_port, repo_root, min_local=need
+                    )
                     break
                 except RuntimeError as e:
                     msg = str(e)
@@ -483,13 +681,12 @@ def run_server_mode(args, cmd_info):
                     continue
             else:
                 print(
-                    f"Error: need {need} Motia worker(s) from this workspace within 60s",
+                    f"Error: need {need} Motia worker(s) from this workspace"
+                    " within 60s",
                     file=sys.stderr,
                 )
                 sys.exit(1)
-            print(
-                f"Workspace Motia isolation ok: {n} worker(s) on port {worker_port}"
-            )
+            print(f"Workspace Motia isolation ok: {n} worker(s) on port {worker_port}")
             rc = proc.wait()
             if rc != 0:
                 sys.exit(rc)
@@ -569,7 +766,10 @@ def _submit_and_poll(port: int, api_path: str, cmd_info: dict, state_dir: str):
             elif state_data.get("processing") is True:
                 legacy_processing_count += 1
                 if legacy_processing_count >= 30:
-                    print("Error: Task is stuck in legacy processing state; worker did not advance the queue")
+                    print(
+                        "Error: Task is stuck in legacy processing state; worker did"
+                        " not advance the queue"
+                    )
                     return 1
             else:
                 legacy_processing_count = 0
@@ -685,7 +885,9 @@ def run_script_mode(args, cmd_info):
     )
 
     output_thread = threading.Thread(
-        target=forward_iii_output, args=(proc.stdout, iii_output_active, True), daemon=True
+        target=forward_iii_output,
+        args=(proc.stdout, iii_output_active, True),
+        daemon=True,
     )
     output_thread.start()
 
@@ -696,8 +898,8 @@ def run_script_mode(args, cmd_info):
         if not wait_for_http(
             f"{base_url}/",
             check_fn=lambda r: True,
-            timeout=30,
-            error_msg="Server failed to start within 30 seconds",
+            timeout=120,
+            error_msg="Server failed to start within 120 seconds",
         ):
             sys.exit(1)
 
@@ -747,18 +949,22 @@ def run_script_mode(args, cmd_info):
             sys.exit(rc)
 
     finally:
-        if server_start_lock is not None:
+        # Keep released ports reserved against new startup until worker cleanup ends.
+        if server_start_lock is None:
+            server_start_lock = open(server_start_lock_path, "w")
+            fcntl.flock(server_start_lock, fcntl.LOCK_EX)
+        try:
+            iii_output_active.clear()
+            time.sleep(0.5)
+            for worker_proc in worker_procs:
+                terminate_group(worker_proc)
+            terminate_group(proc)
+            stop_workspace_servers(workflow_dir, worker_url=iii_env["III_URL"])
+            cleanup_config(config_path)
+            shutil.rmtree(state_dir)
+        finally:
             fcntl.flock(server_start_lock, fcntl.LOCK_UN)
             server_start_lock.close()
-        # Cleanup: stop iii, its process group, and any workspace worker it spawned.
-        iii_output_active.clear()
-        time.sleep(0.5)
-        for worker_proc in worker_procs:
-            terminate_group(worker_proc)
-        terminate_group(proc)
-        stop_workspace_servers(workflow_dir, worker_url=iii_env["III_URL"])
-        cleanup_config(config_path)
-        shutil.rmtree(state_dir)
 
 
 if __name__ == "__main__":

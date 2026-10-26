@@ -2,7 +2,9 @@
 #define _BB_MSET_H_
 
 #include "isa.h"
+#if defined(__linux__)
 #include <dma.h>
+#endif
 
 #define BB_MSET_FUNC7 32
 

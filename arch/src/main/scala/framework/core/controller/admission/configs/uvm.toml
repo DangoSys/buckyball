@@ -1,0 +1,15 @@
+[parameters]
+dataBits=64
+moves=true
+taskEnabled=true
+remote=true
+[parameters.permission]
+addressBits=44
+entries=4
+[parameters.tracking]
+entries=4
+addressBits=44
+idBits=8
+lineBytes=64
+maxRanges=8
+[defines]

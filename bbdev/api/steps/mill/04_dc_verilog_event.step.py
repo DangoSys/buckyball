@@ -14,9 +14,10 @@ if step_path not in sys.path:
     sys.path.insert(0, step_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
+
 mill_dir = os.path.join(os.path.dirname(__file__))
 mill_scripts = os.path.join(mill_dir, "scripts")
 if mill_dir not in sys.path:
@@ -24,7 +25,7 @@ if mill_dir not in sys.path:
 if mill_scripts not in sys.path:
     sys.path.insert(0, mill_scripts)
 from utils.path import rtl_out
-import mill as mill_run
+from steps.mill.scripts.mill import elaborate_cmd
 
 config = {
     "name": "dc-verilog",
@@ -63,7 +64,10 @@ def prepare_dc_verilog(build_dir: str):
     )
     stub_dir = os.path.join(build_dir, "dc_stubs")
     os.makedirs(stub_dir, exist_ok=True)
-    skip_dirs = {os.path.join(build_dir, name) for name in ("ip-generate", "ip-replace", "dc_stubs")}
+    skip_dirs = {
+        os.path.join(build_dir, name)
+        for name in ("ip-generate", "ip-replace", "dc_stubs")
+    }
     kept = []
     stubbed_dpi = []
     for path in vsrcs:
@@ -91,22 +95,30 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     arch = os.path.join(bbdir, "arch")
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "tapeout", input_data.get("output_dir"),
+            bbdir,
+            design,
+            "tapeout",
+            input_data.get("output_dir"),
+            selection=input_data["target"],
         )
         os.makedirs(build_dir, exist_ok=True)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         returncode = (
             await stream_run_logger_async(
-            cmd=mill_run.elaborate_cmd(
-                "sims.verilator.Elaborate", mill_config, build_dir, seq_mem=True,
-            ),
-            logger=ctx.logger,
-            cwd=arch,
-            stdout_prefix="dc verilog",
-            stderr_prefix="dc verilog",
+                cmd=elaborate_cmd(
+                    design,
+                    input_data["target"],
+                    "verilog",
+                    build_dir,
+                    seq_mem=True,
+                ),
+                logger=ctx.logger,
+                cwd=arch,
+                stdout_prefix="dc verilog",
+                stderr_prefix="dc verilog",
             )
         ).returncode
     except (ValueError, RuntimeError) as error:
@@ -128,7 +140,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
     top_module = input_data.get("top") or "DigitalTop"
-    ctx.logger.info(f"Using DC RTL output directory: {build_dir}, synthesis top: {top_module}")
+    ctx.logger.info(
+        f"Using DC RTL output directory: {build_dir}, synthesis top: {top_module}"
+    )
     mem_conf = os.path.join(build_dir, "mems.conf")
 
     try:
@@ -169,7 +183,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     payload = {
         **input_data,
-        "chip": chip,
+        "design": design,
         "consumer": "dc",
         "top": top_module,
         "next_topic": "dc.area",
@@ -177,12 +191,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     }
     if input_data.get("from_power_workflow"):
         payload["analysis_dir"] = log_dir(
-            bbdir, chip, "tapeout", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "power"
+            bbdir,
+            design,
+            "tapeout",
+            datetime.now().strftime("%Y-%m-%d-%H-%M"),
+            "dc",
+            "power",
+            selection=input_data["target"],
         )
     else:
         payload["analysis_dir"] = log_dir(
-            bbdir, chip, "tapeout", datetime.now().strftime("%Y-%m-%d-%H-%M"), "dc", "area"
+            bbdir,
+            design,
+            "tapeout",
+            datetime.now().strftime("%Y-%m-%d-%H-%M"),
+            "dc",
+            "area",
+            selection=input_data["target"],
         )
-    await ctx.enqueue({"topic": "ip.generate", "data": payload})
+    await ctx.enqueue(
+        {"topic": "ip.generate", "data": {**(payload), "target": input_data["target"]}}
+    )
 
     return

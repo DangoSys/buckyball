@@ -1,0 +1,70 @@
+#include "buckyball.h"
+#include <bbhw/isa/isa.h>
+#include <dma.h>
+#include <isa/gemmini.h>
+#include <stdio.h>
+
+#define DIM 16
+
+static elem_t mat_a[DIM * DIM] __attribute__((aligned(64)));
+static elem_t mat_b[DIM * DIM] __attribute__((aligned(64)));
+static elem_t zeros[DIM * DIM] __attribute__((aligned(64)));
+static result_t mat_c[DIM * DIM] __attribute__((aligned(64)));
+static result_t expected[DIM * DIM] __attribute__((aligned(64)));
+
+int main() {
+#ifdef MULTITHREAD
+  multithread(MULTITHREAD);
+#endif
+  printf("=== Gemmini OS RISC Basic Test ===\n");
+
+  for (int row = 0; row < DIM; ++row)
+    for (int col = 0; col < DIM; ++col) {
+      mat_a[row * DIM + col] = (3 * row + 5 * col) % 11 - 5;
+      mat_b[row * DIM + col] = (7 * row + 2 * col) % 13 - 6;
+    }
+  cpu_matmul(mat_a, mat_b, expected, DIM, DIM, DIM);
+
+  uint32_t bank_a = 0, bank_b = 1, bank_c = 2, bank_d_zeros = 3;
+  bb_mem_alloc(bank_a, 1, 1);
+  bb_mem_alloc(bank_b, 1, 1);
+  bb_mem_alloc(bank_c, 1, 4);
+  bb_mem_alloc(bank_d_zeros, 1, 1);
+  bb_mvin((uintptr_t)mat_a, bank_a, DIM, 1);
+  bb_mvin((uintptr_t)mat_b, bank_b, DIM, 1);
+  bb_mvin((uintptr_t)zeros, bank_d_zeros, DIM, 1);
+  bb_gemmini_config(0, 0, 0, 0, 0);
+  /* Preload D from zeros bank so C = A*B + D = A*B (not A*B + A) */
+  bb_gemmini_preload(bank_d_zeros, bank_c, DIM, 0, 0);
+  bb_gemmini_compute_preloaded(bank_a, bank_b, bank_c, DIM, 0, 0, 0);
+  bb_mvout((uintptr_t)mat_c, bank_c, DIM, 1);
+  bb_mem_release(bank_a);
+  bb_mem_release(bank_b);
+  bb_mem_release(bank_c);
+  bb_mem_release(bank_d_zeros);
+
+  if (compare_u32_matrices(mat_c, expected, DIM, DIM)) {
+    printf("Gemmini OS RISC Basic Test PASSED\n");
+    return 0;
+  }
+
+  printf("got mat_c: ");
+  for (int i = 0; i < DIM; i++) {
+    printf("%d ", mat_c[i]);
+  }
+  printf("\n");
+  // for (int i = 0; i < DIM; i++) {
+  //   for (int j = 0; j < DIM; j++) {
+  //     printf("%d ", mat_c[i * DIM + j]);
+  //   }
+  //   printf("\n");
+  // }
+
+  printf("exp row0: ");
+  for (int i = 0; i < DIM; i++) {
+    printf("%d ", expected[i]);
+  }
+  printf("\n");
+  printf("Gemmini OS RISC Basic Test FAILED\n");
+  return 1;
+}

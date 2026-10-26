@@ -1,14 +1,18 @@
 add_custom_target(tutorial-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET tutorial-ctests-build)
 
-# Baremetal single-core only (matches Bazel //bb-tests/.../CTest/tutorial).
-foreach(BUCKYBALL_CTEST_TARGET IN LISTS BUCKYBALL_CPU_TARGETS)
-  buckyball_ctest_name(BUCKYBALL_TUTORIAL_TEST
-    ${BUCKYBALL_CTEST_TARGET} tutorial)
-  add_buckyball_baremetal_ctest(
-    ${BUCKYBALL_TUTORIAL_TEST}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    tutorial.c)
-  add_dependencies(tutorial-ctests-build
-    ${BUCKYBALL_TUTORIAL_TEST}-baremetal-build)
+# Runs on the selected bare-metal hart.
+foreach(BUCKYBALL_CTEST_TARGET IN LISTS DESIGN_CPU_TARGETS)
+    set(BUCKYBALL_TUTORIAL_TEST
+        "${BUCKYBALL_WORKLOAD_DESIGN}-${BUCKYBALL_CTEST_TARGET}-ctest-tutorial"
+    )
+    add_buckyball_baremetal_ctest(
+      ${BUCKYBALL_TUTORIAL_TEST}
+      ${CMAKE_CURRENT_SOURCE_DIR}
+      tutorial.c
+    )
+    add_dependencies(
+        tutorial-ctests-build
+        ${BUCKYBALL_TUTORIAL_TEST}-baremetal-build
+    )
 endforeach()

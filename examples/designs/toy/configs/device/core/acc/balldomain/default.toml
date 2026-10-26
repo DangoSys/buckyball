@@ -1,0 +1,61 @@
+[[balls]]
+id = 0
+name = "GemminiBall"
+component = "gemmini"
+param = "default"
+port = { inBW = 2, outBW = 4, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_BOUNDS", funct7 = 80 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_A", funct7 = 81 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_B", funct7 = 82 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_D", funct7 = 83 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_ADDR_C", funct7 = 84 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_AB", funct7 = 85 },
+  { mnemonic = "GEMMINI_LOOP_WS_CONFIG_STRIDES_DC", funct7 = 86 },
+  { mnemonic = "GEMMINI_LOOP_WS", funct7 = 87 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_1", funct7 = 96 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_2", funct7 = 97 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_3", funct7 = 98 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_4", funct7 = 99 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_5", funct7 = 100 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_6", funct7 = 101 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_7", funct7 = 102 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_8", funct7 = 103 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS_CONFIG_9", funct7 = 104 },
+  { mnemonic = "GEMMINI_LOOP_CONV_WS", funct7 = 105 },
+  { mnemonic = "GEMMINI_CONFIG", funct7 = 2 },
+  { mnemonic = "GEMMINI_FLUSH", funct7 = 3 },
+  { mnemonic = "GEMMINI_PRELOAD", funct7 = 21 },
+  { mnemonic = "GEMMINI_COMPUTE_PRELOADED", funct7 = 66 },
+  { mnemonic = "GEMMINI_COMPUTE_ACCUMULATED", funct7 = 67 },
+]
+
+[[balls]]
+id = 1
+name = "TraceBall"
+component = "trace"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "BDB_COUNTER", funct7 = 4 },
+]
+
+[[balls]]
+id = 3
+name = "ReluBall"
+component = "relu"
+param = "default"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "RELU", funct7 = 50 },
+]
+
+[[balls]]
+id = 4
+name = "RedmuleBall"
+component = "redmule"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "REDMULE_F16", funct7 = 68 },
+]

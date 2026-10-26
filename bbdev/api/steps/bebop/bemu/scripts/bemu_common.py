@@ -1,6 +1,7 @@
 from pathlib import Path
 
-from utils.event_common import require_chip
+from utils.event_common import require_design
+from utils.path import runner_manifest
 
 
 def _repo(bbdir: str | None) -> Path:
@@ -9,24 +10,14 @@ def _repo(bbdir: str | None) -> Path:
     return Path(bbdir or get_buckyball_path())
 
 
-def bemu_manifest(chip: str, bbdir: str | None = None) -> Path:
-    chip = require_chip({"chip": chip})
+def bemu_manifest(design: str, bbdir: str | None = None, *, selection: str) -> Path:
+    design = require_design({"design": design})
     root = _repo(bbdir)
-    path = (
-        root
-        / "examples"
-        / "chips"
-        / chip
-        / "configs"
-        / "generated"
-        / "bemu"
-        / "Cargo.toml"
-    )
+    path = runner_manifest(root, design, selection)
     if not path.is_file():
-        raise FileNotFoundError(f"missing {path}; run bbdev config --install")
+        raise FileNotFoundError(f"missing design manifest: {path}")
     return path
 
 
-def bemu_chip_binary(chip: str) -> str:
-    """The chip's BEMU boot entry in its generated crate."""
-    return f"bebop-chip-{require_chip({'chip': chip})}"
+def bemu_binary() -> str:
+    return "bebop-bemu"

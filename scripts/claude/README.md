@@ -26,11 +26,11 @@ User / Agent host
 ## Daily path
 
 ```text
-bbdev_compiler_build(chip)
+bbdev_stack_build(design, thread, core, device)
   → bbdev_task_status(trace_id) until success
-  → bbdev_workload_build(chip)
+  → bbdev_workload_build(design)
   → bbdev_task_status(trace_id) until success
-  → bbdev_bemu_sim(chip, binary)
+  → bbdev_bemu_sim(design, binary)
   → bbdev_task_status(trace_id) until success
   → bbdev_bebop_verilator_run(binary, config)
   → bbdev_task_status(trace_id) until success
@@ -43,13 +43,13 @@ UVM when needed: `bbdev_uvm_build` / `bbdev_uvm_run`.
 ### Validation
 | Tool | Purpose |
 |------|---------|
-| `validate(chip, balldomain?)` | Chip balldomain TOML invariants (`ballIdMappings` / `ballISA`) |
+| `validate(design, balldomain?)` | Design balldomain TOML invariants (`ballIdMappings` / `ballISA`) |
 
 ### bbdev wrappers (all POST APIs)
 | Tool | API |
 |------|-----|
 | `bbdev_config_install` | `/config/install` |
-| `bbdev_compiler_build` | `/compiler/build` |
+| `bbdev_stack_build` | `/stack/build` |
 | `bbdev_task_status` | State for a submitted `trace_id` |
 | `bbdev_workload_{clean,build,tohex}` | `/workload/{clean,build,tohex}` |
 | `bbdev_bemu_{sim,batch}` | `/bebop/bemu/{sim,batch}` |
@@ -88,7 +88,7 @@ the current MCP server; any other unknown trace fails.
 | Trigger | Skill |
 |---------|-------|
 | `/ball-align` | `.agents/skills/ball-align` |
-| `/chip-designer` | `.agents/skills/chip-designer` |
+| `/design-designer` | `.agents/skills/design-designer` |
 | `/verify <Name>` | `.agents/skills/verify` |
 | `/check` | `.agents/skills/check` |
 | `/waveform` | `.agents/skills/waveform` |

@@ -5,24 +5,18 @@ Generates Verilog via mill for bebop verilator
 """
 
 import os
-import shutil
+import time
 import sys
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-mill_dir = os.path.dirname(__file__)
-mill_scripts = os.path.join(mill_dir, "scripts")
-if mill_dir not in sys.path:
-    sys.path.insert(0, mill_dir)
-if mill_scripts not in sys.path:
-    sys.path.insert(0, mill_scripts)
-from utils.event_common import require_chip
+from utils.event_common import require_design
 from utils.path import get_buckyball_path
 from utils.stream_run import stream_run_logger_async
 from utils.path import rtl_out
-import mill as mill_run
+from steps.mill.scripts.mill import design_cmd
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -52,28 +46,36 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     bbdir = get_buckyball_path()
     arch = os.path.join(bbdir, "arch")
-    chip = None
+    design = None
     try:
-        chip = require_chip(input_data)
+        design = require_design(input_data)
         mill_config, build_dir = rtl_out(
-            bbdir, chip, "verilog", input_data.get("output_dir")
+            bbdir,
+            design,
+            "verilog",
+            input_data.get("output_dir"),
+            selection=input_data["target"],
         )
-        shutil.rmtree(build_dir, ignore_errors=True)
+        if not os.path.isabs(build_dir):
+            raise ValueError("RTL output directory must be absolute")
+        command, directory = design_cmd(
+            bbdir,
+            design,
+            "verilator",
+            build_dir,
+            diff=bool(input_data.get("diff", False)),
+            selection=input_data["target"],
+        )
+        if os.path.exists(build_dir):
+            os.rename(build_dir, f"{build_dir}.previous-{time.time_ns()}")
         os.makedirs(build_dir)
-        ctx.logger.info(f"Using mill config: {mill_config}")
+        ctx.logger.info(f"Using mill target: {input_data["target"]}")
         ctx.logger.info(f"Using build directory: {build_dir}")
-        command = mill_run.elaborate_cmd(
-            "sims.verilator.Elaborate", mill_config, build_dir
-        )
-        if input_data.get("diff"):
-            command += " --difftest"
-        if input_data.get("main_only"):
-            command += " --main-only"
         returncode = (
             await stream_run_logger_async(
                 cmd=command,
                 logger=ctx.logger,
-                cwd=arch,
+                cwd=directory,
                 stdout_prefix="bebop verilator verilog",
                 stderr_prefix="bebop verilator verilog",
             )
@@ -87,12 +89,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "task": "validation",
                 "error": str(error),
-                "example": 'bbdev bebop verilator --verilog "--chip toy"',
+                "example": 'bbdev bebop verilator --verilog "--design toy"',
             },
             trace_id=origin_tid,
         )
         return
-    ctx.logger.info(f"Using chip: {chip}")
+    ctx.logger.info(f"Using design: {design}")
     output_status = check_verilog_output(build_dir)
     if returncode != 0:
         await check_result(
@@ -101,7 +103,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             continue_run=False,
             extra_fields={
                 "task": "verilog",
-                "chip": chip,
+                "design": design,
                 "output_dir": build_dir,
                 "output_status": output_status,
             },
@@ -110,7 +112,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     if not output_status["is_dir"] or output_status["sv_count"] == 0:
         ctx.logger.error(
-            f"Verilog output is invalid: {build_dir} (exists={output_status['exists']}, is_dir={output_status['is_dir']}, sv_count={output_status['sv_count']})"
+            f"Verilog output is invalid: {build_dir} (exists={output_status['exists']},"
+            f" is_dir={output_status['is_dir']}, sv_count={output_status['sv_count']})"
         )
         await check_result(
             ctx,
@@ -119,7 +122,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "task": "verilog",
                 "error": "invalid_verilog_output",
-                "chip": chip,
+                "design": design,
                 "output_dir": build_dir,
                 "output_status": output_status,
             },
@@ -130,7 +133,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         ctx,
         returncode,
         continue_run=input_data.get("from_run_workflow", False) and returncode == 0,
-        extra_fields={"task": "verilog", "chip": chip, "output_dir": build_dir},
+        extra_fields={"task": "verilog", "design": design, "output_dir": build_dir},
         trace_id=origin_tid,
     )
     if input_data.get("from_run_workflow") and returncode == 0:
@@ -142,6 +145,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                     "output_dir": build_dir,
                     "vsrc_dir": build_dir,
                     "task": "run",
+                    "target": input_data["target"],
                 },
             }
         )
