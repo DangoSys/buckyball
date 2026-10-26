@@ -49,7 +49,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "design": design,
         "consumer": "yosys",
-        "top": req_arg(body, "top") or "DigitalTop",
+        "top": req_arg(body, "top"),
         "next_topic": "yosys.synth",
     }
     output_dir = req_arg(body, "output_dir")

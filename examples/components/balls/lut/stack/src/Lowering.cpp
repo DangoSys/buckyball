@@ -1,4 +1,11 @@
 //===- Lowering.cpp - LutBall in lower-buckyball --------------------------===//
+//
+// lookup_i8: source 0 holds `rows` rows of sixteen i8 codes, source 1 the
+// table: one group of 256 entries shared by every channel, or four groups
+// with 256 entries per channel (channel * 256 + code, 1024 bytes per group).
+// The destination receives table[code] for every element.
+//
+//===----------------------------------------------------------------------===//
 #include "Buckyball/BuckyballOps.h"
 #include "Conversion/Buckyball.h"
 #include "Target/BuckyballTargetRegistry.h"

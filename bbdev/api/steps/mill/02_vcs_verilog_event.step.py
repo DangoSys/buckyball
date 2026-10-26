@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 
 from motia import FlowContext, queue
@@ -44,7 +45,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "tapeout",
             selection=input_data["target"],
         )
-        os.makedirs(build_dir, exist_ok=True)
+        if os.path.exists(build_dir):
+            shutil.rmtree(build_dir)
+        os.makedirs(build_dir)
         returncode = (
             await stream_run_logger_async(
                 cmd=elaborate_cmd(design, input_data["target"], "verilog", build_dir),

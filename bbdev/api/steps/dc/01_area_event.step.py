@@ -36,7 +36,7 @@ config = {
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
     source_list_path = input_data.get("source_list")
-    top_module = input_data.get("top") or "DigitalTop"
+    top_module = input_data.get("top")
     analysis_dir = input_data.get("analysis_dir")
     if not isinstance(source_list_path, str) or not os.path.isfile(source_list_path):
         await check_result(
@@ -79,6 +79,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             top_module,
             selection=input_data["target"],
         )
+        top_module = contract.top_module
     except (OSError, ValueError) as exc:
         await check_result(
             ctx,

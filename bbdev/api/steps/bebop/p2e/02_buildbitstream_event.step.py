@@ -60,7 +60,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     diff = bool(input_data.get("diff", False))
-    stop_after = input_data.get("stop_after")
     build_dir = input_data.get("output_dir") or str(
         Path(bbdir)
         / "examples/designs"
@@ -72,10 +71,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_root = (Path(bbdir) / "examples/designs" / design / "output/p2e").resolve()
     if build_root not in build_path.parents:
         raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
-    if stop_after and build_path.exists():
-        raise ValueError(
-            f"Resource assessment requires a fresh output_dir: {build_path}"
-        )
     if build_path.exists():
         shutil.rmtree(build_path)
     build_path.mkdir(parents=True)
@@ -134,7 +129,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             *(["--diff"] if diff else []),
             *(["--itrace"] if input_data.get("itrace", False) else []),
             *(["--mtrace"] if input_data.get("mtrace", False) else []),
-            *(["--stop-after", stop_after] if stop_after else []),
         ]
     )
     build_cmd = f"cd {shlex.quote(bbdir)} && {build_cmd}"
@@ -165,18 +159,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "diff": diff,
         "timestamp": timestamp,
     }
-    if stop_after:
-        extra_fields = {
-            "task": "resource-assessment",
-            "stop_after": stop_after,
-            "runtime_ready": False,
-            "vsrc_dir": vsrc_dir,
-            "build_dir": build_dir,
-            "diff": diff,
-            "timestamp": timestamp,
-        }
-    else:
-        extra_fields["runtime_ready"] = build_result.returncode == 0
+    extra_fields["runtime_ready"] = build_result.returncode == 0
     await check_result(
         ctx,
         build_result.returncode,

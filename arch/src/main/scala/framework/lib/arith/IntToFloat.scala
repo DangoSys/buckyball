@@ -89,7 +89,7 @@ class IntToFloat(intWidth: Int, expWidth: Int, sigWidth: Int) extends Module {
   val roundDetectTininess = RegEnable(midDetectTininess, midValid)
   val roundValid          = RegNext(midValid, false.B)
 
-  val roundAnyRawFNToRecFN = Instantiate(new hardfloat.RoundAnyRawFNToRecFN(
+  val roundAnyRawFNToRecFN = Module(new hardfloat.RoundAnyRawFNToRecFN(
     rawExpWidth,
     intWidth,
     expWidth,

@@ -35,7 +35,7 @@ func.func @main() -> i8 {
   %loaded_a = buckyball.bank_mvin %a, %a_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x8xf16>
   %loaded_b = buckyball.bank_mvin %b, %b_bank <{depth = 8 : i64, stride = 1 : i64}> : memref<8x8xf16>
   %result = buckyball.bank_custom "matmul_f16" (%loaded_a, %loaded_b) -> %c_bank
-      {rows = @BB_BANK_LINES@ : i64, k = 8 : i64, op1_base = 0 : i64, op2_base = 0 : i64, wr_base = 0 : i64}
+      {rows = @BB_BANK_LINES@ : i64, k = 8 : i64}
   %stored = buckyball.bank_mvout %c, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x8xf16>
   buckyball.bank_release %loaded_a
   buckyball.bank_release %loaded_b

@@ -2,15 +2,17 @@ use crate::model;
 
 pub const BANK_ROW_BYTES: usize = 16;
 pub const MAX_ITER: usize = 16;
-pub const MAX_WORDS: usize = MAX_ITER;
+pub const MAX_COLS: usize = 2;
+pub const MAX_WORDS: usize = MAX_ITER * MAX_COLS;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TransposeCmd {
-    pub bid: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
@@ -55,15 +57,17 @@ fn word_hi(data: &[u8], word_index: usize) -> u64 {
     u64::from_le_bytes(buf)
 }
 
-pub fn gen_case(seed: u32, index: u32, bid: u32) -> TransposeCase {
+// Word `i` of a case is bank row `i / cols`, group `i % cols`: each row spans `cols` groups.
+pub fn gen_case(seed: u32, index: u32) -> TransposeCase {
     match index {
-        0 => directed_i8(bid),
-        1 => directed_i32(bid),
-        _ => random_case(seed, index, bid),
+        0 => directed_i8(),
+        1 => directed_i32(),
+        2 => directed_i8_two_groups(),
+        _ => random_case(seed, index),
     }
 }
 
-fn directed_i8(bid: u32) -> TransposeCase {
+fn directed_i8() -> TransposeCase {
     let iter = 16usize;
     let elem_bytes = 1usize;
     let cols = 1usize;
@@ -74,10 +78,11 @@ fn directed_i8(bid: u32) -> TransposeCase {
     let nwords = model::num_words(total * elem_bytes) as u32;
     TransposeCase {
         cmd: TransposeCmd {
-            bid,
             iter: iter as u32,
             op1_bank: 0,
             wr_bank: 1,
+            op1_group: 0,
+            wr_group: 0,
             op1_col: cols as u32,
             wr_col: cols as u32,
             rob_id: 3,
@@ -90,7 +95,7 @@ fn directed_i8(bid: u32) -> TransposeCase {
     }
 }
 
-fn directed_i32(bid: u32) -> TransposeCase {
+fn directed_i32() -> TransposeCase {
     let iter = 8usize;
     let elem_bytes = 4usize;
     let cols = 1usize;
@@ -104,10 +109,11 @@ fn directed_i32(bid: u32) -> TransposeCase {
     let nwords = model::num_words(total * elem_bytes) as u32;
     TransposeCase {
         cmd: TransposeCmd {
-            bid,
             iter: iter as u32,
             op1_bank: 0,
             wr_bank: 1,
+            op1_group: 0,
+            wr_group: 0,
             op1_col: cols as u32,
             wr_col: cols as u32,
             rob_id: 5,
@@ -120,13 +126,44 @@ fn directed_i32(bid: u32) -> TransposeCase {
     }
 }
 
-fn random_case(seed: u32, index: u32, bid: u32) -> TransposeCase {
+// Mirrors transpose_i8_16x32_test.c: a 16x32 i8 matrix whose rows span two groups.
+fn directed_i8_two_groups() -> TransposeCase {
+    let iter = 16usize;
+    let elem_bytes = 1usize;
+    let cols = 2usize;
+    let w = cols * (BANK_ROW_BYTES / elem_bytes);
+    let total = iter * w;
+    let src: Vec<u8> = (0..iter)
+        .flat_map(|r| (0..w).map(move |c| (r + c + 1) as u8))
+        .collect();
+    let dst = model::transpose_bytes(&src, iter, w, elem_bytes);
+    let nwords = model::num_words(total * elem_bytes) as u32;
+    TransposeCase {
+        cmd: TransposeCmd {
+            iter: iter as u32,
+            op1_bank: 0,
+            wr_bank: 1,
+            op1_group: 2,
+            wr_group: 1,
+            op1_col: cols as u32,
+            wr_col: cols as u32,
+            rob_id: 6,
+            elem_bits: (elem_bytes * 8) as u32,
+            num_src_words: nwords,
+            num_dst_words: nwords,
+        },
+        src,
+        dst,
+    }
+}
+
+fn random_case(seed: u32, index: u32) -> TransposeCase {
     let mut rng = Rng::new(seed, index);
     let elem_bits = if rng.next() & 1 == 0 { 8u32 } else { 32u32 };
     let elem_bytes = (elem_bits / 8) as usize;
     let iter_pool = [1u32, 2, 4, 8, 16];
     let iter = iter_pool[(rng.next() as usize) % iter_pool.len()] as usize;
-    let cols = 1usize;
+    let cols = (rng.next() as usize) % MAX_COLS + 1;
     let w = cols * (BANK_ROW_BYTES / elem_bytes);
 
     // Keep banks in 0..7 so the same cases work on configs with bankNum=8 or 16.
@@ -135,6 +172,9 @@ fn random_case(seed: u32, index: u32, bid: u32) -> TransposeCase {
     if wr_bank == op1_bank {
         wr_bank = (wr_bank + 1) & 7;
     }
+
+    let op1_group = rng.range(0, 3);
+    let wr_group = rng.range(0, 3);
 
     let total = iter * w;
     let mut src = vec![0u8; total * elem_bytes];
@@ -146,10 +186,11 @@ fn random_case(seed: u32, index: u32, bid: u32) -> TransposeCase {
 
     TransposeCase {
         cmd: TransposeCmd {
-            bid,
             iter: iter as u32,
             op1_bank,
             wr_bank,
+            op1_group,
+            wr_group,
             op1_col: cols as u32,
             wr_col: cols as u32,
             rob_id: rng.range(0, 15),

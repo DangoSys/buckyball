@@ -47,8 +47,10 @@ class transpose_scoreboard extends uvm_scoreboard;
       `uvm_fatal("SCB", "mem_model handle not set")
     end
     mem_model.clear_mem();
+    // Word i lives at row i / col, group op1_group + i % col.
     for (i = 0; i < clone.num_src_words; i++) begin
-      mem_model.load_word(int'(clone.op1_bank), i, clone.src_words[i]);
+      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group) + i % clone.op1_col,
+                            i / clone.op1_col, clone.src_words[i]);
     end
     mem_model.arm();
 
@@ -67,22 +69,12 @@ class transpose_scoreboard extends uvm_scoreboard;
   endfunction
 
   function void check_cmd(bb_blink_cmd_item got, transpose_cmd_item exp);
+    // Compare as plain BLink commands; the comparer rejects differing types.
+    bb_blink_cmd_item want = bb_blink_cmd_item::type_id::create("want");
+    want.copy(exp);
     verification_pkg::evidence::checks++;
-    if (got.bid !== exp.bid)
-      `uvm_fatal("CMD", $sformatf("bid mismatch: got %0d exp %0d", got.bid, exp.bid))
-    if (got.funct7 !== exp.funct7)
-      `uvm_fatal("CMD", $sformatf("funct7 mismatch: got %0d exp %0d", got.funct7, exp.funct7))
-    if (got.iter !== exp.iter)
-      `uvm_fatal("CMD", $sformatf("iter mismatch: got %0d exp %0d", got.iter, exp.iter))
-    if (got.op1_bank !== exp.op1_bank || got.wr_bank !== exp.wr_bank)
-      `uvm_fatal("CMD", "bank field mismatch")
-    if (got.op1_col !== exp.op1_col || got.wr_col !== exp.wr_col)
-      `uvm_fatal("CMD", "column field mismatch")
-    if (got.rob_id !== exp.rob_id)
-      `uvm_fatal("CMD", $sformatf("rob_id mismatch: got %0d exp %0d", got.rob_id, exp.rob_id))
-    if (got.rs2[7:0] !== exp.elem_bits[7:0])
-      `uvm_fatal("CMD", $sformatf(
-                 "elem_bits mismatch: got %0d exp %0d", got.rs2[7:0], exp.elem_bits[7:0]))
+    if (!got.compare(want))
+      `uvm_fatal("CMD", $sformatf("command mismatch: got %s exp %s", got.sprint(), want.sprint()))
   endfunction
 
   function void write_read(bb_blink_read_item item);
@@ -92,12 +84,16 @@ class transpose_scoreboard extends uvm_scoreboard;
       `uvm_fatal("READ", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.op1_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== '0)
-      `uvm_fatal("READ", $sformatf("group_id mismatch: got %0d exp 0", item.group_id))
-    // DUT may re-read the same bank word across output columns (cache refill).
-    if (item.addr >= stim.num_src_words[6:0])
+    if (item.group_id < stim.op1_group || item.group_id >= stim.op1_group + stim.op1_col)
       `uvm_fatal("READ", $sformatf(
-                 "addr out of range: got %0d max %0d", item.addr, stim.num_src_words))
+                 "group_id out of range: got %0d base %0d col %0d",
+                 item.group_id,
+                 stim.op1_group,
+                 stim.op1_col
+                 ))
+    // DUT may re-read the same bank word across output columns (cache refill).
+    if (item.addr >= stim.iter)
+      `uvm_fatal("READ", $sformatf("addr out of range: got %0d iter %0d", item.addr, stim.iter))
     read_count++;
   endfunction
 
@@ -108,10 +104,11 @@ class transpose_scoreboard extends uvm_scoreboard;
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== '0)
-      `uvm_fatal("WRITE", $sformatf("group_id mismatch: got %0d exp 0", item.group_id))
-    if (item.addr !== write_count[6:0])
-      `uvm_fatal("WRITE", $sformatf("addr mismatch: got %0d exp %0d", item.addr, write_count))
+    if (item.group_id !== stim.wr_group + write_count % stim.wr_col)
+      `uvm_fatal("WRITE", $sformatf("group_id mismatch at %0d: got %0d", write_count, item.group_id
+                 ))
+    if (item.addr !== write_count / stim.wr_col)
+      `uvm_fatal("WRITE", $sformatf("addr mismatch at %0d: got %0d", write_count, item.addr))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))
     if (item.data !== expected_dst[write_count])
@@ -129,7 +126,6 @@ class transpose_scoreboard extends uvm_scoreboard;
     stim = current_stim("RESP");
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("RESP", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.is_sub !== 1'b0) `uvm_fatal("RESP", "is_sub should be 0")
     resp_count++;
   endfunction
 

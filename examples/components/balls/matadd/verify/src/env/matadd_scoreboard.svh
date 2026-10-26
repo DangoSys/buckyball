@@ -34,8 +34,10 @@ class matadd_scoreboard extends uvm_scoreboard;
     mem_model.clear_mem();
     for (int group = 0; group < stim.group_count; group++) begin
       for (int line = 0; line < stim.lines; line++) begin
-        mem_model.load_word_g(stim.op1_bank, group, line, stim.a_word(group, line));
-        mem_model.load_word_g(stim.op2_bank, group, line, stim.b_word(group, line));
+        mem_model.load_word_g(stim.op1_bank, stim.op1_group + group, line, stim.a_word(group, line
+                              ));
+        mem_model.load_word_g(stim.op2_bank, stim.op2_group + group, line, stim.b_word(group, line
+                              ));
       end
     end
     mem_model.arm();
@@ -51,24 +53,11 @@ class matadd_scoreboard extends uvm_scoreboard;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    matadd_cmd_item expected;
-    expected = current_stim("CMD");
-    if (item.bid !== expected.bid) `uvm_fatal("CMD", "bid mismatch")
-    if (item.funct7 !== expected.funct7) `uvm_fatal("CMD", "funct7 mismatch")
-    if (item.iter !== expected.iter) `uvm_fatal("CMD", "iter mismatch")
-    if (item.op1_bank !== expected.op1_bank || item.op2_bank !== expected.op2_bank ||
-        item.wr_bank !== expected.wr_bank)
-      `uvm_fatal("CMD", "bank field mismatch")
-    if (item.op1_col !== expected.group_count || item.op2_col !== expected.group_count ||
-        item.wr_col !== expected.group_count)
-      `uvm_fatal("CMD", "group field mismatch")
-    if (item.rob_id !== expected.rob_id) `uvm_fatal("CMD", "rob_id mismatch")
-    if (item.op1_en !== 1'b1 || item.op2_en !== 1'b1 || item.wr_spad_en !== 1'b1 ||
-        item.op1_from_spad !== 1'b1 || item.op2_from_spad !== 1'b1)
-      `uvm_fatal("CMD", "enable field mismatch")
-    if (item.meta_bank !== 0 || item.rs1 !== 0 || item.rs2 !== 0 || item.special !== 0 ||
-        item.is_sub !== 0 || item.sub_rob_id !== 0)
-      `uvm_fatal("CMD", "reserved field mismatch")
+    // Compare as plain BLink commands; the comparer rejects differing types.
+    bb_blink_cmd_item want = bb_blink_cmd_item::type_id::create("want");
+    want.copy(current_stim("CMD"));
+    if (!item.compare(want))
+      `uvm_fatal("CMD", $sformatf("command mismatch: got %s exp %s", item.sprint(), want.sprint()))
     if (cmd_count != 0) `uvm_fatal("CMD", "extra command observed")
     cmd_count++;
   endfunction
@@ -87,7 +76,8 @@ class matadd_scoreboard extends uvm_scoreboard;
     if (item.rob_id !== expected.rob_id) `uvm_fatal("READ", "rob_id mismatch")
     if (item.bank_id !== (item.port == 0 ? expected.op1_bank : expected.op2_bank))
       `uvm_fatal("READ", "bank mismatch")
-    if (item.group_id !== group || item.addr !== line)
+    if (item.group_id !== (item.port == 0 ? expected.op1_group : expected.op2_group) + group ||
+        item.addr !== line)
       `uvm_fatal("READ", $sformatf(
                  "address mismatch port=%0d group=%0d line=%0d", item.port, item.group_id, item.addr
                  ))
@@ -104,7 +94,7 @@ class matadd_scoreboard extends uvm_scoreboard;
     line  = write_count % expected.lines;
     if (item.port != 0 || item.bank_id !== expected.wr_bank || item.rob_id !== expected.rob_id)
       `uvm_fatal("WRITE", "port, bank, or rob_id mismatch")
-    if (item.group_id !== group || item.addr !== line)
+    if (item.group_id !== expected.wr_group + group || item.addr !== line)
       `uvm_fatal("WRITE", $sformatf("address mismatch group=%0d line=%0d", item.group_id, item.addr
                  ))
     if (item.mask !== 16'hffff) `uvm_fatal("WRITE", "mask mismatch")
@@ -117,8 +107,7 @@ class matadd_scoreboard extends uvm_scoreboard;
     matadd_cmd_item expected;
     expected = current_stim("RESP");
     if (resp_count != 0) `uvm_fatal("RESP", "extra response observed")
-    if (item.rob_id !== expected.rob_id || item.is_sub !== 0 || item.sub_rob_id !== 0)
-      `uvm_fatal("RESP", "response mismatch")
+    if (item.rob_id !== expected.rob_id) `uvm_fatal("RESP", "response mismatch")
     resp_count++;
   endfunction
 

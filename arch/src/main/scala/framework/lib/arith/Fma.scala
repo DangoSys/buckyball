@@ -29,8 +29,8 @@ class Fma(latency: Int, expWidth: Int, sigWidth: Int) extends Module {
   //------------------------------------------------------------------------
   //------------------------------------------------------------------------
 
-  val mulAddRecFNToRaw_preMul  = Instantiate(new hardfloat.MulAddRecFNToRaw_preMul(expWidth, sigWidth))
-  val mulAddRecFNToRaw_postMul = Instantiate(new hardfloat.MulAddRecFNToRaw_postMul(expWidth, sigWidth))
+  val mulAddRecFNToRaw_preMul  = Module(new hardfloat.MulAddRecFNToRaw_preMul(expWidth, sigWidth))
+  val mulAddRecFNToRaw_postMul = Module(new hardfloat.MulAddRecFNToRaw_postMul(expWidth, sigWidth))
 
   mulAddRecFNToRaw_preMul.io.op := io.op
   mulAddRecFNToRaw_preMul.io.a  := io.a
@@ -73,7 +73,7 @@ class Fma(latency: Int, expWidth: Int, sigWidth: Int) extends Module {
   //------------------------------------------------------------------------
   //------------------------------------------------------------------------
 
-  val roundRawFNToRecFN = Instantiate(new hardfloat.RoundRawFNToRecFN(expWidth, sigWidth, 0))
+  val roundRawFNToRecFN = Module(new hardfloat.RoundRawFNToRecFN(expWidth, sigWidth, 0))
 
   val round_regs = if (latency >= 2) 1 else 0
   roundRawFNToRecFN.io.invalidExc     := Pipe(valid_stage0, mulAddRecFNToRaw_postMul.io.invalidExc, round_regs).bits

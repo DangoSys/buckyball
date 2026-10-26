@@ -82,10 +82,11 @@ class RedmuleBall(
   val inWindow                                                                                 = bankRow >= startRow && bankRow < (startRow +& span)
   val readPort                                                                                 = Mux(region === 2.U, 1.U, 0.U)
 
+  // A continuation reads the previous C from the bank the destination held before this write.
   val readBank = Mux(
     region === 1.U,
     issue.op1_bank,
-    Mux(region === 2.U, issue.op2_bank, issue.wr_bank)
+    Mux(region === 2.U, issue.op2_bank, issue.wr_read_bank)
   )
 
   val readGroup = Mux(region === 1.U, issue.op1_group, Mux(region === 2.U, issue.op2_group, issue.wr_group))

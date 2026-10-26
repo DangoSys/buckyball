@@ -17,7 +17,7 @@ func.func @main() -> i8 {
   %output_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
   %loaded_input = buckyball.bank_mvin %input, %input_bank <{depth = 4 : i64, stride = 1 : i64}> : memref<4x4xi32>
   %loaded_scales = buckyball.bank_mvin %scales, %scale_bank <{depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
-  %result = buckyball.bank_custom "int32_to_fp32" (%loaded_input, %loaded_scales) -> %output_bank {rows = 1 : i64}
+  %result = buckyball.bank_custom "int32_to_fp32" (%loaded_input, %loaded_scales) -> %output_bank {rows = 1 : i64, relu = false}
   %stored = buckyball.bank_mvout %output, %result <{depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
   func.call @check_result(%output) : (memref<4x4xf32>) -> ()
   buckyball.bank_release %loaded_input

@@ -1,23 +1,24 @@
-// The reduce core has four banks: groups 0 and 1 share a two-group source
-// bank, group 2 then reuses its banks. The first add_f32 starts from +0
-// instead of the poison in the accumulator.
-func.func @reduce_groups(%pair: memref<2x2x4xi32>, %last: memref<2x4xi32>,
-                         %poison: memref<2x4xi32>, %output: memref<2x4xi32>)
+// A three-term sum as a chain of add_f32 into fresh banks: the first sum
+// lands in a bank holding poison, which it overwrites, and the second reuses
+// a released source bank.
+func.func @reduce_groups(%first: memref<2x4xi32>, %second: memref<2x4xi32>,
+                         %last: memref<2x4xi32>, %poison: memref<2x4xi32>,
+                         %output: memref<2x4xi32>)
     attributes {llvm.emit_c_interface} {
-  %source = buckyball.bank_alloc <{row = 1 : i64, col = 2 : i64}>
-  %accumulator = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %a = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
   %sum = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %groups = buckyball.bank_mvin %pair, %source <{depth = 2 : i64, stride = 1 : i64}> : memref<2x2x4xi32>
-  %poisoned = buckyball.bank_mvin %poison, %accumulator <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
-  %first = buckyball.bank_custom "add_f32" (%groups, %poisoned) -> %sum {rows = 2 : i64, group = 0 : i64, first = true}
-  %second = buckyball.bank_custom "add_f32" (%groups, %first) -> %poisoned {rows = 2 : i64, group = 1 : i64, first = false}
-  buckyball.bank_release %groups
-  %single = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %group2 = buckyball.bank_mvin %last, %single <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
-  %third = buckyball.bank_custom "add_f32" (%group2, %second) -> %first {rows = 2 : i64, group = 0 : i64, first = false}
-  %stored = buckyball.bank_mvout %output, %third <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
-  buckyball.bank_release %group2
-  buckyball.bank_release %second
+  %la = buckyball.bank_mvin %first, %a <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
+  %lb = buckyball.bank_mvin %second, %b <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
+  %poisoned = buckyball.bank_mvin %poison, %sum <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
+  %partial = buckyball.bank_custom "add_f32" (%la, %lb) -> %poisoned {rows = 2 : i64}
+  buckyball.bank_release %la
+  %d = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %ld = buckyball.bank_mvin %last, %d <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
+  %total = buckyball.bank_custom "add_f32" (%ld, %partial) -> %lb {rows = 2 : i64}
+  %stored = buckyball.bank_mvout %output, %total <{depth = 2 : i64, stride = 1 : i64}> : memref<2x4xi32>
+  buckyball.bank_release %ld
+  buckyball.bank_release %partial
   buckyball.bank_release %stored
   return
 }

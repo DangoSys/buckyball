@@ -7,7 +7,6 @@ pub const C_BANK: u32 = 5;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct MatrixCmd {
     pub kind: u32,
-    pub bid: u32,
     pub rob_id: u32,
     pub op1_words: u32,
     pub op2_words: u32,
@@ -15,6 +14,9 @@ pub struct MatrixCmd {
     pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,20 +28,27 @@ pub struct MatrixCase {
     pub writes: Vec<model::WriteExp>,
 }
 
-pub fn gen_case(seed: u32, index: u32, bid: u32, tile_rows: usize) -> MatrixCase {
+// Random cases also place every operand at a nonzero group base of its bank.
+pub fn gen_case(seed: u32, index: u32, tile_rows: usize) -> MatrixCase {
     match index {
-        0 => build_case(seed, bid, 16, 1, tile_rows),
-        1 => build_case(seed, bid, 16, 2, tile_rows),
-        2 => build_case(seed ^ index, bid, 16, 1, tile_rows),
+        0 => build_case(seed, 16, 1, tile_rows, false),
+        1 => build_case(seed, 16, 2, tile_rows, false),
+        2 => build_case(seed ^ index, 16, 1, tile_rows, false),
         _ => {
             let mut rng = Rng::new(seed, index);
             let blocks = 1 + (rng.next() % 2) as usize;
-            build_case(rng.next(), bid, 16, blocks, tile_rows)
+            build_case(rng.next(), 16, blocks, tile_rows, true)
         }
     }
 }
 
-fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize, tile_rows: usize) -> MatrixCase {
+fn build_case(
+    seed: u32,
+    rows: usize,
+    blocks: usize,
+    tile_rows: usize,
+    grouped: bool,
+) -> MatrixCase {
     assert!(matches!(rows, 16 | 32 | 64));
     assert!(matches!(blocks, 1 | 2));
     assert!(rows * model::RESULT_WORDS <= model::BANK_DEPTH);
@@ -55,11 +64,13 @@ fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize, tile_rows: usize)
     let mut a = Vec::with_capacity(blocks);
     let mut b = Vec::with_capacity(blocks);
     let mut result = vec![bias_values.clone(); rows];
+    let group = |rng: &mut Rng| if grouped { 1 + rng.next() % 3 } else { 0 };
     let mut commands = Vec::with_capacity(blocks + 1);
+    let bias_group = group(&mut rng);
     commands.push(MatrixCmd {
         kind: 0,
-        bid,
         rob_id: 0,
+        op1_group: bias_group,
         op1_words: 4,
         rs1_lo: model::encode_rs1(BIAS_BANK, 0, 0, 4) as u32,
         rs1_hi: (model::encode_rs1(BIAS_BANK, 0, 0, 4) >> 32) as u32,
@@ -89,10 +100,15 @@ fn build_case(seed: u32, bid: u32, rows: usize, blocks: usize, tile_rows: usize)
         }
         let rs1 = model::encode_rs1(a_bank, b_bank, C_BANK, model::CORE as u64);
         let rs2 = model::encode_rs2(rows, block == 0, block + 1 == blocks);
+        let op1_group = group(&mut rng);
+        let op2_group = group(&mut rng);
+        let wr_group = group(&mut rng);
         commands.push(MatrixCmd {
             kind: 1,
-            bid,
             rob_id: (block + 1) as u32,
+            op1_group,
+            op2_group,
+            wr_group,
             op1_words: rows as u32,
             op2_words: (model::CORE * rows.div_ceil(tile_rows)) as u32,
             rs1_lo: rs1 as u32,

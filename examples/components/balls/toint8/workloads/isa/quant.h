@@ -4,6 +4,13 @@
 #include <bbhw/isa/bb_func7.h>
 #include <bbhw/isa/isa.h>
 
+// Group g of every operand bank is channel block g (channels 16g..16g+15).
+// The input, scale (I32 only), and output banks have the same number of
+// groups; every group uses the same rows, so one instruction converts all
+// channel blocks. In group g, input rows hold 4 FP32/INT32 lanes (four rows
+// per pixel), scale rows 0..3 hold the 16 per-channel scales of block g, and
+// each output row holds the 16 INT8 channels of one pixel.
+
 static inline void bb_quant_f32_to_i8(uint64_t input_bank, uint64_t output_bank,
                                       uint64_t iter, float scale) {
   union {

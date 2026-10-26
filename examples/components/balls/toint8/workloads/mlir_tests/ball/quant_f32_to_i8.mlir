@@ -12,14 +12,14 @@ func.func @main() -> i8 {
   %scale = arith.constant 5.000000e-01 : f32
   %input = memref.get_global @input : memref<4x4xf32>
   %output = memref.alloc() alignment = 64 : memref<1x16xi8>
-  buckyball.mset <{bank = 0 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %input <{bank = 0 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
-  buckyball.custom "fp32_to_int8" args(%scale : f32) <{sources = array<i64: 0>, destination = 1 : i64}> {rows = 4 : i64}
-  buckyball.mvout %output <{bank = 1 : i64, depth = 1 : i64, stride = 1 : i64}> : memref<1x16xi8>
+  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  buckyball.mvin %input <{bank = 1 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
+  buckyball.custom "fp32_to_int8" args(%scale : f32) <{sources = array<i64: 1>, destination = 2 : i64}> {rows = 4 : i64}
+  buckyball.mvout %output <{bank = 2 : i64, depth = 1 : i64, stride = 1 : i64}> : memref<1x16xi8>
   func.call @check_result(%output) : (memref<1x16xi8>) -> ()
-  buckyball.mset <{bank = 0 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   memref.dealloc %output : memref<1x16xi8>
   return %zero_i8 : i8
 }

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -91,7 +92,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
+    top_module = input_data.get("top") or yosys_cfg["top"]
     liberty = yosys_cfg.get("liberty")
     if isinstance(liberty, str):
         liberty = os.path.expandvars(os.path.expanduser(liberty))
@@ -138,6 +139,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Yosys log dir: {yosys_output_dir}")
 
     read_commands = "\n".join([f"read_verilog -sv {src}" for src in vsrcs])
+    # SRAM macros instantiated by sram_macros.v are cells of their own liberty.
+    with open(input_data["generate_manifest"], "r") as f:
+        leaf_paths = json.load(f)["leaf_paths"]
+    for leaf in leaf_paths.values():
+        read_commands += f"\nread_liberty -lib {leaf['lib']}"
     yosys_script = f"{yosys_output_dir}/synth_area.ys"
     with open(yosys_script, "w") as f:
         f.write(f"{read_commands}\n")

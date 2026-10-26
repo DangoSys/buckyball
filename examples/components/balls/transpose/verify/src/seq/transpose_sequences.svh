@@ -3,7 +3,6 @@ class transpose_basic_seq extends uvm_sequence #(bb_blink_cmd_item);
 
   int unsigned case_index;
   int unsigned seed;
-  int unsigned bid;
 
   function new(string name = "transpose_basic_seq");
     super.new(name);
@@ -14,7 +13,7 @@ class transpose_basic_seq extends uvm_sequence #(bb_blink_cmd_item);
     transpose_cmd_item item;
     item = transpose_cmd_item::type_id::create("item");
     start_item(item);
-    item.load_rust_case(seed, case_index, bid);
+    item.load_rust_case(seed, case_index);
     finish_item(item);
   endtask
 endclass

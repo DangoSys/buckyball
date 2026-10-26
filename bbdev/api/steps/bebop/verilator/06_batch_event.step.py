@@ -89,7 +89,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     vsrc_dir = rtl_dir(
         bbdir,
         design,
-        "verilog",
+        "bebop",
         selection=input_data["target"],
     )
     manifest = str(runner_manifest(bbdir, design, input_data["target"]))

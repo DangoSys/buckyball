@@ -3,10 +3,12 @@ class int8add_cov extends uvm_component;
 
   uvm_analysis_imp_cmd #(bb_blink_cmd_item, int8add_cov) cmd_imp;
 
-  bit [6:0] cur_funct7;
+  bit [6:0] cur_funct;
+  int unsigned cur_col;
 
   covergroup cmd_cg;
-    coverpoint cur_funct7 {
+    coverpoint cur_col {bins c1 = {1}; bins c2 = {2};}
+    coverpoint cur_funct {
       bins add = {INT8ADD_THREAD_FUNCT7[6:0]}; bins relu = {INT8ADD_RELU_THREAD_FUNCT7[6:0]};
     }
   endgroup
@@ -20,9 +22,10 @@ class int8add_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    if (item.funct7 != INT8ADD_THREAD_FUNCT7[6:0] && item.funct7 != INT8ADD_RELU_THREAD_FUNCT7[6:0])
-      `uvm_fatal("COV", $sformatf("unexpected funct7 %0d", item.funct7))
-    cur_funct7 = item.funct7;
+    if (item.funct != INT8ADD_THREAD_FUNCT7[6:0] && item.funct != INT8ADD_RELU_THREAD_FUNCT7[6:0])
+      `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
+    cur_funct = item.funct;
+    cur_col   = item.op1_col;
     cmd_count++;
     cmd_cg.sample();
   endfunction

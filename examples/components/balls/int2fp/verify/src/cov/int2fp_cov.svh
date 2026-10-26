@@ -20,8 +20,8 @@ class int2fp_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    if (item.funct7 != INT32_TO_FP32_THREAD_FUNCT7[6:0])
-      `uvm_fatal("COV", $sformatf("unexpected funct7 %0d", item.funct7))
+    if (item.funct != INT32_TO_FP32_THREAD_FUNCT7[6:0])
+      `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
     cur_relu = item.rs2[0];
     cur_iter = item.iter;
     cmd_count++;

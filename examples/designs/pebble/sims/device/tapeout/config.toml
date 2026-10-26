@@ -1,5 +1,5 @@
 [tapeout]
-top = "DigitalTop"
+top = "DeviceTop"
 sram_process = "smic180"
 sram_mdf = "ip/smic180_sram_library.mdf.json"
 constraints_sdc = "area/constraints.sdc"

@@ -1,4 +1,5 @@
 +lint=TFIPC-L
++incdir+@UVM@/src/core
 +incdir+@UVM@/src/ball
 +incdir+@UVM@/src/ball/agents/cmd
 +incdir+@UVM@/src/ball/agents/mem
@@ -14,6 +15,7 @@
 +incdir+src/tests
 +incdir+@RTL@
 
+@UVM@/src/core/package.sv
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 

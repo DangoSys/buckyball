@@ -45,7 +45,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 
-    data = {"design": design, "top": req_arg(body, "top") or "DigitalTop"}
+    data = {"design": design, "top": req_arg(body, "top")}
     output_dir = req_arg(body, "output_dir")
     if output_dir:
         data["output_dir"] = output_dir

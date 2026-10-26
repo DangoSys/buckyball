@@ -4,6 +4,10 @@
 #include <bbhw/isa/bb_func7.h>
 #include <bbhw/isa/isa.h>
 
+// Group g of the input and output banks is channel block g (16 INT8 channels
+// per row). Both banks have the same number of groups; every group is pooled
+// with the same geometry, so one instruction pools all channel blocks.
+
 #define bb_maxpool(input_bank, output_bank, input_side, output_side, kernel,   \
                    stride, padding, input_base, output_base, output_stride,    \
                    start_row, start_col)                                       \

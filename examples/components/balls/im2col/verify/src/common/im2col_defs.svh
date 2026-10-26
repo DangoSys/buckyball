@@ -1,5 +1,4 @@
 typedef struct {
-  int unsigned bid;
   int unsigned iter;
   int unsigned ksize;
   int unsigned stride;
@@ -7,6 +6,8 @@ typedef struct {
   int unsigned window_count;
   int unsigned op1_bank;
   int unsigned wr_bank;
+  int unsigned op1_group;
+  int unsigned wr_group;
   int unsigned op1_col;
   int unsigned wr_col;
   int unsigned rob_id;
@@ -16,8 +17,7 @@ typedef struct {
 
 import "DPI-C" function int im2col_case_load(
   input int unsigned seed,
-  input int unsigned index,
-  input int unsigned bid
+  input int unsigned index
 );
 import "DPI-C" function void im2col_case_cmd(output im2col_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned im2col_case_src_word_lo(input int unsigned word_index);
@@ -32,11 +32,3 @@ localparam int IM2COL_THREAD_FUNCT7 = `IM2COL_FUNCT7;
 localparam int IM2COL_MAX_WORDS = 128;
 localparam int IM2COL_TIMEOUT_CYCLES = 100000;
 localparam int IM2COL_SEED = 32'hCAFE_BABE;
-
-function automatic int unsigned im2col_require_bid();
-  int unsigned bid;
-  if (!$value$plusargs("BID=%d", bid)) begin
-    `uvm_fatal("BID", "missing required plusarg +BID=<n>")
-  end
-  return bid;
-endfunction

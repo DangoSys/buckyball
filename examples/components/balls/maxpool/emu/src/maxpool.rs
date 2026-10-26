@@ -1,5 +1,5 @@
 use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
-use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
+use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::{BallModel, ExecContext};
 
 pub struct MaxPool;
@@ -73,10 +73,12 @@ impl BallModel for MaxPool {
         if input_bank == output_bank {
             panic!("maxpool: input and output banks must differ");
         }
-        for bank in [input_bank, output_bank] {
-            if !ctx.config(bank).allocated || ctx.config(bank).cols != 1 {
-                panic!("maxpool: each operand must occupy one allocated bank");
-            }
+        if !ctx.config(input_bank).allocated || !ctx.config(output_bank).allocated {
+            panic!("maxpool: bank not allocated");
+        }
+        let groups = ctx.config(input_bank).cols;
+        if groups == 0 || ctx.config(output_bank).cols != groups {
+            panic!("maxpool: input and output must have the same channel groups");
         }
         if xs2 >> 46 != 0
             || output_side * output_side != iter
@@ -96,8 +98,10 @@ impl BallModel for MaxPool {
             panic!("maxpool: illegal square pooling geometry");
         }
 
-        let pi = pbank(ctx, input_bank);
-        let po = pbank(ctx, output_bank);
+        // Group g of both operands is channel block g; each block uses the same rows.
+        for group in 0..groups {
+        let pi = pbank_group(ctx, input_bank, group);
+        let po = pbank_group(ctx, output_bank, group);
         let (input, output) = ctx.banks.read_write(pi, po);
         for output_y in 0..output_side {
             for output_x in 0..output_side {
@@ -129,6 +133,7 @@ impl BallModel for MaxPool {
                     output[output_offset + lane] = maximum[lane] as u8;
                 }
             }
+        }
         }
         0
     }

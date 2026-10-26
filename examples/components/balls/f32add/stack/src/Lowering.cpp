@@ -1,8 +1,12 @@
 //===- Lowering.cpp - F32AddBall in lower-buckyball -----------------------===//
 //
-// add_f32: C = B + A[group] over `rows` rows of four f32, RNE with canonical
-// NaN. A may have several groups; B and C have one. With `first` the sum
-// starts from +0 instead of reading B, which still names an allocated bank.
+// add_f32: C = A + B over `rows` rows of four f32, RNE with canonical NaN.
+// A, B and C are distinct one-group banks.
+//
+// The Ball reads both addends from its source banks and cannot read the old
+// destination, so it takes no read_destination: a sum of more terms is a
+// chain of add_f32 into fresh banks. The Ball's input group is group 0 and it
+// always reads B.
 //
 //===----------------------------------------------------------------------===//
 
@@ -23,24 +27,20 @@ public:
       return failure();
     Location loc = op.getLoc();
     int64_t rows = cast<IntegerAttr>(op->getAttr("rows")).getInt();
-    int64_t group = cast<IntegerAttr>(op->getAttr("group")).getInt();
-    bool first = cast<BoolAttr>(op->getAttr("first")).getValue();
     if (rows <= 0 || rows > buckyball_target::getBuckyballTarget().bankDepth ||
-        group < 0 || group > 31 || op.getSources().size() != 2 ||
+        op.getReadDestination() || op.getSources().size() != 2 ||
         op.getSources()[0] == op.getSources()[1] ||
         llvm::is_contained(op.getSources(), op.getDestination()))
-      return op.emitOpError(
-          "add_f32 requires distinct banks, rows within a bank and a group "
-          "in [0, 31]");
+      return op.emitOpError("add_f32 requires distinct A, B and C banks, rows "
+                            "within a bank and no read_destination");
+    // rs2: group 0 in [4:0]; bit 5 clear reads B.
     mlir::buddy::emitInstruction(
         rewriter, loc, buckyball_target::getBuckyballFunct7("F32ADD"),
         mlir::buddy::constantI64(rewriter, loc,
                                  mlir::buddy::bankFields(op.getSources(),
                                                          op.getDestination(),
                                                          false, rows)),
-        mlir::buddy::constantI64(rewriter, loc,
-                                 mlir::buddy::field(group, 0, 4) |
-                                     mlir::buddy::field(first, 5, 5)));
+        mlir::buddy::constantI64(rewriter, loc, 0));
     rewriter.eraseOp(op);
     return success();
   }

@@ -17,20 +17,18 @@ class int2fp_ball_test extends uvm_test;
   endfunction
 
   task run_phase(uvm_phase phase);
-    int unsigned bid = int2fp_require_bid();
     phase.raise_objection(this);
-    for (int unsigned index = 0; index < INT2FP_NUM_CASES; index++) run_case(index, bid);
+    for (int unsigned index = 0; index < INT2FP_NUM_CASES; index++) run_case(index);
     phase.drop_objection(this);
   endtask
 
-  task run_case(int unsigned index, int unsigned bid);
+  task run_case(int unsigned index);
     int2fp_basic_seq seq;
     int cycles = 0;
     apply_reset();
     env.scb.reset_counters();
     seq = int2fp_basic_seq::type_id::create("seq");
     seq.case_index = index;
-    seq.bid = bid;
     seq.start(env.cmd_agent.seqr);
     while (!env.scb.done()) begin
       @(posedge vif.clock);

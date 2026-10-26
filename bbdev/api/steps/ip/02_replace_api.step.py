@@ -31,7 +31,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "design": design,
         "consumer": req_arg(body, "consumer") or "dc",
-        "top": req_arg(body, "top") or "DigitalTop",
+        "top": req_arg(body, "top"),
     }
     if data["consumer"] not in ("dc", "yosys"):
         return ApiResponse(status=400, body={"error": "consumer must be dc or yosys"})

@@ -132,7 +132,7 @@ class FPU(b: ModuleParam) extends Module {
     arithmeticFlags(index) := fma.io.exceptionFlags
     arithmeticValid(index) := fma.io.validout
 
-    val div = Instantiate(new hardfloat.DivSqrtRecFN_small(exp, sig, 0))
+    val div = Module(new hardfloat.DivSqrtRecFN_small(exp, sig, 0))
     div.io.inValid        := start && isDivide
     div.io.sqrtOp         := operation === 11.U
     div.io.a              := a
@@ -149,7 +149,7 @@ class FPU(b: ModuleParam) extends Module {
     divideValid(index) := div.io.outValid_div || div.io.outValid_sqrt
     divideReady(index) := div.io.inReady
 
-    val compare = Instantiate(new hardfloat.CompareRecFN(exp, sig))
+    val compare = Module(new hardfloat.CompareRecFN(exp, sig))
     compare.io.a         := a
     compare.io.b         := b
     compare.io.signaling := funct3 =/= 2.U
@@ -168,7 +168,7 @@ class FPU(b: ModuleParam) extends Module {
     val injected       = Cat(injectedSign, rawA(width - 2, 0))
 
     val intInput = Mux(rs2(1), request.integer, Cat(Fill(32, !rs2(0) && request.integer(31)), request.integer(31, 0)))
-    val fromInt  = Instantiate(new hardfloat.INToRecFN(64, exp, sig))
+    val fromInt  = Module(new hardfloat.INToRecFN(64, exp, sig))
     fromInt.io.in             := intInput
     fromInt.io.signedIn       := !rs2(0)
     fromInt.io.roundingMode   := rounding
@@ -177,7 +177,7 @@ class FPU(b: ModuleParam) extends Module {
     val convertedIntegers = Wire(Vec(2, UInt(64.W)))
     val convertedFlags    = Wire(Vec(2, UInt(5.W)))
     for ((intWidth, intIndex) <- Seq(32, 64).zipWithIndex) {
-      val toInt = Instantiate(new hardfloat.RecFNToIN(exp, sig, intWidth))
+      val toInt = Module(new hardfloat.RecFNToIN(exp, sig, intWidth))
       toInt.io.in                 := a
       toInt.io.signedOut          := !rs2(0)
       toInt.io.roundingMode       := rounding
@@ -190,7 +190,7 @@ class FPU(b: ModuleParam) extends Module {
       if (single) request.a
       else
         Mux(request.a(63, 32).andR, request.a(31, 0), "h7fc00000".U(32.W))
-    val convert = Instantiate(new hardfloat.RecFNToRecFN(sourceExp, sourceSig, exp, sig))
+    val convert = Module(new hardfloat.RecFNToRecFN(sourceExp, sourceSig, exp, sig))
     convert.io.in             := hardfloat.recFNFromFN(sourceExp, sourceSig, source)
     convert.io.roundingMode   := rounding
     convert.io.detectTininess := 1.U

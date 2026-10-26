@@ -132,9 +132,10 @@ def sim_name(bbdir, design, product, *, selection):
 
 
 def rtl_dir(bbdir, design, product, output_dir=None, *, selection):
+    # Each product (verilog, tapeout, dc, p2e) elaborates its own RTL.
     name = sim_name(bbdir, design, product, selection=selection)
     return output_dir or os.path.join(
-        design_arch_root(bbdir, design, selection=selection), name
+        design_arch_root(bbdir, design, selection=selection), product, name
     )
 
 

@@ -20,8 +20,8 @@ class lut_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    if (item.funct7 != LUT_THREAD_FUNCT7[6:0])
-      `uvm_fatal("COV", $sformatf("unexpected funct7 %0d", item.funct7))
+    if (item.funct != LUT_THREAD_FUNCT7[6:0])
+      `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
     cur_iter = item.iter;
     cur_lut_cols = item.op2_col;
     cmd_count++;

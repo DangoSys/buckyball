@@ -196,8 +196,7 @@ WORKFLOW_COMMANDS = {
         "buildbitstream": (
             'Build Bebop P2E runtime case. Args: "--design <design> (--device | --core'
             " <entry>) [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir"
-            ' <dir>] [--stop-after vsyn|vcom]"; stop-after produces resource assessment'
-            " only, not a runnable case"
+            ' <dir>]"'
         ),
         "runworkload": (
             'Cold-load Bebop P2E workload. Args: "--design <design> (--device | --core'

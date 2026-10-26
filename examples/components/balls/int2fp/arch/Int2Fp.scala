@@ -69,6 +69,9 @@ class Int2Fp(
   val scaleBank    = RegInit(0.U(frontendParam.bank_id_len.W))
   val outputBank   = RegInit(0.U(frontendParam.bank_id_len.W))
   val bases        = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
+  // Every group of a virtual bank is one 16-channel block with the same rows.
+  val groups       = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
+  val group        = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
   val iterReg      = RegInit(0.U(frontendParam.iter_len.W))
   val rowReg       = RegInit(0.U(log2Ceil(memParam.bankEntries).W))
   val reluReg      = RegInit(false.B)
@@ -105,14 +108,14 @@ class Int2Fp(
   for (i <- 0 until mapping.inBW) {
     io.bankRead(i).rob_id           := robIdReg
     io.bankRead(i).bank_id          := Mux(i.U === 0.U, inputBank, scaleBank)
-    io.bankRead(i).group_id         := bases(i)
+    io.bankRead(i).group_id         := bases(i) + group
     io.bankRead(i).io.req.valid     := false.B
     io.bankRead(i).io.req.bits.addr := Mux(i.U === 0.U, rowReg, rowReg(1, 0))
     io.bankRead(i).io.resp.ready    := false.B
   }
   io.bankWrite(0).rob_id := robIdReg
   io.bankWrite(0).bank_id          := outputBank
-  io.bankWrite(0).group_id         := bases(2)
+  io.bankWrite(0).group_id         := bases(2) + group
   io.bankWrite(0).io.req.valid     := false.B
   io.bankWrite(0).io.req.bits.addr := rowReg
   io.bankWrite(0).io.req.bits.data := writeData
@@ -144,8 +147,9 @@ class Int2Fp(
           "INT32_TO_FP32 input exceeds bank depth"
         )
         assert(
-          cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U,
-          "INT32_TO_FP32 operands must each occupy one bank"
+          cmd.op1_col =/= 0.U && cmd.op1_col === cmd.op2_col && cmd.op1_col === cmd.wr_col &&
+            cmd.op1_col <= memParam.bankNum.U,
+          "INT32_TO_FP32 operands must have the same channel groups"
         )
         assert(
           cmd.op1_bank =/= cmd.op2_bank && cmd.op1_bank =/= cmd.wr_bank && cmd.op2_bank =/= cmd.wr_bank,
@@ -158,6 +162,8 @@ class Int2Fp(
         scaleBank              := cmd.op2_bank
         outputBank             := cmd.wr_bank
         bases                  := VecInit(cmd.op1_group, cmd.op2_group, cmd.wr_group)
+        groups                 := cmd.op1_col
+        group                  := 0.U
         iterReg                := cmd.iter
         rowReg                 := 0.U
         reluReg                := cmd.rs2(0)
@@ -220,10 +226,15 @@ class Int2Fp(
     is(writeResp) {
       io.bankWrite(0).io.resp.ready := true.B
       when(io.bankWrite(0).io.resp.fire) {
-        when(rowReg === iterReg - 1.U) {
+        when(rowReg === iterReg - 1.U && group + 1.U === groups) {
           state := complete
         }.otherwise {
-          rowReg                 := rowReg + 1.U
+          when(rowReg === iterReg - 1.U) {
+            group  := group + 1.U
+            rowReg := 0.U
+          }.otherwise {
+            rowReg := rowReg + 1.U
+          }
           readSent.foreach(_     := false.B)
           readReceived.foreach(_ := false.B)
           state                  := readReq

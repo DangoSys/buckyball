@@ -51,4 +51,7 @@ tests = [
   "toy-toy-mlirtest-linalg_conv2d_nhwc_hwcf-baremetal",
   "toy-toy-mlirtest-linalg_conv2d_nhwc_fhwc-baremetal",
   "toy-toy-mlirtest-linalg_conv2d_nchw_fchw-baremetal",
+  "toy-toy-mlirtest-linalg_conv2d_nhwc_hwcf_deep-baremetal",
+  "toy-toy-mlirtest-base_bank_loop_carried-baremetal",
+  "toy-toy-mlirtest-base_bank_transfer-baremetal",
 ]

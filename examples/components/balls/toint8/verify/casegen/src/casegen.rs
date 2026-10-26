@@ -14,17 +14,17 @@ pub const MAX_DST: usize = 4;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ToInt8Cmd {
     pub kind: u32,
-    pub bid: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub op2_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub op2_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
     pub input_base: u32,
@@ -68,16 +68,16 @@ impl ToInt8Case {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> ToInt8Case {
+pub fn gen_case(index: u32) -> ToInt8Case {
     match index {
-        0 => f32_signed(bid),
-        1 => f32_zero(bid),
-        2 => f32_rounding(bid),
-        3 => f32_rows(bid),
-        4 => i32_scale_rows(bid),
-        5 => i32_relu_tile(bid),
-        6 => i32_signed(bid),
-        7 => i32_offset(bid),
+        0 => f32_signed(),
+        1 => f32_zero(),
+        2 => f32_rounding(),
+        3 => f32_rows(),
+        4 => i32_scale_rows(),
+        5 => i32_relu_tile(),
+        6 => i32_signed(),
+        7 => i32_offset(),
         _ => panic!("toint8: unsupported directed case {index}"),
     }
 }
@@ -115,10 +115,6 @@ fn copy_addrs(src: &[u32]) -> [u32; MAX_DST] {
     out
 }
 
-fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u32) -> u64 {
-    u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20) | (u64::from(iter) << 30)
-}
-
 fn encode_i32_rs2(
     relu: bool,
     out_base: u32,
@@ -153,7 +149,6 @@ pub(crate) fn validate(
     op2_col: u32,
     wr_col: u32,
     iter: u32,
-    rs1: u64,
     rs2: u64,
 ) {
     if kind != KIND_F32 && kind != KIND_I32 {
@@ -177,14 +172,8 @@ pub(crate) fn validate(
     if op1_bank == wr_bank {
         panic!("ToInt8Ball input and output banks must differ");
     }
-    if (rs1 & 0x3ff) != u64::from(op1_bank) || ((rs1 >> 20) & 0x3ff) != u64::from(wr_bank) {
-        panic!("toint8: rs1 bank fields mismatch");
-    }
-    if ((rs1 >> 30) & 0x3_ffff_ffff) != u64::from(iter) {
-        panic!("toint8: rs1 iter mismatch");
-    }
     if kind == KIND_F32 {
-        if ((rs1 >> 10) & 0x3ff) != 0 || op2_bank != 0 {
+        if op2_bank != 0 {
             panic!("QUANT_F32_TO_I8 reserves input bank 1");
         }
         if rs2 >> 32 != 0 {
@@ -196,9 +185,6 @@ pub(crate) fn validate(
     } else {
         if op2_bank >= BANK_NUM {
             panic!("QUANT_I32_TO_I8 scale bank is invalid");
-        }
-        if ((rs1 >> 10) & 0x3ff) != u64::from(op2_bank) {
-            panic!("toint8: rs1 scale bank mismatch");
         }
         if op2_col != 1 {
             panic!("QUANT_I32_TO_I8 scale must occupy one bank");
@@ -299,9 +285,10 @@ fn i32_addrs(iter: u32, out_base: u32, width: u32, stride: u32) -> Vec<u32> {
         .collect()
 }
 
+// `groups` are the op1/op2/wr base groups.
 fn finish(
     kind: u32,
-    bid: u32,
+    groups: [u32; 3],
     iter: u32,
     op1_bank: u32,
     op2_bank: u32,
@@ -317,9 +304,8 @@ fn finish(
 ) -> ToInt8Case {
     let op1_col = 1;
     let wr_col = 1;
-    let rs1 = encode_rs1(op1_bank, op2_bank, wr_bank, iter);
     validate(
-        kind, op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs1, rs2,
+        kind, op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs2,
     );
     if src.len() != iter as usize {
         panic!("toint8: src rows {} != iter {iter}", src.len());
@@ -334,22 +320,21 @@ fn finish(
     } else if scale.len() != SCALE_ROWS {
         panic!("QUANT_I32_TO_I8 must emit four scale rows");
     }
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     ToInt8Case {
         cmd: ToInt8Cmd {
             kind,
-            bid,
             iter,
             op1_bank,
             op2_bank,
             wr_bank,
+            op1_group: groups[0],
+            op2_group: groups[1],
+            wr_group: groups[2],
             op1_col,
             op2_col,
             wr_col,
             rob_id,
-            rs1_lo,
-            rs1_hi,
             rs2_lo,
             rs2_hi,
             input_base,
@@ -364,7 +349,7 @@ fn finish(
     }
 }
 
-fn f32_case(bid: u32, rob_id: u32, scale: f32, values: &[f32]) -> ToInt8Case {
+fn f32_case(groups: [u32; 3], rob_id: u32, scale: f32, values: &[f32]) -> ToInt8Case {
     let bits: Vec<u32> = values.iter().map(|v| v.to_bits()).collect();
     let src = pack_u32s(&bits);
     let iter = src.len() as u32;
@@ -372,7 +357,7 @@ fn f32_case(bid: u32, rob_id: u32, scale: f32, values: &[f32]) -> ToInt8Case {
     let dst_addr: Vec<u32> = (0..dst.len() as u32).collect();
     finish(
         KIND_F32,
-        bid,
+        groups,
         iter,
         0,
         0,
@@ -389,7 +374,7 @@ fn f32_case(bid: u32, rob_id: u32, scale: f32, values: &[f32]) -> ToInt8Case {
 }
 
 fn i32_case(
-    bid: u32,
+    groups: [u32; 3],
     rob_id: u32,
     op1_bank: u32,
     op2_bank: u32,
@@ -411,7 +396,7 @@ fn i32_case(
     let dst_addr = i32_addrs(iter, out_base, width, stride);
     finish(
         KIND_I32,
-        bid,
+        groups,
         iter,
         op1_bank,
         op2_bank,
@@ -427,9 +412,9 @@ fn i32_case(
     )
 }
 
-fn f32_signed(bid: u32) -> ToInt8Case {
+fn f32_signed() -> ToInt8Case {
     f32_case(
-        bid,
+        [0, 0, 0],
         2,
         0.5,
         &[
@@ -439,13 +424,13 @@ fn f32_signed(bid: u32) -> ToInt8Case {
     )
 }
 
-fn f32_zero(bid: u32) -> ToInt8Case {
-    f32_case(bid, 3, 1.0, &[0.0; 16])
+fn f32_zero() -> ToInt8Case {
+    f32_case([1, 0, 2], 3, 1.0, &[0.0; 16])
 }
 
-fn f32_rounding(bid: u32) -> ToInt8Case {
+fn f32_rounding() -> ToInt8Case {
     f32_case(
-        bid,
+        [2, 0, 1],
         4,
         1.0,
         &[
@@ -455,9 +440,9 @@ fn f32_rounding(bid: u32) -> ToInt8Case {
     )
 }
 
-fn f32_rows(bid: u32) -> ToInt8Case {
+fn f32_rows() -> ToInt8Case {
     f32_case(
-        bid,
+        [3, 0, 3],
         5,
         2.0,
         &[
@@ -468,37 +453,37 @@ fn f32_rows(bid: u32) -> ToInt8Case {
     )
 }
 
-fn i32_scale_rows(bid: u32) -> ToInt8Case {
+fn i32_scale_rows() -> ToInt8Case {
     let mut values = [0i32; 16];
     let mut scales = [0.0f32; 16];
     for i in 0..16 {
         values[i] = i as i32 - 8;
         scales[i] = 0.5 + (i as f32) * 0.25;
     }
-    i32_case(bid, 6, 0, 1, 2, false, 0, 1, 1, 1, 0, &values, &scales)
+    i32_case([0, 0, 0], 6, 0, 1, 2, false, 0, 1, 1, 1, 0, &values, &scales)
 }
 
-fn i32_relu_tile(bid: u32) -> ToInt8Case {
+fn i32_relu_tile() -> ToInt8Case {
     let mut values = [0i32; 64];
     for position in 0..4 {
         for channel in 0..16 {
             values[position * 16 + channel] = position as i32 * 20 + channel as i32 - 8;
         }
     }
-    i32_case(bid, 7, 0, 1, 2, true, 3, 2, 2, 4, 0, &values, &[1.0; 16])
+    i32_case([1, 2, 3], 7, 0, 1, 2, true, 3, 2, 2, 4, 0, &values, &[1.0; 16])
 }
 
-fn i32_signed(bid: u32) -> ToInt8Case {
+fn i32_signed() -> ToInt8Case {
     let values: [i32; 16] = [
         -300, -128, -5, -1, 0, 1, 5, 127, 128, 200, -64, 64, -7, 7, 3, -3,
     ];
-    i32_case(bid, 8, 0, 1, 2, false, 0, 1, 1, 1, 0, &values, &[1.0; 16])
+    i32_case([3, 1, 2], 8, 0, 1, 2, false, 0, 1, 1, 1, 0, &values, &[1.0; 16])
 }
 
-fn i32_offset(bid: u32) -> ToInt8Case {
+fn i32_offset() -> ToInt8Case {
     let mut values = [0i32; 32];
     for i in 0..32 {
         values[i] = i as i32 - 16;
     }
-    i32_case(bid, 9, 0, 1, 2, true, 1, 2, 1, 2, 4, &values, &[0.5; 16])
+    i32_case([2, 3, 1], 9, 0, 1, 2, true, 1, 2, 1, 2, 4, &values, &[0.5; 16])
 }

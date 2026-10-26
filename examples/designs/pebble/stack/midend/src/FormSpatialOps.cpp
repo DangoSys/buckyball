@@ -1,6 +1,7 @@
 //===- FormSpatialOps.cpp - Recognize quantized convolution chains --------===//
 #include "Custom/CustomOps.h"
 #include "Lowering.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
@@ -55,6 +56,27 @@ void pebble::formSpatialOps(func::FuncOp function) {
     if (!lhs || !rhs)
       continue;
     auto quant = frontend(lhs->getOperand(0), "frontend.fp32_to_int8");
+    // IM2COL takes square kernels up to its size with unit dilation, and the
+    // array tiles a single image with one stride.
+    auto weightType = cast<RankedTensorType>(rhs->getOperand(0).getType());
+    auto inputType = cast<RankedTensorType>(input.getType());
+    auto outputType = cast<RankedTensorType>(op->getResult(0).getType());
+    auto strides =
+        llvm::to_vector(cast<DenseIntElementsAttr>(op->getAttr("strides"))
+                            .getValues<int64_t>());
+    auto dilations =
+        llvm::to_vector(cast<DenseIntElementsAttr>(op->getAttr("dilations"))
+                            .getValues<int64_t>());
+    if (!weightType.hasStaticShape() || !inputType.hasStaticShape() ||
+        !outputType.hasStaticShape() || inputType.getDimSize(0) != 1 ||
+        weightType.getDimSize(2) != weightType.getDimSize(3) ||
+        weightType.getDimSize(2) >
+            buckyball_target::getBuckyballBallParam("IM2COL", "maxKSize") ||
+        strides[0] != strides[1] || dilations != SmallVector<int64_t>{1, 1} ||
+        !pebble::spatialTile(outputType.getDimSize(1), outputType.getDimSize(2),
+                             1, strides[0], weightType.getDimSize(2))
+             .tile)
+      continue;
     Operation *end = op;
     Value biasValue;
     Operation *initial = op->getOperand(2).getDefiningOp();
@@ -116,14 +138,8 @@ void pebble::formSpatialOps(func::FuncOp function) {
                          ValueRange{quant->getOperand(0), rhs->getOperand(0),
                                     bias->getOperand(0), quant->getOperand(1),
                                     lhs->getOperand(1), rhs->getOperand(1)});
-    custom->setAttr("strides",
-                    rewriter.getDenseI64ArrayAttr(llvm::to_vector(
-                        cast<DenseIntElementsAttr>(op->getAttr("strides"))
-                            .getValues<int64_t>())));
-    custom->setAttr("dilations",
-                    rewriter.getDenseI64ArrayAttr(llvm::to_vector(
-                        cast<DenseIntElementsAttr>(op->getAttr("dilations"))
-                            .getValues<int64_t>())));
+    custom->setAttr("strides", rewriter.getDenseI64ArrayAttr(strides));
+    custom->setAttr("dilations", rewriter.getDenseI64ArrayAttr(dilations));
     custom->setAttr("padding", rewriter.getDenseI64ArrayAttr(padding));
     rewriter.replaceOp(end, custom.getOutputs());
     if (depthwise) {
@@ -147,11 +163,16 @@ void pebble::formSpatialOps(func::FuncOp function) {
       roots.push_back(op);
   });
   DominanceInfo dominance(function);
+  const auto &target = buckyball_target::getBuckyballTarget();
+  // The banks of the resident images that chains leave for the next stage.
+  DenseMap<Value, int64_t> imageBanks;
   int64_t group = 0;
   for (auto root : roots) {
     Value value = root.getResult(0);
+    auto outputType = cast<RankedTensorType>(value.getType());
     SmallVector<Operation *> links;
     bool relu = false, pool = false, flatten = false;
+    int64_t window = 1;
     while (value.hasOneUse()) {
       Operation *user = *value.getUsers().begin();
       if (user->getBlock() != root->getBlock())
@@ -171,10 +192,19 @@ void pebble::formSpatialOps(func::FuncOp function) {
           break;
         relu = true;
       } else if (auto pooling = dyn_cast<linalg::PoolingNhwcMaxOp>(user)) {
+        // MAXPOOL pools square windows that tile the convolution output.
+        auto filter =
+            cast<RankedTensorType>(pooling.getInputs()[1].getType()).getShape();
         if (pool || flatten ||
             !llvm::all_of(pooling.getDilations().getValues<int64_t>(),
-                          [](int64_t v) { return v == 1; }))
+                          [](int64_t v) { return v == 1; }) ||
+            filter[0] != filter[1] ||
+            !llvm::all_of(pooling.getStrides().getValues<int64_t>(),
+                          [&](int64_t v) { return v == filter[0]; }) ||
+            outputType.getDimSize(1) % filter[0] ||
+            outputType.getDimSize(2) % filter[0])
           break;
+        window = filter[0];
         Value initial = pooling.getOutputs()[0];
         if (auto fill = initial.getDefiningOp<linalg::FillOp>())
           initial = fill.getInputs()[0];
@@ -232,6 +262,33 @@ void pebble::formSpatialOps(func::FuncOp function) {
       }
     if (barrier)
       continue;
+    // The chain keeps every panel of its pooled output in a bank while it
+    // reads the resident image before it and works in seven more banks.
+    auto weightType = cast<RankedTensorType>(root.getInputs()[1].getType());
+    int64_t height = outputType.getDimSize(1) / window;
+    int64_t width = outputType.getDimSize(2) / window;
+    int64_t channels = weightType.getDimSize(0);
+    auto [tile, side] = pebble::spatialTile(
+        height, width, window,
+        cast<DenseI64ArrayAttr>(root->getAttr("strides"))[0],
+        weightType.getDimSize(2));
+    if (!tile)
+      continue;
+    int64_t banks = (height + side - 1) / side * ((width + side - 1) / side) *
+                    ((channels + 15) / 16);
+    if (imageBanks.lookup(root.getInputs()[0]) + banks + 7 > target.bankNum)
+      continue;
+    // A flattened image is one transposed 16x16 panel that feeds a resident
+    // one-row Linear.
+    if (flatten) {
+      auto linearWeight = cast<RankedTensorType>(next.getInputs()[1].getType());
+      if (height != 4 || width != 4 || channels != 16 ||
+          linearWeight.getDimSize(0) > target.bankDepth ||
+          linearWeight.getDimSize(1) % 16)
+        continue;
+    } else if (!terminalQuant) {
+      imageBanks[value] = banks;
+    }
     if (terminalQuant)
       links.push_back(consumer);
     auto id = rewriter.getI64IntegerAttr(group++);

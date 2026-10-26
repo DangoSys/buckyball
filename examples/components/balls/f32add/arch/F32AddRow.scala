@@ -20,7 +20,7 @@ class F32AddRow extends Module {
 
   val result = Wire(Vec(4, UInt(32.W)))
   for (lane <- 0 until 4) {
-    val add = Instantiate(new AddRecFN(8, 24))
+    val add = Module(new AddRecFN(8, 24))
     add.io.subOp          := false.B
     add.io.a              := recFNFromFN(8, 24, io.accumulator(32 * lane + 31, 32 * lane))
     add.io.b              := recFNFromFN(8, 24, io.source(32 * lane + 31, 32 * lane))

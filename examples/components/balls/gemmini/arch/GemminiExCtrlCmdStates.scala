@@ -27,8 +27,9 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
       op2_bank         := io.cmdReq.bits.op2_bank
       wr_bank          := io.cmdReq.bits.wr_bank
       wr_read_bank     := io.cmdReq.bits.wr_read_bank
-      op1_group        := io.cmdReq.bits.op1_group
-      op2_group        := io.cmdReq.bits.op2_group
+      // rs2[41:36] and rs2[47:42] select a group of op1 and op2 within their banks.
+      op1_group        := io.cmdReq.bits.op1_group + io.cmdReq.bits.rs2(41, 36)
+      op2_group        := io.cmdReq.bits.op2_group + io.cmdReq.bits.rs2(47, 42)
       wr_group         := io.cmdReq.bits.wr_group
       op1_base         := io.cmdReq.bits.rs2(15, 6)
       op2_base         := io.cmdReq.bits.rs2(25, 16)
@@ -55,6 +56,7 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
         )
         state            := sCommit
       }.elsewhen(sub_cmd === GemminiSubCmd.PRELOAD) {
+        assert(io.cmdReq.bits.rs2(41, 36) < io.cmdReq.bits.op1_col, "Gemmini preload op1 group outside the bank")
         read_row_cnt  := 0.U
         feed_row_cnt  := 0.U
         req_sent      := false.B
@@ -64,6 +66,10 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
       }.elsewhen(
         sub_cmd === GemminiSubCmd.COMPUTE_PRELOADED || sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
       ) {
+        assert(
+          io.cmdReq.bits.rs2(41, 36) < io.cmdReq.bits.op1_col && io.cmdReq.bits.rs2(47, 42) < io.cmdReq.bits.op2_col,
+          "Gemmini compute operand group outside the bank"
+        )
         read_row_cnt        := 0.U
         feed_row_cnt        := 0.U
         outBufRows          := 0.U

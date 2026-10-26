@@ -72,11 +72,11 @@ class Int8MulBall(
   val gateValue      = (gateWord >> (lane << 3))(7, 0).asSInt
   val inputValue     = (inputWord >> (lane << 3))(7, 0).asSInt
   val integerProduct = (gateValue * inputValue).asUInt
-  val productToFloat = Instantiate(new INToRecFN(16, 8, 24))
+  val productToFloat = Module(new INToRecFN(16, 8, 24))
 
   val scale = Instantiate(new Fma(3, 8, 24))
 
-  val toInt8 = Instantiate(new RecFNToIN(8, 24, 8))
+  val toInt8 = Module(new RecFNToIN(8, 24, 8))
 
   productToFloat.io.signedIn       := true.B
   productToFloat.io.in             := productReg

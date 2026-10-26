@@ -17,23 +17,20 @@ class matadd_ball_test extends uvm_test;
   endfunction
 
   task run_phase(uvm_phase phase);
-    int unsigned bid;
-    bid = matadd_require_bid();
     phase.raise_objection(this);
-    run_case(0, "ONE_GROUP_16_LINES", bid);
-    run_case(1, "TWO_GROUPS_16_LINES", bid);
-    run_case(2, "TWO_GROUPS_64_LINES", bid);
+    run_case(0, "ONE_GROUP_16_LINES");
+    run_case(1, "TWO_GROUPS_16_LINES");
+    run_case(2, "TWO_GROUPS_64_LINES");
     phase.drop_objection(this);
   endtask
 
-  task run_case(int unsigned index, string name, int unsigned bid);
+  task run_case(int unsigned index, string name);
     matadd_seq seq;
     int cycles;
     apply_reset();
     env.scb.reset_counters();
     seq = matadd_seq::type_id::create("seq");
     seq.case_index = index;
-    seq.bid = bid;
     seq.start(env.cmd_agent.seqr);
     cycles = 0;
     while (!env.scb.done()) begin

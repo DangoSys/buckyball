@@ -4,6 +4,10 @@
 // four; the destination receives rows / 4 rows of sixteen i8,
 // clamp(round_half_even(x * multiplier), -128, 127). Argument 0 is the f32
 // multiplier.
+// int32_to_int8: source 0 holds `rows` rows of sixteen i32 (four bank rows
+// each), source 1 the sixteen f32 scales of the columns (four bank rows); the
+// destination receives `rows` rows of sixteen i8,
+// clamp(round_half_even(x * scale), -128, 127), with `relu` at least zero.
 //
 //===----------------------------------------------------------------------===//
 
@@ -48,20 +52,16 @@ public:
     if (op.getKind() != "int32_to_int8")
       return failure();
     auto rows = cast<IntegerAttr>(op->getAttr("rows")).getInt();
-    auto base = cast<IntegerAttr>(op->getAttr("wr_base")).getInt();
     bool relu = cast<BoolAttr>(op->getAttr("relu")).getValue();
     int64_t depth = buckyball_target::getBuckyballTarget().bankDepth;
-    if (rows <= 0 || rows > 127 || rows * 4 > depth || base < 0 || base > 127 ||
-        base + rows > depth)
-      return op.emitOpError(
-          "INT32-to-INT8 rows or wr_base exceed the ISA range");
-    // One row contains sixteen output bytes. A partial update retains the
-    // destination version; reading an old destination alone does not do that.
+    if (rows <= 0 || rows > 127 || rows * 4 > depth)
+      return op.emitOpError("INT32-to-INT8 rows exceed the ISA range");
+    // The output rows start at the base of the destination: width one, height
+    // `rows`, stride one.
     uint64_t rs1 = mlir::buddy::bankFields(op.getSources(), op.getDestination(),
-                                           false, rows * 4) |
-                   (uint64_t(op.getReadDestination()) << 63);
-    uint64_t rs2 = uint64_t(relu) | (uint64_t(base) << 1) | (1ULL << 8) |
-                   (uint64_t(rows) << 15) | (1ULL << 22);
+                                           false, rows * 4);
+    uint64_t rs2 =
+        uint64_t(relu) | (1ULL << 8) | (uint64_t(rows) << 15) | (1ULL << 22);
     mlir::buddy::emitInstruction(
         rewriter, op.getLoc(),
         buckyball_target::getBuckyballFunct7("QUANT_I32_TO_I8"),

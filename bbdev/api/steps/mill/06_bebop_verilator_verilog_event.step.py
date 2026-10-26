@@ -5,7 +5,7 @@ Generates Verilog via mill for bebop verilator
 """
 
 import os
-import time
+import shutil
 import sys
 from motia import FlowContext, queue
 
@@ -52,7 +52,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         mill_config, build_dir = rtl_out(
             bbdir,
             design,
-            "verilog",
+            "bebop",
             input_data.get("output_dir"),
             selection=input_data["target"],
         )
@@ -67,7 +67,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             selection=input_data["target"],
         )
         if os.path.exists(build_dir):
-            os.rename(build_dir, f"{build_dir}.previous-{time.time_ns()}")
+            shutil.rmtree(build_dir)
         os.makedirs(build_dir)
         ctx.logger.info(f"Using mill target: {input_data["target"]}")
         ctx.logger.info(f"Using build directory: {build_dir}")

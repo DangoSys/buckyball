@@ -34,7 +34,7 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    top_module = input_data.get("top") or "DigitalTop"
+    top_module = input_data["top"]
     activity_path = input_data.get("activity")
     activity_format = input_data.get("format")
     analysis_dir = input_data.get("analysis_dir")

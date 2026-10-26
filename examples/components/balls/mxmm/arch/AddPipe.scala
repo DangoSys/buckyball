@@ -22,7 +22,7 @@ class AddPipe extends Module {
   val decodedA     = RegEnable(rawFloatFromRecFN(8, 24, io.a), io.valid)
   val decodedB     = RegEnable(rawFloatFromRecFN(8, 24, io.b), io.valid)
   val decodedValid = RegNext(io.valid, false.B)
-  val add          = Instantiate(new AddRawFN(8, 24))
+  val add          = Module(new AddRawFN(8, 24))
   add.io.subOp        := false.B
   add.io.a            := decodedA
   add.io.b            := decodedB
@@ -31,7 +31,7 @@ class AddPipe extends Module {
   val sum      = RegEnable(add.io.rawOut, decodedValid)
   val invalid  = RegEnable(add.io.invalidExc, decodedValid)
   val sumValid = RegNext(decodedValid, false.B)
-  val round    = Instantiate(new RoundRawFNToRecFN(8, 24, 0))
+  val round    = Module(new RoundRawFNToRecFN(8, 24, 0))
   round.io.in             := sum
   round.io.invalidExc     := invalid
   round.io.infiniteExc    := false.B

@@ -1,6 +1,5 @@
 from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from pathlib import Path
 
 from utils.event_common import require_design
 from utils.path import get_buckyball_path, rtl_dir
@@ -33,17 +32,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         selection=selection,
     )
 
-    stop_after = body.get("stop_after", body.get("stop-after"))
-    if stop_after is not None and stop_after not in ("vsyn", "vcom"):
-        return ApiResponse(
-            status=400, body={"error": "stop-after must be vsyn or vcom"}
-        )
     output_dir = body.get("output_dir") or body.get("output-dir")
-    if stop_after and output_dir and Path(output_dir).exists():
-        return ApiResponse(
-            status=400,
-            body={"error": "Resource assessment requires a fresh output_dir"},
-        )
     data = {
         "design": design,
         "diff": bool(body.get("diff", False)),
@@ -51,7 +40,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "mtrace": bool(body.get("mtrace", False)),
         "vsrc_dir": vsrc_dir,
         "output_dir": output_dir,
-        "stop_after": stop_after,
     }
     await ctx.enqueue(
         {

@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 
 from motia import FlowContext, queue
@@ -37,7 +38,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             input_data.get("output_dir"),
             selection=input_data["target"],
         )
-        os.makedirs(build_dir, exist_ok=True)
+        if os.path.exists(build_dir):
+            shutil.rmtree(build_dir)
+        os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         command, directory = design_cmd(

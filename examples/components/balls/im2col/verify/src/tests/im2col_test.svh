@@ -18,27 +18,25 @@ class im2col_ball_test extends uvm_test;
   endfunction
 
   task run_phase(uvm_phase phase);
-    int unsigned bid;
-    bid = im2col_require_bid();
     phase.raise_objection(this);
-    run_directed(bid);
-    run_random(bid);
+    run_directed();
+    run_random();
     phase.drop_objection(this);
   endtask
 
-  task run_directed(int unsigned bid);
-    run_case(0, "DIR_K3_PAD0", bid);
-    run_case(1, "DIR_K3_PAD1", bid);
+  task run_directed();
+    run_case(0, "DIR_K3_PAD0");
+    run_case(1, "DIR_K3_PAD1");
   endtask
 
-  task run_random(int unsigned bid);
+  task run_random();
     int i;
     for (i = 2; i <= 21; i++) begin
-      run_case(i, $sformatf("RND_%0d", i), bid);
+      run_case(i, $sformatf("RND_%0d", i));
     end
   endtask
 
-  task run_case(int unsigned idx, string label, int unsigned bid);
+  task run_case(int unsigned idx, string label);
     im2col_basic_seq seq;
     int cycles;
 
@@ -47,7 +45,6 @@ class im2col_ball_test extends uvm_test;
 
     seq = im2col_basic_seq::type_id::create("seq");
     seq.case_index = idx;
-    seq.bid = bid;
     seq.start(env.cmd_agent.seqr);
 
     cycles = 0;

@@ -24,7 +24,7 @@ func.func @main() -> i8 {
   %output_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
   %loaded_gate = buckyball.bank_mvin %gate, %gate_bank <{depth = 1 : i64, stride = 1 : i64}> : memref<1x@BB_BANK_I8_LANES@xi8>
   %loaded_input = buckyball.bank_mvin %input, %input_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
-  %result = buckyball.bank_custom "gate_mul_i8" (%loaded_gate, %loaded_input) -> %output_bank args(%ratio : f32) {rows = @BB_BANK_LINES@ : i64, gate_row = 0 : i64}
+  %result = buckyball.bank_custom "gate_mul_i8" (%loaded_gate, %loaded_input) -> %output_bank args(%ratio : f32) {rows = @BB_BANK_LINES@ : i64}
   %stored = buckyball.bank_mvout %output, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
   func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
   buckyball.bank_release %loaded_gate

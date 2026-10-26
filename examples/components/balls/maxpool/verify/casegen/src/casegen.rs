@@ -7,15 +7,14 @@ pub const NUM_CASES: u32 = 9;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaxPoolCmd {
-    pub bid: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
     pub input_base: u32,
@@ -79,10 +78,6 @@ fn field(val: u32, lo: u32, hi: u32) -> u64 {
     (u64::from(val) & mask) << lo
 }
 
-fn encode_rs1(input_bank: u32, output_bank: u32, iter: u32) -> u64 {
-    field(input_bank, 0, 9) | field(0, 10, 19) | field(output_bank, 20, 29) | field(iter, 30, 63)
-}
-
 fn encode_rs2(geo: &model::Geo) -> u64 {
     field(geo.input_side as u32, 0, 3)
         | field(geo.output_side as u32, 4, 7)
@@ -100,24 +95,12 @@ fn split_rs(value: u64) -> (u32, u32) {
     (value as u32, (value >> 32) as u32)
 }
 
-fn validate_cmd(op1_bank: u32, wr_bank: u32, iter: u32, rs1: u64, rs2: u64) {
+fn validate_cmd(op1_bank: u32, wr_bank: u32, iter: u32, rs2: u64) {
     if iter == 0 {
         panic!("maxpool: iter must be positive");
     }
     if op1_bank == wr_bank {
         panic!("maxpool: input and output banks must differ");
-    }
-    if (rs1 & 0x3ff) != u64::from(op1_bank) {
-        panic!("maxpool: rs1 bank0 mismatch");
-    }
-    if ((rs1 >> 10) & 0x3ff) != 0 {
-        panic!("maxpool: input bank 1 must be zero");
-    }
-    if ((rs1 >> 20) & 0x3ff) != u64::from(wr_bank) {
-        panic!("maxpool: rs1 bank2 mismatch");
-    }
-    if ((rs1 >> 30) & 0x3fff_ffff) != u64::from(iter) {
-        panic!("maxpool: rs1 iter mismatch");
     }
     if (rs2 >> 46) != 0 {
         panic!("maxpool: reserved rs2 bits must be zero");
@@ -169,7 +152,7 @@ fn copy_addrs<const N: usize>(src: &[u32]) -> [u32; N] {
     out
 }
 
-fn build_case(spec: CaseSpec, bid: u32) -> MaxPoolCase {
+fn build_case(spec: CaseSpec) -> MaxPoolCase {
     model::validate(&spec.geo);
     let iter = model::iter_for(&spec.geo);
     let input_bytes = if spec.ctest_input {
@@ -222,24 +205,22 @@ fn build_case(spec: CaseSpec, bid: u32) -> MaxPoolCase {
         panic!("maxpool: gold rows {} != iter {iter}", dst_addrs.len());
     }
 
-    let rs1 = encode_rs1(spec.op1_bank, spec.wr_bank, iter);
     let rs2 = encode_rs2(&spec.geo);
-    validate_cmd(spec.op1_bank, spec.wr_bank, iter, rs1, rs2);
+    validate_cmd(spec.op1_bank, spec.wr_bank, iter, rs2);
 
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
 
     MaxPoolCase {
         cmd: MaxPoolCmd {
-            bid,
             iter,
             op1_bank: spec.op1_bank,
             wr_bank: spec.wr_bank,
+            // Vary the renamed group bases across cases; the Ball adds them to every access.
+            op1_group: spec.seed % 3,
+            wr_group: (spec.seed + 1) % 4,
             op1_col: 1,
             wr_col: 1,
             rob_id: spec.rob_id,
-            rs1_lo,
-            rs1_hi,
             rs2_lo,
             rs2_hi,
             input_base: spec.geo.input_base as u32,
@@ -439,9 +420,9 @@ fn spec_for(index: u32) -> CaseSpec {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> MaxPoolCase {
+pub fn gen_case(index: u32) -> MaxPoolCase {
     if index >= NUM_CASES {
         panic!("maxpool: unsupported directed case {index}");
     }
-    build_case(spec_for(index), bid)
+    build_case(spec_for(index))
 }

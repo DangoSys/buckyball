@@ -109,4 +109,6 @@ tests = [
   "pebble-pebble-ctest-pipeline-same_ball_independent-multicore-baremetal",
   "pebble-pebble-ctest-pipeline-rob_window_probe-multicore-baremetal",
   "pebble-pebble-ctest-pipeline-write_bank_versions-multicore-baremetal",
+  "pebble-pebble-mlirtest-base_bank_loop_carried-baremetal",
+  "pebble-pebble-mlirtest-base_bank_transfer-baremetal",
 ]

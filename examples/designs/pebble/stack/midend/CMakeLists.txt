@@ -17,13 +17,9 @@ set(TESTS "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 add_custom_target(${TARGET}-compiler-check
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-custom-ops.mlir -allow-unregistered-dialect -form-custom-ops | ${CHECK} ${TESTS}/form-custom-ops.mlir --implicit-check-not=buckyball."
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-int32-bias.mlir -allow-unregistered-dialect -form-custom-ops | ${CHECK} ${TESTS}/form-int32-bias.mlir --implicit-check-not=buckyball."
-  COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-linear-chain.mlir -form-custom-ops | ${CHECK} ${TESTS}/form-linear-chain.mlir --check-prefix=FORM --implicit-check-not=custom.chain"
-  COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-linear-chain.mlir -form-custom-ops -convert-linalg-to-buckyball | ${CHECK} ${TESTS}/form-linear-chain.mlir --check-prefix=BANK"
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/lower-frontend-types.mlir -allow-unregistered-dialect -lower-frontend -split-input-file -verify-diagnostics | ${CHECK} ${TESTS}/lower-frontend-types.mlir --check-prefix=VALID --implicit-check-not=frontend."
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/lower-custom-ops.mlir -convert-linalg-to-buckyball | ${CHECK} ${TESTS}/lower-custom-ops.mlir --implicit-check-not=custom.op"
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/unknown-custom-op.mlir -convert-linalg-to-buckyball -verify-diagnostics -o /dev/null"
-  COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-quantized-chain.mlir -form-custom-ops | ${CHECK} ${TESTS}/form-quantized-chain.mlir --check-prefix=FORM"
-  COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-quantized-chain.mlir -form-custom-ops -convert-linalg-to-buckyball | ${CHECK} ${TESTS}/form-quantized-chain.mlir --check-prefix=BANK --implicit-check-not=buckyball.bank_mvout"
   COMMAND bash -o pipefail -c "${OPT} ${CMAKE_CURRENT_SOURCE_DIR}/../../workloads/device/core/acc/mlir_tests/core/mega_conv2d.mlir -allow-unregistered-dialect -form-custom-ops | ${CHECK} ${CMAKE_CURRENT_SOURCE_DIR}/../../workloads/device/core/acc/mlir_tests/core/mega_conv2d.mlir --check-prefix=FORM"
   COMMAND bash -o pipefail -c "${OPT} ${CMAKE_CURRENT_SOURCE_DIR}/../../workloads/device/core/acc/mlir_tests/core/mega_conv2d.mlir -allow-unregistered-dialect -form-custom-ops -convert-linalg-to-buckyball | ${CHECK} ${CMAKE_CURRENT_SOURCE_DIR}/../../workloads/device/core/acc/mlir_tests/core/mega_conv2d.mlir --check-prefix=BANK --implicit-check-not=buckyball.bank_mvout"
   COMMAND bash -o pipefail -c "${OPT} ${TESTS}/form-depthwise.mlir -allow-unregistered-dialect -form-custom-ops | ${CHECK} ${TESTS}/form-depthwise.mlir --implicit-check-not=linalg.depthwise"

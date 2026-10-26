@@ -21,8 +21,8 @@ class maxpool_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    if (item.funct7 != MAXPOOL_THREAD_FUNCT7[6:0])
-      `uvm_fatal("COV", $sformatf("unexpected funct7 %0d", item.funct7))
+    if (item.funct != MAXPOOL_THREAD_FUNCT7[6:0])
+      `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
     cur_kernel  = int'(item.rs2[11:8]);
     cur_stride  = int'(item.rs2[15:12]);
     cur_padding = int'(item.rs2[19:16]);

@@ -22,26 +22,15 @@ Verifies the generated `TransposeBall` module directly using the shared Blink UV
 
 - case 0: directed i8, iter=16
 - case 1: directed i32, iter=8
-- cases 2..21: random with fixed seed `0xCAFE_BABE`, elem_bits in {8,32}, iter in {1,2,4,8,16}
+- case 2: directed i8 16x32, rows span two groups (`transpose_i8_16x32_test.c`)
+- cases 3..22: random with fixed seed `0xCAFE_BABE`, elem_bits in {8,32}, iter in {1,2,4,8,16},
+  col in {1,2}, op1/wr group base in 0..3
 
 Each case: reset, preload src words into `mem_model`, drive one command, wait for
-`scb.done()` or timeout at 2000 cycles. Scoreboard compares observed writes
-(data/addr/mask/bank/rob) with DPI `transpose_case_dst_word_*`. `transpose_cov`
-requires both `elem_bits` bins and all `iter` bins hit across the whole test, else
+`scb.done()` or timeout at 8000 cycles. Scoreboard compares observed writes
+(data/addr/group/mask/bank/rob) with DPI `transpose_case_dst_word_*`. `transpose_cov`
+requires both `elem_bits` bins, both `col` bins and all `iter` bins hit across the whole test, else
 `check_phase` fatal.
-
-## BID (required)
-
-`+BID=<n>` is mandatory. Missing it fatals at test start. There is no default bid.
-
-| Config | Plusarg |
-|--------|---------|
-| `sims.verilator.BuckyballToyVerilatorConfig` | `+BID=2` |
-| `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=0` |
-
-```console
-./simv +UVM_TESTNAME=transpose_ball_test +BID=2
-```
 
 ## Build
 
@@ -69,14 +58,13 @@ vcs -full64 -sverilog -timescale=1ns/1ps \
 Run:
 
 ```console
-./simv +UVM_TESTNAME=transpose_ball_test +BID=2
+./simv +UVM_TESTNAME=transpose_ball_test
 ```
 
 Or via bbdev:
 
 ```console
-bbdev uvm --build '--ball=transpose'
-bbdev uvm --run '--ball=transpose' -- '+BID=2'
+bbdev uvm --run '--design pebble --ball transpose'
 ```
 
 
@@ -85,7 +73,6 @@ bbdev uvm --run '--ball=transpose' -- '+BID=2'
 - [x] Layout matches Blink common + ball-local split; filelist uses `@UVM@` / `@RTL@`
 - [x] casegen reuses transpose model; whole-case DPI API
 - [x] directed i8/i32 scoreboard pass
-- [x] deterministic random idx 2..21 pass
+- [x] deterministic random idx 3..22 pass
 - [x] protocol + semantic cover enforced (`check_phase` fatal)
-- [x] toy: `+BID=2` config `sims.verilator.BuckyballToyVerilatorConfig` — 22/22
-- [x] pebble: `+BID=0` config `sims.verilator.BuckyballPebbleVerilatorConfig` — 22/22
+- [x] pebble: 23/23 on the BLink command interface (2026-10-26)

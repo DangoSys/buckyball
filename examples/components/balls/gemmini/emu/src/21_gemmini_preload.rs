@@ -1,5 +1,5 @@
 use super::bank_matrix::read_i8_nn_at;
-use super::decode::{pbank, rs1_b0, rs1_b2, rs1_iter};
+use super::decode::{pbank_group, rs1_b0, rs1_b2, rs1_iter};
 use super::gemmini_state::gemini;
 use super::instruction::{BallModel, ExecContext};
 
@@ -18,7 +18,10 @@ impl BallModel for GemminiPreload {
             panic!("gemmini_preload: bad iter");
         }
 
-        let p1 = pbank(ctx, op1);
+        // rs2[41:36] selects the group of op1.
+        let group1 = (xs2 >> 36) & 0x3f;
+        assert!(group1 < ctx.config(op1).cols, "gemmini_preload: op1 group outside the bank");
+        let p1 = pbank_group(ctx, op1, group1);
         let state = gemini(ctx);
         let mut gm = state.lock().unwrap();
 

@@ -11,31 +11,18 @@ class toint8_cmd_item extends bb_blink_cmd_item;
   bit [127:0] dst_words[TOINT8_MAX_DST_WORDS];
   bit [31:0] dst_addr[TOINT8_MAX_DST_WORDS];
 
-  constraint legal_c {
-    funct7 inside {QUANT_F32_TO_I8_THREAD_FUNCT7[6:0], QUANT_I32_TO_I8_THREAD_FUNCT7[6:0]};
-    op1_en == 1'b1;
-    wr_spad_en == 1'b1;
-    op1_from_spad == 1'b1;
-    op1_col == 5'd1;
-    wr_col == 5'd1;
-    meta_bank == 5'd0;
-    is_sub == 1'b0;
-    sub_rob_id == 8'h00;
-    special == 64'd0;
-  }
-
   function new(string name = "toint8_cmd_item");
     super.new(name);
   endfunction
 
-  function void load_rust_case(int unsigned index, int unsigned bid);
+  function void load_rust_case(int unsigned index);
     toint8_cmd_dpi_t cmd;
     int unsigned rc;
     longint unsigned w_lo;
     longint unsigned w_hi;
     int i;
 
-    rc = toint8_case_load(index, bid);
+    rc = toint8_case_load(index);
     if (rc != 0) begin
       `uvm_fatal("CASE", $sformatf("toint8_case_load returned %0d for index %0d", rc, index))
     end
@@ -45,43 +32,35 @@ class toint8_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", $sformatf("unknown toint8 kind %0d", cmd.kind))
     end
 
-    kind            = cmd.kind;
-    this.bid        = cmd.bid[4:0];
-    iter            = cmd.iter;
-    op1_bank        = cmd.op1_bank[4:0];
-    op2_bank        = cmd.op2_bank[4:0];
-    wr_bank         = cmd.wr_bank[4:0];
-    op1_col         = cmd.op1_col[4:0];
-    op2_col         = cmd.op2_col[4:0];
-    wr_col          = cmd.wr_col[4:0];
-    rob_id          = cmd.rob_id[3:0];
-    rs1             = {cmd.rs1_hi, cmd.rs1_lo};
-    rs2             = {cmd.rs2_hi, cmd.rs2_lo};
-    input_base      = cmd.input_base;
-    num_src_words   = cmd.num_src_words;
+    // Banks and iter come from rs1; rs2 carries the f32 scale or the i32 output geometry.
+    kind = cmd.kind;
+    rob_id = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
+    funct           = kind == TOINT8_KIND_F32 ? QUANT_F32_TO_I8_THREAD_FUNCT7[6:0] :
+                                                QUANT_I32_TO_I8_THREAD_FUNCT7[6:0];
+    rs2 = {cmd.rs2_hi, cmd.rs2_lo};
+    iter = cmd.iter;
+    op1_bank = cmd.op1_bank;
+    op2_bank = cmd.op2_bank;
+    wr_bank = cmd.wr_bank;
+    op1_group = cmd.op1_group;
+    op2_group = cmd.op2_group;
+    wr_group = cmd.wr_group;
+    op1_col = cmd.op1_col;
+    op2_col = cmd.op2_col;
+    wr_col = cmd.wr_col;
+    wr_read_bank = '0;
+    wr_arch_bank = cmd.wr_bank;
+    input_base = cmd.input_base;
+    num_src_words = cmd.num_src_words;
     num_scale_words = cmd.num_scale_words;
-    num_dst_words   = cmd.num_dst_words;
-    special         = 64'd0;
-    op1_en          = 1'b1;
-    wr_spad_en      = 1'b1;
-    op1_from_spad   = 1'b1;
-    meta_bank       = 5'd0;
-    is_sub          = 1'b0;
-    sub_rob_id      = 8'h00;
+    num_dst_words = cmd.num_dst_words;
 
     if (kind == TOINT8_KIND_F32) begin
-      funct7        = QUANT_F32_TO_I8_THREAD_FUNCT7[6:0];
-      op2_en        = 1'b0;
-      op2_from_spad = 1'b0;
-      if (op2_bank != 0 || op2_col != 0 || rs1[19:10] != 0)
-        `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves input bank 1")
+      if (op2_bank != 0 || op2_col != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves input bank 1")
       if (rs2[63:32] != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves rs2[63:32]")
       if (num_scale_words != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 must not emit scale rows")
       if (input_base != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 input_base must be 0")
     end else begin
-      funct7        = QUANT_I32_TO_I8_THREAD_FUNCT7[6:0];
-      op2_en        = 1'b1;
-      op2_from_spad = 1'b1;
       if (op2_col != 1) `uvm_fatal("CASE", "QUANT_I32_TO_I8 scale must occupy one bank")
       if (op1_bank == op2_bank)
         `uvm_fatal("CASE", "QUANT_I32_TO_I8 input and scale banks must differ")
@@ -103,8 +82,6 @@ class toint8_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", $sformatf("num_src_words out of range: %0d", num_src_words))
     if (num_dst_words == 0 || num_dst_words > TOINT8_MAX_DST_WORDS)
       `uvm_fatal("CASE", $sformatf("num_dst_words out of range: %0d", num_dst_words))
-    if (funct7 != QUANT_F32_TO_I8_THREAD_FUNCT7[6:0] && funct7 != QUANT_I32_TO_I8_THREAD_FUNCT7[6:0])
-      `uvm_fatal("CASE", $sformatf("invalid funct7: %0d", funct7))
 
     for (i = 0; i < num_src_words; i++) begin
       w_lo = toint8_case_src_word_lo(i);

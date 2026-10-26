@@ -1,5 +1,5 @@
 use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
-use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
+use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 use std::collections::HashMap;
 
@@ -87,15 +87,21 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     {
         panic!("smatmul: bank not allocated");
     }
-    if ctx.config(a_bank).cols != 1 || ctx.config(b_bank).cols != 1 || ctx.config(c_bank).cols != 1
-    {
-        panic!("smatmul: A, B, and C banks must each have one column");
+    // A and B group g hold reduction block g (K = iter per group); C rows
+    // continue across groups: line L lives in group L / bank_lines().
+    let k_groups = ctx.config(a_bank).cols as usize;
+    let c_groups = ctx.config(c_bank).cols as usize;
+    if k_groups == 0 || ctx.config(b_bank).cols as usize != k_groups || c_groups == 0 {
+        panic!("smatmul: A and B must have the same reduction groups");
+    }
+    if rows > (bank_lines() / 4).max(32) {
+        panic!("smatmul: M exceeds the accumulator");
     }
 
     let a_rows = if rows == 1 { k / k_tile } else { rows * k / k_tile };
     let b_rows = k;
     let c_rows = rows * 4;
-    if a_rows > bank_lines() || b_rows > bank_lines() || output_base + c_rows > bank_lines() {
+    if a_rows > bank_lines() || b_rows > bank_lines() || output_base + c_rows > c_groups * bank_lines() {
         panic!("smatmul: bank footprint exceeds bank depth");
     }
 
@@ -136,8 +142,6 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("smatmul: continuation changed output shape or destination");
     }
 
-    let pa = pbank(ctx, a_bank);
-    let pb = pbank(ctx, b_bank);
     let k_tiles = k / k_tile;
     let row_bytes = bank_row_bytes();
 
@@ -147,6 +151,9 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     // reads one A byte and one complete B row, then updates all 16 lanes.
     // Wrapping arithmetic is intentionally retained to match the accumulator
     // semantics of the RTL and the previous emulator implementation.
+    for k_group in 0..k_groups {
+    let pa = pbank_group(ctx, a_bank, k_group as u64);
+    let pb = pbank_group(ctx, b_bank, k_group as u64);
     for inner in 0..k {
         let b_base = ((inner / k_tile) * k_tile + inner % k_tile) * row_bytes;
         let b_row = &ctx.banks[pb][b_base..b_base + cols];
@@ -168,12 +175,14 @@ pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             }
         }
     }
+    }
 
     if last {
-        let pc = pbank(ctx, c_bank);
         for row in 0..rows {
             for col in 0..cols {
-                let offset = (output_base + row * 4 + col / 4) * bank_row_bytes() + col % 4 * 4;
+                let line = output_base + row * 4 + col / 4;
+                let pc = pbank_group(ctx, c_bank, (line / bank_lines()) as u64);
+                let offset = line % bank_lines() * bank_row_bytes() + col % 4 * 4;
                 ctx.banks[pc][offset..offset + 4]
                     .copy_from_slice(&chain.accumulators[row * cols + col].to_le_bytes());
             }
@@ -212,7 +221,6 @@ pub(crate) fn latency(xs1: u64, xs2: u64, instance: u32) -> u64 {
         || cols != n_tile as u64
         || k == 0
         || k % k_tile as u64 != 0
-        || output_base + rows * 4 > bank_lines() as u64
     {
         panic!("smatmul: illegal matrix encoding");
     }

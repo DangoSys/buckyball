@@ -25,7 +25,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "data": {
                 **body,
                 "design": design,
-                "top": body.get("top") or "DigitalTop",
+                "top": body.get("top"),
                 "from_power_workflow": True,
                 "_trace_id": ctx.trace_id,
                 "target": selection,

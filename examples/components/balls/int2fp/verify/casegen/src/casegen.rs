@@ -12,18 +12,18 @@ pub const NUM_CASES: u32 = 6;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Int2FpCmd {
-    pub bid: u32,
     pub iter: u32,
     pub relu: u32,
     pub op1_bank: u32,
     pub op2_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub op2_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
     pub num_src_words: u32,
@@ -65,17 +65,17 @@ impl Int2FpCase {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> Int2FpCase {
+pub fn gen_case(index: u32) -> Int2FpCase {
     if index >= NUM_CASES {
         panic!("int2fp: unsupported directed case {index}");
     }
     match index {
-        0 => directed(bid, 2, 4, false, &MLIR_INPUT, &[0.125; 16]),
-        1 => directed(bid, 3, 4, true, &RELU_INPUT, &[1.0; 16]),
-        2 => directed(bid, 4, 8, false, &ITER8, &SCALE16),
-        3 => directed(bid, 5, 8, true, &ITER8, &SCALE16),
-        4 => directed(bid, 6, 16, false, &ITER16, &SCALE16),
-        5 => directed(bid, 7, 16, true, &ITER16, &SCALE16),
+        0 => directed(2, 4, false, &MLIR_INPUT, &[0.125; 16], [0, 0, 0]),
+        1 => directed(3, 4, true, &RELU_INPUT, &[1.0; 16], [1, 2, 3]),
+        2 => directed(4, 8, false, &ITER8, &SCALE16, [2, 0, 1]),
+        3 => directed(5, 8, true, &ITER8, &SCALE16, [3, 1, 0]),
+        4 => directed(6, 16, false, &ITER16, &SCALE16, [0, 3, 2]),
+        5 => directed(7, 16, true, &ITER16, &SCALE16, [1, 1, 1]),
         _ => panic!("int2fp: unsupported directed case {index}"),
     }
 }
@@ -119,10 +119,6 @@ fn copy_words<const N: usize>(src: &[u128]) -> [u128; N] {
     out
 }
 
-fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u32) -> u64 {
-    u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20) | (u64::from(iter) << 30)
-}
-
 fn split_rs(value: u64) -> (u32, u32) {
     (value as u32, (value >> 32) as u32)
 }
@@ -139,7 +135,6 @@ pub(crate) fn validate(
     op2_col: u32,
     wr_col: u32,
     iter: u32,
-    rs1: u64,
     rs2: u64,
     scales: &[u128],
 ) {
@@ -157,15 +152,6 @@ pub(crate) fn validate(
     }
     if op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank {
         panic!("INT32_TO_FP32 banks must be distinct");
-    }
-    if (rs1 & 0x3ff) != u64::from(op1_bank)
-        || ((rs1 >> 10) & 0x3ff) != u64::from(op2_bank)
-        || ((rs1 >> 20) & 0x3ff) != u64::from(wr_bank)
-    {
-        panic!("int2fp: rs1 bank fields mismatch");
-    }
-    if ((rs1 >> 30) & 0x3_ffff_ffff) != u64::from(iter) {
-        panic!("int2fp: rs1 iter mismatch");
     }
     if rs2 >> 1 != 0 {
         panic!("INT32_TO_FP32 reserves rs2[63:1]");
@@ -200,7 +186,15 @@ fn dst_words(src: &[u128], scales: &[u128], relu: bool) -> Vec<u128> {
         .collect()
 }
 
-fn directed(bid: u32, rob_id: u32, iter: u32, relu: bool, values: &[i32], scales: &[f32]) -> Int2FpCase {
+// `groups` are the op1/op2/wr base groups.
+fn directed(
+    rob_id: u32,
+    iter: u32,
+    relu: bool,
+    values: &[i32],
+    scales: &[f32],
+    groups: [u32; 3],
+) -> Int2FpCase {
     if values.len() != iter as usize * LANES {
         panic!(
             "int2fp: {} values do not match iter {iter} * {LANES}",
@@ -218,10 +212,9 @@ fn directed(bid: u32, rob_id: u32, iter: u32, relu: bool, values: &[i32], scales
     let op1_col = 1;
     let op2_col = 1;
     let wr_col = 1;
-    let rs1 = encode_rs1(op1_bank, op2_bank, wr_bank, iter);
     let rs2 = u64::from(relu);
     validate(
-        op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs1, rs2, &scale,
+        op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs2, &scale,
     );
     if src.len() != iter as usize {
         panic!("int2fp: src rows {} != iter {iter}", src.len());
@@ -230,22 +223,21 @@ fn directed(bid: u32, rob_id: u32, iter: u32, relu: bool, values: &[i32], scales
     if dst.len() != iter as usize {
         panic!("int2fp: dst rows {} != iter {iter}", dst.len());
     }
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     Int2FpCase {
         cmd: Int2FpCmd {
-            bid,
             iter,
             relu: u32::from(relu),
             op1_bank,
             op2_bank,
             wr_bank,
+            op1_group: groups[0],
+            op2_group: groups[1],
+            wr_group: groups[2],
             op1_col,
             op2_col,
             wr_col,
             rob_id,
-            rs1_lo,
-            rs1_hi,
             rs2_lo,
             rs2_hi,
             num_src_words: src.len() as u32,

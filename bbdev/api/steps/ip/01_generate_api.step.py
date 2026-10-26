@@ -10,7 +10,7 @@ def req_arg(body: dict, name: str):
 
 config = {
     "name": "ip-generate-api",
-    "description": "generate SRAM macros from elaborator mems.conf via MacroCompiler",
+    "description": "generate SRAM macro wrappers from elaborator mems.conf via the process sram function",
     "flows": ["ip", "dc", "yosys"],
     "triggers": [api("POST", "/ip/generate")],
     "enqueues": ["ip.generate"],
@@ -31,7 +31,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "design": design,
         "consumer": req_arg(body, "consumer") or "dc",
-        "top": req_arg(body, "top") or "DigitalTop",
+        "top": req_arg(body, "top"),
     }
     if data["consumer"] not in ("dc", "yosys"):
         return ApiResponse(status=400, body={"error": "consumer must be dc or yosys"})

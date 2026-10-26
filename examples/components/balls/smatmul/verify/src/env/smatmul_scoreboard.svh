@@ -48,19 +48,19 @@ class smatmul_scoreboard extends uvm_scoreboard;
       for (int i = 0; i < smatmul_case_bias_words(); i++) begin
         lo = smatmul_case_bias_word_lo(i);
         hi = smatmul_case_bias_word_hi(i);
-        mem_model.load_word(0, i, {hi, lo});
+        mem_model.load_word_g(got.op1_bank, got.op1_group, i, {hi, lo});
       end
       for (int block = 0; block < expected_commands - 1; block++) begin
         smatmul_case_cmd(block + 1, data_cmd);
         for (int i = 0; i < smatmul_case_a_words(block); i++) begin
           lo = smatmul_case_a_word_lo(block, i);
           hi = smatmul_case_a_word_hi(block, i);
-          mem_model.load_word(data_cmd.rs1_lo[9:0], i, {hi, lo});
+          mem_model.load_word_g(data_cmd.rs1_lo[9:0], data_cmd.op1_group, i, {hi, lo});
         end
         for (int i = 0; i < smatmul_case_b_words(block); i++) begin
           lo = smatmul_case_b_word_lo(block, i);
           hi = smatmul_case_b_word_hi(block, i);
-          mem_model.load_word(data_cmd.rs1_lo[19:10], i, {hi, lo});
+          mem_model.load_word_g(data_cmd.rs1_lo[19:10], data_cmd.op2_group, i, {hi, lo});
         end
       end
       mem_model.arm();
@@ -84,16 +84,11 @@ class smatmul_scoreboard extends uvm_scoreboard;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    smatmul_cmd_item exp;
-    exp = current_stim("CMD");
-    if (item.bid !== exp.bid || item.funct7 !== exp.funct7 ||
-        item.op1_bank !== exp.op1_bank || item.op2_bank !== exp.op2_bank ||
-        item.wr_bank !== exp.wr_bank || item.rs1 !== exp.rs1 ||
-        item.rs2 !== exp.rs2 || item.iter !== exp.iter ||
-        item.op1_col !== exp.op1_col || item.op2_col !== exp.op2_col ||
-        item.wr_col !== exp.wr_col || item.op1_en !== exp.op1_en ||
-        item.op2_en !== exp.op2_en || item.wr_spad_en !== exp.wr_spad_en)
-      `uvm_fatal("CMD", "command differs from generated contract")
+    // Compare as plain BLink commands; the comparer rejects differing types.
+    bb_blink_cmd_item want = bb_blink_cmd_item::type_id::create("want");
+    want.copy(current_stim("CMD"));
+    if (!item.compare(want))
+      `uvm_fatal("CMD", $sformatf("command mismatch: got %s exp %s", item.sprint(), want.sprint()))
     cmd_count++;
   endfunction
 
@@ -101,13 +96,16 @@ class smatmul_scoreboard extends uvm_scoreboard;
     smatmul_cmd_item stim;
     stim = current_stim("READ");
     if (stim.kind == 0) begin
-      if (item.port != 0 || item.bank_id != stim.op1_bank || item.addr >= 4)
+      if (item.port != 0 || item.bank_id != stim.op1_bank || item.group_id != stim.op1_group ||
+          item.addr >= 4)
         `uvm_fatal("READ", "invalid bias read")
     end else if (item.port == 0) begin
-      if (item.bank_id != stim.op1_bank || item.addr >= stim.op1_words)
+      if (item.bank_id != stim.op1_bank || item.group_id != stim.op1_group ||
+          item.addr >= stim.op1_words)
         `uvm_fatal("READ", "A read outside command footprint")
     end else if (item.port == 1) begin
-      if (item.bank_id != stim.op2_bank || item.addr >= stim.op2_words)
+      if (item.bank_id != stim.op2_bank || item.group_id != stim.op2_group ||
+          item.addr >= stim.op2_words)
         `uvm_fatal("READ", "B read outside command footprint")
     end else begin
       `uvm_fatal("READ", "unexpected read port")
@@ -121,7 +119,7 @@ class smatmul_scoreboard extends uvm_scoreboard;
     stim = current_stim("WRITE");
     if (stim.kind != 1 || stim.rs2[25] != 1)
       `uvm_fatal("WRITE", "write before the last accumulation block")
-    if (item.port != 0 || item.group_id != 0 || item.bank_id != stim.wr_bank ||
+    if (item.port != 0 || item.group_id != stim.wr_group || item.bank_id != stim.wr_bank ||
         item.mask != 16'hffff || item.rob_id != stim.rob_id)
       `uvm_fatal("WRITE", "write metadata violates SMatMul contract")
     for (int i = 0; i < expected_writes; i++) begin
@@ -138,8 +136,7 @@ class smatmul_scoreboard extends uvm_scoreboard;
   function void write_resp(bb_blink_resp_item item);
     smatmul_cmd_item stim;
     stim = current_stim("RESP");
-    if (item.rob_id !== stim.rob_id || item.is_sub !== 1'b0)
-      `uvm_fatal("RESP", "response metadata mismatch")
+    if (item.rob_id !== stim.rob_id) `uvm_fatal("RESP", "response metadata mismatch")
     void'(stim_q.pop_front());
     resp_count++;
   endfunction

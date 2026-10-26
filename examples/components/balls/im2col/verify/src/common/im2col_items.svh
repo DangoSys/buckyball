@@ -10,69 +10,48 @@ class im2col_cmd_item extends bb_blink_cmd_item;
   bit [127:0] src_words[IM2COL_MAX_WORDS];
   bit [127:0] dst_words[IM2COL_MAX_WORDS];
 
-  constraint legal_c {
-    funct7 == IM2COL_THREAD_FUNCT7[6:0];
-    op1_en == 1'b1;
-    op2_en == 1'b0;
-    wr_spad_en == 1'b1;
-    op1_from_spad == 1'b1;
-    op2_from_spad == 1'b0;
-    op2_bank == 5'd0;
-    op2_col == 5'd0;
-    meta_bank == 5'd0;
-    rs1 == 64'd0;
-    rs2[63] == 1'b0;
-    is_sub == 1'b0;
-    sub_rob_id == 8'h00;
-  }
-
   function new(string name = "im2col_cmd_item");
     super.new(name);
   endfunction
 
-  function void load_rust_case(int unsigned seed, int unsigned index, int unsigned bid);
+  function void load_rust_case(int unsigned seed, int unsigned index);
     im2col_cmd_dpi_t cmd;
     int unsigned rc;
     longint unsigned w_lo;
     longint unsigned w_hi;
     int i;
 
-    rc = im2col_case_load(seed, index, bid);
+    rc = im2col_case_load(seed, index);
     if (rc != 0) begin
       `uvm_fatal("CASE", $sformatf("im2col_case_load returned %0d for index %0d", rc, index))
     end
     im2col_case_cmd(cmd);
 
-    bid = cmd.bid[4:0];
-    funct7 = IM2COL_THREAD_FUNCT7[6:0];
-    iter = cmd.iter;
     ksize = cmd.ksize;
     stride = cmd.stride;
     padding = cmd.padding;
     window_count = cmd.window_count;
-    op1_bank = cmd.op1_bank[4:0];
-    wr_bank = cmd.wr_bank[4:0];
-    op1_col = cmd.op1_col[4:0];
-    wr_col = cmd.wr_col[4:0];
-    rob_id = cmd.rob_id[3:0];
     num_src_words = cmd.num_src_words;
     num_dst_words = cmd.num_dst_words;
 
-    special = 64'd0;
-    op1_en = 1'b1;
-    op2_en = 1'b0;
-    wr_spad_en = 1'b1;
-    op1_from_spad = 1'b1;
-    op2_from_spad = 1'b0;
-    op2_bank = 5'd0;
-    op2_col = 5'd0;
-    meta_bank = 5'd0;
-    rs1 = 64'd0;
+    // bb_im2col: banks and input_size (iter) come from rs1, the window geometry from rs2.
+    rob_id = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
+    funct = IM2COL_THREAD_FUNCT7[6:0];
     rs2 = {
       1'b0, window_count[6:0], 6'd0, 4'd0, 6'd0, 8'd0, 8'd0, padding[7:0], stride[7:0], ksize[7:0]
     };
-    is_sub = 1'b0;
-    sub_rob_id = 8'h00;
+    iter = cmd.iter;
+    op1_bank = cmd.op1_bank;
+    op2_bank = '0;
+    wr_bank = cmd.wr_bank;
+    op1_group = cmd.op1_group;
+    op2_group = '0;
+    wr_group = cmd.wr_group;
+    op1_col = cmd.op1_col;
+    op2_col = '0;
+    wr_col = cmd.wr_col;
+    wr_read_bank = '0;
+    wr_arch_bank = cmd.wr_bank;
 
     if (num_src_words > IM2COL_MAX_WORDS || num_dst_words > IM2COL_MAX_WORDS) begin
       `uvm_fatal("CASE", $sformatf("word count out of range src=%0d dst=%0d", num_src_words,

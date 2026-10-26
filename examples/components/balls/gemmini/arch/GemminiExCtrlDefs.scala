@@ -58,7 +58,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val io = ctrlIo
 
-  val mesh = Instantiate(new MeshWithDelays(
+  val mesh = Module(new MeshWithDelays(
     inputType,
     inputType,
     meshOutputType,

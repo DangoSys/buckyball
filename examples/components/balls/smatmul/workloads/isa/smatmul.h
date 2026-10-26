@@ -3,6 +3,12 @@
 
 #include <bbhw/isa/bb_func7.h>
 #include <bbhw/isa/isa.h>
+
+// SMATMUL_OS: A and B have the same number of groups; group g holds reduction
+// block g, so the instruction accumulates over K = k * groups with k per group
+// (A[:, g*k : (g+1)*k] and B[:, g*k : (g+1)*k] in the single-group layouts).
+// C rows continue across groups: line L = output_base + row * 4 + word lives
+// in group L / BANK_LINES, line L % BANK_LINES. The bias bank has one group.
 #define BB_SMATMUL_CFG(rows, cols, first, last, output_base)                   \
   (FIELD((rows), 0, 11) | FIELD((cols), 12, 23) | FIELD((first), 24, 24) |     \
    FIELD((last), 25, 25) | FIELD((output_base), 26, 31))

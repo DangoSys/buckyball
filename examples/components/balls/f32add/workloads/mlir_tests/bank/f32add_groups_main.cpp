@@ -3,8 +3,8 @@
 #include <cstdio>
 
 using Rows = StridedMemRefType<uint32_t, 2>;
-extern "C" void _mlir_ciface_reduce_groups(StridedMemRefType<uint32_t, 3> *,
-                                           Rows *, Rows *, Rows *);
+extern "C" void _mlir_ciface_reduce_groups(Rows *, Rows *, Rows *, Rows *,
+                                           Rows *);
 
 static int checkF32Add() {
   alignas(64) static const uint32_t input[3][8] = {
@@ -18,24 +18,22 @@ static int checkF32Add() {
       0x7fa00001, 0x7fa00001, 0x7fa00001, 0x7fa00001,
       0x7fa00001, 0x7fa00001, 0x7fa00001, 0x7fa00001};
   alignas(64) static uint32_t output[8];
-  // A whole-bank mvin reads row r of group g at (r * 2 + g) * 16 bytes.
-  alignas(64) static uint32_t pair[2][2][4];
-  for (unsigned group = 0; group < 2; ++group)
-    for (unsigned i = 0; i < 8; ++i)
-      pair[i / 4][group][i % 4] = input[group][i];
-  StridedMemRefType<uint32_t, 3> pairRef = {
-      &pair[0][0][0], &pair[0][0][0], 0, {2, 2, 4}, {8, 4, 1}};
+  Rows firstRef = {
+      (uint32_t *)input[0], (uint32_t *)input[0], 0, {2, 4}, {4, 1}};
+  Rows secondRef = {
+      (uint32_t *)input[1], (uint32_t *)input[1], 0, {2, 4}, {4, 1}};
   Rows lastRef = {
       (uint32_t *)input[2], (uint32_t *)input[2], 0, {2, 4}, {4, 1}};
   Rows poisonRef = {(uint32_t *)poison, (uint32_t *)poison, 0, {2, 4}, {4, 1}};
   Rows outputRef = {output, output, 0, {2, 4}, {4, 1}};
-  _mlir_ciface_reduce_groups(&pairRef, &lastRef, &poisonRef, &outputRef);
+  _mlir_ciface_reduce_groups(&firstRef, &secondRef, &lastRef, &poisonRef,
+                             &outputRef);
   for (unsigned i = 0; i < 8; ++i) {
     union {
       uint32_t bits;
       float value;
-    } expected = {0}, source;
-    for (unsigned group = 0; group < 3; ++group) {
+    } expected = {input[0][i]}, source;
+    for (unsigned group = 1; group < 3; ++group) {
       source.bits = input[group][i];
       asm volatile("fadd.s %0, %1, %2, rne"
                    : "=f"(expected.value)
@@ -50,6 +48,6 @@ static int checkF32Add() {
 int main() {
   int result = checkF32Add();
   if (!result)
-    puts("F32ADD Bank MLIR grouped/RNE/NaN/first/SSA output PASS");
+    puts("F32ADD Bank MLIR chained RNE/NaN/SSA output PASS");
   return result;
 }

@@ -9,19 +9,17 @@ pub const NUM_CASES: u32 = 4;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LutCmd {
-    pub bid: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub op2_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub op2_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
-    pub rs2_lo: u32,
-    pub rs2_hi: u32,
     pub num_src_words: u32,
     pub num_lut_words: u32,
     pub num_dst_words: u32,
@@ -61,15 +59,15 @@ impl LutCase {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> LutCase {
+pub fn gen_case(index: u32) -> LutCase {
     if index >= NUM_CASES {
         panic!("lut: unsupported directed case {index}");
     }
     match index {
-        0 => directed(bid, 2, 4, false),
-        1 => directed(bid, 3, 1, false),
-        2 => directed(bid, 4, 8, false),
-        3 => directed(bid, 5, 4, true),
+        0 => directed(2, 4, false, [0, 0, 0]),
+        1 => directed(3, 1, false, [1, 2, 3]),
+        2 => directed(4, 8, false, [2, 0, 1]),
+        3 => directed(5, 4, true, [3, 1, 2]),
         _ => panic!("lut: unsupported directed case {index}"),
     }
 }
@@ -142,14 +140,6 @@ fn copy_words<const N: usize>(src: &[u128]) -> [u128; N] {
     out
 }
 
-fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u32) -> u64 {
-    u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20) | (u64::from(iter) << 30)
-}
-
-fn split_rs(value: u64) -> (u32, u32) {
-    (value as u32, (value >> 32) as u32)
-}
-
 pub(crate) fn validate(
     op1_bank: u32,
     op2_bank: u32,
@@ -158,8 +148,6 @@ pub(crate) fn validate(
     op2_col: u32,
     wr_col: u32,
     iter: u32,
-    rs1: u64,
-    rs2: u64,
 ) {
     if iter == 0 {
         panic!("lut: iter must be positive");
@@ -169,18 +157,6 @@ pub(crate) fn validate(
     }
     if op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank {
         panic!("lut: banks must be distinct");
-    }
-    if (rs1 & 0x3ff) != u64::from(op1_bank)
-        || ((rs1 >> 10) & 0x3ff) != u64::from(op2_bank)
-        || ((rs1 >> 20) & 0x3ff) != u64::from(wr_bank)
-    {
-        panic!("lut: rs1 bank fields mismatch");
-    }
-    if ((rs1 >> 30) & 0x3_ffff_ffff) != u64::from(iter) {
-        panic!("lut: rs1 iter mismatch");
-    }
-    if rs2 != 0 {
-        panic!("lut: rs2 must be zero");
     }
 }
 
@@ -196,7 +172,8 @@ fn dst_words(table: &[u8], input: &[u8], lane_table: bool) -> Vec<u128> {
     pack_bytes(&mapped)
 }
 
-fn directed(bid: u32, rob_id: u32, iter: u32, per_lane: bool) -> LutCase {
+// `groups` are the op1/op2/wr base groups; a lane table spans four groups from its base.
+fn directed(rob_id: u32, iter: u32, per_lane: bool, groups: [u32; 3]) -> LutCase {
     let nbytes = iter as usize * BYTES_PER_ROW;
     let table = if per_lane {
         lane_table()
@@ -217,11 +194,7 @@ fn directed(bid: u32, rob_id: u32, iter: u32, per_lane: bool) -> LutCase {
     let op1_col = 1;
     let op2_col = if per_lane { 4 } else { 1 };
     let wr_col = 1;
-    let rs1 = encode_rs1(op1_bank, op2_bank, wr_bank, iter);
-    let rs2 = 0u64;
-    validate(
-        op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter, rs1, rs2,
-    );
+    validate(op1_bank, op2_bank, wr_bank, op1_col, op2_col, wr_col, iter);
     if src.len() != iter as usize {
         panic!("lut: src rows {} != iter {iter}", src.len());
     }
@@ -232,23 +205,19 @@ fn directed(bid: u32, rob_id: u32, iter: u32, per_lane: bool) -> LutCase {
     if dst.len() != iter as usize {
         panic!("lut: dst rows {} != iter {iter}", dst.len());
     }
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
-    let (rs2_lo, rs2_hi) = split_rs(rs2);
     LutCase {
         cmd: LutCmd {
-            bid,
             iter,
             op1_bank,
             op2_bank,
             wr_bank,
+            op1_group: groups[0],
+            op2_group: groups[1],
+            wr_group: groups[2],
             op1_col,
             op2_col,
             wr_col,
             rob_id,
-            rs1_lo,
-            rs1_hi,
-            rs2_lo,
-            rs2_hi,
             num_src_words: src.len() as u32,
             num_lut_words: lut.len() as u32,
             num_dst_words: dst.len() as u32,

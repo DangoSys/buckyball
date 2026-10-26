@@ -2,6 +2,7 @@
 
 #include "Custom/CustomOps.h"
 #include "Lowering.h"
+#include "Target/BuckyballTargetRegistry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/Dialect/Linalg/IR/Linalg.h"
@@ -9,7 +10,6 @@
 #include "mlir/IR/Dominance.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
-#include "mlir/Interfaces/SideEffectInterfaces.h"
 #include "mlir/Pass/Pass.h"
 
 using namespace mlir;
@@ -184,10 +184,17 @@ public:
     SmallVector<linalg::TransposeOp> transposes;
     getOperation().walk(
         [&](linalg::TransposeOp op) { transposes.push_back(op); });
+    const auto &target = buckyball_target::getBuckyballTarget();
     for (auto op : transposes) {
+      // TRANSPOSE holds the whole matrix in two groups of bank columns of at
+      // most 31 banks each.
       auto type = dyn_cast<RankedTensorType>(op.getInput().getType());
-      if (!type || type.getRank() != 2 || !type.getElementType().isInteger(8) ||
-          op.getPermutation() != ArrayRef<int64_t>({1, 0}))
+      if (!type || type.getRank() != 2 || !type.hasStaticShape() ||
+          !type.getElementType().isInteger(8) ||
+          op.getPermutation() != ArrayRef<int64_t>({1, 0}) ||
+          type.getDimSize(0) > target.bankDepth || type.getDimSize(1) % 16 ||
+          type.getDimSize(1) / 16 > 31 ||
+          2 * type.getDimSize(1) / 16 > target.bankNum)
         continue;
       rewriter.setInsertionPoint(op);
       auto custom =
@@ -196,98 +203,6 @@ public:
       rewriter.replaceOp(op, custom.getOutputs());
     }
     pebble::formSpatialOps(getOperation());
-    pebble::formQuantizedChains(getOperation());
-
-    // Form single-consumer Linear chains. The links remain explicit custom
-    // operations; bank lowering consumes each group as one resident kernel.
-    SmallVector<CustomOp> linears;
-    int64_t group = 0;
-    getOperation().walk([&](CustomOp op) {
-      if (op.getKind() == "linear_i8")
-        linears.push_back(op);
-      if (auto id = op->getAttrOfType<IntegerAttr>("custom.chain"))
-        group = std::max(group, id.getInt() + 1);
-    });
-    for (CustomOp root : linears) {
-      if (root->hasAttr("custom.chain"))
-        continue;
-      SmallVector<CustomOp> stages{root};
-      SmallVector<Operation *> links;
-      SmallVector<bool> activations;
-      while (true) {
-        Value value = stages.back().getResult(0);
-        SmallVector<Operation *> edge;
-        bool relu = false;
-        while (value.hasOneUse()) {
-          Operation *user = *value.getUsers().begin();
-          if (user->getBlock() != root->getBlock())
-            break;
-          if (user->getName().getStringRef() == "buddy_trace.end") {
-            auto tensor = user->getAttrOfType<BoolAttr>("tensor");
-            if (!tensor || tensor.getValue())
-              break;
-          } else {
-            auto maximum = dyn_cast<linalg::GenericOp>(user);
-            if (relu || !pebble::elementwise(maximum, "arith.maximumf") ||
-                !llvm::is_contained(maximum.getInputs(), value))
-              break;
-            Value other =
-                maximum.getInputs()[maximum.getInputs()[0] == value ? 1 : 0];
-            if (!matchPattern(other, m_AnyZeroFloat()))
-              break;
-            relu = true;
-          }
-          edge.push_back(user);
-          value = user->getResult(0);
-        }
-        if (!value.hasOneUse())
-          break;
-        auto next = dyn_cast<CustomOp>(*value.getUsers().begin());
-        if (!next || next.getKind() != "linear_i8" ||
-            next->getBlock() != root->getBlock() ||
-            next.getInputs()[0] != value || next->hasAttr("custom.chain") ||
-            !dominance.properlyDominates(next.getInputs()[3], stages.back()))
-          break;
-        bool barrier = false;
-        for (Operation *between = stages.back()->getNextNode(); between != next;
-             between = between->getNextNode()) {
-          if (!isMemoryEffectFree(between) &&
-              between->getName().getDialectNamespace() != "buddy_trace") {
-            barrier = true;
-            break;
-          }
-        }
-        if (barrier)
-          break;
-        stages.push_back(next);
-        llvm::append_range(links, edge);
-        activations.push_back(relu);
-      }
-      if (stages.size() < 2)
-        continue;
-      auto id = rewriter.getI64IntegerAttr(group++);
-      for (auto [index, stage] : llvm::enumerate(stages)) {
-        stage->setAttr("custom.chain", id);
-        if (index < activations.size())
-          stage->setAttr("custom.relu",
-                         rewriter.getBoolAttr(activations[index]));
-      }
-      for (Operation *link : links) {
-        if (auto maximum = dyn_cast<linalg::GenericOp>(link)) {
-          rewriter.setInsertionPoint(maximum);
-          Value input = matchPattern(maximum.getInputs()[0], m_AnyZeroFloat())
-                            ? maximum.getInputs()[1]
-                            : maximum.getInputs()[0];
-          auto activation = CustomOp::create(rewriter, maximum.getLoc(),
-                                             maximum->getResultTypes(), "relu",
-                                             ValueRange{input});
-          activation->setAttr("custom.chain", id);
-          rewriter.replaceOp(maximum, activation.getOutputs());
-        } else {
-          link->setAttr("custom.chain", id);
-        }
-      }
-    }
   }
 };
 

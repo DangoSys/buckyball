@@ -1,7 +1,5 @@
 package framework.acc.gpdomain.execution.arithmetic
 
-import chisel3.experimental.hierarchy.{Instance, Instantiate}
-
 import framework.acc.gpdomain.configs.GpDomainParam
 
 import chisel3._
@@ -51,29 +49,29 @@ class FALU(gpParam: GpDomainParam) extends Module {
     val a                 = recFNFromFN(expWidth, sigWidth, av)
     val b                 = recFNFromFN(expWidth, sigWidth, bv)
     val c                 = recFNFromFN(expWidth, sigWidth, cv)
-    val add               = Instantiate(new AddRecFN(expWidth, sigWidth))
+    val add               = Module(new AddRecFN(expWidth, sigWidth))
     add.io.a              := Mux(io.op === 39.U, b, a)
     add.io.b              := Mux(io.op === 39.U, a, b)
     add.io.subOp          := io.op === 2.U || io.op === 39.U
     add.io.roundingMode   := io.roundingMode
     add.io.detectTininess := 1.U
-    val mul = Instantiate(new MulRecFN(expWidth, sigWidth))
+    val mul = Module(new MulRecFN(expWidth, sigWidth))
     mul.io.a              := a
     mul.io.b              := b
     mul.io.roundingMode   := io.roundingMode
     mul.io.detectTininess := 1.U
-    val fma = Instantiate(new MulAddRecFN(expWidth, sigWidth))
+    val fma = Module(new MulAddRecFN(expWidth, sigWidth))
     fma.io.a              := b
     fma.io.b              := Mux(io.op(2), a, c)
     fma.io.c              := Mux(io.op(2), c, a)
     fma.io.op             := Cat(io.op(0), io.op(1) ^ io.op(0))
     fma.io.roundingMode   := io.roundingMode
     fma.io.detectTininess := 1.U
-    val cmp = Instantiate(new CompareRecFN(expWidth, sigWidth))
+    val cmp = Module(new CompareRecFN(expWidth, sigWidth))
     cmp.io.a         := a
     cmp.io.b         := b
     cmp.io.signaling := Seq(25, 27, 29, 31).map(n => io.op === n.U).reduce(_ || _)
-    val div = Instantiate(new DivSqrtRecFN_small(expWidth, sigWidth, 0))
+    val div = Module(new DivSqrtRecFN_small(expWidth, sigWidth, 0))
     div.io.a              := Mux(io.op === 33.U, b, a)
     div.io.b              := Mux(io.op === 33.U, a, b)
     div.io.sqrtOp         := squareRoot
@@ -230,11 +228,11 @@ class FALU(gpParam: GpDomainParam) extends Module {
     val (se, ss)     = if (srcWidth == 32) (8, 24) else (11, 53)
     val (de, ds)     = if (dstWidth == 32) (8, 24) else (11, 53)
     val matchesWidth = io.sew === (if (baseSelector != 0 || srcWidth == 32) 2 else 3).U
-    val floatToInt   = Instantiate(new RecFNToIN(se, ss, dstWidth))
+    val floatToInt   = Module(new RecFNToIN(se, ss, dstWidth))
     floatToInt.io.in           := recFNFromFN(se, ss, io.a(srcWidth - 1, 0))
     floatToInt.io.signedOut    := io.subop(0)
     floatToInt.io.roundingMode := Mux(io.subop(2, 0) >= 6.U, 1.U, io.roundingMode)
-    val intToFloat = Instantiate(new INToRecFN(srcWidth, de, ds))
+    val intToFloat = Module(new INToRecFN(srcWidth, de, ds))
     intToFloat.io.in             := io.a(srcWidth - 1, 0)
     intToFloat.io.signedIn       := io.subop(0)
     intToFloat.io.roundingMode   := io.roundingMode
@@ -251,7 +249,7 @@ class FALU(gpParam: GpDomainParam) extends Module {
       io.flags       := intToFloat.io.exceptionFlags
     }
     if (baseSelector != 0) {
-      val convert = Instantiate(new RecFNToRecFN(se, ss, de, ds))
+      val convert = Module(new RecFNToRecFN(se, ss, de, ds))
       convert.io.in             := recFNFromFN(se, ss, io.a(srcWidth - 1, 0))
       convert.io.roundingMode   := Mux(io.subop === 21.U, 6.U, io.roundingMode)
       convert.io.detectTininess := 1.U

@@ -1,16 +1,16 @@
 typedef struct {
-  int unsigned bid;
   int unsigned iter;
   int unsigned relu;
   int unsigned op1_bank;
   int unsigned op2_bank;
   int unsigned wr_bank;
+  int unsigned op1_group;
+  int unsigned op2_group;
+  int unsigned wr_group;
   int unsigned op1_col;
   int unsigned op2_col;
   int unsigned wr_col;
   int unsigned rob_id;
-  int unsigned rs1_lo;
-  int unsigned rs1_hi;
   int unsigned rs2_lo;
   int unsigned rs2_hi;
   int unsigned num_src_words;
@@ -18,10 +18,7 @@ typedef struct {
   int unsigned num_dst_words;
 } int2fp_cmd_dpi_t;
 
-import "DPI-C" function int int2fp_case_load(
-  input int unsigned index,
-  input int unsigned bid
-);
+import "DPI-C" function int int2fp_case_load(input int unsigned index);
 import "DPI-C" function void int2fp_case_cmd(output int2fp_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned int2fp_case_src_word_lo(input int unsigned word_index);
 import "DPI-C" function longint unsigned int2fp_case_src_word_hi(input int unsigned word_index);
@@ -40,11 +37,3 @@ localparam int INT2FP_MAX_SCALE_WORDS = 4;
 localparam int INT2FP_MAX_DST_WORDS = 16;
 localparam int INT2FP_NUM_CASES = 6;
 localparam int INT2FP_TIMEOUT_CYCLES = 20000;
-
-function automatic int unsigned int2fp_require_bid();
-  int unsigned bid;
-  if (!$value$plusargs("BID=%d", bid)) begin
-    `uvm_fatal("BID", "missing required plusarg +BID=<n>")
-  end
-  return bid;
-endfunction

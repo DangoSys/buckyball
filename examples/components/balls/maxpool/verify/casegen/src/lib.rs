@@ -10,8 +10,8 @@ thread_local! {
 }
 
 #[no_mangle]
-pub extern "C" fn maxpool_case_load(index: u32, bid: u32) -> i32 {
-    let case = casegen::gen_case(index, bid);
+pub extern "C" fn maxpool_case_load(index: u32) -> i32 {
+    let case = casegen::gen_case(index);
     CURRENT.with(|current| *current.borrow_mut() = Some(case));
     0
 }

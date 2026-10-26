@@ -1,25 +1,25 @@
 pub const ROW_BYTES: usize = 16;
 pub const MAX_ROWS: usize = 64;
-pub const NUM_CASES: u32 = 3;
+pub const NUM_CASES: u32 = 4;
 pub const GATE_ROW: u32 = 1;
 pub const RATIO: f32 = 0.25;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Int8MulCmd {
-    pub bid: u32,
     pub iter: u32,
     pub gate_bank: u32,
     pub input_bank: u32,
     pub output_bank: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub op2_col: u32,
     pub wr_col: u32,
     pub gate_row: u32,
     pub bank_entries: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
     pub num_gate_words: u32,
@@ -61,7 +61,9 @@ impl Int8MulCase {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32, bank_entries: u32) -> Int8MulCase {
+// Gate word `g` is row `gate_row` of group `g`; input/output word `i` is row `i % iter` of
+// group `i / iter`: the Ball walks groups in order and reloads the gate per group.
+pub fn gen_case(index: u32, bank_entries: u32) -> Int8MulCase {
     if bank_entries == 0 {
         panic!("int8mul: bank entries must be positive");
     }
@@ -69,9 +71,10 @@ pub fn gen_case(index: u32, bid: u32, bank_entries: u32) -> Int8MulCase {
         panic!("int8mul: unsupported directed case {index}");
     }
     match index {
-        0 => directed(bid, 2, 1, GATE_ROW, bank_entries),
-        1 => directed(bid, 3, 4, GATE_ROW, bank_entries),
-        2 => directed(bid, 4, 1, bank_entries - 1, bank_entries),
+        0 => directed(2, 1, GATE_ROW, 1, [0, 0, 0], bank_entries),
+        1 => directed(3, 4, GATE_ROW, 1, [0, 0, 0], bank_entries),
+        2 => directed(4, 1, bank_entries - 1, 1, [0, 0, 0], bank_entries),
+        3 => directed(5, 4, GATE_ROW, 2, [2, 1, 3], bank_entries),
         _ => panic!("int8mul: unsupported directed case {index}"),
     }
 }
@@ -85,10 +88,10 @@ fn positive_finite(value: f32) -> bool {
     value.is_finite() && value > 0.0
 }
 
-fn ctest_gate() -> u128 {
+fn ctest_gate(group: u32) -> u128 {
     let mut row = [0u8; ROW_BYTES];
     for lane in 0..ROW_BYTES {
-        row[lane] = (lane as i8 - 8) as u8;
+        row[lane] = (lane as i8 - 8 + group as i8) as u8;
     }
     pack_bytes(&row)[0]
 }
@@ -129,10 +132,6 @@ fn copy_words<const N: usize>(src: &[u128]) -> [u128; N] {
     out
 }
 
-fn encode_rs1(gate: u32, input: u32, output: u32, iter: u32) -> u64 {
-    u64::from(gate) | (u64::from(input) << 10) | (u64::from(output) << 20) | (u64::from(iter) << 30)
-}
-
 fn encode_rs2(ratio: f32, gate_row: u32) -> u64 {
     u64::from(ratio.to_bits()) | (u64::from(gate_row) << 32)
 }
@@ -150,7 +149,6 @@ pub(crate) fn validate(
     wr_col: u32,
     iter: u32,
     gate_row: u32,
-    rs1: u64,
     rs2: u64,
     ratio: f32,
     bank_entries: u32,
@@ -164,7 +162,7 @@ pub(crate) fn validate(
     if gate_row >= bank_entries {
         panic!("int8mul: gate row must fit one physical bank");
     }
-    if op1_col != 1 || op2_col != 1 || wr_col != 1 {
+    if op1_col == 0 || op1_col != op2_col || op1_col != wr_col {
         panic!("int8mul: bank groups must match");
     }
     if gate_bank == input_bank || gate_bank == output_bank || input_bank == output_bank {
@@ -177,27 +175,19 @@ pub(crate) fn validate(
     if rs2 >> (32 + gate_row_bits) != 0 {
         panic!("int8mul: reserved rs2 bits must be zero");
     }
-    if (rs1 & 0x3ff) != u64::from(gate_bank)
-        || ((rs1 >> 10) & 0x3ff) != u64::from(input_bank)
-        || ((rs1 >> 20) & 0x3ff) != u64::from(output_bank)
-    {
-        panic!("int8mul: rs1 bank fields mismatch");
-    }
-    if ((rs1 >> 30) & 0x3_ffff_ffff) != u64::from(iter) {
-        panic!("int8mul: rs1 iter mismatch");
-    }
     if rs2 != encode_rs2(ratio, gate_row) {
         panic!("int8mul: rs2 ratio/gate_row fields mismatch");
     }
 }
 
-fn dst_words(gate_word: u128, input: &[u128], iter: u32, ratio: f32) -> Vec<u128> {
-    let mut out = Vec::with_capacity(iter as usize);
-    for row in 0..iter as usize {
+fn dst_words(gate: &[u128], input: &[u128], iter: u32, ratio: f32) -> Vec<u128> {
+    let mut out = Vec::with_capacity(input.len());
+    for (word, input_word) in input.iter().enumerate() {
+        let gate_word = gate[word / iter as usize];
         let mut packed = 0u128;
         for lane in 0..ROW_BYTES {
             let g = ((gate_word >> (lane * 8)) & 0xff) as u8 as i8;
-            let inp = ((input[row] >> (lane * 8)) & 0xff) as u8 as i8;
+            let inp = ((input_word >> (lane * 8)) & 0xff) as u8 as i8;
             let q = compute(g, inp, ratio);
             packed |= u128::from(q as u8) << (lane * 8);
         }
@@ -206,60 +196,58 @@ fn dst_words(gate_word: u128, input: &[u128], iter: u32, ratio: f32) -> Vec<u128
     out
 }
 
-fn directed(bid: u32, rob_id: u32, iter: u32, gate_row: u32, bank_entries: u32) -> Int8MulCase {
+fn directed(
+    rob_id: u32,
+    iter: u32,
+    gate_row: u32,
+    cols: u32,
+    groups: [u32; 3],
+    bank_entries: u32,
+) -> Int8MulCase {
     let gate_bank = 0;
     let input_bank = 1;
     let output_bank = 2;
-    let op1_col = 1;
-    let op2_col = 1;
-    let wr_col = 1;
     let ratio = RATIO;
-    let gate = ctest_gate();
-    let input = ctest_input(iter as usize);
-    let rs1 = encode_rs1(gate_bank, input_bank, output_bank, iter);
+    let gate: Vec<u128> = (0..cols).map(ctest_gate).collect();
+    let input = ctest_input((iter * cols) as usize);
     let rs2 = encode_rs2(ratio, gate_row);
     validate(
         gate_bank,
         input_bank,
         output_bank,
-        op1_col,
-        op2_col,
-        wr_col,
+        cols,
+        cols,
+        cols,
         iter,
         gate_row,
-        rs1,
         rs2,
         ratio,
         bank_entries,
     );
-    if input.len() != iter as usize {
-        panic!("int8mul: input rows {} != iter {iter}", input.len());
-    }
-    let dst = dst_words(gate, &input, iter, ratio);
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
+    let dst = dst_words(&gate, &input, iter, ratio);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     Int8MulCase {
         cmd: Int8MulCmd {
-            bid,
             iter,
             gate_bank,
             input_bank,
             output_bank,
-            op1_col,
-            op2_col,
-            wr_col,
+            op1_group: groups[0],
+            op2_group: groups[1],
+            wr_group: groups[2],
+            op1_col: cols,
+            op2_col: cols,
+            wr_col: cols,
             gate_row,
             bank_entries,
             rob_id,
-            rs1_lo,
-            rs1_hi,
             rs2_lo,
             rs2_hi,
-            num_gate_words: 1,
+            num_gate_words: gate.len() as u32,
             num_input_words: input.len() as u32,
             num_dst_words: dst.len() as u32,
         },
-        gate_words: copy_words(&[gate]),
+        gate_words: copy_words(&gate),
         input_words: copy_words(&input),
         dst_words: copy_words(&dst),
     }

@@ -13,13 +13,13 @@ func.func @main() -> i8 {
       memref.store %value, %input[%row, %lane] : memref<36x16xi8>
     }
   }
-  buckyball.mset <{bank = 0 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %input <{bank = 0 : i64, depth = 36 : i64, stride = 1 : i64}> : memref<36x16xi8>
-  buckyball.custom "maxpool_i8" <{sources = array<i64: 0>, destination = 1 : i64}> {input_side = 6 : i64, output_side = 3 : i64, kernel = 2 : i64, stride = 2 : i64, padding = 0 : i64, op1_base = 0 : i64, wr_base = 0 : i64, output_stride = 3 : i64, start_row = 0 : i64, start_col = 0 : i64}
-  buckyball.mvout %output <{bank = 1 : i64, depth = 9 : i64, stride = 1 : i64}> : memref<9x16xi8>
-  buckyball.mset <{bank = 0 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  buckyball.mvin %input <{bank = 1 : i64, depth = 36 : i64, stride = 1 : i64}> : memref<36x16xi8>
+  buckyball.custom "maxpool_i8" <{sources = array<i64: 1>, destination = 2 : i64}> {input_side = 6 : i64, output_side = 3 : i64, kernel = 2 : i64, stride = 2 : i64, padding = 0 : i64, op1_base = 0 : i64, wr_base = 0 : i64, output_stride = 3 : i64, start_row = 0 : i64, start_col = 0 : i64}
+  buckyball.mvout %output <{bank = 2 : i64, depth = 9 : i64, stride = 1 : i64}> : memref<9x16xi8>
   buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   func.call @check_result(%output) : (memref<9x16xi8>) -> ()
   memref.dealloc %input : memref<36x16xi8>
   memref.dealloc %output : memref<9x16xi8>

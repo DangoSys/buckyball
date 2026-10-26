@@ -6,7 +6,6 @@ pub const MAX_WORDS: usize = 128;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Im2colCmd {
-    pub bid: u32,
     pub iter: u32,
     pub ksize: u32,
     pub stride: u32,
@@ -14,6 +13,8 @@ pub struct Im2colCmd {
     pub window_count: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
@@ -63,22 +64,23 @@ fn word_hi(data: &[u8], word_index: usize) -> u64 {
     u64::from_le_bytes(buf)
 }
 
-pub fn gen_case(seed: u32, index: u32, bid: u32) -> Im2colCase {
+pub fn gen_case(seed: u32, index: u32) -> Im2colCase {
     match index {
-        0 => directed_k3_pad0(bid),
-        1 => directed_k3_pad1(bid),
-        _ => random_case(seed, index, bid),
+        0 => directed_k3_pad0(),
+        1 => directed_k3_pad1(),
+        _ => random_case(seed, index),
     }
 }
 
 fn build_case(
-    bid: u32,
     iter: usize,
     ksize: usize,
     stride: usize,
     padding: usize,
     op1_bank: u32,
     wr_bank: u32,
+    op1_group: u32,
+    wr_group: u32,
     rob_id: u32,
     flat: &[u8],
 ) -> Im2colCase {
@@ -105,7 +107,6 @@ fn build_case(
     }
     Im2colCase {
         cmd: Im2colCmd {
-            bid,
             iter: iter as u32,
             ksize: ksize as u32,
             stride: stride as u32,
@@ -113,6 +114,8 @@ fn build_case(
             window_count: windows as u32,
             op1_bank,
             wr_bank,
+            op1_group,
+            wr_group,
             op1_col: 1,
             wr_col: 1,
             rob_id,
@@ -124,7 +127,7 @@ fn build_case(
     }
 }
 
-fn directed_k3_pad0(bid: u32) -> Im2colCase {
+fn directed_k3_pad0() -> Im2colCase {
     let iter = 6usize;
     let k = 3usize;
     let flat: [i8; 36] = [
@@ -132,10 +135,10 @@ fn directed_k3_pad0(bid: u32) -> Im2colCase {
         -25, 26, 27, 0, -29, 30, 31, 32, 33, -34, 0, 36,
     ];
     let bytes: Vec<u8> = flat.iter().map(|&x| x as u8).collect();
-    build_case(bid, iter, k, 1, 0, 0, 1, 3, &bytes)
+    build_case(iter, k, 1, 0, 0, 1, 0, 0, 3, &bytes)
 }
 
-fn directed_k3_pad1(bid: u32) -> Im2colCase {
+fn directed_k3_pad1() -> Im2colCase {
     let iter = 6usize;
     let k = 3usize;
     let flat: [i8; 36] = [
@@ -143,7 +146,7 @@ fn directed_k3_pad1(bid: u32) -> Im2colCase {
         24, 25, 26, -27, 28, 29, -30, 0, 32, 33, 34,
     ];
     let bytes: Vec<u8> = flat.iter().map(|&x| x as u8).collect();
-    build_case(bid, iter, k, 1, 1, 0, 1, 5, &bytes)
+    build_case(iter, k, 1, 1, 0, 1, 1, 2, 5, &bytes)
 }
 
 fn shape_ok(iter: usize, ksize: usize, stride: usize, padding: usize) -> bool {
@@ -158,7 +161,7 @@ fn shape_ok(iter: usize, ksize: usize, stride: usize, padding: usize) -> bool {
     rows <= model::bank_entries()
 }
 
-fn random_case(seed: u32, index: u32, bid: u32) -> Im2colCase {
+fn random_case(seed: u32, index: u32) -> Im2colCase {
     let mut rng = Rng::new(seed, index);
     let iter_pool = [3usize, 4, 5, 6, 7];
     let ksize_pool = [1usize, 3, 5];
@@ -182,16 +185,11 @@ fn random_case(seed: u32, index: u32, bid: u32) -> Im2colCase {
         for b in flat.iter_mut() {
             *b = (rng.next() & 0xff) as u8;
         }
+        let rob_id = rng.range(0, 15);
+        let op1_group = rng.range(0, 3);
+        let wr_group = rng.range(0, 3);
         return build_case(
-            bid,
-            iter,
-            ksize,
-            stride,
-            padding,
-            op1_bank,
-            wr_bank,
-            rng.range(0, 15),
-            &flat,
+            iter, ksize, stride, padding, op1_bank, wr_bank, op1_group, wr_group, rob_id, &flat,
         );
     }
     panic!("random_case: failed to find legal shape for index={index}");

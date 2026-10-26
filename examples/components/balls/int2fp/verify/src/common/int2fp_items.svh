@@ -9,64 +9,43 @@ class int2fp_cmd_item extends bb_blink_cmd_item;
   bit [127:0] scale_words[INT2FP_MAX_SCALE_WORDS];
   bit [127:0] dst_words[INT2FP_MAX_DST_WORDS];
 
-  constraint legal_c {
-    funct7 == INT32_TO_FP32_THREAD_FUNCT7[6:0];
-    op1_en == 1'b1;
-    op2_en == 1'b1;
-    wr_spad_en == 1'b1;
-    op1_from_spad == 1'b1;
-    op2_from_spad == 1'b1;
-    op1_col == 5'd1;
-    op2_col == 5'd1;
-    wr_col == 5'd1;
-    meta_bank == 5'd0;
-    is_sub == 1'b0;
-    sub_rob_id == 8'h00;
-    special == 64'd0;
-  }
-
   function new(string name = "int2fp_cmd_item");
     super.new(name);
   endfunction
 
-  function void load_rust_case(int unsigned index, int unsigned bid);
+  function void load_rust_case(int unsigned index);
     int2fp_cmd_dpi_t cmd;
     int unsigned rc;
     longint unsigned w_lo;
     longint unsigned w_hi;
     int i;
 
-    rc = int2fp_case_load(index, bid);
+    rc = int2fp_case_load(index);
     if (rc != 0) begin
       `uvm_fatal("CASE", $sformatf("int2fp_case_load returned %0d for index %0d", rc, index))
     end
     int2fp_case_cmd(cmd);
 
-    this.bid        = cmd.bid[4:0];
-    iter            = cmd.iter;
-    relu            = cmd.relu;
-    op1_bank        = cmd.op1_bank[4:0];
-    op2_bank        = cmd.op2_bank[4:0];
-    wr_bank         = cmd.wr_bank[4:0];
-    op1_col         = cmd.op1_col[4:0];
-    op2_col         = cmd.op2_col[4:0];
-    wr_col          = cmd.wr_col[4:0];
-    rob_id          = cmd.rob_id[3:0];
-    rs1             = {cmd.rs1_hi, cmd.rs1_lo};
+    // bb_int32_to_fp32: input/scale/output banks and iter come from rs1, relu from rs2[0].
+    rob_id          = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
+    funct           = INT32_TO_FP32_THREAD_FUNCT7[6:0];
     rs2             = {cmd.rs2_hi, cmd.rs2_lo};
+    iter            = cmd.iter;
+    op1_bank        = cmd.op1_bank;
+    op2_bank        = cmd.op2_bank;
+    wr_bank         = cmd.wr_bank;
+    op1_group       = cmd.op1_group;
+    op2_group       = cmd.op2_group;
+    wr_group        = cmd.wr_group;
+    op1_col         = cmd.op1_col;
+    op2_col         = cmd.op2_col;
+    wr_col          = cmd.wr_col;
+    wr_read_bank    = '0;
+    wr_arch_bank    = cmd.wr_bank;
+    relu            = cmd.relu;
     num_src_words   = cmd.num_src_words;
     num_scale_words = cmd.num_scale_words;
     num_dst_words   = cmd.num_dst_words;
-    funct7          = INT32_TO_FP32_THREAD_FUNCT7[6:0];
-    special         = 64'd0;
-    op1_en          = 1'b1;
-    op2_en          = 1'b1;
-    wr_spad_en      = 1'b1;
-    op1_from_spad   = 1'b1;
-    op2_from_spad   = 1'b1;
-    meta_bank       = 5'd0;
-    is_sub          = 1'b0;
-    sub_rob_id      = 8'h00;
 
     if (iter == 0 || iter[1:0] != 2'b00)
       `uvm_fatal("CASE", "INT32_TO_FP32 iter must be a positive multiple of four")
@@ -88,8 +67,6 @@ class int2fp_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", $sformatf("num_src_words out of range: %0d", num_src_words))
     if (num_dst_words == 0 || num_dst_words > INT2FP_MAX_DST_WORDS)
       `uvm_fatal("CASE", $sformatf("num_dst_words out of range: %0d", num_dst_words))
-    if (funct7 != INT32_TO_FP32_THREAD_FUNCT7[6:0])
-      `uvm_fatal("CASE", $sformatf("invalid funct7: %0d", funct7))
 
     for (i = 0; i < num_src_words; i++) begin
       w_lo = int2fp_case_src_word_lo(i);

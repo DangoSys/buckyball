@@ -40,26 +40,26 @@ func.func @main() -> i8 {
     memref.store %bias_i32, %bias[%bias_row, %bias_lane] : memref<4x4xi32>
   }
 
-  buckyball.mset <{bank = 0 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 4 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %input0 <{bank = 0 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mvin %weight0 <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mvin %input1 <{bank = 2 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mvin %weight1 <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  buckyball.mset <{bank = 5 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  buckyball.mvin %input0 <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  buckyball.mvin %weight0 <{bank = 2 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  buckyball.mvin %input1 <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  buckyball.mvin %weight1 <{bank = 4 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
   // The bias occupies the first four rows of C.
-  buckyball.mvin %bias <{bank = 4 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xi32>
-  buckyball.custom "matmul_i8_block" <{sources = array<i64: 0, 1>, destination = 4 : i64, read_destination}> {rows = 16 : i64, k = 16 : i64, first = true, last = false}
-  buckyball.custom "matmul_i8_block" <{sources = array<i64: 2, 3>, destination = 4 : i64, read_destination}> {rows = 16 : i64, k = 16 : i64, first = false, last = true}
-  buckyball.mvout %output <{bank = 4 : i64, depth = 64 : i64, stride = 1 : i64}> : memref<64x4xi32>
+  buckyball.mvin %bias <{bank = 5 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xi32>
+  buckyball.custom "matmul_i8_block" <{sources = array<i64: 1, 2>, destination = 5 : i64, read_destination}> {rows = 16 : i64, k = 16 : i64, first = true, last = false}
+  buckyball.custom "matmul_i8_block" <{sources = array<i64: 3, 4>, destination = 5 : i64, read_destination}> {rows = 16 : i64, k = 16 : i64, first = false, last = true}
+  buckyball.mvout %output <{bank = 5 : i64, depth = 64 : i64, stride = 1 : i64}> : memref<64x4xi32>
   func.call @check_result(%output) : (memref<64x4xi32>) -> ()
-  buckyball.mset <{bank = 0 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   buckyball.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   buckyball.mset <{bank = 4 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 5 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   memref.dealloc %input0 : memref<16x16xi8>
   memref.dealloc %input1 : memref<16x16xi8>
   memref.dealloc %weight0 : memref<16x16xi8>

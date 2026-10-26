@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -12,20 +11,15 @@ for path in (
         sys.path.insert(0, str(path))
 
 from smic180.compiler import generate_smic180_sram_dbs
+from smic180.sram import smic180_sram
 
 
-def leaf_names_from_macros(macros_v: Path, known: set[str]) -> list[str]:
-    if not macros_v.is_file():
-        raise FileNotFoundError(f"missing macros verilog: {macros_v}")
-    text = macros_v.read_text()
-    ordered: list[str] = []
-    for name in sorted(known):
-        pat = re.compile(rf"(?m)^\s*{re.escape(name)}\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(")
-        if pat.search(text):
-            ordered.append(name)
-    if not ordered:
-        raise RuntimeError(f"no known sram leaf instances in {macros_v}")
-    return ordered
+def generate_sram_macros(
+    *, process: str, mems: str, mdf: Path
+) -> tuple[str, list[str]]:
+    if process == "smic180":
+        return smic180_sram(mems, mdf)
+    raise ValueError(f"unknown sram process {process!r}")
 
 
 def generate_sram_dbs(

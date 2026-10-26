@@ -4,9 +4,11 @@ class int8mul_cov extends uvm_component;
   uvm_analysis_imp_cmd #(bb_blink_cmd_item, int8mul_cov) cmd_imp;
 
   int unsigned cur_iter;
+  int unsigned cur_col;
 
   covergroup cmd_cg;
     coverpoint cur_iter {bins i1 = {1}; bins i4 = {4};}
+    coverpoint cur_col {bins c1 = {1}; bins c2 = {2};}
   endgroup
 
   int cmd_count;
@@ -18,9 +20,10 @@ class int8mul_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    if (item.funct7 != INT8MUL_THREAD_FUNCT7[6:0])
-      `uvm_fatal("COV", $sformatf("unexpected funct7 %0d", item.funct7))
+    if (item.funct != INT8MUL_THREAD_FUNCT7[6:0])
+      `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
     cur_iter = item.iter;
+    cur_col  = item.op1_col;
     cmd_count++;
     cmd_cg.sample();
   endfunction

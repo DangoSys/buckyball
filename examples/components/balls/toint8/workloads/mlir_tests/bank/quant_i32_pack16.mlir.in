@@ -28,7 +28,7 @@ func.func @main() -> i8 {
   %output_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
   %loaded_input = buckyball.bank_mvin %input, %input_bank <{depth = @BB_QUANT_I32_INPUT_ROWS@ : i64, stride = 1 : i64}> : memref<@BB_QUANT_I32_INPUT_ROWS@x4xi32>
   %loaded_scale = buckyball.bank_mvin %scale, %scale_bank <{depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
-  %result = buckyball.bank_custom "int32_to_int8" (%loaded_input, %loaded_scale) -> %output_bank {rows = @BB_QUANT_I32_OUTPUT_ROWS@ : i64, wr_base = 0 : i64, relu = false}
+  %result = buckyball.bank_custom "int32_to_int8" (%loaded_input, %loaded_scale) -> %output_bank {rows = @BB_QUANT_I32_OUTPUT_ROWS@ : i64, relu = false}
   %stored = buckyball.bank_mvout %output, %result <{depth = @BB_QUANT_I32_OUTPUT_ROWS@ : i64, stride = 1 : i64}> : memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>
   func.call @check_result(%output) : (memref<@BB_QUANT_I32_OUTPUT_ROWS@x@BB_BANK_I8_LANES@xi8>) -> ()
   buckyball.bank_release %loaded_input

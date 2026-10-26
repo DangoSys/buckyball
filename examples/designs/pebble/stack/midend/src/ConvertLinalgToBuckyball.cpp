@@ -13,8 +13,8 @@
 #include "mlir/Dialect/MemRef/IR/MemRef.h"
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Utils/StaticValueUtils.h"
 #include "mlir/Pass/Pass.h"
-#include "llvm/ADT/MapVector.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
@@ -35,9 +35,65 @@ Value pebble::tensorBuffer(OpBuilder &builder, Location loc, Value tensor) {
   return bufferization::ToBufferOp::create(builder, loc, memory, tensor, true);
 }
 
+SmallVector<Value> pebble::repeat(
+    OpBuilder &builder, Location loc, int64_t begin, int64_t end, int64_t step,
+    bool unroll, ValueRange carried,
+    function_ref<SmallVector<Value>(OpBuilder &, Value, ValueRange)> body) {
+  SmallVector<Value> values(carried);
+  if (unroll || end - begin <= step) {
+    for (int64_t index = begin; index < end; index += step)
+      values = body(
+          builder, arith::ConstantIndexOp::create(builder, loc, index), values);
+    return values;
+  }
+  auto loop = scf::ForOp::create(
+      builder, loc, arith::ConstantIndexOp::create(builder, loc, begin),
+      arith::ConstantIndexOp::create(builder, loc, end),
+      arith::ConstantIndexOp::create(builder, loc, step), carried,
+      [&](OpBuilder &nested, Location loc, Value index, ValueRange args) {
+        scf::YieldOp::create(nested, loc, body(nested, index, args));
+      });
+  return loop.getResults();
+}
+
+Value pebble::accumulate(
+    OpBuilder &builder, Location loc, int64_t total, int64_t size, bool unroll,
+    Value accumulator,
+    function_ref<Value(OpBuilder &, Value, int64_t, bool, bool, Value)> body) {
+  int64_t pieces = (total + size - 1) / size;
+  int64_t last = (pieces - 1) * size;
+  accumulator = body(builder, arith::ConstantIndexOp::create(builder, loc, 0),
+                     std::min(size, total), true, pieces == 1, accumulator);
+  accumulator = pebble::repeat(
+      builder, loc, size, last, size, unroll, accumulator,
+      [&](OpBuilder &b, Value start, ValueRange args) -> SmallVector<Value> {
+        return {body(b, start, size, false, false, args[0])};
+      })[0];
+  if (pieces > 1)
+    accumulator =
+        body(builder, arith::ConstantIndexOp::create(builder, loc, last),
+             total - last, false, true, accumulator);
+  return accumulator;
+}
+
+pebble::SpatialTile pebble::spatialTile(int64_t height, int64_t width,
+                                        int64_t pool, int64_t stride,
+                                        int64_t kernel) {
+  int64_t tile = 4 / pool;
+  while (tile > 0 && (height % tile || width % tile ||
+                      (tile * pool - 1) * stride + kernel > 8))
+    --tile;
+  if (!tile)
+    return {0, 0};
+  int64_t side = std::min<int64_t>(8, std::min(height, width));
+  while (side % tile)
+    --side;
+  return {tile, side};
+}
+
 namespace {
 LogicalResult lowerMatmul(::buddy::custom::CustomOp op, Value residentInput,
-                          Value nextMultiplier, bool relu, Value &result) {
+                          Value &result) {
   bool linear = op.getKind() == "linear_i8";
   if (op.getInputs().size() != (linear ? 6 : 3) || op.getNumResults() != 1)
     return op.emitOpError("has the wrong number of inputs or results for ")
@@ -46,23 +102,14 @@ LogicalResult lowerMatmul(::buddy::custom::CustomOp op, Value residentInput,
   auto a = cast<RankedTensorType>(inputs[0].getType());
   auto b = cast<RankedTensorType>(inputs[1].getType());
   auto resultType = cast<RankedTensorType>(op.getResult(0).getType());
-  if (a.hasStaticShape() && b.hasStaticShape() && a.getRank() == 2 &&
-      b.getRank() == 2 &&
-      (a.getDimSize(0) != 1 || a.getDimSize(1) % 16 || b.getDimSize(1) % 16)) {
-    if (residentInput || nextMultiplier)
-      return op.emitOpError("resident Linear requires one row and aligned K/N");
-    return pebble::lowerLinearTiles(op, result);
-  }
-  const auto &target = buckyball_target::getBuckyballTarget();
   if (!a.hasStaticShape() || !b.hasStaticShape() || a.getRank() != 2 ||
-      b.getRank() != 2 || a.getDimSize(0) != 1 ||
-      a.getDimSize(1) != b.getDimSize(0) || a.getDimSize(1) <= 0 ||
-      b.getDimSize(1) <= 0 || a.getDimSize(1) % 16 || b.getDimSize(1) % 16)
-    return op.emitOpError("requires 1xK and KxN tensors with positive K and N "
-                          "multiples of sixteen");
+      b.getRank() != 2 || a.getDimSize(1) != b.getDimSize(0))
+    return op.emitOpError("requires static MxK and KxN tensors");
+  const auto &target = buckyball_target::getBuckyballTarget();
   int64_t k = a.getDimSize(1), n = b.getDimSize(1);
-  if (target.bankWidthBits != 128 || k > target.bankDepth)
-    return op.emitOpError("operands do not fit the core bank geometry");
+  // One activation row with aligned K and N stays in one bank.
+  if (a.getDimSize(0) != 1 || k % 16 || n % 16 || k > target.bankDepth)
+    return pebble::lowerLinearTiles(op, result);
   if (!b.getElementType().isInteger(8) ||
       !(linear ? a.getElementType().isF32()
                : a.getElementType().isInteger(8)) ||
@@ -86,31 +133,19 @@ LogicalResult lowerMatmul(::buddy::custom::CustomOp op, Value residentInput,
     return op.emitOpError(
         "requires an INT32 initial accumulator matching the result");
 
-  if (nextMultiplier && (n / 16 > 128 || n / 16 > target.bankDepth))
-    return op.emitOpError(
-        "resident output exceeds the quantizer row address range");
-
   OpBuilder builder(op);
   Location loc = op.getLoc();
   Type i64 = builder.getI64Type();
   Value zero = arith::ConstantIndexOp::create(builder, loc, 0);
   Value weight = pebble::tensorBuffer(builder, loc, inputs[1]);
-  Value output;
-  if (!nextMultiplier)
-    output = memref::AllocOp::create(
-        builder, loc, MemRefType::get({1, n}, resultType.getElementType()));
-  Value residentOutput;
-  if (nextMultiplier)
-    residentOutput = BankAllocOp::create(builder, loc, i64, 1, 1);
+  Value output = memref::AllocOp::create(
+      builder, loc, MemRefType::get({1, n}, resultType.getElementType()));
   Value initial = pebble::tensorBuffer(builder, loc, inputs[2]);
-  Value scales, inputStep, outputMultiplier;
+  Value scales, inputStep;
   Value codes = residentInput;
   if (linear) {
     inputStep = tensor::ExtractOp::create(builder, loc, inputs[4],
                                           ValueRange{zero, zero});
-    if (nextMultiplier)
-      outputMultiplier = tensor::ExtractOp::create(builder, loc, nextMultiplier,
-                                                   ValueRange{zero, zero});
     scales = memref::AllocOp::create(
         builder, loc, MemRefType::get({16}, builder.getF32Type()));
   }
@@ -134,79 +169,75 @@ LogicalResult lowerMatmul(::buddy::custom::CustomOp op, Value residentInput,
     }
   }
 
-  // Keep the activation in its bank while processing each sixteen-column slice.
-  for (int64_t column = 0; column < n; column += 16) {
-    for (int64_t lane = 0; linear && lane < 16; ++lane) {
-      Value index = arith::ConstantIndexOp::create(builder, loc, lane);
-      Value channel =
-          arith::ConstantIndexOp::create(builder, loc, column + lane);
-      Value step = tensor::ExtractOp::create(builder, loc, inputs[5],
-                                             ValueRange{zero, channel});
-      Value product = arith::MulFOp::create(builder, loc, inputStep, step);
-      if (nextMultiplier)
-        product =
-            arith::MulFOp::create(builder, loc, product, outputMultiplier);
-      memref::StoreOp::create(builder, loc, product, scales, index);
-    }
-    Value weightSlice = memref::SubViewOp::create(
-        builder, loc, weight, ArrayRef<int64_t>{0, column},
-        ArrayRef<int64_t>{k, 16}, ArrayRef<int64_t>{1, 1});
-    Value weightBank = BankAllocOp::create(builder, loc, i64, 1, 1);
-    weightBank = BankMvinOp::create(builder, loc, i64, weightSlice, weightBank,
-                                    k, n / 16);
-    Value accumulator = BankAllocOp::create(builder, loc, i64, 1, 1);
-    Value initialSlice = memref::SubViewOp::create(
-        builder, loc, initial, ArrayRef<int64_t>{0, column},
-        ArrayRef<int64_t>{1, 16}, ArrayRef<int64_t>{1, 1});
-    accumulator =
-        BankMvinOp::create(builder, loc, i64, initialSlice, accumulator, 4, 1);
-    auto matmul =
-        BankCustomOp::create(builder, loc, i64, ValueRange{codes, weightBank},
-                             accumulator, ValueRange{}, "matmul_i8", true);
-    matmul->setAttr("rows", builder.getI64IntegerAttr(1));
-    matmul->setAttr("k", builder.getI64IntegerAttr(k));
-    accumulator = matmul.getDestinationOut();
-    BankReleaseOp::create(builder, loc, weightBank);
+  // Keep the activation in its bank while processing each sixteen-column
+  // slice.
+  pebble::repeat(
+      builder, loc, 0, n, 16, false, {},
+      [&](OpBuilder &b, Value column, ValueRange) -> SmallVector<Value> {
+        if (linear) {
+          auto lanes = scf::ForOp::create(
+              b, loc, zero, arith::ConstantIndexOp::create(b, loc, 16),
+              arith::ConstantIndexOp::create(b, loc, 1));
+          OpBuilder::InsertionGuard guard(b);
+          b.setInsertionPointToStart(lanes.getBody());
+          Value lane = lanes.getInductionVar();
+          Value channel = arith::AddIOp::create(b, loc, column, lane);
+          Value step = tensor::ExtractOp::create(b, loc, inputs[5],
+                                                 ValueRange{zero, channel});
+          Value product = arith::MulFOp::create(b, loc, inputStep, step);
+          memref::StoreOp::create(b, loc, product, scales, lane);
+        }
+        SmallVector<OpFoldResult> offsets{b.getIndexAttr(0), column};
+        SmallVector<OpFoldResult> unit{b.getIndexAttr(1), b.getIndexAttr(1)};
+        Value weightSlice = memref::SubViewOp::create(
+            b, loc, weight, offsets,
+            ArrayRef<OpFoldResult>{b.getIndexAttr(k), b.getIndexAttr(16)},
+            unit);
+        Value weightBank = BankAllocOp::create(b, loc, i64, 1, 1);
+        weightBank =
+            BankMvinOp::create(b, loc, i64, weightSlice, weightBank, k, n / 16);
+        Value accumulator = BankAllocOp::create(b, loc, i64, 1, 1);
+        Value initialSlice = memref::SubViewOp::create(
+            b, loc, initial, offsets,
+            ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(16)},
+            unit);
+        accumulator =
+            BankMvinOp::create(b, loc, i64, initialSlice, accumulator, 4, 1);
+        auto matmul =
+            BankCustomOp::create(b, loc, i64, ValueRange{codes, weightBank},
+                                 accumulator, ValueRange{}, "matmul_i8", true);
+        matmul->setAttr("rows", b.getI64IntegerAttr(1));
+        matmul->setAttr("k", b.getI64IntegerAttr(k));
+        accumulator = matmul.getDestinationOut();
+        BankReleaseOp::create(b, loc, weightBank);
 
-    Value resultBank = accumulator;
-    if (linear) {
-      Value scaleBank = BankAllocOp::create(builder, loc, i64, 1, 1);
-      scaleBank =
-          BankMvinOp::create(builder, loc, i64, scales, scaleBank, 4, 1);
-      if (nextMultiplier) {
-        auto quantized = BankCustomOp::create(
-            builder, loc, i64, ValueRange{accumulator, scaleBank},
-            residentOutput, ValueRange{}, "int32_to_int8", true);
-        quantized->setAttr("rows", builder.getI64IntegerAttr(1));
-        quantized->setAttr("wr_base", builder.getI64IntegerAttr(column / 16));
-        quantized->setAttr("relu", builder.getBoolAttr(relu));
-        residentOutput = quantized.getDestinationOut();
-      } else {
-        resultBank = BankAllocOp::create(builder, loc, i64, 1, 1);
-        auto restored = BankCustomOp::create(
-            builder, loc, i64, ValueRange{accumulator, scaleBank}, resultBank,
-            ValueRange{}, "int32_to_fp32");
-        restored->setAttr("rows", builder.getI64IntegerAttr(1));
-        resultBank = restored.getDestinationOut();
-      }
-      BankReleaseOp::create(builder, loc, scaleBank);
-    }
-    if (!nextMultiplier) {
-      Value outputSlice = memref::SubViewOp::create(
-          builder, loc, output, ArrayRef<int64_t>{0, column},
-          ArrayRef<int64_t>{1, 16}, ArrayRef<int64_t>{1, 1});
-      resultBank =
-          BankMvoutOp::create(builder, loc, i64, outputSlice, resultBank, 4, 1);
-      if (linear)
-        BankReleaseOp::create(builder, loc, resultBank);
-    }
-    BankReleaseOp::create(builder, loc, accumulator);
-  }
+        Value resultBank = accumulator;
+        if (linear) {
+          Value scaleBank = BankAllocOp::create(b, loc, i64, 1, 1);
+          scaleBank = BankMvinOp::create(b, loc, i64, scales, scaleBank, 4, 1);
+          resultBank = BankAllocOp::create(b, loc, i64, 1, 1);
+          auto restored = BankCustomOp::create(
+              b, loc, i64, ValueRange{accumulator, scaleBank}, resultBank,
+              ValueRange{}, "int32_to_fp32");
+          restored->setAttr("rows", b.getI64IntegerAttr(1));
+          restored->setAttr("relu", b.getBoolAttr(false));
+          resultBank = restored.getDestinationOut();
+          BankReleaseOp::create(b, loc, scaleBank);
+        }
+        Value outputSlice = memref::SubViewOp::create(
+            b, loc, output, offsets,
+            ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(16)},
+            unit);
+        resultBank =
+            BankMvoutOp::create(b, loc, i64, outputSlice, resultBank, 4, 1);
+        if (linear)
+          BankReleaseOp::create(b, loc, resultBank);
+        BankReleaseOp::create(b, loc, accumulator);
+        return SmallVector<Value>{};
+      });
   BankReleaseOp::create(builder, loc, codes);
-  result = residentOutput;
-  if (!nextMultiplier)
-    result = bufferization::ToTensorOp::create(
-        builder, loc, op.getResult(0).getType(), output, true, true);
+  result = bufferization::ToTensorOp::create(
+      builder, loc, op.getResult(0).getType(), output, true, true);
   return success();
 }
 
@@ -226,57 +257,11 @@ public:
                     linalg::LinalgDialect>();
   }
   void runOnOperation() override {
-    if (failed(pebble::lowerQuantizedChains(getOperation())))
-      return signalPassFailure();
     DenseMap<Value, Value> residentVectors;
     SmallVector<Operation *> spatial;
     if (failed(
             pebble::lowerSpatialOps(getOperation(), residentVectors, spatial)))
       return signalPassFailure();
-    llvm::MapVector<int64_t, SmallVector<Operation *>> chains;
-    getOperation().walk([&](Operation *op) {
-      if (auto group = op->getAttrOfType<IntegerAttr>("custom.chain"))
-        chains[group.getInt()].push_back(op);
-    });
-    for (auto &[id, links] : chains) {
-      SmallVector<::buddy::custom::CustomOp> stages;
-      for (Operation *link : links)
-        if (auto op = dyn_cast<::buddy::custom::CustomOp>(link))
-          if (op.getKind() == "linear_i8")
-            stages.push_back(op);
-      DenseMap<Value, Value> resident;
-      Value input = residentVectors.lookup(stages.front().getInputs()[0]);
-      for (auto [index, stage] : llvm::enumerate(stages)) {
-        bool last = index + 1 == stages.size();
-        Value multiplier = last ? Value() : stages[index + 1].getInputs()[3];
-        bool relu =
-            !last && stage->getAttrOfType<BoolAttr>("custom.relu").getValue();
-        Value lowered;
-        if (failed(lowerMatmul(stage, input, multiplier, relu, lowered)))
-          return signalPassFailure();
-        if (last)
-          stage.getResult(0).replaceAllUsesWith(lowered);
-        else
-          resident[stage.getResult(0)] = input = lowered;
-      }
-      for (Operation *link : links) {
-        if (auto op = dyn_cast<::buddy::custom::CustomOp>(link)) {
-          if (op.getKind() == "relu")
-            resident[op.getResult(0)] = resident.at(op.getInputs()[0]);
-        } else {
-          // Cycle-only markers observe the resident bank without spilling it.
-          Value bank = resident.at(link->getOperand(0));
-          resident[link->getResult(0)] = bank;
-          OpBuilder builder(link);
-          Operation *trace = builder.clone(*link);
-          trace->setOperand(0, bank);
-          trace->getResult(0).setType(bank.getType());
-          trace->removeAttr("custom.chain");
-        }
-      }
-      for (Operation *link : llvm::reverse(links))
-        link->erase();
-    }
     SmallVector<::buddy::custom::CustomOp> computations;
     getOperation().walk([&](::buddy::custom::CustomOp op) {
       if (!llvm::is_contained(spatial, op.getOperation()))
@@ -286,10 +271,9 @@ public:
       if (op.getKind() == "global_avg_i8" || op.getKind() == "lookup_i8" ||
           op.getKind() == "gate_mul_i8") {
         Value result;
-        LogicalResult status =
-            op.getKind() == "global_avg_i8"
-                ? pebble::lowerGlobalAverage(op, result, false)
-                : pebble::lowerChannelOp(op, result);
+        LogicalResult status = op.getKind() == "global_avg_i8"
+                                   ? pebble::lowerGlobalAverage(op, result)
+                                   : pebble::lowerChannelOp(op, result);
         if (failed(status))
           return signalPassFailure();
         op.getResult(0).replaceAllUsesWith(result);
@@ -314,7 +298,7 @@ public:
       }
       Value result;
       if (failed(lowerMatmul(op, residentVectors.lookup(op.getInputs()[0]),
-                             Value(), false, result)))
+                             result)))
         return signalPassFailure();
       op.getResult(0).replaceAllUsesWith(result);
       op.erase();

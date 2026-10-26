@@ -33,7 +33,6 @@ package redmule_uvm_pkg;
           vif.bank_write_resp_valid[0] <= 0;
           vif.bank_write_resp_ok[0] <= 1;
           vif.cmd_resp_ready <= 1;
-          vif.sub_rob_req_ready <= 1;
         end else begin
           for (int port = 0; port < 2; port++) begin
             if (vif.bank_read_resp_valid[port] && vif.bank_read_resp_ready[port])
@@ -41,11 +40,13 @@ package redmule_uvm_pkg;
             if (vif.bank_read_req_valid[port] && vif.bank_read_req_ready[port]) begin
               if (!mem.exists(
                       vif.bank_read_bank_id[port]
-                  ) || !mem[vif.bank_read_bank_id[port]][0].exists(
+                  ) || !mem[vif.bank_read_bank_id[port]].exists(
+                      vif.bank_read_group_id[port]
+                  ) || !mem[vif.bank_read_bank_id[port]][vif.bank_read_group_id[port]].exists(
                       vif.bank_read_req_addr[port]
                   ))
                 `uvm_fatal("MEM", "bank read was not preloaded")
-              vif.bank_read_resp_data[port] <= mem[vif.bank_read_bank_id[port]][0][vif.bank_read_req_addr[port]];
+              vif.bank_read_resp_data[port] <= mem[vif.bank_read_bank_id[port]][vif.bank_read_group_id[port]][vif.bank_read_req_addr[port]];
               vif.bank_read_resp_valid[port] <= 1;
             end
             vif.bank_read_req_ready[port] <= (!vif.bank_read_resp_valid[port] || vif.bank_read_resp_ready[port]) &&
@@ -79,33 +80,34 @@ package redmule_uvm_pkg;
 
   class redmule_seq extends uvm_sequence #(bb_blink_cmd_item);
     `uvm_object_utils(redmule_seq)
-    int bid, rows, k, base, block_index, blocks;
+    int rows, k, base, block_index, blocks;
+    int groups[4];
     function new(string name = "redmule_seq");
       super.new(name);
     endfunction
     task body();
       bb_blink_cmd_item item = bb_blink_cmd_item::type_id::create("item");
       start_item(item);
-      item.bid = bid;
-      item.funct7 = `REDMULE_F16_FUNCT7;
-      item.iter = k;
-      item.op1_en = 1;
-      item.op2_en = 1;
-      item.wr_spad_en = 1;
-      item.op1_from_spad = 1;
-      item.op2_from_spad = 1;
-      item.op1_bank = 0;
-      item.op2_bank = 1;
-      item.wr_bank = 2;
-      item.op1_col = 1;
-      item.op2_col = 1;
-      item.wr_col = 1;
-      item.rs1 = (longint'(k) << 30) | (2 << 20) | (1 << 10);
+      // bb_redmule(a=0, b=1, c=2, m, k, base, base, base, first): banks and K from rs1.
+      // The frontend renames C on every write: block j writes bank 2 + j % 2 and a
+      // continuation reads the previous C from the other one, its wr_read_bank.
+      item.rob_id = block_index;
+      item.funct = `REDMULE_F16_FUNCT7;
       item.rs2 = longint'(rows) | (longint'(base) << 12) |
         (longint'(base) << 22) | (longint'(base) << 32) |
         (longint'(block_index == 0) << 42);
-      item.special = item.rs2;
-      item.rob_id = block_index;
+      item.iter = k;
+      item.op1_bank = 0;
+      item.op2_bank = 1;
+      item.wr_bank = 2 + block_index % 2;
+      item.op1_group = groups[0];
+      item.op2_group = groups[1];
+      item.wr_group = groups[2];
+      item.op1_col = 1;
+      item.op2_col = 1;
+      item.wr_col = 1;
+      item.wr_read_bank = block_index == 0 ? 0 : 3 - block_index % 2;
+      item.wr_arch_bank = 2;
       finish_item(item);
     endtask
   endclass
@@ -118,6 +120,7 @@ package redmule_uvm_pkg;
     uvm_analysis_imp_resp #(bb_blink_resp_item, redmule_scoreboard) resp_imp;
     bb_blink_mem_model #(`BB_IN_BW, `BB_OUT_BW) mem_model;
     int rows, k, base, blocks, block_index;
+    int groups[4];
     int reads[2], writes, commands, responses;
     bit first;
     bit a_seen[int], b_seen[int], c_seen[int];
@@ -141,8 +144,13 @@ package redmule_uvm_pkg;
       number_cg = new();
     endfunction
     function void write_cmd(bb_blink_cmd_item item);
-      if (item.funct7 != `REDMULE_F16_FUNCT7 || item.iter != k ||
-          item.rs2[11:0] != rows || item.rob_id != block_index)
+      if (item.funct != `REDMULE_F16_FUNCT7 || item.iter != k ||
+          item.rs2[11:0] != rows || item.rob_id != block_index ||
+          item.op1_bank != 0 || item.op2_bank != 1 || item.wr_bank != 2 + block_index % 2 ||
+          item.op1_group != groups[0] || item.op2_group != groups[1] ||
+          item.wr_group != groups[2] ||
+          item.wr_read_bank != (block_index == 0 ? 0 : 3 - block_index % 2) ||
+          item.wr_arch_bank != 2)
         `uvm_fatal("CMD", "unexpected RedMulE command")
       first = item.rs2[42];
       m_bucket = rows;
@@ -153,15 +161,15 @@ package redmule_uvm_pkg;
     endfunction
     function void write_read(bb_blink_read_item item);
       int limit;
-      if (item.group_id != 0 || item.rob_id != block_index)
-        `uvm_fatal("READ", "unexpected read metadata")
+      if (item.rob_id != block_index) `uvm_fatal("READ", "unexpected read metadata")
+      if (item.group_id != groups[item.bank_id]) `uvm_fatal("READ", "unexpected read group")
       if (item.port == 1 && item.bank_id == 1) begin
         limit = base + k;
         b_seen[item.addr] = 1;
       end else if (item.port == 0 && item.bank_id == 0) begin
         limit = base + rows * k / 8;
         a_seen[item.addr] = 1;
-      end else if (item.port == 0 && item.bank_id == 2 && !first) begin
+      end else if (item.port == 0 && item.bank_id == 3 - block_index % 2 && !first) begin
         limit = base + rows;
         c_seen[item.addr] = 1;
       end else `uvm_fatal("READ", "unexpected read bank")
@@ -176,8 +184,8 @@ package redmule_uvm_pkg;
         redmule_case_word(2, block_index * rows + writes, 1),
         redmule_case_word(2, block_index * rows + writes, 0)
       };
-      if (item.port != 0 || item.bank_id != 2 || item.addr != base + writes ||
-          item.rob_id != block_index || item.group_id != 0 || item.mask != 16'hffff ||
+      if (item.port != 0 || item.bank_id != 2 + block_index % 2 || item.addr != base + writes ||
+          item.rob_id != block_index || item.group_id != groups[2] || item.mask != 16'hffff ||
           item.data !== expected)
         `uvm_fatal("WRITE", $sformatf(
                    "row %0d got %032h expected %032h", item.addr, item.data, expected))
@@ -190,11 +198,11 @@ package redmule_uvm_pkg;
         else number_class = 4;
         number_cg.sample();
       end
-      mem_model.load_word(2, item.addr, item.data);
+      mem_model.load_word_g(item.bank_id, groups[2], item.addr, item.data);
       writes++;
     endfunction
     function void write_resp(bb_blink_resp_item item);
-      if (item.rob_id != block_index || item.is_sub != 0 || item.sub_rob_id != 0 || writes != rows)
+      if (item.rob_id != block_index || writes != rows)
         `uvm_fatal("RESP", "completion preceded required reads/writes")
       for (int row = base; row < base + rows * k / 8; row++)
       if (!a_seen.exists(row)) `uvm_fatal("READ", "missing A row")
@@ -257,13 +265,13 @@ package redmule_uvm_pkg;
       env = redmule_env::type_id::create("env", this);
     endfunction
     task run_phase(uvm_phase phase);
-      int bid, rows, k, base, blocks, before_response, cycles;
+      int rows, k, base, blocks, before_response, cycles;
+      int groups[4];
       longint unsigned shape;
       longint native_cycles, ball_started, ball_cycles, total_native = 0, total_ball = 0;
       redmule_seq seq;
       redmule_mem_model memory_agent;
       if (!$cast(memory_agent, env.mem_model)) `uvm_fatal("MEM", "wrong memory model type")
-      if (!$value$plusargs("BID=%d", bid)) `uvm_fatal("BID", "missing BID")
       phase.raise_objection(this);
       for (int index = 0; index < 67; index++) begin
         vif.reset = 1;
@@ -281,19 +289,23 @@ package redmule_uvm_pkg;
         env.scb.k = k;
         env.scb.base = base;
         env.scb.blocks = blocks;
+        // Odd cases place A, B and C at nonzero group bases of their banks; both
+        // banks of C use the destination group.
+        groups = index % 2 ? '{1, 2, 3, 3} : '{0, 0, 0, 0};
+        env.scb.groups = groups;
         env.mem_model.clear_mem();
         for (int row = 0; row < base + rows * k / 8; row++) begin
-          env.mem_model.load_word(0, row, {
-                                  redmule_case_word(0, row, 1), redmule_case_word(0, row, 0)});
+          env.mem_model.load_word_g(0, groups[0], row, {
+                                    redmule_case_word(0, row, 1), redmule_case_word(0, row, 0)});
           reference.load_word(0, row, {redmule_case_word(0, row, 1), redmule_case_word(0, row, 0)});
         end
         for (int row = 0; row < base + k; row++) begin
-          env.mem_model.load_word(1, row, {
-                                  redmule_case_word(1, row, 1), redmule_case_word(1, row, 0)});
+          env.mem_model.load_word_g(1, groups[1], row, {
+                                    redmule_case_word(1, row, 1), redmule_case_word(1, row, 0)});
           reference.load_word(1, row, {redmule_case_word(1, row, 1), redmule_case_word(1, row, 0)});
         end
         for (int row = 0; row < base + rows; row++) begin
-          env.mem_model.load_word(2, row, 0);
+          env.mem_model.load_word_g(2, groups[2], row, 0);
           reference.load_word(2, row, 0);
         end
         env.mem_model.arm();
@@ -306,7 +318,7 @@ package redmule_uvm_pkg;
           env.scb.c_seen.delete();
           before_response = env.scb.responses;
           seq = redmule_seq::type_id::create("seq");
-          seq.bid = bid;
+          seq.groups = groups;
           seq.rows = rows;
           seq.k = k;
           seq.base = base;

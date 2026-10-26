@@ -80,8 +80,8 @@ class Int8AddBall(
 
   val add = Instantiate(new PipelinedAddRawFN(8, 24))
 
-  val round          = Instantiate(new RoundRawFNToRecFN(8, 24, 0))
-  val toInt          = Instantiate(new RecFNToIN(8, 24, 8))
+  val round          = Module(new RoundRawFNToRecFN(8, 24, 0))
+  val toInt          = Module(new RecFNToIN(8, 24, 8))
   val lhsValue       = (lhsWord >> (lane << 3))(7, 0)
   val rhsValue       = (rhsWord >> (lane << 3))(7, 0)
   val calculateIssue = state === calculate

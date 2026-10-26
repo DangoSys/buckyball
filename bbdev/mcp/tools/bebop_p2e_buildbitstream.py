@@ -16,7 +16,6 @@ def register(mcp):
         mtrace: bool = False,
         vsrc_dir: Optional[str] = None,
         output_dir: Optional[str] = None,
-        stop_after: Optional[str] = None,
         device: bool = False,
         core: str | None = None,
     ) -> str:
@@ -27,7 +26,6 @@ def register(mcp):
             {"design": design, "diff": diff, "itrace": itrace, "mtrace": mtrace},
             vsrc_dir=vsrc_dir,
             output_dir=output_dir,
-            stop_after=stop_after,
         )
         if device:
             request["device"] = True

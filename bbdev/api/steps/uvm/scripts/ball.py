@@ -112,12 +112,11 @@ def vcs_defines(domain, mapping, thread, core, parameters):
         f"+define+BB_OUT_BW={mapping.out_bw}",
         f"+define+BB_MMIO_READ_BW={mapping.mmio_read_bw}",
         f"+define+BB_MMIO_WRITE_BW={mapping.mmio_write_bw}",
-        f"+define+BB_BANK_ID_W={(core.virtual_bank_count - 1).bit_length()}",
+        f"+define+BB_BANK_ID_W={thread.frontend.bank_id_len}",
         f"+define+BB_GROUP_COUNT_W={max_group_count.bit_length()}",
         f"+define+BB_GROUP_ID_W={(max_group_count - 1).bit_length()}",
         f"+define+BB_BANK_ADDR_W={(thread.mem.bank.entries - 1).bit_length()}",
         f"+define+BB_ROB_ID_W={(thread.frontend.rob_entries - 1).bit_length()}",
-        f"+define+BB_SUB_ROB_ID_W={(thread.frontend.sub_rob_depth * 4 - 1).bit_length()}",
     ]
     for e in mapping.instructions:
         defs.append(f"+define+{e.mnemonic}_FUNCT7={e.funct7}")
@@ -185,7 +184,7 @@ def build_ball(
         Path(bbdir)
         / "examples/designs"
         / design_name
-        / "output/sims/device/arch"
+        / "output/sims/device/arch/verilog"
         / mill_cfg
     )
     design = load_design(bbdir, design_name)

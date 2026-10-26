@@ -6,6 +6,7 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
   bit [31:0] command_count;
   bit [31:0] op1_words;
   bit [31:0] op2_words;
+  bit [63:0] rs1;
 
   function new(string name = "smatmul_cmd_item");
     super.new(name);
@@ -21,43 +22,35 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     kind = cmd.kind;
     command_index = index;
     command_count = smatmul_case_num_commands();
-    bid = cmd.bid[4:0];
-    rob_id = cmd.rob_id[3:0];
     op1_words = cmd.op1_words;
     op2_words = cmd.op2_words;
     rs1 = {cmd.rs1_hi, cmd.rs1_lo};
+
+    // BB_BANK0/1/2 and BB_ITER fields of rs1; banks are not renamed at Ball level.
+    rob_id = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
     rs2 = {cmd.rs2_hi, cmd.rs2_lo};
-    op1_bank = rs1[4:0];
-    op2_bank = rs1[14:10];
-    wr_bank = rs1[24:20];
     iter = rs1[63:30];
-    special = 64'd0;
-    meta_bank = 5'd0;
-    is_sub = 1'b0;
-    sub_rob_id = 8'd0;
+    op1_bank = rs1[9:0];
+    op2_bank = rs1[19:10];
+    wr_bank = rs1[29:20];
+    op1_group = cmd.op1_group;
+    op2_group = cmd.op2_group;
+    wr_group = cmd.wr_group;
+    wr_read_bank = '0;
+    wr_arch_bank = wr_bank;
 
     if (kind == 0) begin
-      funct7 = SMATMUL_BIAS_THREAD_FUNCT7[6:0];
-      op1_en = 1'b1;
-      op2_en = 1'b0;
-      wr_spad_en = 1'b0;
-      op1_from_spad = 1'b1;
-      op2_from_spad = 1'b0;
-      op1_col = 5'd1;
-      op2_col = 5'd0;
-      wr_col = 5'd0;
+      funct   = SMATMUL_BIAS_THREAD_FUNCT7[6:0];
+      op1_col = 1;
+      op2_col = 0;
+      wr_col  = 0;
       if (rs1[29:10] != 0 || iter != 4 || rs2 != 0 || op1_words != 4)
         `uvm_fatal("CASE", "invalid bias command")
     end else begin
-      funct7 = SMATMUL_OS_THREAD_FUNCT7[6:0];
-      op1_en = 1'b1;
-      op2_en = 1'b1;
-      wr_spad_en = 1'b1;
-      op1_from_spad = 1'b1;
-      op2_from_spad = 1'b1;
-      op1_col = 5'd1;
-      op2_col = 5'd1;
-      wr_col = 5'd1;
+      funct   = SMATMUL_OS_THREAD_FUNCT7[6:0];
+      op1_col = 1;
+      op2_col = 1;
+      wr_col  = 1;
       if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank)
         `uvm_fatal("CASE", "SMATMUL_OS banks must be distinct")
       if (rs2[63:26] != 0 || rs2[23:12] != 16 || iter != 16)
@@ -74,5 +67,6 @@ class smatmul_cmd_item extends bb_blink_cmd_item;
     command_count = rhs_.command_count;
     op1_words = rhs_.op1_words;
     op2_words = rhs_.op2_words;
+    rs1 = rhs_.rs1;
   endfunction
 endclass

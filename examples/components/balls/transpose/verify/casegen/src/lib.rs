@@ -10,8 +10,8 @@ thread_local! {
 }
 
 #[no_mangle]
-pub extern "C" fn transpose_case_load(seed: u32, index: u32, bid: u32) -> i32 {
-    let case = casegen::gen_case(seed, index, bid);
+pub extern "C" fn transpose_case_load(seed: u32, index: u32) -> i32 {
+    let case = casegen::gen_case(seed, index);
     let nsrc = case.cmd.num_src_words as usize;
     let ndst = case.cmd.num_dst_words as usize;
     if nsrc > MAX_WORDS || ndst > MAX_WORDS {

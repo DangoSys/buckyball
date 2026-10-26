@@ -4,7 +4,9 @@
 #include <bbhw/isa/isa.h>
 
 // FP16 A[M,K], B[K,8], C[M,8]; ordered FP16 FMA, RNE, canonical NaN.
-// Bases are bank rows. First starts with positive zero; every call writes C.
+// Bases are bank rows. First starts with positive zero; otherwise rs1 marks
+// the old C, which the Ball reads from the bank C held before this write.
+// Every call writes C.
 static inline void bb_redmule(uint32_t a, uint32_t b, uint32_t c, uint32_t m,
                               uint32_t k, uint32_t op1_base, uint32_t op2_base,
                               uint32_t wr_base, uint32_t first) {
@@ -16,7 +18,7 @@ static inline void bb_redmule(uint32_t a, uint32_t b, uint32_t c, uint32_t m,
                      (uint64_t)op2_base << 22 | (uint64_t)wr_base << 32 |
                      (uint64_t)first << 42;
   BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(a) | BB_BANK1(b) | BB_BANK2(c) |
-                                BB_ITER(k),
+                                BB_ITER(k) | (first ? 0 : BB_READ_WR_OLD),
                             special, BB_FUNC7(REDMULE_F16));
 }
 #endif

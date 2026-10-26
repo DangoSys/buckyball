@@ -53,6 +53,7 @@ class SMatMulUnit(
     "SMatMulBall bank depth must be divisible by four"
   )
   require(maxOutputRows >= rows, "SMatMulBall accumulator must hold at least one core")
+  require(isPow2(memParam.bankEntries), "SMatMulBall requires power-of-two bank depth")
   require((osFunct >> 4) == 4, "SMATMUL_OS must encode two reads and one write")
   require((biasFunct >> 4) == 1, "SMATMUL_BIAS must encode one read")
 
@@ -118,6 +119,9 @@ class SMatMulUnit(
   val bBank      = RegInit(0.U(bankIdWidth.W))
   val cBank      = RegInit(0.U(bankIdWidth.W))
   val bases      = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
+  // A and B group g hold reduction block g; C rows continue across groups.
+  val kGroups    = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
+  val kGroup     = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
   val cBase      = RegInit(0.U(addressWidth.W))
   val chainRows  = RegInit(0.U(12.W))
   val chainCBank = RegInit(0.U(bankIdWidth.W))
@@ -183,7 +187,7 @@ class SMatMulUnit(
   for (port <- 0 until mapping.inBW) {
     io.bankRead(port).rob_id           := robId
     io.bankRead(port).bank_id          := Mux(port.U === 0.U, aBank, bBank)
-    io.bankRead(port).group_id         := bases(port)
+    io.bankRead(port).group_id         := bases(port) + kGroup
     io.bankRead(port).io.req.valid     := false.B
     io.bankRead(port).io.req.bits.addr := 0.U
     io.bankRead(port).io.resp.ready    := false.B
@@ -207,7 +211,7 @@ class SMatMulUnit(
   val cWords = cRowData.asTypeOf(Vec(resultWords, UInt(128.W)))
   io.bankWrite(0).rob_id           := robId
   io.bankWrite(0).bank_id          := cBank
-  io.bankWrite(0).group_id         := bases(2)
+  io.bankWrite(0).group_id         := bases(2) + (cLine >> addressWidth)
   io.bankWrite(0).io.req.valid     := state === writeResult
   io.bankWrite(0).io.req.bits.addr := cLine(addressWidth - 1, 0)
   io.bankWrite(0).io.req.bits.data := cWords(outputWord)
@@ -240,6 +244,8 @@ class SMatMulUnit(
 
     robId       := io.cmdReq.bits.rob_id
     biasCommand := isBias
+    kGroups     := command.op1_col
+    kGroup      := 0.U
 
     when(isBias) {
       assert(command.iter === 4.U, "SMATMUL_BIAS iter must be four rows")
@@ -263,9 +269,11 @@ class SMatMulUnit(
         "SMATMUL_OS requires distinct A, B, and C banks"
       )
       assert(
-        command.op1_col === 1.U && command.op2_col === 1.U && command.wr_col === 1.U,
-        "SMATMUL_OS requires one physical bank per operand"
+        command.op1_col =/= 0.U && command.op1_col === command.op2_col &&
+          command.op1_col <= memParam.bankNum.U && command.wr_col =/= 0.U,
+        "SMATMUL_OS A and B must have the same reduction groups"
       )
+      assert(rows <= accDepth.U, "SMATMUL_OS M exceeds the accumulator")
       assert(
         rows === 1.U || (rows =/= 0.U && rows(2, 0) === 0.U),
         "SMATMUL_OS M must be one or a positive multiple of 8"
@@ -289,8 +297,8 @@ class SMatMulUnit(
         command.rs2(
           31,
           26
-        ) +& rows * resultWords.U <= memParam.bankEntries.U,
-        "SMATMUL_OS C footprint exceeds bank depth"
+        ) +& rows * resultWords.U <= command.wr_col * memParam.bankEntries.U,
+        "SMATMUL_OS C footprint exceeds its groups"
       )
       when(first) {
         assert(!chainLive, "SMATMUL_OS first block cannot start while a chain is live")
@@ -404,8 +412,17 @@ class SMatMulUnit(
         bRowsRequested := 0.U
         bRowsStored    := 0.U
         state          := loadTile
+      }.elsewhen(kGroup + 1.U < kGroups) {
+        kGroup         := kGroup + 1.U
+        reductionTile  := 0.U
+        aRowsRequested := 0.U
+        aRowsStored    := 0.U
+        bRowsRequested := 0.U
+        bRowsStored    := 0.U
+        state          := loadTile
       }.elsewhen(outputTile + 1.U < outputTileCount) {
         outputTile     := outputTile + 1.U
+        kGroup         := 0.U
         reductionTile  := 0.U
         aRowsRequested := 0.U
         aRowsStored    := 0.U

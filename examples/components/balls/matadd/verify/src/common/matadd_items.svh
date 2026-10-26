@@ -5,51 +5,32 @@ class matadd_cmd_item extends bb_blink_cmd_item;
   int unsigned group_count;
   int unsigned case_index;
 
-  constraint legal_c {
-    funct7 == MATADD_THREAD_FUNCT7[6:0];
-    op1_en == 1'b1;
-    op2_en == 1'b1;
-    wr_spad_en == 1'b1;
-    op1_from_spad == 1'b1;
-    op2_from_spad == 1'b1;
-    meta_bank == 5'd0;
-    rs1 == 64'd0;
-    rs2 == 64'd0;
-    special == 64'd0;
-    is_sub == 1'b0;
-    sub_rob_id == 8'd0;
-  }
-
   function new(string name = "matadd_cmd_item");
     super.new(name);
   endfunction
 
-  function void load_case(int unsigned index, int unsigned ball_id);
+  // Case 0 covers one group at base 0; cases 1 and 2 cover two groups at nonzero bases.
+  function void load_case(int unsigned index);
     if (index > 2) `uvm_fatal("CASE", $sformatf("unsupported case %0d", index))
     case_index = index;
-    this.bid = ball_id[4:0];
-    funct7 = MATADD_THREAD_FUNCT7[6:0];
+    // bb_matadd: banks and iter come from rs1, rs2 is zero.
+    rob_id = 4 + index;
+    funct = MATADD_THREAD_FUNCT7[6:0];
+    rs2 = 64'd0;
     iter = (index == 2) ? MATADD_MAX_LINES : 16;
     lines = iter;
     group_count = (index == 0) ? 1 : 2;
-    op1_bank = 5'd0;
-    op2_bank = 5'd1;
-    wr_bank = 5'd2;
-    op1_col = group_count[4:0];
-    op2_col = group_count[4:0];
-    wr_col = group_count[4:0];
-    rob_id = 4 + index;
-    op1_en = 1'b1;
-    op2_en = 1'b1;
-    wr_spad_en = 1'b1;
-    op1_from_spad = 1'b1;
-    op2_from_spad = 1'b1;
-    meta_bank = 5'd0;
-    rs1 = 64'd0;
-    rs2 = 64'd0;
-    special = 64'd0;
-    is_sub = 1'b0;
-    sub_rob_id = 8'd0;
+    op1_bank = 0;
+    op2_bank = 1;
+    wr_bank = 2;
+    op1_group = (index == 0) ? 0 : 1;
+    op2_group = (index == 0) ? 0 : 3;
+    wr_group = (index == 0) ? 0 : index;
+    op1_col = group_count;
+    op2_col = group_count;
+    wr_col = group_count;
+    wr_read_bank = 0;
+    wr_arch_bank = wr_bank;
   endfunction
 
   function automatic bit [31:0] a_lane(int unsigned group, int unsigned line, int unsigned lane);

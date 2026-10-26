@@ -42,11 +42,13 @@ def source_scope(
             texts[cur],
             re.M | re.S,
         ):
-            if child in modules and child not in reachable:
+            # Undefined children (memory black boxes) stay in the set for mems.conf selection.
+            if child not in reachable:
                 reachable.add(child)
-                pending.append(child)
+                if child in modules:
+                    pending.append(child)
 
-    return reachable, {modules[name] for name in reachable}
+    return reachable, {modules[name] for name in reachable if name in modules}
 
 
 def replace_sources(

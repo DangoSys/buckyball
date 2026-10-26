@@ -1,5 +1,5 @@
 use super::bank_matrix::{read_i32_nn_at, read_i8_nn_at, write_i32_nn_groups_at};
-use super::decode::{pbank, pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
+use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::gemmini_state::{gemini, in_shift as apply_in_shift};
 use super::instruction::{BallModel, ExecContext};
 
@@ -19,8 +19,15 @@ impl BallModel for GemminiComputePreloaded {
             panic!("gemmini_compute_preloaded: bad iter");
         }
 
-        let pa = pbank(ctx, op_a);
-        let pb = pbank(ctx, op_b);
+        // rs2[41:36] and rs2[47:42] select the groups of op1 and op2.
+        let group_a = (xs2 >> 36) & 0x3f;
+        let group_b = (xs2 >> 42) & 0x3f;
+        assert!(
+            group_a < ctx.config(op_a).cols && group_b < ctx.config(op_b).cols,
+            "gemmini_compute_preloaded: operand group outside the bank"
+        );
+        let pa = pbank_group(ctx, op_a, group_a);
+        let pb = pbank_group(ctx, op_b, group_b);
         let pw: Vec<_> = (0..ctx.config(wr).cols)
             .map(|group| pbank_group(ctx, wr, group))
             .collect();

@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import glob
 import re
@@ -26,6 +27,7 @@ if mill_scripts not in sys.path:
     sys.path.insert(0, mill_scripts)
 from utils.path import rtl_out
 from steps.mill.scripts.mill import elaborate_cmd
+from steps.dc.scripts.tapeout import get_tapeout_contract
 
 config = {
     "name": "dc-verilog",
@@ -99,11 +101,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         mill_config, build_dir = rtl_out(
             bbdir,
             design,
-            "tapeout",
+            "dc",
             input_data.get("output_dir"),
             selection=input_data["target"],
         )
-        os.makedirs(build_dir, exist_ok=True)
+        if os.path.exists(build_dir):
+            shutil.rmtree(build_dir)
+        os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         returncode = (
@@ -139,7 +143,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return failure_result
-    top_module = input_data.get("top") or "DigitalTop"
+    top_module = get_tapeout_contract(
+        bbdir, design, input_data.get("top"), selection=input_data["target"]
+    ).top_module
     ctx.logger.info(
         f"Using DC RTL output directory: {build_dir}, synthesis top: {top_module}"
     )

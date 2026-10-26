@@ -1,23 +1,23 @@
 pub const ROW_BYTES: usize = 16;
 pub const BANK_ENTRIES: u32 = 64;
 pub const MAX_ROWS: usize = 64;
-pub const NUM_CASES: u32 = 2;
+pub const NUM_CASES: u32 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Int8AddCmd {
     pub relu: u32,
-    pub bid: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub op2_bank: u32,
     pub wr_bank: u32,
+    pub op1_group: u32,
+    pub op2_group: u32,
+    pub wr_group: u32,
     pub op1_col: u32,
     pub op2_col: u32,
     pub wr_col: u32,
     pub rob_id: u32,
-    pub rs1_lo: u32,
-    pub rs1_hi: u32,
     pub rs2_lo: u32,
     pub rs2_hi: u32,
     pub num_lhs_words: u32,
@@ -59,13 +59,15 @@ impl Int8AddCase {
     }
 }
 
-pub fn gen_case(index: u32, bid: u32) -> Int8AddCase {
+// Word `i` of an operand is bank row `i % iter` in group `i / iter`: the Ball walks groups in order.
+pub fn gen_case(index: u32) -> Int8AddCase {
     if index >= NUM_CASES {
         panic!("int8add: unsupported directed case {index}");
     }
     match index {
-        0 => directed(bid, 2, false),
-        1 => directed(bid, 3, true),
+        0 => directed(2, false, 1, [0, 0, 0]),
+        1 => directed(3, true, 1, [0, 0, 0]),
+        2 => directed(4, false, 2, [1, 3, 2]),
         _ => panic!("int8add: unsupported directed case {index}"),
     }
 }
@@ -125,10 +127,6 @@ fn copy_words<const N: usize>(src: &[u128]) -> [u128; N] {
     out
 }
 
-fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u32) -> u64 {
-    u64::from(op1) | (u64::from(op2) << 10) | (u64::from(wr) << 20) | (u64::from(iter) << 30)
-}
-
 fn encode_rs2(lhs_ratio: f32, rhs_ratio: f32) -> u64 {
     u64::from(lhs_ratio.to_bits()) | (u64::from(rhs_ratio.to_bits()) << 32)
 }
@@ -145,7 +143,6 @@ pub(crate) fn validate(
     op2_col: u32,
     wr_col: u32,
     iter: u32,
-    rs1: u64,
     rs2: u64,
     lhs_ratio: f32,
     rhs_ratio: f32,
@@ -153,7 +150,7 @@ pub(crate) fn validate(
     if iter == 0 || iter > BANK_ENTRIES {
         panic!("int8add: iter must fit in one physical bank");
     }
-    if op1_col != 1 || op2_col != 1 || wr_col != 1 {
+    if op1_col == 0 || op1_col != op2_col || op1_col != wr_col {
         panic!("int8add: bank groups must match");
     }
     if op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank {
@@ -161,15 +158,6 @@ pub(crate) fn validate(
     }
     if !positive_finite(lhs_ratio) || !positive_finite(rhs_ratio) {
         panic!("int8add: ratios must be finite and positive");
-    }
-    if (rs1 & 0x3ff) != u64::from(op1_bank)
-        || ((rs1 >> 10) & 0x3ff) != u64::from(op2_bank)
-        || ((rs1 >> 20) & 0x3ff) != u64::from(wr_bank)
-    {
-        panic!("int8add: rs1 bank fields mismatch");
-    }
-    if ((rs1 >> 30) & 0x3_ffff_ffff) != u64::from(iter) {
-        panic!("int8add: rs1 iter mismatch");
     }
     if rs2 != encode_rs2(lhs_ratio, rhs_ratio) {
         panic!("int8add: rs2 ratio fields mismatch");
@@ -179,13 +167,13 @@ pub(crate) fn validate(
 fn dst_words(
     lhs: &[u128],
     rhs: &[u128],
-    iter: u32,
+    words: usize,
     lhs_ratio: f32,
     rhs_ratio: f32,
     relu: bool,
 ) -> Vec<u128> {
-    let mut out = Vec::with_capacity(iter as usize);
-    for row in 0..iter as usize {
+    let mut out = Vec::with_capacity(words);
+    for row in 0..words {
         let mut packed = 0u128;
         for lane in 0..ROW_BYTES {
             let l = ((lhs[row] >> (lane * 8)) & 0xff) as u8 as i8;
@@ -198,52 +186,35 @@ fn dst_words(
     out
 }
 
-fn directed(bid: u32, rob_id: u32, relu: bool) -> Int8AddCase {
+fn directed(rob_id: u32, relu: bool, cols: u32, groups: [u32; 3]) -> Int8AddCase {
     let iter = 7u32;
+    let words = (iter * cols) as usize;
     let lhs_ratio = 0.5f32;
     let rhs_ratio = 0.25f32;
-    let (lhs, rhs) = ctest_values(iter as usize);
+    let (lhs, rhs) = ctest_values(words);
     let op1_bank = 0;
     let op2_bank = 1;
     let wr_bank = 2;
-    let op1_col = 1;
-    let op2_col = 1;
-    let wr_col = 1;
-    let rs1 = encode_rs1(op1_bank, op2_bank, wr_bank, iter);
     let rs2 = encode_rs2(lhs_ratio, rhs_ratio);
     validate(
-        op1_bank,
-        op2_bank,
-        wr_bank,
-        op1_col,
-        op2_col,
-        wr_col,
-        iter,
-        rs1,
-        rs2,
-        lhs_ratio,
-        rhs_ratio,
+        op1_bank, op2_bank, wr_bank, cols, cols, cols, iter, rs2, lhs_ratio, rhs_ratio,
     );
-    if lhs.len() != iter as usize || rhs.len() != iter as usize {
-        panic!("int8add: operand rows != iter {iter}");
-    }
-    let dst = dst_words(&lhs, &rhs, iter, lhs_ratio, rhs_ratio, relu);
-    let (rs1_lo, rs1_hi) = split_rs(rs1);
+    let dst = dst_words(&lhs, &rhs, words, lhs_ratio, rhs_ratio, relu);
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     Int8AddCase {
         cmd: Int8AddCmd {
             relu: u32::from(relu),
-            bid,
             iter,
             op1_bank,
             op2_bank,
             wr_bank,
-            op1_col,
-            op2_col,
-            wr_col,
+            op1_group: groups[0],
+            op2_group: groups[1],
+            wr_group: groups[2],
+            op1_col: cols,
+            op2_col: cols,
+            wr_col: cols,
             rob_id,
-            rs1_lo,
-            rs1_hi,
             rs2_lo,
             rs2_hi,
             num_lhs_words: lhs.len() as u32,

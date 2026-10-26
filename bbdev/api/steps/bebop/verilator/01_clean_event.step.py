@@ -37,7 +37,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     build_dir = rtl_dir(
         bbdir,
         design,
-        "verilog",
+        "bebop",
         selection=input_data["target"],
     )
     command = f"rm -rf {build_dir}"

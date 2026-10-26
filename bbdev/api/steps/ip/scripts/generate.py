@@ -1,29 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 import sys
-from collections import Counter
 from pathlib import Path
 
 if str(Path(__file__).resolve().parents[2] / "dc" / "scripts") not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "dc" / "scripts"))
 
 from tapeout import SramGeom, get_tapeout_contract
-from macro_compiler import run_macro_compiler
 from replace import source_scope
-from sram_compiler import generate_sram_dbs, leaf_names_from_macros
-
-
-def pad_mems_conf(text: str) -> str:
-    lines = []
-    for raw in text.splitlines():
-        if not raw.strip():
-            continue
-        lines.append(raw.rstrip() + " ")
-    if not lines:
-        raise ValueError("empty mems.conf")
-    return "\n".join(lines) + "\n"
+from sram_compiler import generate_sram_dbs, generate_sram_macros
 
 
 def load_mdf(mdf: Path) -> dict[str, tuple[int, int]]:
@@ -50,106 +36,13 @@ def load_mdf(mdf: Path) -> dict[str, tuple[int, int]]:
     return index
 
 
-def parse_mems(text: str) -> list[tuple[str, int, int]]:
-    out: list[tuple[str, int, int]] = []
-    for i, raw in enumerate(text.splitlines(), 1):
-        line = raw.strip()
-        if not line:
-            continue
-        parts = line.split()
-        if (
-            len(parts) < 6
-            or parts[0] != "name"
-            or parts[2] != "depth"
-            or parts[4] != "width"
-        ):
-            raise ValueError(
-                f"mems.conf:{i}: expected 'name <id> depth <n> width <n> ...', got {line!r}"
-            )
-        try:
-            depth = int(parts[3])
-            width = int(parts[5])
-        except ValueError as exc:
-            raise ValueError(f"mems.conf:{i}: depth/width not int") from exc
-        if depth <= 0 or width <= 0:
-            raise ValueError(f"mems.conf:{i}: depth/width must be positive")
-        out.append((parts[1], depth, width))
-    if not out:
-        raise ValueError("empty mems.conf")
-    return out
-
-
-def module_insts(text: str) -> dict[str, Counter[str]]:
-    hits = list(re.finditer(r"(?m)^module\s+(\w+)\s*\(", text))
-    out: dict[str, Counter[str]] = {}
-    for i, m in enumerate(hits):
-        name = m.group(1)
-        if name in out:
-            raise ValueError(f"duplicate module {name}")
-        start = m.end()
-        end = hits[i + 1].start() if i + 1 < len(hits) else len(text)
-        counts: Counter[str] = Counter()
-        for inst in re.finditer(
-            r"(?m)^\s*([A-Za-z_][A-Za-z0-9_$]*)\s+[A-Za-z_][A-Za-z0-9_$]*\s*\(",
-            text[start:end],
-        ):
-            leaf = inst.group(1)
-            if leaf in ("module", "assign", "wire", "input", "output"):
-                raise ValueError(f"module {name}: refused instance parse {leaf!r}")
-            counts[leaf] += 1
-        out[name] = counts
-    return out
-
-
-def check_mapping(
-    *, mems_text: str, macros_v: Path, mdf: dict[str, tuple[int, int]]
-) -> None:
-    if not macros_v.is_file():
-        raise FileNotFoundError(f"missing macros verilog: {macros_v}")
-    insts = module_insts(macros_v.read_text())
-    lib = ", ".join(f"{n}={d}x{w}" for n, (d, w) in sorted(mdf.items()))
-    errs: list[str] = []
-    for name, depth, width in parse_mems(mems_text):
-        need = depth * width
-        if name not in insts:
-            errs.append(f"{name}: missing module for {depth}x{width} ({need} bits)")
-            continue
-        counts = insts[name]
-        if not counts:
-            errs.append(f"{name}: empty mapping for {depth}x{width} ({need} bits)")
-            continue
-        got = 0
-        parts = []
-        unknown = False
-        for leaf, n in sorted(counts.items()):
-            if leaf not in mdf:
-                errs.append(f"{name}: unknown leaf {leaf}")
-                unknown = True
-                break
-            d, w = mdf[leaf]
-            got += n * d * w
-            parts.append(f"{n}x {leaf} ({d}x{w})")
-        if unknown:
-            continue
-        if got != need:
-            errs.append(
-                f"{name}: need {depth}x{width} = {need} bits, "
-                f"got {' + '.join(parts)} = {got} bits"
-            )
-    if errs:
-        raise RuntimeError(
-            "SRAM mapping mismatch:\n  " + "\n  ".join(errs) + f"\nlibrary: {lib}"
-        )
-
-
-def geoms_from_macros(
+def geoms_from_names(
     *,
-    macros_v: Path,
+    names: list[str],
     sram_table: dict[str, SramGeom],
     mdf: Path,
 ) -> list[SramGeom]:
     index = load_mdf(mdf)
-    names = leaf_names_from_macros(macros_v, set(sram_table) | set(index))
     geoms: list[SramGeom] = []
     for name in names:
         if name not in sram_table:
@@ -171,7 +64,7 @@ def geoms_from_macros(
 
 
 def check_bitwrite_contract(
-    geoms: list[SramGeom], mdf: Path, macros_v: Path, sram_table: dict[str, SramGeom]
+    geoms: list[SramGeom], mdf: Path, sram_table: dict[str, SramGeom]
 ) -> None:
     raw = json.loads(mdf.read_text())
     if not isinstance(raw, list):
@@ -211,12 +104,13 @@ def check_bitwrite_contract(
     for geom in sram_table.values():
         if geom.bitwrite and geom.name not in used:
             raise RuntimeError(
-                f"bitwrite sram {geom.name} not instantiated in {macros_v}"
+                f"bitwrite sram {geom.name} not instantiated by any memory"
             )
 
 
-def _leaf_paths(cache_dir: Path, name: str, corner: str) -> dict[str, str]:
-    leaf = cache_dir / name
+def _leaf_paths(cache_dir: Path, g: SramGeom, corner: str) -> dict[str, str]:
+    name = g.name
+    leaf = cache_dir / f"{name}-mux{g.mux}"
     return {
         "v": str((leaf / f"{name}.v").resolve()),
         "lib": str((leaf / f"{name}_{corner}.lib").resolve()),
@@ -240,14 +134,12 @@ def generate_sram(
     if not src.is_file():
         raise FileNotFoundError(f"missing elaborator mems.conf: {src}")
     mems = src.read_text()
-    parse_mems(mems)
     reachable, _ = source_scope(Path(source_list).read_text().splitlines(), top_module)
-    selected = "\n".join(
-        line
+    selected = "".join(
+        line + "\n"
         for line in mems.splitlines()
         if line.strip() and line.split()[1] in reachable
     )
-    padded = pad_mems_conf(selected) if selected else ""
     contract = get_tapeout_contract(bbdir, design, selection=selection)
     if out_dir is None:
         dest = build_dir / "ip-generate"
@@ -258,31 +150,20 @@ def generate_sram(
     dest.mkdir(parents=True, exist_ok=True)
     mems_out = dest / "mems.conf"
     verilog = dest / "sram_macros.v"
-    firrtl = dest / "sram_macros.fir"
-    mems_out.write_text(padded)
-    arch_dir = bbdir / "arch"
-    if padded:
-        run_macro_compiler(
-            mems_conf=mems_out,
-            mdf=contract.sram_mdf,
-            verilog=verilog,
-            firrtl=firrtl,
-            arch_dir=arch_dir,
+    mems_out.write_text(selected)
+    if selected:
+        text, names = generate_sram_macros(
+            process=contract.sram_process, mems=selected, mdf=contract.sram_mdf
         )
-        check_mapping(
-            mems_text=padded,
-            macros_v=verilog,
-            mdf=load_mdf(contract.sram_mdf),
-        )
-        geoms = geoms_from_macros(
-            macros_v=verilog,
+        verilog.write_text(text)
+        geoms = geoms_from_names(
+            names=names,
             sram_table=contract.sram_table,
             mdf=contract.sram_mdf,
         )
-        check_bitwrite_contract(geoms, contract.sram_mdf, verilog, contract.sram_table)
+        check_bitwrite_contract(geoms, contract.sram_mdf, contract.sram_table)
     else:
         verilog.write_text("")
-        firrtl.write_text("")
         geoms = []
     ip_db = build_dir.parent / f"{build_dir.name}-ip-db"
     if geoms:
@@ -301,14 +182,13 @@ def generate_sram(
         "sram_mdf": str(contract.sram_mdf),
         "mems_conf": str(mems_out),
         "sram_macros_v": str(verilog),
-        "sram_macros_fir": str(firrtl),
         "sram_corner": corner_tag,
         "ip_db": str(ip_db),
         "leaves": names,
-        "leaf_paths": {g.name: _leaf_paths(ip_db, g.name, corner_tag) for g in geoms},
+        "leaf_paths": {g.name: _leaf_paths(ip_db, g, corner_tag) for g in geoms},
         "link_dbs": [str(p) for p in db_paths],
         "leaf_count": len(names),
-        "mem_count": sum(1 for line in padded.splitlines() if line.strip()),
+        "mem_count": len(selected.splitlines()),
     }
     manifest_path = dest / "generate_manifest.json"
     manifest_path.write_text(json.dumps(man, indent=2) + "\n")

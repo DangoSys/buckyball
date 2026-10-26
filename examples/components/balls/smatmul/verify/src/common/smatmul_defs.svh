@@ -1,6 +1,5 @@
 typedef struct {
   int unsigned kind;
-  int unsigned bid;
   int unsigned rob_id;
   int unsigned op1_words;
   int unsigned op2_words;
@@ -8,6 +7,9 @@ typedef struct {
   int unsigned rs1_hi;
   int unsigned rs2_lo;
   int unsigned rs2_hi;
+  int unsigned op1_group;
+  int unsigned op2_group;
+  int unsigned wr_group;
 } matrix_cmd_dpi_t;
 
 `ifndef SMATMUL_TILE_ROWS
@@ -17,7 +19,6 @@ typedef struct {
 import "DPI-C" function void smatmul_case_load(
   input int unsigned seed,
   input int unsigned index,
-  input int unsigned bid,
   input int unsigned tile_rows
 );
 import "DPI-C" function int unsigned smatmul_case_num_commands();
@@ -50,11 +51,3 @@ localparam int SMATMUL_OS_THREAD_FUNCT7 = `SMATMUL_OS_FUNCT7;
 localparam int SMATMUL_BIAS_THREAD_FUNCT7 = `SMATMUL_BIAS_FUNCT7;
 localparam int MATRIX_TIMEOUT_CYCLES = 200000;
 localparam int MATRIX_SEED = 32'hCAFE_BABE;
-
-function automatic int unsigned matrix_require_bid();
-  int unsigned bid;
-  if (!$value$plusargs("BID=%d", bid)) begin
-    `uvm_fatal("BID", "missing required plusarg +BID=<n>")
-  end
-  return bid;
-endfunction

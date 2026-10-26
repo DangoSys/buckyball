@@ -1,3 +1,4 @@
++incdir+@UVM@/src/core
 +incdir+@UVM@/src/ball
 +incdir+@UVM@/src/ball/agents/cmd
 +incdir+@UVM@/src/ball/agents/mem
@@ -13,16 +14,17 @@
 +incdir+src/tests
 +incdir+@RTL@
 
+@UVM@/src/core/package.sv
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
 @RTL@/RoundAnyRawFNToRecFN_ie5_is16_oe8_os24.sv
-@RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
 @RTL@/INToRecFN_i16_e8_s24.sv
 @RTL@/MulAddRecFNToRaw_preMul_e8_s24.sv
 @RTL@/MulAddRecFNToRaw_postMul_e8_s24.sv
-@RTL@/MulAddRecFNPipe_l3_e8_s24.sv
+@RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
 @RTL@/RoundRawFNToRecFN_e8_s24.sv
+@RTL@/Fma_l3_e8_s24.sv
 @RTL@/RecFNToIN_e8_s24_i8.sv
 @RTL@/Int8MulBall.sv
 

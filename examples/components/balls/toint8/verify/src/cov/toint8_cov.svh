@@ -3,10 +3,10 @@ class toint8_cov extends uvm_component;
 
   uvm_analysis_imp_cmd #(bb_blink_cmd_item, toint8_cov) cmd_imp;
 
-  bit [6:0] cur_funct7;
+  bit [6:0] cur_funct;
 
   covergroup cmd_cg;
-    coverpoint cur_funct7 {
+    coverpoint cur_funct {
       bins f32 = {QUANT_F32_TO_I8_THREAD_FUNCT7[6:0]};
       bins i32 = {QUANT_I32_TO_I8_THREAD_FUNCT7[6:0]};
     }
@@ -21,7 +21,7 @@ class toint8_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    cur_funct7 = item.funct7;
+    cur_funct = item.funct;
     cmd_count++;
     cmd_cg.sample();
   endfunction

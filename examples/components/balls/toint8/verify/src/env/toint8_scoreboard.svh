@@ -47,10 +47,11 @@ class toint8_scoreboard extends uvm_scoreboard;
     end
     mem_model.clear_mem();
     for (i = 0; i < clone.num_src_words; i++) begin
-      mem_model.load_word(int'(clone.op1_bank), int'(clone.input_base) + i, clone.src_words[i]);
+      mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group), int'(clone.input_base) + i,
+                            clone.src_words[i]);
     end
     for (i = 0; i < clone.num_scale_words; i++) begin
-      mem_model.load_word(int'(clone.op2_bank), i, clone.scale_words[i]);
+      mem_model.load_word_g(int'(clone.op2_bank), int'(clone.op2_group), i, clone.scale_words[i]);
     end
     mem_model.arm();
 
@@ -66,47 +67,41 @@ class toint8_scoreboard extends uvm_scoreboard;
   endfunction
 
   function void check_cmd(bb_blink_cmd_item got, toint8_cmd_item exp);
+    // Compare as plain BLink commands; the comparer rejects differing types.
+    bb_blink_cmd_item want = bb_blink_cmd_item::type_id::create("want");
+    want.copy(exp);
     verification_pkg::evidence::checks++;
-    if (got.bid !== exp.bid)
-      `uvm_fatal("CMD", $sformatf("bid mismatch: got %0d exp %0d", got.bid, exp.bid))
-    if (got.funct7 !== exp.funct7)
-      `uvm_fatal("CMD", $sformatf("funct7 mismatch: got %0d exp %0d", got.funct7, exp.funct7))
-    if (got.iter !== exp.iter)
-      `uvm_fatal("CMD", $sformatf("iter mismatch: got %0d exp %0d", got.iter, exp.iter))
-    if (got.op1_bank !== exp.op1_bank || got.op2_bank !== exp.op2_bank ||
-        got.wr_bank !== exp.wr_bank)
-      `uvm_fatal("CMD", "bank field mismatch")
-    if (got.op1_col !== exp.op1_col || got.op2_col !== exp.op2_col || got.wr_col !== exp.wr_col)
-      `uvm_fatal("CMD", "column field mismatch")
-    if (got.rs1 !== exp.rs1 || got.rs2 !== exp.rs2) `uvm_fatal("CMD", "rs field mismatch")
-    if (got.rob_id !== exp.rob_id)
-      `uvm_fatal("CMD", $sformatf("rob_id mismatch: got %0d exp %0d", got.rob_id, exp.rob_id))
+    if (!got.compare(want))
+      `uvm_fatal("CMD", $sformatf("command mismatch: got %s exp %s", got.sprint(), want.sprint()))
   endfunction
 
   function void write_read(bb_blink_read_item item);
     toint8_cmd_item stim;
     int unsigned scale_reads;
     int unsigned expect_bank;
+    int unsigned expect_group;
     int unsigned expect_addr;
 
     stim = current_stim("READ");
     if (item.port != 0)
       `uvm_fatal("READ", $sformatf("ToInt8Ball has one read port, got port %0d", item.port))
-    if (item.group_id !== 5'd0)
-      `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp 0", item.group_id))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
 
     scale_reads = stim.num_scale_words;
     if (read_count < scale_reads) begin
-      expect_bank = stim.op2_bank;
-      expect_addr = read_count;
+      expect_bank  = stim.op2_bank;
+      expect_group = stim.op2_group;
+      expect_addr  = read_count;
     end else begin
-      expect_bank = stim.op1_bank;
-      expect_addr = stim.input_base + (read_count - scale_reads);
+      expect_bank  = stim.op1_bank;
+      expect_group = stim.op1_group;
+      expect_addr  = stim.input_base + (read_count - scale_reads);
     end
-    if (item.bank_id !== expect_bank[4:0])
+    if (item.bank_id !== expect_bank[BB_BLINK_BANK_ID_W-1:0])
       `uvm_fatal("READ", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, expect_bank))
+    if (item.group_id !== expect_group[BB_BLINK_GROUP_ID_W-1:0])
+      `uvm_fatal("READ", $sformatf("group mismatch: got %0d exp %0d", item.group_id, expect_group))
     if (item.addr !== expect_addr[BB_BLINK_BANK_ADDR_W-1:0])
       `uvm_fatal("READ", $sformatf("addr mismatch: got %0d exp %0d", item.addr, expect_addr))
     read_count++;
@@ -122,8 +117,9 @@ class toint8_scoreboard extends uvm_scoreboard;
       `uvm_fatal("WRITE", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.wr_bank))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.group_id !== 5'd0)
-      `uvm_fatal("WRITE", $sformatf("group mismatch: got %0d exp 0", item.group_id))
+    if (item.group_id !== stim.wr_group)
+      `uvm_fatal("WRITE", $sformatf("group mismatch: got %0d exp %0d", item.group_id, stim.wr_group
+                 ))
     if (item.mask !== 16'hFFFF)
       `uvm_fatal("WRITE", $sformatf("mask mismatch: got 0x%04h", item.mask))
     if (write_count >= stim.num_dst_words)
@@ -147,9 +143,6 @@ class toint8_scoreboard extends uvm_scoreboard;
     stim = current_stim("RESP");
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("RESP", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
-    if (item.is_sub !== 1'b0) `uvm_fatal("RESP", "is_sub should be 0")
-    if (item.sub_rob_id !== 8'h00)
-      `uvm_fatal("RESP", $sformatf("sub_rob_id mismatch: got 0x%0h", item.sub_rob_id))
     resp_count++;
   endfunction
 

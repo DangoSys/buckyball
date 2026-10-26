@@ -24,7 +24,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "topic": "dc.verilog",
             "data": {
                 "design": design,
-                "top": body.get("top") or "DigitalTop",
+                "top": body.get("top"),
                 "_trace_id": ctx.trace_id,
                 "target": selection,
             },

@@ -38,6 +38,9 @@ class MaxPoolBall(
   val outputBank                                                           = RegInit(0.U(fp.bank_id_len.W))
   val bases                                                                = Reg(Vec(3, UInt(mp.groupIdWidth.W)))
   val iter                                                                 = RegInit(0.U(fp.iter_len.W))
+  // Every group of a virtual bank is one 16-channel block with the same rows.
+  val groups                                                               = RegInit(0.U(log2Up(mp.bankNum + 1).W))
+  val group                                                                = RegInit(0.U(log2Up(mp.bankNum + 1).W))
   val inputSide                                                            = RegInit(0.U(8.W))
   val outputSide                                                           = RegInit(0.U(8.W))
   val kernel                                                               = RegInit(0.U(8.W))
@@ -74,14 +77,14 @@ class MaxPoolBall(
 
   blink.bankRead(0).rob_id           := robId
   blink.bankRead(0).bank_id          := inputBank
-  blink.bankRead(0).group_id         := bases(0)
+  blink.bankRead(0).group_id         := bases(0) + group
   blink.bankRead(0).io.req.valid     := false.B
   blink.bankRead(0).io.req.bits.addr := inputAddress
   blink.bankRead(0).io.resp.ready    := false.B
 
   blink.bankWrite(0).rob_id           := robId
   blink.bankWrite(0).bank_id          := outputBank
-  blink.bankWrite(0).group_id         := bases(2)
+  blink.bankWrite(0).group_id         := bases(2) + group
   blink.bankWrite(0).io.req.valid     := false.B
   blink.bankWrite(0).io.req.bits.addr := outputAddress
   blink.bankWrite(0).io.req.bits.data := writeData
@@ -107,8 +110,9 @@ class MaxPoolBall(
         assert(cmd.rs2(63, 46) === 0.U, "MAXPOOL reserved rs2 bits must be zero")
 
         assert(
-          cmd.op1_col === 1.U && cmd.op2_col === 0.U && cmd.wr_col === 1.U,
-          "MAXPOOL requires one input bank and one output bank"
+          cmd.op1_col =/= 0.U && cmd.op2_col === 0.U && cmd.wr_col === cmd.op1_col &&
+            cmd.op1_col <= mp.bankNum.U,
+          "MAXPOOL input and output must have the same channel groups"
         )
         assert(cmd.op1_bank =/= cmd.wr_bank, "MAXPOOL input and output banks must differ")
         assert(
@@ -145,6 +149,8 @@ class MaxPoolBall(
         outputBank   := cmd.wr_bank
         bases        := VecInit(cmd.op1_group, cmd.op2_group, cmd.wr_group)
         iter         := cmd.iter
+        groups       := cmd.op1_col
+        group        := 0.U
         inputSide    := inSide
         outputSide   := outSide
         kernel       := kernelSize
@@ -217,20 +223,27 @@ class MaxPoolBall(
     is(writeResp) {
       blink.bankWrite(0).io.resp.ready := true.B
       when(blink.bankWrite(0).io.resp.fire) {
-        when(outputRow +& 1.U === iter) {
+        when(outputRow +& 1.U === iter && group +& 1.U === groups) {
           state := complete
         }.otherwise {
-          outputRow := outputRow + 1.U
-          when(outputX +& 1.U === outputSide) {
-            outputX := 0.U
-            outputY := outputY + 1.U
+          when(outputRow +& 1.U === iter) {
+            group     := group + 1.U
+            outputRow := 0.U
+            outputY   := 0.U
+            outputX   := 0.U
           }.otherwise {
-            outputX := outputX + 1.U
+            outputRow := outputRow + 1.U
+            when(outputX +& 1.U === outputSide) {
+              outputX := 0.U
+              outputY := outputY + 1.U
+            }.otherwise {
+              outputX := outputX + 1.U
+            }
           }
-          kernelY   := 0.U
-          kernelX   := 0.U
-          maximum   := VecInit(Seq.fill(16)("h80".U(8.W)))
-          state     := scan
+          kernelY := 0.U
+          kernelX := 0.U
+          maximum := VecInit(Seq.fill(16)("h80".U(8.W)))
+          state   := scan
         }
       }
     }

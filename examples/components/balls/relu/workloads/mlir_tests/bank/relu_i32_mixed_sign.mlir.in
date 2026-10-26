@@ -29,7 +29,7 @@ func.func @main() -> i8 {
   %loaded = buckyball.bank_mvin %input, %bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}>
       : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
   %result = buckyball.bank_custom "relu_i32" (%loaded) -> %loaded
-      {rows = @BB_BANK_LINES@ : i64, stride = @BB_BANK_LINES@ : i64, group = 0 : i64}
+      {rows = @BB_BANK_LINES@ : i64}
   %stored = buckyball.bank_mvout %output, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}>
       : memref<@BB_BANK_LINES@x@BB_BANK_I32_LANES@xi32>
   buckyball.bank_release %stored

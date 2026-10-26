@@ -18,7 +18,7 @@ class smatmul_cov extends uvm_component;
   endfunction
 
   function void write_cmd(bb_blink_cmd_item item);
-    is_bias  = (item.funct7 == SMATMUL_BIAS_THREAD_FUNCT7[6:0]);
+    is_bias  = (item.funct == SMATMUL_BIAS_THREAD_FUNCT7[6:0]);
     is_first = is_bias ? 0 : item.rs2[24];
     cmd_count++;
     cmd_cg.sample();

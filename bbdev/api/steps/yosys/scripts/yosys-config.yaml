@@ -6,7 +6,7 @@
 liberty:
 
 # Default top module name (override with --top on CLI)
-top: DigitalTop
+top: DeviceTop
 
 # OpenSTA timing analysis settings
 # Clock period in nanoseconds (used for STA constraint)

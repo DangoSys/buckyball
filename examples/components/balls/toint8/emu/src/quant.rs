@@ -1,5 +1,5 @@
 use bebop_bemu::thread::banks::bank_lines;
-use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
+use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter};
 use super::instruction::ExecContext;
 
 pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
@@ -16,8 +16,9 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if !ctx.config(src).allocated || !ctx.config(dst).allocated {
         panic!("quant_f32_to_i8: bank not allocated");
     }
-    if ctx.config(src).cols != 1 || ctx.config(dst).cols != 1 {
-        panic!("quant_f32_to_i8: banks must have one column");
+    let groups = ctx.config(src).cols;
+    if groups == 0 || ctx.config(dst).cols != groups {
+        panic!("quant_f32_to_i8: input and output must have the same channel groups");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
         panic!("quant_f32_to_i8: iter must be a positive multiple of four within bank depth");
@@ -30,8 +31,10 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("quant_f32_to_i8: scale must be finite and positive");
     }
 
-    let ps = pbank(ctx, src);
-    let pd = pbank(ctx, dst);
+    // Group g of every operand is channel block g; each block uses the same rows.
+    for channel_group in 0..groups {
+    let ps = pbank_group(ctx, src, channel_group);
+    let pd = pbank_group(ctx, dst, channel_group);
     let (input, output) = ctx.banks.read_write(ps, pd);
     for output_row in 0..iter / 4 {
         let mut packed = [0u8; 16];
@@ -48,6 +51,7 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let base = output_row * 16;
         output[base..base + 16].copy_from_slice(&packed);
     }
+    }
     0
 }
 
@@ -63,8 +67,9 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     {
         panic!("quant_i32_to_i8: bank not allocated");
     }
-    if ctx.config(src).cols != 1 || ctx.config(scale_bank).cols != 1 || ctx.config(dst).cols != 1 {
-        panic!("quant_i32_to_i8: banks must have one column");
+    let groups = ctx.config(src).cols;
+    if groups == 0 || ctx.config(scale_bank).cols != groups || ctx.config(dst).cols != groups {
+        panic!("quant_i32_to_i8: input, scale, and output must have the same channel groups");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
         panic!("quant_i32_to_i8: iter must be a positive multiple of four within bank depth");
@@ -91,7 +96,9 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     }
     let relu = xs2 & 1 != 0;
 
-    let pscale = pbank(ctx, scale_bank);
+    // Group g of every operand is channel block g; each block uses the same rows.
+    for channel_group in 0..groups {
+    let pscale = pbank_group(ctx, scale_bank, channel_group);
     let mut scales = [0.0f32; 16];
     for group in 0..4 {
         let base = group * 16;
@@ -106,8 +113,8 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         }
     }
 
-    let ps = pbank(ctx, src);
-    let pd = pbank(ctx, dst);
+    let ps = pbank_group(ctx, src, channel_group);
+    let pd = pbank_group(ctx, dst, channel_group);
     let (input, output) = ctx.banks.read_write(ps, pd);
     for output_row in 0..iter / 4 {
         let mut packed = [0u8; 16];
@@ -125,6 +132,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             output_base + (output_row / output_width) * output_stride + output_row % output_width;
         let base = row * 16;
         output[base..base + 16].copy_from_slice(&packed);
+    }
     }
     0
 }

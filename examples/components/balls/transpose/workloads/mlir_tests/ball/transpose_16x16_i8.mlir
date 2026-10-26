@@ -23,13 +23,13 @@ func.func @main() -> i8 {
     }
   }
 
-  buckyball.mset <{bank = 0 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
   buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %input <{bank = 0 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.custom "transpose_i8" <{sources = array<i64: 0>, destination = 1 : i64}> {rows = 16 : i64, cols = 16 : i64}
-  buckyball.mvout %output <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mset <{bank = 0 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  buckyball.mvin %input <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  buckyball.custom "transpose_i8" <{sources = array<i64: 1>, destination = 2 : i64}> {rows = 16 : i64, cols = 16 : i64}
+  buckyball.mvout %output <{bank = 2 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
   buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
 
   func.call @check_result(%output) : (memref<16x16xi8>) -> ()
   memref.dealloc %input : memref<16x16xi8>

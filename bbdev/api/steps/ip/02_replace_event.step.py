@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
+
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -14,6 +16,7 @@ if scripts_path not in sys.path:
 
 from utils.event_common import check_result, get_origin_trace_id, require_design
 from utils.path import get_buckyball_path, rtl_dir
+from steps.dc.scripts.tapeout import get_tapeout_contract
 from replace import replace_sources
 
 config = {
@@ -32,7 +35,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         consumer = input_data.get("consumer") or "dc"
         if consumer not in {"dc", "yosys"}:
             raise ValueError("consumer must be dc or yosys")
-        top_module = input_data.get("top") or "DigitalTop"
+        # The synthesis top: --top, else the design's tapeout config (dc) or the yosys config.
+        top_module = input_data.get("top") or (
+            get_tapeout_contract(
+                get_buckyball_path(), design, None, selection=input_data["target"]
+            ).top_module
+            if consumer == "dc"
+            else yaml.safe_load(
+                (
+                    Path(__file__).parents[1] / "yosys/scripts/yosys-config.yaml"
+                ).read_text()
+            )["top"]
+        )
         if not isinstance(top_module, str) or not top_module:
             raise ValueError("top must be a non-empty string")
 
@@ -41,7 +55,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             rtl_dir(
                 bbdir,
                 design,
-                "tapeout" if consumer == "dc" else "verilog",
+                "dc" if consumer == "dc" else "synth",
                 input_data.get("output_dir"),
                 selection=input_data["target"],
             )

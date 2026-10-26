@@ -48,7 +48,7 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
 
     data = {
         "design": design,
-        "top": req_arg(body, "top") or "DigitalTop",
+        "top": req_arg(body, "top"),
         "vcd": req_arg(body, "vcd"),
         "from_run_workflow": True,
     }

@@ -1,18 +1,31 @@
 //===- Lowering.cpp - GemminiBall in lower-buckyball ----------------------===//
 //
-// matmul_i8_tile: C = A @ B for one 16x16 tile. A holds sixteen rows of
-// sixteen i8 (M x K) at row a_base, B sixteen rows of sixteen i8 (K x N) at
-// row b_base, and C, a bank of four columns, receives sixteen rows of sixteen
-// i32 at row c_base. a_base, b_base and c_base are the i64 arguments.
+// matmul_i8_tile: one 16x16 tile C = A @ B over `k`, a positive multiple of
+// sixteen. A and B fill their groups in order, each group a bank depth of
+// rows before the next, so a K deeper than a bank spans several groups
+// (allocated together or gathered with bank_transfer).
+//   A: k / 16 blocks of sixteen rows of sixteen i8; row i of block r is
+//      A[i, 16r .. 16r + 15].
+//   B: k rows of sixteen i8, B[0 .. k - 1, 0 .. 15].
+//   C: a bank of four groups, sixteen rows of sixteen i32.
 // With read_destination C = in_shift(C + A @ B, shift), rounding to nearest
-// even; without, C = A @ B on the output-stationary array.
+// even; without, C = A @ B.
+//
+// This is not smatmul's matmul_i8: C holds one output row per bank row across
+// four groups instead of four bank rows of one group, there is no bias row,
+// and read_destination accumulates the whole old C with a rounding shift.
+//
+// The Ball issues one instruction per 16-deep block, the operand groups and
+// row bases derived from the block index. Without read_destination the first
+// block runs on the output-stationary array (PRELOAD primes D = 0); every
+// other block accumulates on the weight-stationary array, reading the old C.
+// Only the last block applies the shift.
 //
 //===----------------------------------------------------------------------===//
 
 #include "Buckyball/BuckyballOps.h"
 #include "Conversion/Buckyball.h"
 #include "Target/BuckyballTargetRegistry.h"
-#include "mlir/Dialect/Arith/IR/Arith.h"
 
 using namespace mlir;
 using namespace ::buddy::buckyball;
@@ -26,67 +39,69 @@ public:
     if (op.getKind() != "matmul_i8_tile")
       return failure();
     Location loc = op.getLoc();
-    bool accumulate = op.getReadDestination();
+    bool readDestination = op.getReadDestination();
+    int64_t k = cast<IntegerAttr>(op->getAttr("k")).getInt();
     int64_t shift =
-        accumulate ? cast<IntegerAttr>(op->getAttr("shift")).getInt() : 0;
+        readDestination ? cast<IntegerAttr>(op->getAttr("shift")).getInt() : 0;
     int64_t meshRows = buckyball_target::getBuckyballBallParam(
         "GEMMINI_COMPUTE_PRELOADED", "meshRows");
     int64_t meshColumns = buckyball_target::getBuckyballBallParam(
         "GEMMINI_COMPUTE_PRELOADED", "meshColumns");
     const auto &target = buckyball_target::getBuckyballTarget();
-    if (target.bankWidthBits != 128 || meshRows != 16 || meshColumns != 16 ||
-        target.bankDepth < 16 || op.getSources().size() != 2 ||
-        op.getArguments().size() != 3 ||
-        op.getSources()[0] == op.getSources()[1] ||
-        llvm::is_contained(op.getSources(), op.getDestination()))
-      return op.emitOpError("matmul_i8_tile requires distinct A, B and C "
-                            "banks, three row bases and a 16x16 mesh");
-    int64_t a = op.getSources()[0], bBank = op.getSources()[1];
+    ArrayRef<int64_t> sources = op.getSources();
     int64_t c = op.getDestination();
-    // rs2: the subcommand in [3:0], then the A, B and C row bases.
-    auto rs2 = [&](uint64_t subcommand, Value aBase, Value bBase) {
-      Value word = mlir::buddy::constantI64(b, loc, subcommand);
-      for (auto [base, bit] : {std::pair{aBase, 6}, std::pair{bBase, 16},
-                               std::pair{op.getArguments()[2], 26}})
-        if (base)
-          word = arith::OrIOp::create(
-              b, loc, word,
-              arith::ShLIOp::create(b, loc, base,
-                                    mlir::buddy::constantI64(b, loc, bit)));
-      return word;
-    };
-    Value aBase = op.getArguments()[0], bBase = op.getArguments()[1];
-    // CONFIG: weight-stationary for the accumulation, as the ISA tests use it,
-    // output-stationary for the plain product.
-    mlir::buddy::emitInstruction(
-        b, loc, buckyball_target::getBuckyballFunct7("GEMMINI_CONFIG"),
-        mlir::buddy::constantI64(b, loc, 0),
-        mlir::buddy::constantI64(b, loc,
-                                 mlir::buddy::field(accumulate, 4, 4) |
-                                     mlir::buddy::field(shift, 9, 40)));
-    if (accumulate) {
+    if (target.bankWidthBits != 128 || meshRows != 16 || meshColumns != 16 ||
+        target.bankDepth % 16 || target.bankDepth > 1024 ||
+        sources.size() != 2 || sources[0] == sources[1] || k <= 0 || k % 16 ||
+        k > 64 * target.bankDepth || llvm::is_contained(sources, c))
+      return op.emitOpError("matmul_i8_tile requires distinct A, B and C "
+                            "banks, k a multiple of 16 within 64 groups and a "
+                            "16x16 mesh");
+    int64_t a = sources[0], bBank = sources[1];
+    int64_t steps = k / 16, groupBlocks = target.bankDepth / 16;
+    uint64_t config = ~0ULL;
+    for (int64_t step = 0; step < steps; ++step) {
+      uint64_t group = step / groupBlocks, base = step % groupBlocks * 16;
+      bool accumulate = readDestination || step > 0;
+      // CONFIG: rs2[4] picks the weight-stationary array, rs2[40:9] the shift.
+      uint64_t word = mlir::buddy::field(accumulate, 4, 4) |
+                      mlir::buddy::field(step == steps - 1 ? shift : 0, 9, 40);
+      if (word != config)
+        mlir::buddy::emitInstruction(
+            b, loc, buckyball_target::getBuckyballFunct7("GEMMINI_CONFIG"),
+            mlir::buddy::constantI64(b, loc, 0),
+            mlir::buddy::constantI64(b, loc, word));
+      config = word;
+      // rs2: the subcommand in [3:0], the first and second source row bases
+      // in [15:6] and [25:16], their groups in [41:36] and [47:42]; C is at
+      // row 0.
+      uint64_t bases =
+          mlir::buddy::field(base, 6, 15) | mlir::buddy::field(base, 16, 25) |
+          mlir::buddy::field(group, 36, 41) | mlir::buddy::field(group, 42, 47);
+      if (accumulate) {
+        mlir::buddy::emitInstruction(
+            b, loc,
+            buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_ACCUMULATED"),
+            mlir::buddy::constantI64(
+                b, loc, mlir::buddy::bankFields({a, bBank}, c, true, 16)),
+            mlir::buddy::constantI64(b, loc, 3 | bases));
+        continue;
+      }
+      // The output-stationary preload reads sixteen rows of B.
+      mlir::buddy::emitInstruction(
+          b, loc, buckyball_target::getBuckyballFunct7("GEMMINI_PRELOAD"),
+          mlir::buddy::constantI64(
+              b, loc, mlir::buddy::bankFields({bBank}, c, false, 16)),
+          mlir::buddy::constantI64(b, loc,
+                                   1 | mlir::buddy::field(base, 6, 15) |
+                                       mlir::buddy::field(group, 36, 41)));
       mlir::buddy::emitInstruction(
           b, loc,
-          buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_ACCUMULATED"),
+          buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_PRELOADED"),
           mlir::buddy::constantI64(
-              b, loc, mlir::buddy::bankFields({a, bBank}, c, true, 16)),
-          rs2(3, aBase, bBase));
-      b.eraseOp(op);
-      return success();
+              b, loc, mlir::buddy::bankFields({a, bBank}, c, false, 16)),
+          mlir::buddy::constantI64(b, loc, 2 | bases));
     }
-    // The output-stationary preload only primes the array with D = 0; it
-    // reads B, which is valid for sixteen rows.
-    mlir::buddy::emitInstruction(
-        b, loc, buckyball_target::getBuckyballFunct7("GEMMINI_PRELOAD"),
-        mlir::buddy::constantI64(
-            b, loc, mlir::buddy::bankFields({bBank}, c, false, 16)),
-        rs2(1, bBase, Value()));
-    mlir::buddy::emitInstruction(
-        b, loc,
-        buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_PRELOADED"),
-        mlir::buddy::constantI64(
-            b, loc, mlir::buddy::bankFields({a, bBank}, c, false, 16)),
-        rs2(2, aBase, bBase));
     b.eraseOp(op);
     return success();
   }

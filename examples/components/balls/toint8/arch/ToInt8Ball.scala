@@ -56,6 +56,10 @@ class ToInt8Ball(
   val scaleBank    = RegInit(0.U(fp.bank_id_len.W))
   val outputBank   = RegInit(0.U(fp.bank_id_len.W))
   val bases        = Reg(Vec(3, UInt(mp.groupIdWidth.W)))
+  // Every group of a virtual bank is one 16-channel block with the same rows.
+  val groups       = RegInit(0.U(log2Up(mp.bankNum + 1).W))
+  val group        = RegInit(0.U(log2Up(mp.bankNum + 1).W))
+  val outputBase   = RegInit(0.U(log2Ceil(mp.bankEntries).W))
   val iterReg      = RegInit(0.U(fp.iter_len.W))
   val inputBaseReg = RegInit(0.U(log2Ceil(mp.bankEntries).W))
   // Relative row within the command.  inputBaseReg is the absolute bank row.
@@ -78,14 +82,14 @@ class ToInt8Ball(
   def positiveFinite(value: UInt): Bool =
     !value(31) && value(30, 23) =/= 255.U && value(30, 0) =/= 0.U
 
-  val intToFloat = Instantiate(new INToRecFN(32, 8, 24))
+  val intToFloat = Module(new INToRecFN(32, 8, 24))
 
   // The unpipelined recoded-float multiplier was the critical Buckyball path
   // (about 8.5 ns before clock uncertainty).  FMA mode with c=0 preserves the
   // multiplication result while splitting the datapath into three stages.
   val multiply = Instantiate(new Fma(3, 8, 24))
 
-  val floatToInt = Instantiate(new RecFNToIN(8, 24, 8))
+  val floatToInt = Module(new RecFNToIN(8, 24, 8))
   val input      = (inputData >> (lane << 5))(31, 0)
   val scale      = Mux(i32Mode, scales(Cat(relativeRow(1, 0), lane)), tensorScale)
   val packIssue  = state === pack
@@ -142,14 +146,14 @@ class ToInt8Ball(
 
   blink.bankRead(0).rob_id           := robIdReg
   blink.bankRead(0).bank_id          := Mux(state === scaleReq || state === scaleResp, scaleBank, inputBank)
-  blink.bankRead(0).group_id         := Mux(state === scaleReq || state === scaleResp, bases(1), bases(0))
+  blink.bankRead(0).group_id         := Mux(state === scaleReq || state === scaleResp, bases(1), bases(0)) + group
   blink.bankRead(0).io.req.valid     := false.B
   blink.bankRead(0).io.req.bits.addr := 0.U
   blink.bankRead(0).io.resp.ready    := false.B
 
   blink.bankWrite(0).rob_id           := robIdReg
   blink.bankWrite(0).bank_id          := outputBank
-  blink.bankWrite(0).group_id         := bases(2)
+  blink.bankWrite(0).group_id         := bases(2) + group
   blink.bankWrite(0).io.req.valid     := false.B
   blink.bankWrite(0).io.req.bits.addr := outputRow
   blink.bankWrite(0).io.req.bits.data := writeData
@@ -171,7 +175,10 @@ class ToInt8Ball(
           cmd.iter <= mp.bankEntries.U,
           "ToInt8Ball input exceeds bank depth"
         )
-        assert(cmd.op1_col === 1.U && cmd.wr_col === 1.U, "ToInt8Ball input and output must each occupy one bank")
+        assert(
+          cmd.op1_col =/= 0.U && cmd.op1_col === cmd.wr_col && cmd.op1_col <= mp.bankNum.U,
+          "ToInt8Ball input and output must have the same channel groups"
+        )
         assert(
           cmd.op1_bank =/= cmd.wr_bank,
           "ToInt8Ball input and output banks must differ"
@@ -180,7 +187,7 @@ class ToInt8Ball(
           assert(cmd.rs2(63, 32) === 0.U, "QUANT_F32_TO_I8 reserves rs2[63:32]")
           assert(positiveFinite(cmd.rs2(31, 0)), "QUANT_F32_TO_I8 scale must be finite and positive")
         }.otherwise {
-          assert(cmd.op2_col === 1.U, "QUANT_I32_TO_I8 scale must occupy one bank")
+          assert(cmd.op2_col === cmd.op1_col, "QUANT_I32_TO_I8 scale must have one group per channel group")
           assert(
             cmd.op1_bank =/= cmd.op2_bank,
             "QUANT_I32_TO_I8 input and scale banks must differ"
@@ -214,6 +221,9 @@ class ToInt8Ball(
         scaleBank    := cmd.op2_bank
         outputBank   := cmd.wr_bank
         bases        := VecInit(cmd.op1_group, cmd.op2_group, cmd.wr_group)
+        groups       := cmd.op1_col
+        group        := 0.U
+        outputBase   := Mux(isI32, cmd.rs2(7, 1), 0.U)
         iterReg      := cmd.iter
         inputBaseReg := Mux(isI32, cmd.rs2(34, 29), 0.U)
         relativeRow  := 0.U
@@ -297,7 +307,16 @@ class ToInt8Ball(
       blink.bankWrite(0).io.resp.ready := true.B
       when(blink.bankWrite(0).io.resp.fire) {
         when(relativeRow === iterReg - 1.U) {
-          state := complete
+          when(group + 1.U === groups) {
+            state := complete
+          }.otherwise {
+            group        := group + 1.U
+            relativeRow  := 0.U
+            outputRow    := outputBase
+            outputColumn := 0.U
+            scaleRow     := 0.U
+            state        := Mux(i32Mode, scaleReq, inputReq)
+          }
         }.otherwise {
           relativeRow := relativeRow + 1.U
           when(outputColumn === outputWidth - 1.U) {

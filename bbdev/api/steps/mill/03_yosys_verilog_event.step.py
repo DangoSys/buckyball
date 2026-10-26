@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import glob
 import re
@@ -186,11 +187,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         mill_config, build_dir = rtl_out(
             bbdir,
             design,
-            "verilog",
+            "synth",
             input_data.get("output_dir"),
             selection=input_data["target"],
         )
-        os.makedirs(build_dir, exist_ok=True)
+        if os.path.exists(build_dir):
+            shutil.rmtree(build_dir)
+        os.makedirs(build_dir)
         ctx.logger.info(f"Using mill config: {mill_config}")
         ctx.logger.info(f"Using build directory: {build_dir}")
         returncode = (
@@ -227,7 +230,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
     yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg.get("top") or "DigitalTop"
+    top_module = input_data.get("top") or yosys_cfg["top"]
     yosys_log_dir = log_dir(
         bbdir,
         design,
