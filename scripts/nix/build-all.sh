@@ -15,7 +15,7 @@ usage() {
   echo "   3. RTL pre-compile sources"
   echo "   4. bb-tests pre-compile sources"
   echo "   5. waveform-mcp build"
-  echo "   6. bebop build"
+  echo "   6. bebop environment"
   echo "   7. verify build"
   echo "   8. pre-commit hooks installation"
   echo "   9. register project MCP"
@@ -149,10 +149,9 @@ if run_step "5"; then
 fi
 
 if run_step "6"; then
-  begin_step "6" "bebop build"
+  begin_step "6" "bebop environment"
   cd "$BBDIR/bebop"
-  nix build
-  nix develop -c echo "bebop built successfully"
+  nix develop -c echo "bebop environment ready"
 
 
 fi

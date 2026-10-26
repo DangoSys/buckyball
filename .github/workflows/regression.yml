@@ -45,7 +45,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
           nix build
@@ -97,7 +97,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
@@ -164,7 +164,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
@@ -220,7 +220,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
@@ -287,7 +287,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
@@ -352,7 +352,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 

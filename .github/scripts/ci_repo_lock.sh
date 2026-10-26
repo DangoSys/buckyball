@@ -25,7 +25,7 @@ repo_reset() {
   cd "${repo}"
 
   # Initialize the compiler in stack and its LLVM dependency explicitly.
-  git fetch --force --prune origin "${want_sha}"
+  git fetch --no-recurse-submodules --force --prune origin "${want_sha}"
   git checkout --detach --force "${want_sha}"
   git reset --hard "${want_sha}"
   git clean -ffd

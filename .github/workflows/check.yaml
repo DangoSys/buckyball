@@ -46,7 +46,7 @@ jobs:
           cd "${root}"
 
           # fetch first to ensure if we modify ci_repo_lock.sh, we still use the old version to checkout.
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             prepare "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
@@ -113,7 +113,7 @@ jobs:
           root="${BB_ROOT/#\~/$HOME}"
           source "${root}/.github/scripts/setproxy.sh"
           cd "${root}"
-          git fetch --force --prune origin "${CHECKOUT_SHA}"
+          git fetch --no-recurse-submodules --force --prune origin "${CHECKOUT_SHA}"
           git show "${CHECKOUT_SHA}:.github/scripts/ci_repo_lock.sh" | bash -s -- \
             enter "${CHECKOUT_SHA}" "${root}" "${CHECKOUT_REF}"
 
