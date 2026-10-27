@@ -10,5 +10,8 @@ stack_name = "goban"
 regression = "sims/device/regression"
 kernel = "sims/device/workloads/kernel"
 
+[targets.device.configs]
+GobanVerilatorConfig = "verilator.toml"
+
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

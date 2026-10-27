@@ -24,7 +24,7 @@ begin_step "0-2" "submodules init"
 cd ${BBDIR}
 git submodule sync
 git submodule update --init --progress
-git -C ${BBDIR}/stack submodule update --init --progress engine os/linux
+git -C ${BBDIR}/stack submodule update --init --progress os/linux
 git -C ${BBDIR}/stack submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   os/thirdparty/linux \
   os/thirdparty/busybox \

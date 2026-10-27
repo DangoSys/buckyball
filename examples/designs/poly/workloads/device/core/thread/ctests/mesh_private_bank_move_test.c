@@ -1,6 +1,5 @@
 #include "ant_mesh.h"
 #include <bbhw/isa/isa.h>
-#include <params.h>
 
 uint64_t entry(const struct ant_mesh_args *args) {
   if (args->index == 0) {

@@ -10,14 +10,14 @@
 enum {
   ROWS = 16,
   NEW_ROWS = 8,
-  BYTES = ROWS * BANK_WIDTH / 8,
-  BASE = BB_SHARED_BANK_BASE
+  BYTES = ROWS * THREAD_MEM_BANK_WIDTH / 8,
+  BASE = THREAD_FRONTEND_SHARED_VBANK_BASE
 };
-static int8_t input[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t left[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t right[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static volatile int8_t warmup[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t output[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
+static int8_t input[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t left[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t right[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static volatile int8_t warmup[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t output[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
 
 extern "C" int pebble_pipeline(uint32_t instance) {
   int c = instance;
@@ -37,7 +37,7 @@ extern "C" int pebble_pipeline(uint32_t instance) {
   bb_transpose(BASE, BASE + 2, ROWS, 8);
   bb_int8add(BASE + 3, BASE + 4, BASE + 2, NEW_ROWS, 1.0f, 1.0f);
   bb_mvout((uintptr_t)output[c], BASE + 2, NEW_ROWS, 1);
-  for (int i = 0; i < NEW_ROWS * BANK_WIDTH / 8; ++i)
+  for (int i = 0; i < NEW_ROWS * THREAD_MEM_BANK_WIDTH / 8; ++i)
     if (output[c][i] != 7)
       return 1;
   for (int bank = BASE; bank < BASE + 5; ++bank)

@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from utils.path import _design_name
+from utils.path import _design_name, design_pb_path
 
 from utils.report_schema import (
     report_directory,
@@ -13,12 +13,10 @@ from utils.report_schema import (
 )
 
 
-def source_context(repo, design):
+def source_context(repo, design, selection):
     repo = Path(repo)
     design = _design_name(design)
-    config = (
-        repo / "examples/designs" / design / "output/generated/design.pb"
-    ).read_bytes()
+    config = design_pb_path(repo, design, selection=selection).read_bytes()
 
     def git(*args):
         return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()

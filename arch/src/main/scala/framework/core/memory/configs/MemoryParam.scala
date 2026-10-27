@@ -28,7 +28,7 @@ object MemoryParam {
     val requester = homep.memory.chi
     MemoryParam(
       AccessParam(
-        AccessParams(requester, a.getAccessTagBits),
+        AccessParams(requester, a.getTagBits),
         a.getRegionsList.asScala.map(PhysicalRegion.fromProto).toSeq,
         a.getTranslationEntries,
         a.getResultLineBits

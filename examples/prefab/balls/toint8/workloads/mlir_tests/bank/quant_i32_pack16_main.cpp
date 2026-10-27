@@ -1,0 +1,23 @@
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
+                             int64_t rows, int64_t lanes, int64_t stride,
+                             int64_t lane_stride) {
+  const int expected_rows =
+      (THREAD_MEM_BANK_ENTRIES < 508 ? THREAD_MEM_BANK_ENTRIES : 508) / 4;
+  if (rows != expected_rows || lanes != THREAD_MEM_BANK_WIDTH / 8 ||
+      stride != lanes || lane_stride != 1)
+    exit(1);
+  for (int row = 0; row < rows; ++row)
+    for (int lane = 0; lane < lanes; ++lane) {
+      int expected = row * lanes + lane;
+      if (expected > 127)
+        expected = 127;
+      if (data[offset + row * stride + lane] != expected) {
+        printf("quant i32 bank mismatch row=%d lane=%d\n", row, lane);
+        exit(1);
+      }
+    }
+  printf("quant i32 bank PASS rows=%d\n", THREAD_MEM_BANK_ENTRIES);
+}

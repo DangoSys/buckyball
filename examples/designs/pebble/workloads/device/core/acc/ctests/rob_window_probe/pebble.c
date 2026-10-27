@@ -7,14 +7,14 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum { M = 8, N = 16, K = 64, LANES = BANK_WIDTH / 8, STORES = 16 };
-static int8_t input[BB_CORE_NUM][M * K] __attribute__((aligned(64)));
-static int8_t weight[BB_CORE_NUM][K * N] __attribute__((aligned(64)));
-static int8_t core[BB_CORE_NUM][N * N] __attribute__((aligned(64)));
-static int32_t bias[BB_CORE_NUM][N] __attribute__((aligned(64)));
-static int32_t output[BB_CORE_NUM][STORES][M * N] __attribute__((aligned(64)));
-static int8_t transposed[BB_CORE_NUM][N * N] __attribute__((aligned(64)));
-static volatile int32_t warmup[BB_CORE_NUM][N] __attribute__((aligned(64)));
+enum { M = 8, N = 16, K = 64, LANES = THREAD_MEM_BANK_WIDTH / 8, STORES = 16 };
+static int8_t input[BB_NUM_CORES][M * K] __attribute__((aligned(64)));
+static int8_t weight[BB_NUM_CORES][K * N] __attribute__((aligned(64)));
+static int8_t core[BB_NUM_CORES][N * N] __attribute__((aligned(64)));
+static int32_t bias[BB_NUM_CORES][N] __attribute__((aligned(64)));
+static int32_t output[BB_NUM_CORES][STORES][M * N] __attribute__((aligned(64)));
+static int8_t transposed[BB_NUM_CORES][N * N] __attribute__((aligned(64)));
+static volatile int32_t warmup[BB_NUM_CORES][N] __attribute__((aligned(64)));
 extern "C" int pebble_pipeline(uint32_t instance) {
   int c = instance;
   for (int i = 0; i < M * K; ++i)

@@ -1,16 +1,14 @@
 #define _GNU_SOURCE
 #include "ant_mesh_move.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 
 extern const unsigned char ant_image[], ant_image_end[];
-enum { ROW_WORDS = BANK_WIDTH / 64, ROWS = 2 };
-static uint64_t input[BB_THREAD_CORE_COUNT][ROWS * ROW_WORDS]
+enum { ROW_WORDS = THREAD_MEM_BANK_WIDTH / 64, ROWS = 2 };
+static uint64_t input[POLY_THREAD_CORES][ROWS * ROW_WORDS]
     __attribute__((section(".data"), aligned(4096)));
-static uint64_t output[BB_THREAD_CORE_COUNT][ROWS * ROW_WORDS]
+static uint64_t output[POLY_THREAD_CORES][ROWS * ROW_WORDS]
     __attribute__((section(".data"), aligned(4096)));
-static unsigned done[BB_THREAD_CORE_COUNT];
+static unsigned done[POLY_THREAD_CORES];
 
 static void run(unsigned context, unsigned id,
                 struct ant_mesh_move_args *args) {
@@ -84,10 +82,10 @@ static void exercise(unsigned tile) {
 int main(void) {
   uintptr_t hart;
   __asm__ volatile("csrr %0, mhartid" : "=r"(hart));
-  if (hart != BB_REPORT_HART)
+  if (hart != WORKLOAD_REPORT_HART)
     exercise(hart - 1);
   else
-    for (unsigned tile = 0; tile < BB_THREAD_CORE_COUNT; ++tile)
+    for (unsigned tile = 0; tile < POLY_THREAD_CORES; ++tile)
       while (!__atomic_load_n(&done[tile], __ATOMIC_ACQUIRE)) {
       }
   return 0;

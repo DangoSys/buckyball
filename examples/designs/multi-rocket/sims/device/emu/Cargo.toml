@@ -66,7 +66,7 @@ p2e = ["bebop/p2e"]
 bebop = { path = "../../../../../../bebop" }
 bebop-verilator = { path = "../../../../../../bebop/src/nodes/verilator", optional = true }
 bebop-bemu = { path = "../../../../../../bebop/src/nodes/bemu" }
-bebop-core-rocket = { path = "../../../../../components/cores/rocket/emu" }
+bebop-core-rocket = { path = "../../../../../prefab/cores/rocket/emu" }
 clap = { version = "4", features = ["derive"] }
 
 [build-dependencies]

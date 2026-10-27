@@ -18,7 +18,7 @@ def register(mcp):
         workload: Optional[str] = None,
         start_ns: Optional[str] = None,
         end_ns: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Run DC synthesis, design-owned activity simulation, and PrimeTime PX.
@@ -41,8 +41,8 @@ def register(mcp):
             start_ns=start_ns,
             end_ns=end_ns,
         )
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

@@ -2,8 +2,8 @@ import mill._
 import mill.scalalib._
 import $file.^.arch.src.main.scala.framework.{build => framework_build}
 import $file.^.arch.thirdparty.{build => thirdparty_build}
-import $file.components.balls.{build => ball_components}
-import $file.components.threads.{build => thread_components}
+import $file.prefab.balls.{build => ball_components}
+import $file.prefab.threads.{build => thread_components}
 
 import $file.^.arch.src.main.scala.framework.acc.balldomain.src.main.scala.bbus.{build => bbus_build}
 import $file.^.arch.src.main.scala.framework.core.tbus.{build => tbus_build}
@@ -32,8 +32,8 @@ object library extends SbtModule {
   override def scalacOptions       = Seq("-deprecation", "-feature", "-language:reflectiveCalls", "-Ymacro-annotations")
 
   override def generatedSources = T {
-    bbus_build.registry(ball_components.sources(), examplesRoot / "components" / "balls", T.dest) ++
-      tbus_build.registry(thread_components.sources(), examplesRoot / "components" / "threads", T.dest)
+    bbus_build.registry(ball_components.sources(), examplesRoot / "prefab" / "balls", T.dest) ++
+      tbus_build.registry(thread_components.sources(), examplesRoot / "prefab" / "threads", T.dest)
   }
 
   override def sources =

@@ -138,7 +138,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             return
         wave = True
     try:
-        image_path = resolve_image(bbdir, image_name, design)
+        image_path = resolve_image(bbdir, image_name, design, input_data["target"])
         image_base = os.path.splitext(image_path)[0]
         elf_path = (
             f"{image_base}.elf" if os.path.isfile(f"{image_base}.elf") else image_base
@@ -309,7 +309,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ]
     run_args += ["--image", image_path]
     run_cmd = f"cd {shlex.quote(bbdir)} && {shlex.join(run_args)}"
-    report_context = source_context(bbdir, design)
+    report_context = source_context(bbdir, design, input_data["target"])
     with open(bitstream, "rb") as source:
         report_context["provenance"]["bitstream_sha256"] = hashlib.file_digest(
             source, "sha256"

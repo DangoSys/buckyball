@@ -10,10 +10,8 @@ def register(mcp):
     def bbdev_bebop_verilator_batch(
         design: str,
         test: str,
-        clean_before: bool = False,
         diff: bool = False,
-        junit: str | None = None,
-        device: bool = False,
+        device: str | None = None,
     ) -> str:
         """Batch bebop-verilator regression. POST /bebop/verilator/batch."""
         if e := need("design", design):
@@ -23,12 +21,10 @@ def register(mcp):
         request = {
             "design": design,
             "test": test,
-            "clean-before": clean_before,
             "diff": diff,
-            "junit": junit,
         }
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         return fmt(
             submit(
                 "/bebop/verilator/batch",

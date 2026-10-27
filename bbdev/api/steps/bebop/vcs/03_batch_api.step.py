@@ -1,5 +1,4 @@
 from utils.event_common import require_target
-import os
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
@@ -19,18 +18,12 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         selection = require_target(body, ("device",))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    junit = body.get("junit")
-    if junit is not None and (not isinstance(junit, str) or not os.path.isabs(junit)):
-        return ApiResponse(
-            status=400, body={"error": "junit must be an absolute file path"}
-        )
     await ctx.enqueue(
         {
             "topic": "bebop.vcs.batch",
             "data": {
                 "design": require_design(body),
                 "test": body.get("test", "bare-tests"),
-                "junit": junit,
                 "jobs": body.get("jobs", 1),
                 "_trace_id": ctx.trace_id,
                 "target": selection,

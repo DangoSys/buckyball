@@ -13,7 +13,7 @@ def register(mcp):
         design: Optional[str] = None,
         ball: Optional[str] = None,
         ip: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
     ) -> str:
         """Build and run a Ball or IP UVM simulation. POST /uvm/run."""
         if design is None and not ip:
@@ -25,6 +25,6 @@ def register(mcp):
             params["ball"] = ball
         if ip:
             params["ip"] = ip
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         return fmt(submit("/uvm/run", params))

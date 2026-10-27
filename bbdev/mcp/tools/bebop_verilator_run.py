@@ -18,7 +18,7 @@ def register(mcp):
         banktrace: bool = False,
         no_wave: bool = False,
         diff: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Full bebop-verilator flow. POST /bebop/verilator/run."""
@@ -37,8 +37,8 @@ def register(mcp):
             "no-wave": no_wave,
             "diff": diff,
         }
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

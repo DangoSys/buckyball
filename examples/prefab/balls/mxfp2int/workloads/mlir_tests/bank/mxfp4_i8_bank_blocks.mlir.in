@@ -1,0 +1,59 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x16xi8>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %blocks = arith.constant @BB_MXFP_BLOCKS@ : index
+  %sixteen = arith.constant 16 : index
+  %scaleRows = arith.constant @BB_MXFP_SCALE_ROWS@ : index
+  %bias = arith.constant 125 : index
+  %eight = arith.constant 8 : index
+  %input = memref.alloc() alignment = 64 : memref<@BB_MXFP_BLOCKS@x16xi8>
+  %scales = memref.alloc() alignment = 64 : memref<@BB_MXFP_SCALE_ROWS@x16xi8>
+  %output = memref.alloc() alignment = 64 : memref<@BB_BANK_LINES@x16xi8>
+  // Byte j of block b holds the nibbles (b + 2j) % 16 (low) and
+  // (b + 2j + 1) % 16 (high); element e has the raw value (b + e) % 16.
+  scf.for %b = %zero to %blocks step %one {
+    scf.for %j = %zero to %sixteen step %one {
+      %j2 = arith.addi %j, %j : index
+      %e0 = arith.addi %b, %j2 : index
+      %lo = arith.remui %e0, %sixteen : index
+      %e1 = arith.addi %e0, %one : index
+      %hi = arith.remui %e1, %sixteen : index
+      %hiShifted = arith.muli %hi, %sixteen : index
+      %byte = arith.addi %hiShifted, %lo : index
+      %v = arith.index_cast %byte : index to i8
+      memref.store %v, %input[%b, %j] : memref<@BB_MXFP_BLOCKS@x16xi8>
+    }
+  }
+  // The scale of block b is 125 + b % 8: shifts -2..5.
+  scf.for %r = %zero to %scaleRows step %one {
+    scf.for %j = %zero to %sixteen step %one {
+      %r16 = arith.muli %r, %sixteen : index
+      %b = arith.addi %r16, %j : index
+      %m = arith.remui %b, %eight : index
+      %s = arith.addi %bias, %m : index
+      %v = arith.index_cast %s : index to i8
+      memref.store %v, %scales[%r, %j] : memref<@BB_MXFP_SCALE_ROWS@x16xi8>
+    }
+  }
+  %ib = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %sb = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %ob = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %il = buckyball.bank_mvin %input, %ib <{depth = @BB_MXFP_BLOCKS@ : i64, stride = 1 : i64}>
+      : memref<@BB_MXFP_BLOCKS@x16xi8>
+  %sl = buckyball.bank_mvin %scales, %sb <{depth = @BB_MXFP_SCALE_ROWS@ : i64, stride = 1 : i64}>
+      : memref<@BB_MXFP_SCALE_ROWS@x16xi8>
+  %result = mxfp2int_ball.bank_mxfp4_i8 %il, %sl -> %ob
+      <{rows = @BB_MXFP_BLOCKS@ : i64}>
+  %stored = buckyball.bank_mvout %output, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}>
+      : memref<@BB_BANK_LINES@x16xi8>
+  buckyball.bank_release %il
+  buckyball.bank_release %sl
+  buckyball.bank_release %stored
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x16xi8>) -> ()
+  memref.dealloc %input : memref<@BB_MXFP_BLOCKS@x16xi8>
+  memref.dealloc %scales : memref<@BB_MXFP_SCALE_ROWS@x16xi8>
+  memref.dealloc %output : memref<@BB_BANK_LINES@x16xi8>
+  return %zero_i8 : i8
+}

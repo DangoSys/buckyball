@@ -39,36 +39,37 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
 
   })
 
-  val idle :: plan :: query :: stream :: waitB :: drain :: respond :: Nil = Enum(7)
-  val state                                                               = RegInit(idle)
-  val command                                                             = Reg(new WriteTransfer(b, permission))
-  val parent                                                              = Reg(UInt(prepared.idBits.W))
-  val endVA                                                               = Reg(UInt(64.W))
-  val cursorVA                                                            = Reg(UInt(64.W))
-  val inputTotal                                                          = Reg(UInt(29.W))
-  val consumed                                                            = RegInit(0.U(29.W))
-  val sourceEnded                                                         = RegInit(false.B)
-  val remaining                                                           = Reg(UInt(29.W))
-  val firstBeat                                                           = RegInit(true.B)
-  val beats                                                               = Reg(UInt(9.W))
-  val beatIndex                                                           = RegInit(0.U(9.W))
-  val awSent                                                              = RegInit(false.B)
-  val wDone                                                               = RegInit(false.B)
-  val queryVA                                                             = Reg(UInt(64.W))
-  val queryBytes                                                          = Reg(UInt(13.W))
-  val headOffset                                                          = Reg(UInt(4.W))
-  val physical                                                            = Reg(UInt(axiParams.addressBits.W))
-  val carry                                                               = RegInit(0.U(128.W))
-  val outputValid                                                         = RegInit(false.B)
-  val outputData                                                          = Reg(UInt(128.W))
-  val outputMask                                                          = Reg(UInt(16.W))
-  val outputLast                                                          = Reg(Bool())
-  val fault                                                               = RegInit(0.U.asTypeOf(new DmaStatus))
-  val offset                                                              = command.vaddr(3, 0)
-  val expectedLast                                                        = consumed +& 1.U === inputTotal
-  val outputRoom                                                          = !outputValid || (io.axi.w.ready && !outputLast)
-  val outputIndex                                                         = beatIndex + io.axi.w.fire.asUInt
-  val outputHead                                                          = firstBeat && !io.axi.w.fire
+  val idle :: plan :: query :: lookup :: answer :: validate :: stream :: waitB :: drain :: respond :: Nil = Enum(10)
+  val state                                                                                               = RegInit(idle)
+  val command                                                                                             = Reg(new WriteTransfer(b, permission))
+  val parent                                                                                              = Reg(UInt(prepared.idBits.W))
+  val endVA                                                                                               = Reg(UInt(64.W))
+  val cursorVA                                                                                            = Reg(UInt(64.W))
+  val inputTotal                                                                                          = Reg(UInt(29.W))
+  val consumed                                                                                            = RegInit(0.U(29.W))
+  val sourceEnded                                                                                         = RegInit(false.B)
+  val remaining                                                                                           = Reg(UInt(29.W))
+  val firstBeat                                                                                           = RegInit(true.B)
+  val beats                                                                                               = Reg(UInt(9.W))
+  val beatIndex                                                                                           = RegInit(0.U(9.W))
+  val awSent                                                                                              = RegInit(false.B)
+  val wDone                                                                                               = RegInit(false.B)
+  val queryVA                                                                                             = Reg(UInt(64.W))
+  val queryBytes                                                                                          = Reg(UInt(13.W))
+  val headOffset                                                                                          = Reg(UInt(4.W))
+  val physical                                                                                            = Reg(UInt(axiParams.addressBits.W))
+  val carry                                                                                               = RegInit(0.U(128.W))
+  val outputValid                                                                                         = RegInit(false.B)
+  val outputData                                                                                          = Reg(UInt(128.W))
+  val outputMask                                                                                          = Reg(UInt(16.W))
+  val outputLast                                                                                          = Reg(Bool())
+  val fault                                                                                               = RegInit(0.U.asTypeOf(new DmaStatus))
+  val mapped                                                                                              = Reg(new MapResult(b.mapping))
+  val offset                                                                                              = command.vaddr(3, 0)
+  val expectedLast                                                                                        = consumed +& 1.U === inputTotal
+  val outputRoom                                                                                          = !outputValid || (io.axi.w.ready && !outputLast)
+  val outputIndex                                                                                         = beatIndex + io.axi.w.fire.asUInt
+  val outputHead                                                                                          = firstBeat && !io.axi.w.fire
 
   io.req.ready         := state === idle && io.decisionValid
   io.busy              := state =/= idle
@@ -78,7 +79,8 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
   io.resp.bits.done    := fault.error === DmaError.None.U
   io.resp.bits.fault   := fault
   io.query             := 0.U.asTypeOf(new MapQuery(b.mapping))
-  io.query.valid       := state === query
+  // The prepared map answers a query held for three cycles.
+  io.query.valid       := state === query || state === lookup || state === answer
   io.query.id          := parent
   io.query.va          := queryVA
   io.query.bytes       := queryBytes
@@ -135,15 +137,18 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
     queryBytes := Mux(commandBytes < covered, commandBytes, covered)
     state      := query
   }
-  when(state === query) {
-    val base    = io.mapping.pa.pad(axiParams.addressBits + 1) - headOffset
+  when(state === query)(state  := lookup)
+  when(state === lookup)(state := answer)
+  when(state === answer) { mapped := io.mapping; state := validate }
+  when(state === validate) {
+    val base    = mapped.pa.pad(axiParams.addressBits + 1) - headOffset
     val lastPA  = base +& ((beats << 4) - 1.U)
-    val invalid = !io.mapping.hit || io.mapping.error =/= Error.Ok.U ||
+    val invalid = !mapped.hit || mapped.error =/= Error.Ok.U ||
       base(axiParams.addressBits) || base(3, 0) =/= 0.U ||
       lastPA(lastPA.getWidth - 1, axiParams.addressBits).orR ||
       (base >> 12) =/= (lastPA >> 12)
     when(invalid) {
-      val error = MuxLookup(io.mapping.error, DmaError.AccessFault.U)(Seq(
+      val error = MuxLookup(mapped.error, DmaError.AccessFault.U)(Seq(
         Error.Shape.U     -> DmaError.Shape.U,
         Error.Overflow.U  -> DmaError.Shape.U,
         Error.PageFault.U -> DmaError.PageFault.U,
@@ -153,7 +158,7 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
       terminate(error, queryVA)
     }.otherwise { physical := base(axiParams.addressBits - 1, 0); state := stream }
   }
-  when(io.axi.aw.fire)(awSent := true.B)
+  when(io.axi.aw.fire)(awSent  := true.B)
 
   // An accepted old W can be replaced immediately; refills take priority over clearing valid.
   when(io.axi.w.fire)(outputValid                                         := false.B)

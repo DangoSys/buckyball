@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 
 
-def _run(
+def run(
     cmd: list[str],
     *,
     repo: Path,
@@ -101,14 +101,14 @@ def build_llvm(
     with open(llvm_build / ".bbdev.lock", "a+b") as lockf:
         fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
         if not (llvm_build / "build.ninja").is_file():
-            _run(
+            run(
                 cmake,
                 repo=root,
                 logger=logger,
                 task_scope=task_scope,
                 output_prefix="compiler llvm configure",
             )
-        _run(
+        run(
             ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
             repo=root,
             logger=logger,
@@ -148,14 +148,14 @@ def build_buddy(
     ]
     with open(buddy / ".bbdev.lock", "a+b") as lockf:
         fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
-        _run(
+        run(
             cmake,
             repo=root,
             logger=logger,
             task_scope=task_scope,
             output_prefix="buddy-mlir configure",
         )
-        _run(
+        run(
             [
                 "ninja",
                 "-C",
@@ -177,15 +177,6 @@ def build_buddy(
     return build
 
 
-def _design(repo: Path, design: str):
-    sys.path.insert(0, str(repo))
-    from stack.scripts import design as design_config
-
-    return design_config, design_config.load(
-        repo / "examples/designs" / design / "output/generated/design.pb"
-    )
-
-
 def build_design(
     repo: str | Path,
     *,
@@ -193,26 +184,36 @@ def build_design(
     selection: str,
     logger: object | None = None,
     task_scope: str | None = None,
-) -> None:
-    """Build the software stack of one simulation entry of `design`.
+) -> Path:
+    """Build the software stack of one simulation of `design`, and return its
+    design.cmake, the input of every software build of that simulation.
 
-    sims/<selection>/stack/CMakeLists.txt is the top of that build: it lists the
+    The stack/CMakeLists.txt of its entry is the top of that build: it lists the
     thread, core and device stacks the entry needs and builds each of them.
     """
     root = Path(repo).resolve()
-    design_config, config = _design(root, design)
-    if selection not in config.simulations:
-        raise ValueError(f"{design}: unregistered simulation entry {selection}")
-    build = design_config.stack_build(config, selection)
-    design_config.generate(config, build / "generated", selection)
+    sys.path.insert(0, str(root))
+    from stack.scripts import design as design_config
+
+    design_pb = (
+        root
+        / "examples/designs"
+        / design
+        / "output/sims"
+        / selection
+        / "generated/design.pb"
+    )
+    config = design_config.load(design_pb)
+    build = design_config.stack_build(config)
+    design_config.generate(design_pb, build / "generated")
     build_buddy(root, logger=logger, task_scope=task_scope)
-    _run(
+    run(
         [
             "cmake",
             "-G",
             "Ninja",
             "-S",
-            config.simulations[selection].stack,
+            config.simulation.stack,
             "-B",
             str(build),
             f"-DDESIGN_CMAKE={build / 'generated/design.cmake'}",
@@ -222,13 +223,14 @@ def build_design(
         task_scope=task_scope,
         output_prefix=f"stack {selection} configure",
     )
-    _run(
+    run(
         ["ninja", "-C", str(build), "-j", str(os.cpu_count() or 1)],
         repo=root,
         logger=logger,
         task_scope=task_scope,
         output_prefix=f"stack {selection} build",
     )
+    return build / "generated/design.cmake"
 
 
 def main() -> None:

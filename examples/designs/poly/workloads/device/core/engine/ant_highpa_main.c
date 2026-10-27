@@ -1,9 +1,7 @@
 #include "ant_highpa.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
-static unsigned done[BB_THREAD_CORE_COUNT];
+static unsigned done[POLY_THREAD_CORES];
 static void exercise(unsigned core) {
   const unsigned context = thread_find(THREAD_SIGNATURE, 0);
   uintptr_t high = 0x180200000ULL + core * 0x20000ULL;
@@ -57,8 +55,8 @@ static void exercise(unsigned core) {
 int main(void) {
   uintptr_t hart;
   __asm__ volatile("csrr %0, mhartid" : "=r"(hart));
-  if (hart == BB_REPORT_HART) {
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+  if (hart == WORKLOAD_REPORT_HART) {
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (!__atomic_load_n(&done[core], __ATOMIC_ACQUIRE)) {
       }
   } else {

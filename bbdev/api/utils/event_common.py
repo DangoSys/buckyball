@@ -4,6 +4,7 @@ Common utility functions for all event steps.
 
 import re
 
+from utils.path import design_pb_path, get_buckyball_path
 from utils.process_registry import set_current_task_scope
 
 
@@ -22,22 +23,29 @@ def require_design(data: dict) -> str:
 
 
 def require_target(data: dict, kinds=("device", "core")) -> str:
+    """The selection of a request: device/<Config> for `--device <Config>`, a
+    config registered by the design's sims config, or core/<entry>."""
     selected = [kind for kind in ("device", "core", "ip", "ball") if kind in data]
     if len(selected) != 1:
         raise ValueError(
-            "Specify exactly one of --device, --core <entry>, --ip <name>, --ball <name> after --design"
+            "Specify exactly one of --device <config>, --core <entry>, --ip <name>, --ball <name> after --design"
         )
     kind = selected[0]
     if kind not in kinds:
         raise ValueError(f"--{kind} is not supported by this operation")
     value = data[kind]
-    if kind == "device":
-        if value is not True:
-            raise ValueError("--device is a flag and takes no value")
-        return "device"
     if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
-        raise ValueError(f"--{kind} requires an entry name")
-    return f"{kind}/{value}"
+        raise ValueError(f"--{kind} requires a name")
+    if kind != "device":
+        return f"{kind}/{value}"
+    design = require_design(data)
+    pb = design_pb_path(get_buckyball_path(), design, selection=f"device/{value}")
+    if not pb.is_file():
+        raise ValueError(
+            f"design {design!r} registers no device config {value!r}"
+            " (run bbdev config --install after editing its sims config)"
+        )
+    return f"device/{value}"
 
 
 def get_origin_trace_id(input_data, ctx):

@@ -31,6 +31,9 @@ repo_reset() {
   git clean -ffd
 
   rm -rf arch/out
+  # Generated outputs (CMake caches, RTL, workloads) are ignored by git clean
+  # and keep stale source paths; every run starts from a fresh output tree.
+  rm -rf examples/designs/*/output
   rm -rf stack/thirdparty/buddy-mlir/llvm/build
   rm -rf stack/thirdparty/buddy-mlir/build
 
@@ -38,11 +41,11 @@ repo_reset() {
   git submodule update --init --force
 
   # submodules in submodules we used need update by hands
-  git -C examples/components/cores/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
-  git -C examples/components/cores/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
+  git -C examples/prefab/cores/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
+  git -C examples/prefab/cores/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
 
   git -C stack submodule sync
-  git -C stack submodule update --init --force -- engine os/linux thirdparty/buddy-mlir
+  git -C stack submodule update --init --force -- os/linux thirdparty/buddy-mlir
   git -C stack submodule update --init --depth 1 --single-branch --recommend-shallow -- \
     os/thirdparty/linux os/thirdparty/busybox os/thirdparty/opensbi
   git -C stack/thirdparty/buddy-mlir submodule sync

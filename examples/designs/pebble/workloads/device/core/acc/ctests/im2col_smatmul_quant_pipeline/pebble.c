@@ -7,18 +7,24 @@
 #include <multithread.h>
 #include <stdint.h>
 
-#if BANK_WIDTH != 128 || BANK_LINES < 64
+#if THREAD_MEM_BANK_WIDTH != 128 || THREAD_MEM_BANK_ENTRIES < 64
 #error "Pebble thread pipeline requires 128-bit banks with at least 64 rows"
 #endif
 
 // K is (kernel row, kernel column, channel); only channel 0 is nonzero.
-enum { LANES = BANK_WIDTH / 8, INPUT_ROWS = 36, WINDOWS = 16, K = 9 * LANES };
-static int8_t input[BB_CORE_NUM][INPUT_ROWS * LANES]
+enum {
+  LANES = THREAD_MEM_BANK_WIDTH / 8,
+  INPUT_ROWS = 36,
+  WINDOWS = 16,
+  K = 9 * LANES
+};
+static int8_t input[BB_NUM_CORES][INPUT_ROWS * LANES]
     __attribute__((aligned(64)));
-static int8_t weight[BB_CORE_NUM][K * LANES] __attribute__((aligned(64)));
-static int32_t bias[BB_CORE_NUM][LANES] __attribute__((aligned(64)));
-static float scale[BB_CORE_NUM][LANES] __attribute__((aligned(64)));
-static int8_t output[BB_CORE_NUM][WINDOWS * LANES] __attribute__((aligned(64)));
+static int8_t weight[BB_NUM_CORES][K * LANES] __attribute__((aligned(64)));
+static int32_t bias[BB_NUM_CORES][LANES] __attribute__((aligned(64)));
+static float scale[BB_NUM_CORES][LANES] __attribute__((aligned(64)));
+static int8_t output[BB_NUM_CORES][WINDOWS * LANES]
+    __attribute__((aligned(64)));
 
 #ifdef __cplusplus
 extern "C"
@@ -38,8 +44,8 @@ extern "C"
     bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)input[thread], 0, INPUT_ROWS, 1);
   bb_mvin((uintptr_t)weight[thread], 2, K, 1);
-  bb_mvin((uintptr_t)bias[thread], 3, LANES * 32 / BANK_WIDTH, 1);
-  bb_mvin((uintptr_t)scale[thread], 5, LANES * 32 / BANK_WIDTH, 1);
+  bb_mvin((uintptr_t)bias[thread], 3, LANES * 32 / THREAD_MEM_BANK_WIDTH, 1);
+  bb_mvin((uintptr_t)scale[thread], 5, LANES * 32 / THREAD_MEM_BANK_WIDTH, 1);
   bb_im2col(0, 1, 6, 3, 1, 0, 0, 0, 0, 0, WINDOWS, 8);
   bb_smatmul_bias(3, 0);
   bb_smatmul_os(1, 2, 4, WINDOWS, LANES, K, 1, 1, 0);

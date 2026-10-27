@@ -1,5 +1,4 @@
 #include <bbhw/isa/isa.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -24,16 +23,16 @@ int main(void) {
   bb_mem_transfer(2, 4);
   bb_mem_transfer(0, 5);
   bb_mem_transfer(1, 5);
-  mvin_kernel(image + 1, sizeof(image) - 4, VIRTUAL_BANK_NUM);
-  run_kernel(4, VIRTUAL_BANK_NUM, 5, 0);
+  mvin_kernel(image + 1, sizeof(image) - 4, CORE_VIRTUAL_BANK_COUNT);
+  run_kernel(4, CORE_VIRTUAL_BANK_COUNT, 5, 0);
   call.args[0] = (uint64_t)4 << 32;
   call.args[1] = (uint64_t)1 << 32;
   bb_mvin_group((uintptr_t)&call, 5, 0, sizeof(call) / 16, 1);
-  run_kernel(4, VIRTUAL_BANK_NUM, 5, 0);
+  run_kernel(4, CORE_VIRTUAL_BANK_COUNT, 5, 0);
   uint32_t groups[2][64] __attribute__((aligned(16)));
   bb_mvout_group((uintptr_t)groups[0], 5, 1, 16, 1);
   bb_mvout_group((uintptr_t)groups[1], 5, 2, 16, 1);
-  release_kernel(VIRTUAL_BANK_NUM);
+  release_kernel(CORE_VIRTUAL_BANK_COUNT);
   bb_mem_release(4);
   bb_mem_release(5);
   for (unsigned row = 0; row < 16; ++row)

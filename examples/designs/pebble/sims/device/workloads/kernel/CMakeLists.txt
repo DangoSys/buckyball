@@ -2,6 +2,8 @@
 set(BUCKYBALL_KERNEL_PROGRAMS
   0 pebble-pebble-mlirtest-core_mega_matmul-linux
   0 pebble-pebble-mlirtest-core_mega_conv2d-linux
+  0 pebble-pebble-mlirtest-core_mega_conv2d_resident-linux
+  0 pebble-pebble-mlirtest-core_mega_conv2d_flatten_linear-linux
   0 pebble-pebble-mlirtest-core_lookup_channel_i8-linux
   0 pebble-pebble-mlirtest-core_generic_matmul_i8-linux
   0 pebble-pebble-mlirtest-core_linear_int8-linux
@@ -37,6 +39,6 @@ set(BUCKYBALL_KERNEL_PROGRAMS
   0 pebble-pebble-mlirtest-bank_int2fp_unit_scale-linux
   0 pebble-pebble-mlirtest-bank_quant_i32_pack16-linux
   0 pebble-pebble-mlirtest-bank_quant_f32_pack16-linux
-  0 pebble-pebble-mlirtest-bank_im2col_k3_padded_bank_windows-linux
+  0 pebble-pebble-mlirtest-bank_im2col_k3_two_blocks-linux
   0 pebble-pebble-mlirtest-bank_transpose_i8_packed_matrix-linux
   PARENT_SCOPE)

@@ -1,20 +1,17 @@
 #include "ant_mesh.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 
 enum {
-  BANKS = VIRTUAL_BANK_NUM - BB_SHARED_BANK_BASE,
-  ROW_BYTES = BANK_WIDTH / 8
+  BANKS = CORE_VIRTUAL_BANK_COUNT - THREAD_FRONTEND_SHARED_VBANK_BASE,
+  ROW_BYTES = THREAD_MEM_BANK_WIDTH / 8
 };
-_Static_assert(BANKS >= 2 && BANK_WIDTH == 128,
+_Static_assert(BANKS >= 2 && THREAD_MEM_BANK_WIDTH == 128,
                "Mesh tests require two 128-bit input rows");
-static uint8_t input[BB_THREAD_CORE_COUNT][BANKS * ROW_BYTES]
+static uint8_t input[POLY_THREAD_CORES][BANKS * ROW_BYTES]
     __attribute__((aligned(64)));
-static uint8_t output[BB_THREAD_CORE_COUNT]
-                     [5 * 2 * ROW_BYTES + BANKS * ROW_BYTES]
+static uint8_t output[POLY_THREAD_CORES][5 * 2 * ROW_BYTES + BANKS * ROW_BYTES]
     __attribute__((aligned(64)));
-static unsigned done[BB_THREAD_CORE_COUNT];
+static unsigned done[POLY_THREAD_CORES];
 extern const unsigned char ant_image[], ant_image_end[];
 static void exercise(unsigned core) {
   if (thread_query(0, THREAD_FIELD_COUNT) != 5)
@@ -70,8 +67,8 @@ static void exercise(unsigned core) {
 int main(void) {
   uintptr_t hart;
   __asm__ volatile("csrr %0, mhartid" : "=r"(hart));
-  if (hart == BB_REPORT_HART) {
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+  if (hart == WORKLOAD_REPORT_HART) {
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (!__atomic_load_n(&done[core], __ATOMIC_ACQUIRE)) {
       }
   } else {

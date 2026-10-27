@@ -30,7 +30,7 @@ virtualBankCount = 40
 entries = 16384
 inputChannels = 5
 defaultGroupCount = 1
-memCycles = 10
+latency = 10
 
 [compiler]
 name = "main"

@@ -5,10 +5,17 @@ syntax = "proto3";
 package buckyball.config;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/descriptor.proto";
 import "hardware.proto";
 
 option java_package = "buckyball.config";
 option java_multiple_files = true;
+
+// Marks the field that names an element of a repeated message; design.cmake
+// keys the element by it (stack/scripts/design.py). Unmarked: its position.
+extend google.protobuf.FieldOptions {
+  bool key = 50000;
+}
 
 message MillConfig {
   reserved 1, 2;
@@ -38,22 +45,19 @@ message DmaConfig {
   uint32 bus_width = 3;
 }
 
-message MemAddrConfig {
-  uint32 addr_len = 1;
-}
-
 message MemDomainConfig {
   BankConfig bank = 1;
   DmaConfig dma = 2;
   MmioConfig mmio = 5;
-  MemAddrConfig mem = 6;
+  reserved 6;
   string source_path = 7;
+  uint32 addr_len = 8;
 }
 
 message BallInstance {
-  uint32 ball_id = 1;
-  string ball_name = 2;
-  string ball_dir = 3;
+  uint32 id = 1;
+  string name = 2;
+  string component = 3 [(key) = true];
   uint32 in_bw = 4;
   uint32 out_bw = 5;
   uint32 mmio_read_bw = 6;
@@ -65,7 +69,7 @@ message BallInstance {
 }
 
 message BallInstruction {
-  string mnemonic = 1;
+  string mnemonic = 1 [(key) = true];
   uint32 funct7 = 2;
 }
 
@@ -77,8 +81,10 @@ message FrontendConfig {
   uint32 rob_entries = 1;
   bool rs_out_of_order_response = 2;
   uint32 bank_id_len = 3;
-  uint32 vbank_id_upper_bound = 4;
-  uint32 shared_bank_id_base = 5;
+  // Virtual bank ids [0, max_private_vbank] are private.
+  uint32 max_private_vbank = 4;
+  // Virtual bank ids from shared_vbank_base up are shared.
+  uint32 shared_vbank_base = 5;
   uint32 iter_len = 6;
   bool sub_rob_enable = 7;
   uint32 sub_rob_depth = 8;
@@ -148,8 +154,8 @@ message ThreadInstance {
 }
 
 message BemuBall {
-  string ball_class = 1;
-  string ball_dir = 2;
+  string emu_class = 1;
+  string component = 2 [(key) = true];
   string emu_lib = 3;
 }
 
@@ -164,7 +170,7 @@ message SharedMemConfig {
   uint32 input_channels = 3;
   uint32 default_group_count = 4;
   uint32 virtual_bank_count = 5;
-  uint32 mem_cycles = 6;
+  uint32 latency = 6;
   uint32 bank_entries = 7;
   uint32 bank_width = 8;
 }
@@ -193,7 +199,7 @@ message CorePlacement {
   LocalAccelerator accelerator = 14;
   string profile = 16;
   reserved 17;
-  uint32 hart_id = 18;
+  uint32 hart_id = 18 [(key) = true];
   uint64 reset_vector = 19;
   uint64 mtime_address = 20;
   MemoryConfig memory = 21;
@@ -211,22 +217,20 @@ message CorePlacement {
 }
 
 message WorkloadConfig {
-  reserved 1;
-  map<string, string> cmake_param = 2;
+  reserved 1, 2;
   optional uint32 control_hart = 3;
   optional uint32 report_hart = 4;
 }
 
+// A compiler target. Its programs see `thread` and `core` by their paths
+// from the profile: THREAD_MEM_BANK_WIDTH, CORE_HART_ID.
 message CompilerProfile {
-  string name = 1;
-  string pkg = 2;
-  string compiler = 3;
-  uint32 bank_num = 4;
-  uint32 bank_width = 5;
-  uint32 bank_entries = 6;
+  string name = 1 [(key) = true];
+  reserved 2, 3, 4, 5, 6, 9;
   repeated string ball_ctest_dirs = 7;
-  ThreadInstance config = 8;
-  optional uint32 test_core = 9;
+  ThreadInstance thread = 8;
+  // The core its programs run on: the first core running the profile.
+  CorePlacement core = 10;
 }
 
 message Design {
@@ -240,13 +244,15 @@ message Design {
   reserved 9;
   BemuConfig bemu = 10;
   WorkloadConfig workload = 11;
-  string design_path = 12;
+  string path = 12;
   repeated CompilerProfile profiles = 13;
   reserved 14;
   DeviceConfig device = 15;
   SimHardware sims = 16;
   VerificationConfig verification = 17;
-  map<string, SimulationTarget> simulations = 18;
+  reserved 18;
+  // The simulation this design.pb was generated for.
+  SimulationTarget simulation = 19;
 }
 
 message SharedBankFabricConfig {
@@ -332,4 +338,8 @@ message SimulationTarget {
   string stack_name = 8;
   string workloads = 9;
   map<string, string> resources = 10;
+  // device/<Config> or core/<entry>: names the run and its output root.
+  string selection = 11;
+  // output/sims/<selection>, relative to the repository.
+  string output = 12;
 }

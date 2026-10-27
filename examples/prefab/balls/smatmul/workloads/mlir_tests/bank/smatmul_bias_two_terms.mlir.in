@@ -1,0 +1,69 @@
+func.func private @check_result(memref<@BB_BANK_LINES@x4xi32>) -> ()
+func.func @main() -> i8 {
+  %zero_i8 = arith.constant 0 : i8
+  %zero_i32 = arith.constant 0 : i32
+  %zero = arith.constant 0 : index
+  %one = arith.constant 1 : index
+  %four = arith.constant 4 : index
+  %eight = arith.constant 8 : index
+  %sixteen = arith.constant 16 : index
+  %m = arith.constant @BB_SMM_M@ : index
+  %a = memref.alloc() : memref<@BB_SMM_M@x16xi8>
+  %w0 = memref.alloc() : memref<16x16xi8>
+  %w1 = memref.alloc() : memref<16x16xi8>
+  %bias = memref.alloc() : memref<4x4xi32>
+  %output = memref.alloc() : memref<@BB_BANK_LINES@x4xi32>
+  linalg.fill ins(%zero_i32 : i32) outs(%output : memref<@BB_BANK_LINES@x4xi32>)
+  scf.for %row = %zero to %m step %one {
+    %slot = arith.remui %row, %sixteen : index
+    scf.for %col = %zero to %sixteen step %one {
+      %v = arith.subi %slot, %col : index
+      %v8 = arith.index_cast %v : index to i8
+      memref.store %v8, %a[%row, %col] : memref<@BB_SMM_M@x16xi8>
+    }
+  }
+  scf.for %row = %zero to %sixteen step %one {
+    %bias_value = arith.subi %row, %eight : index
+    %bias_i32 = arith.index_cast %bias_value : index to i32
+    %bias_row = arith.divui %row, %four : index
+    %bias_lane = arith.remui %row, %four : index
+    memref.store %bias_i32, %bias[%bias_row, %bias_lane] : memref<4x4xi32>
+    scf.for %col = %zero to %sixteen step %one {
+      %r32 = arith.index_cast %row : index to i32
+      %c32 = arith.index_cast %col : index to i32
+      %plus32 = arith.addi %r32, %c32 : i32
+      %twice32 = arith.addi %r32, %r32 : i32
+      %minus32 = arith.subi %twice32, %c32 : i32
+      %plus = arith.trunci %plus32 : i32 to i8
+      %minus = arith.trunci %minus32 : i32 to i8
+      memref.store %plus, %w0[%row, %col] : memref<16x16xi8>
+      memref.store %minus, %w1[%row, %col] : memref<16x16xi8>
+    }
+  }
+  %a0_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b0_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %a1_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b1_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %c_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %a0 = buckyball.bank_mvin %a, %a0_bank <{depth = @BB_SMM_M@ : i64, stride = 1 : i64}> : memref<@BB_SMM_M@x16xi8>
+  %b0 = buckyball.bank_mvin %w0, %b0_bank <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  %a1 = buckyball.bank_mvin %a, %a1_bank <{depth = @BB_SMM_M@ : i64, stride = 1 : i64}> : memref<@BB_SMM_M@x16xi8>
+  %b1 = buckyball.bank_mvin %w1, %b1_bank <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  // The bias occupies the first four rows of C.
+  %c = buckyball.bank_mvin %bias, %c_bank <{depth = 4 : i64, stride = 1 : i64}> : memref<4x4xi32>
+  // Two reduction blocks: the second A and B become the second groups.
+  %a_groups = buckyball.bank_transfer %a1, %a0
+  %b_groups = buckyball.bank_transfer %b1, %b0
+  %result = smatmul_ball.bank_matmul_i8 %a_groups, %b_groups -> %c <{rows = @BB_SMM_M@ : i64, k = 16 : i64}>
+  %stored = buckyball.bank_mvout %output, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x4xi32>
+  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x4xi32>) -> ()
+  buckyball.bank_release %a_groups
+  buckyball.bank_release %b_groups
+  buckyball.bank_release %stored
+  memref.dealloc %a : memref<@BB_SMM_M@x16xi8>
+  memref.dealloc %w0 : memref<16x16xi8>
+  memref.dealloc %w1 : memref<16x16xi8>
+  memref.dealloc %bias : memref<4x4xi32>
+  memref.dealloc %output : memref<@BB_BANK_LINES@x4xi32>
+  return %zero_i8 : i8
+}

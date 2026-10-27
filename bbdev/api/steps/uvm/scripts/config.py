@@ -4,7 +4,7 @@ from pathlib import Path
 from google.protobuf.json_format import MessageToDict
 
 
-def profiles(repo, design, ip):
+def profiles(repo, design, selection, ip):
     repo = Path(repo)
     sys.path.insert(0, str(repo / "bbdev/api/steps/config/scripts"))
     import design_pb2
@@ -14,7 +14,14 @@ def profiles(repo, design, ip):
 
         path = default_ip_config(repo, ip)
     else:
-        path = repo / "examples/designs" / design / "output/generated/design.pb"
+        path = (
+            repo
+            / "examples/designs"
+            / design
+            / "output/sims"
+            / selection
+            / "generated/design.pb"
+        )
     config = design_pb2.Design.FromString(path.read_bytes())
     entries = decode_profiles(config)
     selected = [entry for entry in entries if ip is None or entry["ip"] == ip]

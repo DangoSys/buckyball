@@ -38,7 +38,7 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
         message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for C tests")
     endif()
     list(
-        FIND DESIGN_TARGETS
+        FIND DESIGN_PROFILES
         "${BUCKYBALL_CTEST_TARGET}"
         _buckyball_target_index
     )
@@ -54,9 +54,6 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
         ${SOURCE_DIR}/${SOURCE_FILE}
         ${WORKLOAD_LIB_DIR}/buckyball.c
         ${WORKLOAD_LIB_DIR}/buckyball.h
-        ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
-        ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
-        ${BUCKYBALL_ISA_DIR}/design/instances.h
         ${BBHW_MEM_C}
         ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/dma.h
         ${BUCKYBALL_DESIGN_COMMON_SOURCES}
@@ -86,10 +83,13 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
             ${WORKLOAD_LIB_DIR}
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
             ${BUCKYBALL_DESIGN_COMMON_INCLUDE_DIRS}
             ${BUCKYBALL_BALL_WORKLOAD_DIRS}
             ${SOURCE_DIR}
+    )
+    target_compile_definitions(
+        ${EXECUTABLE}
+        PRIVATE ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}}
     )
     set_target_properties(${EXECUTABLE} PROPERTIES LINKER_LANGUAGE C)
 
@@ -107,6 +107,8 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
             -I${DESIGN_COMMON_INCLUDE_DIR}
         )
     endforeach()
+    set(TARGET_DEFINES ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}})
+    list(TRANSFORM TARGET_DEFINES PREPEND "-D")
     set(BALL_ISA_INCLUDE_FLAGS)
     foreach(BALL_WORKLOAD_DIR ${BUCKYBALL_BALL_WORKLOAD_DIRS})
         list(APPEND BALL_ISA_INCLUDE_FLAGS -I${BALL_WORKLOAD_DIR})
@@ -121,13 +123,14 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
             ${SOURCE_DIR}/${SOURCE_FILE}
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${WORKLOAD_LIB_DIR} -I${BUCKYBALL_ISA_DIR}/design
-            -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}
+            -I${WORKLOAD_LIB_DIR} ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR}
+            ${TARGET_DEFINES}
             ${BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS} ${BALL_ISA_INCLUDE_FLAGS}
             -I${SOURCE_DIR}
         DEPENDS ${TEST_DEPS} ${BAREMETAL_DIR}/crt0.S ${BBSIM_LD}
         COMMENT "Building baremetal executable: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
 
     add_custom_target(
@@ -137,12 +140,6 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
 endfunction()
 
 function(add_buckyball_ctest SOURCE_FILE)
-    if(BUCKYBALL_WORKLOAD_DESIGN STREQUAL "")
-        message(
-            FATAL_ERROR
-            "BUCKYBALL_WORKLOAD_DESIGN must be set before add_buckyball_ctest()"
-        )
-    endif()
     get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
     if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
         message(
@@ -151,7 +148,7 @@ function(add_buckyball_ctest SOURCE_FILE)
         )
     endif()
     set(TEST_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${BUCKYBALL_CTEST_TARGET}-ctest-${_stem}"
+        "${DESIGN_NAME}-${BUCKYBALL_CTEST_TARGET}-ctest-${_stem}"
     )
     set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -188,9 +185,11 @@ function(add_buckyball_component_workload NAME)
             "Workload target and sources are required for ${NAME}"
         )
     endif()
-    set(_profile "${DESIGN_TARGET_ID_${BUCKYBALL_CTEST_TARGET}}")
+    list(FIND DESIGN_PROFILES "${BUCKYBALL_CTEST_TARGET}" _profile)
+    set(_defines ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}})
+    list(TRANSFORM _defines PREPEND "-D")
     set(_test
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${BUCKYBALL_CTEST_TARGET}-ctest-pipeline-${NAME}"
+        "${DESIGN_NAME}-${BUCKYBALL_CTEST_TARGET}-ctest-pipeline-${NAME}"
     )
     set(_elf "${_test}-multicore-baremetal")
     set(_sources)
@@ -213,18 +212,17 @@ function(add_buckyball_component_workload NAME)
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
             -I${WORKLOAD_LIB_DIR} -I${BAREMETAL_DIR}/multithread
-            -I${BUCKYBALL_ISA_DIR}/design
-            -I${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET} ${_ball_includes}
+            ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR}
+            ${_defines} ${_ball_includes}
             -o ${_elf} ${BAREMETAL_DIR}/start.S ${_sources}
             ${WORKLOAD_LIB_DIR}/buckyball.c ${BBHW_MEM_C}
         DEPENDS
             ${_sources}
             ${_headers}
             ${BAREMETAL_DIR}/start.S
-            ${BUCKYBALL_ISA_DIR}/design/instances.h
-            ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/ballISA.h
-            ${BUCKYBALL_ISA_DIR}/${BUCKYBALL_CTEST_TARGET}/params.h
+            ${RUNTIME_INCLUDE_DIR}/bb_cores.h
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
     add_custom_target(
         ${_test}-thread-build

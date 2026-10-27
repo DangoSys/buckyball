@@ -36,4 +36,11 @@ tests = [
   "toy-toy-ctest-tlb_sv39_4k_alias_test-baremetal",
   "toy-toy-ctest-tlb_sfence_remap_test-baremetal",
   "toy-toy-ctest-mvin_mvout_stride_test-baremetal",
+
+  "toy-toy-ctest-vecmat16_atranspose_16x16_test-baremetal",
+  "toy-toy-ctest-vecmat16_accumulate_k4_test-baremetal",
+  "toy-toy-mlirtest-ball_matmul_at_i8_16x16-baremetal",
+  "toy-toy-ctest-mxfp4_e8m0_two_block_test-baremetal",
+  "toy-toy-ctest-mxfp4_e8m0_scale_range_test-baremetal",
+  "toy-toy-mlirtest-ball_mxfp4_i8_2blocks-baremetal",
 ]

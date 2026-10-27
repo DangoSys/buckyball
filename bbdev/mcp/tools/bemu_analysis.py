@@ -12,7 +12,7 @@ def register(mcp):
         run: str,
         itrace: bool = False,
         mtrace: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Analyze a run directory under the repository log/ directory. POST /bebop/bemu/analysis."""
@@ -28,8 +28,8 @@ def register(mcp):
             "itrace": itrace,
             "mtrace": mtrace,
         }
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

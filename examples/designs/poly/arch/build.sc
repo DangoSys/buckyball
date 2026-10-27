@@ -2,7 +2,7 @@ import mill._
 import mill.scalalib._
 import $file.^.^.^.^.arch.src.main.scala.framework.device.cbus.{build => cbus_build}
 import $file.^.^.^.{build => examples}
-import $file.^.^.^.components.cores.reduce.arch.{build => reduce}
+import $file.^.^.^.prefab.cores.reduce.arch.{build => reduce}
 
 val designRoot: os.Path = millSourcePath / os.up
 

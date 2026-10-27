@@ -8,19 +8,8 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-from utils.path import get_buckyball_path
+from utils.path import get_buckyball_path, workload_build_dir
 from utils.event_common import check_result, get_origin_trace_id
-
-_workload_build_path = os.path.join(
-    get_buckyball_path(), "bb-tests", "workloads", "scripts", "build.py"
-)
-_spec = importlib.util.spec_from_file_location(
-    "workload_build_module", _workload_build_path
-)
-if _spec is None or _spec.loader is None:
-    raise RuntimeError(f"cannot load {_workload_build_path}")
-workload_build = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(workload_build)
 
 _stack_build_path = os.path.join(
     os.path.dirname(__file__), "..", "stack", "scripts", "build.py"
@@ -118,22 +107,45 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     try:
         # Workloads link the device runtime; MLIR tests compile with its plugins.
-        stack_build.build_design(
+        design_cmake = stack_build.build_design(
             bbdir,
             design=design,
             selection=input_data["target"],
             logger=ctx.logger,
             task_scope=origin_tid,
         )
-        workload_build.build_workload(
-            bbdir,
-            design,
-            selection=input_data["target"],
-            ctest=ctest,
-            mlirtest=mlirtest,
-            soctest=soctest,
+        build = workload_build_dir(bbdir, design, selection=input_data["target"])
+        stack_build.run(
+            [
+                "cmake",
+                "-G",
+                "Ninja",
+                "-S",
+                os.path.join(bbdir, "bb-tests", "workloads"),
+                "-B",
+                build,
+                f"-DDESIGN_CMAKE={design_cmake}",
+            ],
+            repo=Path(bbdir),
             logger=ctx.logger,
             task_scope=origin_tid,
+            output_prefix="workload configure",
+        )
+        target = (
+            "sync-ctest-bin"
+            if ctest
+            else (
+                "sync-mlirtest-bin"
+                if mlirtest
+                else "sync-soctest-bin" if soctest else "sync-bin"
+            )
+        )
+        stack_build.run(
+            ["ninja", "-C", build, "-j", "1", target],
+            repo=Path(bbdir),
+            logger=ctx.logger,
+            task_scope=origin_tid,
+            output_prefix="workload build",
         )
     except Exception as error:
         ctx.logger.error(str(error))

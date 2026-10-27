@@ -18,7 +18,7 @@ def register(mcp):
         banktrace: bool = False,
         no_wave: bool = False,
         diff: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Run one workload on bebop-verilator. POST /bebop/verilator/sim."""
@@ -36,8 +36,8 @@ def register(mcp):
             "no-wave": no_wave,
             "diff": diff,
         }
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/bebop/verilator/sim", params))

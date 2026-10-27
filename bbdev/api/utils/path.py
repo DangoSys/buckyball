@@ -92,30 +92,27 @@ def design_arch_root(bbdir, design, *, selection):
     )
 
 
-def load_design_config(bbdir, design):
+def design_pb_path(bbdir, design, *, selection):
+    """The design.pb of one simulation: the design with its config's overrides."""
+    return Path(design_output_root(bbdir, design, selection=selection)) / (
+        "generated/design.pb"
+    )
+
+
+def load_design_config(bbdir, design, *, selection):
     sys.path.insert(0, str(Path(bbdir) / "bbdev/api/steps/config/scripts"))
     import design_pb2
 
-    path = (
-        Path(bbdir)
-        / "examples/designs"
-        / _design_name(design)
-        / "output/generated/design.pb"
-    )
+    path = design_pb_path(bbdir, design, selection=selection)
     return design_pb2.Design.FromString(path.read_bytes())
 
 
 def simulation_target(bbdir, design, selection):
-    config = load_design_config(bbdir, design)
-    if selection not in config.simulations:
-        raise ValueError(
-            f"design {design!r} has no registered simulation entry {selection!r}"
-        )
-    return config.simulations[selection]
+    return load_design_config(bbdir, design, selection=selection).simulation
 
 
 def runner_manifest(bbdir, design, selection):
-    """The simulation entry's emu crate: its model and the runners built from it."""
+    """The emu crate of the simulation's entry: its model and the runners built from it."""
     return Path(bbdir) / simulation_target(bbdir, design, selection).emu / "Cargo.toml"
 
 

@@ -51,9 +51,10 @@ void dpi_mem_pmctrace(unsigned char is_store, // 1 = store, 0 = load
 
 // DPI-C function for cycle counter trace (ctrace)
 // Called from TraceBall when counter commands are executed
-void dpi_ctrace(unsigned char subcmd, // 0=START, 1=STOP, 2=READ
-                unsigned int ctr_id, unsigned long long tag,
-                unsigned long long elapsed, unsigned long long cycle);
+void dpi_ctrace(unsigned int subcmd, // 0=START, 1=STOP, 2=READ
+                unsigned int ctr_id, unsigned int tag_lo, unsigned int tag_hi,
+                unsigned int elapsed_lo, unsigned int elapsed_hi,
+                unsigned int cycle_lo, unsigned int cycle_hi);
 
 // DPI-C function for bank hash trace (banktrace)
 // Called when a Ball instruction writes a bank

@@ -1,9 +1,8 @@
 #include <bbhw/isa/isa.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-enum { ROW_BYTES = BANK_WIDTH / 8 };
+enum { ROW_BYTES = THREAD_MEM_BANK_WIDTH / 8 };
 static uint8_t initial[6 * ROW_BYTES] __attribute__((aligned(16)));
 static uint8_t replacement[3 * ROW_BYTES] __attribute__((aligned(16)));
 static uint8_t full[6 * ROW_BYTES] __attribute__((aligned(16)));

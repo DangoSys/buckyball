@@ -82,18 +82,23 @@ jobs:
       matrix:
         include:
           - design: toy
+            config: ToyVerilatorConfig
             run_bemu_tests: true
             run_verilator_tests: true
           - design: pebble
+            config: PebbleVerilatorConfig
             run_bemu_tests: true
             run_verilator_tests: true
           - design: goban
+            config: GobanVerilatorConfig
             run_bemu_tests: true
             run_verilator_tests: true
           - design: poly
+            config: PolyVerilatorConfig
             run_bemu_tests: true
             run_verilator_tests: true
           - design: multi-rocket
+            config: MultiRocketVerilatorConfig
             run_bemu_tests: true
             run_verilator_tests: true
     env:
@@ -131,9 +136,9 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev stack --build '--design ${{ matrix.design }} --device'
-          nix develop -c bbdev workload --clean '--design ${{ matrix.design }} --device'
-          nix develop -c bbdev workload --build '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev stack --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev workload --clean '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev workload --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
 
       - name: bemu tests
         if: matrix.run_bemu_tests
@@ -142,9 +147,11 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device --test bare-tests --jobs 16 --clean-before --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/bemu-bare.xml"
-          nix develop -c bbdev kernel --build '--design ${{ matrix.design }} --device'
-          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device --test linux-tests --jobs 16 --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/bemu-linux.xml"
+          # Other design jobs share this checkout; drop only this config's old batch runs.
+          rm -rf "${root}"/log/*-${{ matrix.design }}-bebop-bemu-device-${{ matrix.config }}-*(N)
+          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test bare-tests --jobs 16"
+          nix develop -c bbdev kernel --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test linux-tests --jobs 16"
 
       - name: verilator tests
         if: matrix.run_verilator_tests
@@ -153,46 +160,33 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev bebop-verilator --clean '--design ${{ matrix.design }} --device'
-          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device --diff'
-          nix develop -c bbdev bebop-verilator --build '--jobs 100 --design ${{ matrix.design }} --device --diff'
-          nix develop -c bbdev bebop-verilator --batch "--design ${{ matrix.design }} --device --test bare-tests --diff --jobs 16 --clean-before --junit ${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/verilator-bare.xml"
-
-      - name: Detect bebop JUnit files
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
-        id: junit
-        shell: zsh {0}
-        run: |
-          root="${BB_ROOT/#\~/$HOME}"
-          reports="${root}/bebop/target/${{ matrix.design }}/test-reports/ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          echo "directory=${reports}" >> "$GITHUB_OUTPUT"
-          files=("${reports}/"*.xml(N))
-          if (( ${#files} == 0 )); then
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          fi
+          rm -rf "${root}"/log/*-${{ matrix.design }}-bebop-verilator-device-${{ matrix.config }}-*(N)
+          nix develop -c bbdev bebop-verilator --clean '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
+          nix develop -c bbdev bebop-verilator --build '--jobs 100 --design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
+          nix develop -c bbdev bebop-verilator --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test bare-tests --diff --jobs 16"
 
       - name: Publish bebop test report
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
+        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "${{ steps.junit.outputs.directory }}/*.xml"
+          report_paths: "${{ env.BB_ROOT }}/log/*-${{ matrix.design }}-bebop-*-device-${{ matrix.config }}-*/junit.xml"
           check_name: "bebop regression (${{ matrix.design }})"
           detailed_summary: true
           include_passed: true
 
       - name: Upload bebop JUnit artifacts
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests) && steps.junit.outputs.found == 'true'
+        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
         uses: actions/upload-artifact@v4
+        # The runner host has no DNS of its own; uploads go through the proxy.
         env:
-          ALL_PROXY: ""
-          HTTP_PROXY: ""
-          HTTPS_PROXY: ""
-          NO_PROXY: github.com,api.github.com,uploads.github.com,objects.githubusercontent.com,.blob.core.windows.net
+          HTTP_PROXY: http://127.0.0.1:7890
+          HTTPS_PROXY: http://127.0.0.1:7890
+          NO_PROXY: localhost,127.0.0.1,::1
         with:
           name: bebop-junit-${{ matrix.design }}
-          path: "${{ steps.junit.outputs.directory }}/*.xml"
+          path: "${{ env.BB_ROOT }}/log/*-${{ matrix.design }}-bebop-*-device-${{ matrix.config }}-*/junit.xml"
+          if-no-files-found: error
 
       - name: Exit repo lock
         if: always()

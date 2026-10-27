@@ -20,7 +20,7 @@ extern "C"
                       int64_t size0, int64_t size1, int64_t stride0,
                       int64_t stride1) {
   (void)allocated;
-  if (size0 != 16 || size1 != 16 || stride0 != 16 || stride1 != 1) {
+  if (size0 != 8 || size1 != 16 || stride0 != 16 || stride1 != 1) {
     printf(
         "FAILED: quant_im2col_k1_single_pixel shape %ldx%ld stride %ldx%ld\n",
         (long)size0, (long)size1, (long)stride0, (long)stride1);
@@ -28,11 +28,15 @@ extern "C"
   }
 
   int8_t *out = aligned + offset;
-  int32_t got = out[0 * stride0 + 0 * stride1];
-  if (got != 1) {
-    printf("FAILED: quant_im2col_k1_single_pixel out[0][0] exp=1 got=%d\n",
-           (int)got);
-    fail();
+  // The one window is line 0: the sixteen channels of the pixel.
+  for (int channel = 0; channel < 16; ++channel) {
+    int expected = channel < 4 ? channel + 1 : 0;
+    int got = out[channel * stride1];
+    if (got != expected) {
+      printf("FAILED: quant_im2col_k1_single_pixel channel=%d exp=%d got=%d\n",
+             channel, expected, got);
+      fail();
+    }
   }
   printf("PASSED: quant_im2col_k1_single_pixel\n");
 }

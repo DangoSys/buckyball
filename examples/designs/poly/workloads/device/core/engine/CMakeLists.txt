@@ -14,7 +14,7 @@ foreach(
         set(POLY_ANT_THREAD ffn)
     endif()
     set(POLY_ANT_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${POLY_ANT_THREAD}-ctest-design-ant_${POLY_ANT_CASE}"
+        "${DESIGN_NAME}-${POLY_ANT_THREAD}-ctest-design-ant_${POLY_ANT_CASE}"
     )
     set(POLY_ANT_IMAGE ${POLY_ANT_IMAGE_DIR}/${POLY_ANT_NAME}-ant)
     set(POLY_ANT_CONTROL_SOURCES)
@@ -51,7 +51,7 @@ foreach(
     endif()
     buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN}")
     set(POLY_ANT_HOST_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-main-ctest-design-ant_${POLY_ANT_CASE}"
+        "${DESIGN_NAME}-main-ctest-design-ant_${POLY_ANT_CASE}"
     )
     set(BUCKYBALL_CTEST_TARGET ${POLY_ANT_THREAD})
     if(NOT POLY_ANT_CASE STREQUAL "highpa")
@@ -62,7 +62,11 @@ foreach(
         )
         target_include_directories(
             ${POLY_ANT_HOST_NAME}-linux
-            PRIVATE ${BUCKYBALL_ISA_DIR}/design
+            PRIVATE ${RUNTIME_INCLUDE_DIR}
+        )
+        target_compile_definitions(
+            ${POLY_ANT_HOST_NAME}-linux
+            PRIVATE ${DESIGN_DEFS}
         )
         target_link_libraries(
             ${POLY_ANT_HOST_NAME}-linux
@@ -76,6 +80,8 @@ foreach(
     set(POLY_ANT_CONTROL_OBJECTS)
 
     set(POLY_ANT_HOST_ELF ${POLY_ANT_HOST_NAME}-multicore-baremetal)
+    set(POLY_ANT_HOST_DEFINES ${DESIGN_TARGET_DEFS_${POLY_ANT_HOST_THREAD}})
+    list(TRANSFORM POLY_ANT_HOST_DEFINES PREPEND "-D")
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_ANT_HOST_ELF}
         COMMAND
@@ -83,9 +89,9 @@ foreach(
             -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax
             -Wl,-T,${BBSIM_LD} ${POLY_ANT_HOST_DEFINITIONS}
             -I${POLY_ANT_SOURCE_DIR}
-            -I${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}
-            -I${BUCKYBALL_ISA_DIR}/design -I${WORKLOAD_LIB_DIR}
-            -I${BUCKYBALL_REPO_ROOT}/examples/components/balls/f32add/workloads
+            ${POLY_ANT_HOST_DEFINES}
+            ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR} -I${WORKLOAD_LIB_DIR}
+            -I${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/f32add/workloads
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
             -I${BUCKYBALL_REPO_ROOT}/stack/engine/include -I${BAREMETAL_DIR}
@@ -103,16 +109,14 @@ foreach(
             ${BBSIM_LD}
             ${POLY_ANT_CONTROL_SOURCES}
             ${POLY_ANT_CONTROL_OBJECTS}
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}/params.h
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}/ballISA.h
             ${POLY_ANT_IMAGE}.bin
             ${BUCKYBALL_REPO_ROOT}/stack/engine/src/thread.c
             ${BUCKYBALL_REPO_ROOT}/stack/engine/include/thread.h
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.c
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.h
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_THREAD}/params.h
-            ${BUCKYBALL_ISA_DIR}/design/instances.h
+            ${RUNTIME_INCLUDE_DIR}/bb_cores.h
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
     add_custom_target(
         ${POLY_ANT_HOST_NAME}-ctest-build
@@ -120,3 +124,4 @@ foreach(
     )
     add_dependencies(poly-ctests-build ${POLY_ANT_HOST_NAME}-ctest-build)
 endforeach()
+add_subdirectory(mlir)

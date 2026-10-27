@@ -6,8 +6,9 @@ Runs bebop bemu batch regression:
   2. Run the BEMU regression harness
 """
 
+from datetime import datetime
 from pathlib import Path
-from utils.path import design_output_root
+from utils.path import design_output_root, log_dir
 
 
 import os
@@ -121,19 +122,26 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    run_log = log_dir(
+        bbdir,
+        design,
+        "verilog",
+        datetime.now().strftime("%Y-%m-%d-%H-%M"),
+        "bebop-bemu",
+        test_type,
+        selection=input_data["target"],
+    )
     harness_args = [
         "--",
         "--workload-toml",
         workload_toml,
         "--bb-tests-root",
         elf_root,
+        "--log-dir",
+        run_log,
         "--jobs",
         str(input_data.get("jobs", 1)),
     ]
-    if input_data.get("clean-before", input_data.get("clean_before", False)):
-        harness_args.append("--clean-before")
-    if input_data.get("junit"):
-        harness_args.extend(["--junit", input_data["junit"]])
     harness = shlex.join(harness_args)
     test_cmd = (
         "nix develop -c cargo test --manifest-path"
@@ -159,6 +167,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "design": design,
             "test_type": test_type,
             "workload_toml": workload_toml,
+            "log_dir": run_log,
+            "junit": os.path.join(run_log, "junit.xml"),
         },
         trace_id=origin_tid,
     )

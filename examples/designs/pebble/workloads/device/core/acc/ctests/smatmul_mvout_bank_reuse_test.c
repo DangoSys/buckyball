@@ -7,8 +7,8 @@
 
 enum {
   DIM = 16,
-  OUTPUT_ROWS = DIM * DIM * 32 / BANK_WIDTH,
-  BIAS_ROWS = DIM * 32 / BANK_WIDTH,
+  OUTPUT_ROWS = DIM * DIM * 32 / THREAD_MEM_BANK_WIDTH,
+  BIAS_ROWS = DIM * 32 / THREAD_MEM_BANK_WIDTH,
   ITERATIONS = 24
 };
 static int8_t input[DIM * DIM] __attribute__((aligned(64)));

@@ -11,5 +11,8 @@ regression = "sims/device/regression"
 kernel = "sims/device/workloads/kernel"
 tapeout = "sims/device/tapeout"
 
+[targets.device.configs]
+PebbleVerilatorConfig = "verilator.toml"
+
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

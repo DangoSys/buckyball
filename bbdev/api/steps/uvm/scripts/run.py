@@ -159,8 +159,8 @@ def run_profile(repo, design, profile, directory, do_run, ctx):
     }
 
 
-def run_verification(repo, design, ip, ctx, do_run):
-    selected = profiles(repo, design, ip)
+def run_verification(repo, design, selection, ip, ctx, do_run):
+    selected = profiles(repo, design, selection, ip)
     return run_suite(repo, design, selected, ip, ctx, do_run)
 
 

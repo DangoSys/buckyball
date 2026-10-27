@@ -1,5 +1,0 @@
-if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
-  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
-endif()
-add_subdirectory(ball)
-add_subdirectory(bank)

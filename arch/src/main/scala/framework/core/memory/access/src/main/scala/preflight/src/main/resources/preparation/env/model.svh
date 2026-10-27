@@ -9,6 +9,8 @@ class model extends uvm_subscriber #(cycle_item);
   int lengths[int][int];
   bit direction[int], notified[int], live[int];
   longint query_key;
+  // A lookup answers in the third cycle of a held query; recent queries and expectations per port.
+  logic [255:0] recent[2][$];
   covergroup behavior with function sample (
       int error, bit writing, int mode, int policy, bit hit, bit released
   );
@@ -115,6 +117,20 @@ class model extends uvm_subscriber #(cycle_item);
         expected_pa  = physical[id][i] + va - addresses[id][i];
       end
     expected_error = !valid || expected_hit ? 0 : (!shape ? 1 : 4);
+    recent[port].push_back({
+                           32'(valid),
+                           32'(id),
+                           va,
+                           32'(bytes),
+                           1'(writing),
+                           1'(expected_hit),
+                           expected_pa,
+                           3'(expected_error)
+                           });
+    if (recent[port].size() > 3) void'(recent[port].pop_front());
+    if (recent[port].size() < 3 || recent[port][0] !== recent[port][1] ||
+        recent[port][1] !== recent[port][2])
+      return;
     verify(hit == expected_hit && pa == expected_pa && error == expected_error, $sformatf(
            "Query port%0d id%0d VA%h expected hit%0d PA%h error%0d got hit%0d PA%h error%0d",
            port,
@@ -133,6 +149,8 @@ class model extends uvm_subscriber #(cycle_item);
     if (t.reset) begin
       cancelled.write(null);
       preflight_ref_reset(reference);
+      recent[0].delete();
+      recent[1].delete();
       index.delete();
       errors.delete();
       counts.delete();

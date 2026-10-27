@@ -31,52 +31,32 @@ function(add_buckyball_mlir_test NAME)
     if(NOT DEFINED BUCKYBALL_MLIR_TEST_PREFIX)
         message(FATAL_ERROR "BUCKYBALL_MLIR_TEST_PREFIX is not set")
     endif()
-    if(BUCKYBALL_WORKLOAD_DESIGN STREQUAL "")
-        message(
-            FATAL_ERROR
-            "BUCKYBALL_WORKLOAD_DESIGN must be set before mlir tests"
-        )
-    endif()
     if(NOT ARG_TARGET)
         message(FATAL_ERROR "${NAME}: TARGET is required")
     endif()
-    list(FIND DESIGN_TARGETS "${ARG_TARGET}" TARGET_INDEX)
+    list(FIND DESIGN_PROFILES "${ARG_TARGET}" TARGET_INDEX)
     if(TARGET_INDEX EQUAL -1)
         message(FATAL_ERROR "${NAME}: unknown Buckyball target ${ARG_TARGET}")
     endif()
-    if(NOT ARG_TARGET IN_LIST DESIGN_BANK_TARGETS)
+    if(NOT DESIGN_PROFILES_${ARG_TARGET}_THREAD_MEM_BANK_NUM GREATER 0)
         message(FATAL_ERROR "${ARG_TARGET}: no physical banks")
     endif()
     set(ASSIGN_PHYSICAL_BANKS -assign-physical-banks)
     set(BIN "${DESIGN_COMPILER}/bin")
     # buddy-opt with this target's compiler plugins.
     string(JOIN " " OPT ${DESIGN_TARGET_OPT_${ARG_TARGET}})
-    set(BB_BALL_ISA_INCLUDE_DIR "${BUCKYBALL_ISA_DIR}/${ARG_TARGET}")
-    set(BB_BALL_ISA_H "${BB_BALL_ISA_INCLUDE_DIR}/ballISA.h")
-    set(BB_PARAMS_H "${BB_BALL_ISA_INCLUDE_DIR}/params.h")
-    if(NOT EXISTS "${BB_BALL_ISA_H}")
-        message(
-            FATAL_ERROR
-            "${NAME}: missing target ISA header ${BB_BALL_ISA_H}"
-        )
-    endif()
-    if(NOT EXISTS "${BB_PARAMS_H}")
-        message(FATAL_ERROR "${NAME}: missing target params.h ${BB_PARAMS_H}")
-    endif()
+    # The banks and Ball ISA of the target, as compiler flags.
+    set(TARGET_DEFINES ${DESIGN_TARGET_DEFS_${ARG_TARGET}})
+    list(TRANSFORM TARGET_DEFINES PREPEND "-D")
     set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
     set(MLIR_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir.in)
     if(EXISTS ${MLIR_TEMPLATE})
-        file(STRINGS ${BB_PARAMS_H} _bank_lines REGEX "^#define BANK_LINES ")
-        file(STRINGS ${BB_PARAMS_H} _bank_width REGEX "^#define BANK_WIDTH ")
-        file(STRINGS ${BB_PARAMS_H} _bank_isqrt REGEX "^#define BANK_ISQRT ")
-        string(REGEX REPLACE ".* " "" BB_BANK_LINES "${_bank_lines}")
-        string(REGEX REPLACE ".* " "" BB_BANK_WIDTH_BITS "${_bank_width}")
-        string(REGEX REPLACE ".* " "" BB_BANK_ISQRT "${_bank_isqrt}")
+        set(BB_BANK_LINES ${DESIGN_PROFILES_${ARG_TARGET}_THREAD_MEM_BANK_ENTRIES})
+        set(BB_BANK_WIDTH_BITS ${DESIGN_PROFILES_${ARG_TARGET}_THREAD_MEM_BANK_WIDTH})
         math(EXPR BB_BANK_I8_LANES "${BB_BANK_WIDTH_BITS} / 8")
         math(EXPR BB_BANK_I32_LANES "${BB_BANK_WIDTH_BITS} / 32")
         if(
             BB_BANK_LINES LESS 1
-            OR BB_BANK_ISQRT LESS 1
             OR BB_BANK_I8_LANES LESS 1
             OR BB_BANK_I32_LANES LESS 1
         )
@@ -95,7 +75,7 @@ function(add_buckyball_mlir_test NAME)
         set(TEST_CASE ${CMAKE_MATCH_1})
     endif()
     set(TEST_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${ARG_TARGET}-mlirtest-${PREFIX}_${TEST_CASE}"
+        "${DESIGN_NAME}-${ARG_TARGET}-mlirtest-${PREFIX}_${TEST_CASE}"
     )
     set(BAREMETAL_BIN ${TEST_NAME}-baremetal)
     set(LINUX_BIN ${TEST_NAME}-linux)
@@ -184,7 +164,7 @@ function(add_buckyball_mlir_test NAME)
             ${ELF_CC} ${C_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${WORKLOAD_LIB_DIR} -I${BB_BALL_ISA_INCLUDE_DIR} -o
+            -I${WORKLOAD_LIB_DIR} ${TARGET_DEFINES} -o
             ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN} ${BAREMETAL_DIR}/crt0.S
             ${BAREMETAL_DIR}/syscalls.c ${CRUNNER_UTILS_SRC} ${BBHW_MEM_C}
             ${MAIN_SRC} ${OBJ} ${MLIR_BAREMETAL_LIBRARIES}
@@ -195,8 +175,6 @@ function(add_buckyball_mlir_test NAME)
             ${MAIN_SRC}
             ${CRUNNER_UTILS_SRC}
             ${BBHW_MEM_C}
-            ${BB_BALL_ISA_H}
-            ${BB_PARAMS_H}
             ${BAREMETAL_DIR}/crt0.S
             ${BAREMETAL_DIR}/syscalls.c
             ${BBSIM_LD}
@@ -211,7 +189,7 @@ function(add_buckyball_mlir_test NAME)
             ${LINUX_CXX} ${LINUX_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR}
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${WORKLOAD_LIB_DIR} -I${BB_BALL_ISA_INCLUDE_DIR} -o
+            -I${WORKLOAD_LIB_DIR} ${TARGET_DEFINES} -o
             ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN} ${CRUNNER_UTILS_SRC} -x c
             ${BBHW_MEM_C} -x none ${MAIN_SRC} ${OBJ} ${MLIR_LINK_LIBRARIES}
         DEPENDS
@@ -220,8 +198,6 @@ function(add_buckyball_mlir_test NAME)
             ${MAIN_SRC}
             ${CRUNNER_UTILS_SRC}
             ${BBHW_MEM_C}
-            ${BB_BALL_ISA_H}
-            ${BB_PARAMS_H}
         COMMENT "Linking ${LINUX_BIN}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         VERBATIM

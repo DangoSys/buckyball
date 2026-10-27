@@ -134,7 +134,7 @@ class BankCheck(
   sink.io.instId        := io.pipeline.commit.bits.instId
   sink.io.threadId      := traceId.U
   sink.io.ownerThreadId := Mux(
-    memParam.sharedEnable.B && io.pipeline.commit.bits.bank >= frontendParam.shared_bank_id_base.U,
+    memParam.sharedEnable.B && io.pipeline.commit.bits.bank >= frontendParam.shared_vbank_base.U,
     sharedOwnerId.U,
     traceId.U
   )

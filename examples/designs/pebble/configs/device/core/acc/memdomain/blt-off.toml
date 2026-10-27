@@ -1,5 +1,7 @@
 # Pebble thread memory domain configuration
 
+addrLen = 39
+
 [bank]
 layoutEnable = false
 num = 24
@@ -17,6 +19,3 @@ bankNum = 5
 bankEntries = 1024
 bankWidth = 8
 readWidth = 8
-
-[mem]
-addrLen = 39

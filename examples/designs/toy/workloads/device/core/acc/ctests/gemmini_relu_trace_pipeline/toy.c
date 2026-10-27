@@ -7,7 +7,8 @@
 #include <multithread.h>
 #include <stdint.h>
 
-#if BANK_WIDTH != 128 || BANK_LINES < 64 || BANK_LINES % 64 != 0
+#if THREAD_MEM_BANK_WIDTH != 128 || THREAD_MEM_BANK_ENTRIES < 64 ||            \
+    THREAD_MEM_BANK_ENTRIES % 64 != 0
 #error "Toy ACC pipeline requires 128-bit banks and depth divisible by 64"
 #endif
 

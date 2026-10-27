@@ -1,0 +1,11 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+set(_lines ${DESIGN_PROFILES_${BUCKYBALL_MLIR_ACTIVE_TARGET}_THREAD_MEM_BANK_ENTRIES})
+math(EXPR _remainder "${_lines} % 64")
+if(_lines LESS 64 OR NOT _remainder EQUAL 0)
+  message(FATAL_ERROR
+    "MaxPool K3 bank batches require bank entries divisible by 64 (got ${_lines})")
+endif()
+add_buckyball_mlir_test(maxpool_k3_padded_spatial TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})

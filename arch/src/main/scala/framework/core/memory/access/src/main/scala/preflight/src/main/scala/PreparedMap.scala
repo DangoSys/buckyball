@@ -137,32 +137,45 @@ class PreparedMap(b: ModuleParam) extends Module {
     errors(releaseSlot)   := Error.Ok.U
   }
 
+  // A lookup takes three cycles and the query must be held throughout: the owning context is
+  // registered, then the first covering range, and the third cycle answers. The owning context
+  // must not change while it is queried.
   for (port <- 0 until 2) {
-    val query      = io.queries(port)
-    val owner      = matches(query.id)
-    val slot       = PriorityEncoder(owner)
+    val query = io.queries(port)
+    val owner = matches(query.id)
+    val owned = RegNext(owner.asUInt.orR)
+    val slot  = RegNext(PriorityEncoder(owner))
+    val last  = query.va +& (query.bytes - 1.U)
+    def covers(context: UInt, index: Int): Bool =
+      index.U < counts(context) && query.va >= vas(context)(index) &&
+        last < (vas(context)(index) +& sizes(context)(index)) && direction(context) === query.write
+    val hits       = VecInit((0 until p.maxRanges).map(covers(slot, _)))
+    val covered    = RegNext(hits.asUInt.orR)
+    val index      = RegNext(PriorityEncoder(hits))
     val retiring   = io.release.fire && io.release.bits.id === query.id
-    val last       = query.va +& (query.bytes - 1.U)
     val shapeOK    = query.bytes =/= 0.U && !last(64) &&
       (query.va(11, 0) +& query.bytes) <= 4096.U
-    val authorized = owner.asUInt.orR && sealedList(slot) && notified(slot) &&
+    val authorized = owned && sealedList(slot) && notified(slot) &&
       errors(slot) === Error.Ok.U && !retiring && !reset.asBool
-    val hits       = VecInit((0 until p.maxRanges).map { index =>
-      index.U < counts(slot) && query.va >= vas(slot)(index) &&
-      last < (vas(slot)(index) +& sizes(slot)(index)) && direction(slot) === query.write
-    })
-    val index      = PriorityEncoder(hits)
     val translated = pas(slot)(index) +& (query.va - vas(slot)(index))
-    val hit        = query.valid && shapeOK && authorized && hits.asUInt.orR
+    val hit        = query.valid && shapeOK && authorized && covered
     io.results(port).hit   := hit
     io.results(port).pa    := Mux(hit, translated(p.bus.addressBits - 1, 0), 0.U)
     io.results(port).error := Mux(!query.valid || hit, Error.Ok.U, Mux(!shapeOK, Error.Shape.U, Error.AccessFault.U))
-    when(hit) {
-      assert(!translated(translated.getWidth - 1, p.bus.addressBits).orR, "PreparedMap translated address overflows PA")
+
+    // Map invariants, checked on the query of this cycle against its current owner.
+    val present        = PriorityEncoder(owner)
+    val presentHits    = VecInit((0 until p.maxRanges).map(covers(present, _)))
+    val presentAllowed = owner.asUInt.orR && sealedList(present) && notified(present) &&
+      errors(present) === Error.Ok.U && !retiring && !reset.asBool
+    val presentPA      = pas(present)(PriorityEncoder(presentHits)) +&
+      (query.va - vas(present)(PriorityEncoder(presentHits)))
+    when(query.valid && shapeOK && presentAllowed && presentHits.asUInt.orR) {
+      assert(!presentPA(presentPA.getWidth - 1, p.bus.addressBits).orR, "PreparedMap translated address overflows PA")
       for (other <- 0 until p.maxRanges) {
-        when(hits(other)) {
+        when(presentHits(other)) {
           assert(
-            (pas(slot)(other) +& (query.va - vas(slot)(other))) === translated,
+            (pas(present)(other) +& (query.va - vas(present)(other))) === presentPA,
             "PreparedMap overlapping records disagree on PA"
           )
         }

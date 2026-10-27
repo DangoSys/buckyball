@@ -59,3 +59,23 @@ port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "REDMULE_F16", funct7 = 68 },
 ]
+
+[[balls]]
+id = 5
+name = "VecBall"
+component = "vector"
+param = "default"
+port = { inBW = 2, outBW = 4, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "VECMAT16", funct7 = 64 },
+]
+
+[[balls]]
+id = 6
+name = "Mxfp2IntBall"
+component = "mxfp2int"
+param = "default"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXFP2INT", funct7 = 65 },
+]

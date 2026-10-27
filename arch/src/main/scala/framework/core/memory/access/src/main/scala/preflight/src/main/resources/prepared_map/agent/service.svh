@@ -3,11 +3,13 @@ task monitor();
     @(ctl.sample);
     if (ctl.sample.reset) begin
       pmap_ref_reset(model);
+      recent[0].delete();
+      recent[1].delete();
       notified.delete();
       status.delete();
     end else begin
-      query_check(ctl.sample.query_0, ctl.sample.result_0);
-      query_check(ctl.sample.query_1, ctl.sample.result_1);
+      query_check(0, ctl.sample.query_0, ctl.sample.result_0);
+      query_check(1, ctl.sample.query_1, ctl.sample.result_1);
       if (ctl.sample.query_0[`PF(QUERY, VALID)] && ctl.sample.query_1[`PF(QUERY, VALID)]) dual++;
       if (mapped.sample.valid) begin
         int error, id;

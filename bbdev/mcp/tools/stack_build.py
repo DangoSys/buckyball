@@ -9,12 +9,12 @@ from common import submit, fmt
 def register(mcp):
     @mcp.tool()
     def bbdev_stack_build(
-        design: str, core: str | None = None, device: bool = False
+        design: str, core: str | None = None, device: str | None = None
     ) -> str:
         """Build a registered device or core simulation stack. POST /stack/build."""
         body = {"design": design}
         if core is not None:
             body["core"] = core
-        if device:
-            body["device"] = True
+        if device is not None:
+            body["device"] = device
         return fmt(submit("/stack/build", body))

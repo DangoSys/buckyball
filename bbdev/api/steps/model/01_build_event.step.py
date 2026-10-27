@@ -27,6 +27,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             get_buckyball_path(),
             params["design"],
             params["model"],
+            selection=params["target"],
             logger=ctx.logger,
             task_scope=trace_id,
         )

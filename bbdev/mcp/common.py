@@ -372,7 +372,7 @@ def _load_toml(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _balldomain_path(design: str, balldomain: Optional[str]) -> Path:
+def _balldomain_path(design: str, device: str, balldomain: Optional[str]) -> Path:
     if balldomain:
         raw = Path(balldomain)
         if raw.is_absolute() or len(raw.parts) > 1:
@@ -382,7 +382,9 @@ def _balldomain_path(design: str, balldomain: Optional[str]) -> Path:
         / "examples"
         / "designs"
         / design
-        / "output/generated/config/derived.json"
+        / "output/sims/device"
+        / device
+        / "generated/config/derived.json"
     )
     cfg = json.loads(derived.read_text(encoding="utf-8"))
     domains = {thread["balldomain_base_dir"] for thread in cfg["threads"]}
@@ -420,7 +422,9 @@ def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _validate_design(design: str, balldomain: Optional[str]) -> Dict[str, Any]:
+def _validate_design(
+    design: str, device: str, balldomain: Optional[str]
+) -> Dict[str, Any]:
     scripts = repo_path() / "bbdev/api/steps/config/scripts"
     sys.path.insert(0, str(scripts))
     from ball_normalize import normalize_ball_domain
@@ -434,10 +438,14 @@ def _validate_design(design: str, balldomain: Optional[str]) -> Dict[str, Any]:
         repo_path()
         / "examples/designs"
         / design
-        / "output/generated/config/config.json"
+        / "output/sims/device"
+        / device
+        / "generated/config/config.json"
     )
     config = json.loads(expanded.read_text(encoding="utf-8"))
-    selected = _balldomain_path(design, balldomain) if balldomain is not None else None
+    selected = (
+        _balldomain_path(design, device, balldomain) if balldomain is not None else None
+    )
     results = []
     for index, thread in enumerate(topology.iter_threads(config["device"])):
         raw = thread.get("balldomain")

@@ -1,12 +1,16 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-enum { ROW_BYTES = (BANK_WIDTH / 8), ROWS = 4, OFFSET = 4, GUARD = 0xa5 };
+enum {
+  ROW_BYTES = (THREAD_MEM_BANK_WIDTH / 8),
+  ROWS = 4,
+  OFFSET = 4,
+  GUARD = 0xa5
+};
 
 static uint8_t input_bytes[OFFSET + ROWS * ROW_BYTES + ROW_BYTES]
     __attribute__((aligned(128)));

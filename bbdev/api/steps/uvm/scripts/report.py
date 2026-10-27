@@ -5,21 +5,21 @@ from utils.path import load_design_config
 from .uvm_common import dashboard_summary, load_ip
 
 
-def verification_targets(repo, design, ball=None, ip=None):
+def verification_targets(repo, design, selection, ball=None, ip=None):
     if ip is not None:
         return [
             f"ip/{ip}/{item['name']}"
-            for profile in load_ip(str(repo), ip, design)
+            for profile in load_ip(str(repo), ip, design, selection)
             for item in profile["targets"]
         ]
     if ball is not None:
         return [f"ball/{ball}"]
-    config = load_design_config(repo, design).verification
+    config = load_design_config(repo, design, selection=selection).verification
     targets = [f"ball/{ball}" for ball in config.balls]
     for ip in config.ips:
         targets.extend(
             f"ip/{ip}/{target['name']}"
-            for profile in load_ip(str(repo), ip, design=design)
+            for profile in load_ip(str(repo), ip, design, selection)
             for target in profile["targets"]
         )
     return targets

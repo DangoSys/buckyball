@@ -12,7 +12,7 @@ def register(mcp):
         design: str,
         ctest: bool = False,
         mlirtest: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Build workloads for a design. POST /workload/build."""
@@ -25,8 +25,8 @@ def register(mcp):
             params["ctest"] = True
         if mlirtest:
             params["mlirtest"] = True
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/workload/build", params))

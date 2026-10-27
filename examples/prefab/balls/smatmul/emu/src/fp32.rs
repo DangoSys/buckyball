@@ -1,0 +1,119 @@
+use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
+use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
+use super::instruction::ExecContext;
+use std::collections::HashMap;
+
+struct Chain {
+    rows: usize,
+    bank: u64,
+    base: usize,
+    values: Vec<f32>,
+}
+
+
+
+pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
+    assert!(!rs1_read_old(xs1), "smatmul_f32: reads no old destination; rs1[29] must be clear");
+    let ball_state = ctx.state::<HashMap<usize, Chain>>();
+    let rows = (xs2 & 0xfff) as usize;
+    let cols = ((xs2 >> 12) & 0xfff) as usize;
+    let k = rs1_iter(xs1) as usize;
+    let first = (xs2 >> 24) & 1 != 0;
+    let last = (xs2 >> 25) & 1 != 0;
+    let base = ((xs2 >> 26) & 63) as usize;
+    let a = rs1_b0(xs1);
+    let b = rs1_b1(xs1);
+    let c = rs1_b2(xs1);
+    assert!(
+        xs2 >> 32 == 0 && (rows == 1 || rows == 16) && cols == 16 && k > 0 && k % 4 == 0,
+        "f32 matmul: requires M=1/16, N=16, positive K multiple of four and zero reserved bits"
+    );
+    assert!(a != b && b != c && a != c, "f32 matmul: banks must differ");
+    for bank in [a, b, c] {
+        assert!(
+            ctx.config(bank).allocated && ctx.config(bank).cols == 1,
+            "f32 matmul: banks must be allocated with one column"
+        );
+    }
+    let stride = bank_row_bytes();
+    assert!(
+        stride == 16
+            && rows * k * 4 <= bank_lines() * stride
+            && cols * k * 4 <= bank_lines() * stride
+            && base * stride + rows * cols * 4 <= bank_lines() * stride,
+        "f32 matmul: bank footprint exceeds depth"
+    );
+    let pa = pbank(ctx, a);
+    let pb = pbank(ctx, b);
+    let av = &ctx.banks[pa][..rows * k * 4];
+    let bv = &ctx.banks[pb][..cols * k * 4];
+    assert!(
+        av.chunks_exact(4)
+            .chain(bv.chunks_exact(4))
+            .all(|x| f32::from_le_bytes(x.try_into().unwrap()).is_finite()),
+        "f32 matmul: non-finite operand"
+    );
+    let mut chain = {
+        let mut chains = ball_state.lock().unwrap();
+        if first {
+            assert!(
+                !chains.contains_key(&ctx.hart_id),
+                "f32 matmul: first while chain is live"
+            );
+            Chain {
+                rows,
+                bank: c,
+                base,
+                values: vec![0f32; rows * cols],
+            }
+        } else {
+            chains
+                .remove(&ctx.hart_id)
+                .expect("f32 matmul: continuation without first")
+        }
+    };
+    assert!(
+        chain.rows == rows && chain.bank == c && chain.base == base,
+        "f32 matmul: continuation changed destination"
+    );
+    let weights: [&[u8]; 16] = std::array::from_fn(|col| &bv[col * k * 4..(col + 1) * k * 4]);
+    for row in 0..rows {
+        if av[row * k * 4..(row + 1) * k * 4]
+            .chunks_exact(4)
+            .all(|x| u32::from_le_bytes(x.try_into().unwrap()) & 0x7fffffff == 0)
+            && chain.values[row * cols..(row + 1) * cols]
+                .iter()
+                .all(|x| x.to_bits() == 0)
+        {
+            continue;
+        }
+        let av = &av[row * k * 4..(row + 1) * k * 4];
+        let dst = &mut chain.values[row * cols..(row + 1) * cols];
+        let mut sums: [f32; 16] = dst.try_into().unwrap();
+        for inner in 0..k {
+            let a = f32::from_le_bytes(av[inner * 4..inner * 4 + 4].try_into().unwrap());
+            for col in 0..16 {
+                let b =
+                    f32::from_le_bytes(weights[col][inner * 4..inner * 4 + 4].try_into().unwrap());
+                sums[col] = a.mul_add(b, sums[col]);
+            }
+        }
+        assert!(
+            sums.iter().all(|x| x.is_finite()),
+            "f32 matmul: accumulator overflow"
+        );
+        dst.copy_from_slice(&sums);
+    }
+    if last {
+        let pc = pbank(ctx, c);
+        for (index, value) in chain.values.iter().enumerate() {
+            let offset = base * stride + index * 4;
+            ctx.banks[pc][offset..offset + 4].copy_from_slice(&value.to_le_bytes());
+        }
+    } else {
+        {
+            ball_state.lock().unwrap().insert(ctx.hart_id, chain);
+        };
+    }
+    0
+}

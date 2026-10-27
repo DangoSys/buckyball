@@ -29,7 +29,7 @@ class Replay:
         self.depth = thread.frontend.rob_entries
         self.alias_base = virtual_banks + (2 if thread.gpdomain.enable else 0)
         self.bids = {
-            i.funct7: ball.ball_id
+            i.funct7: ball.id
             for ball in thread.balldomain.balls
             for i in ball.instructions
         }

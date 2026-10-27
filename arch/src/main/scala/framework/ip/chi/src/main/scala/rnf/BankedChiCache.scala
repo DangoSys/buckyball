@@ -31,7 +31,7 @@ object RnfParams {
   def fromProto(p: RnfHardware, requester: Params): RnfParams = RnfParams(
     requester,
     p.getNodeId,
-    p.getCacheLines,
+    p.getLines,
     p.getHomeId,
     p.getHomeCount,
     p.getBanks,

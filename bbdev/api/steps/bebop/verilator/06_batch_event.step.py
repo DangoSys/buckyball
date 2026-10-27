@@ -4,8 +4,9 @@ bebop verilator batch event handler
 Runs bebop verilator batch regression (requires prior --build).
 """
 
+from datetime import datetime
 from pathlib import Path
-from utils.path import design_output_root
+from utils.path import design_output_root, log_dir
 from utils.path import runner_manifest
 
 
@@ -94,6 +95,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     manifest = str(runner_manifest(bbdir, design, input_data["target"]))
     features = "verilator,bemu" if diff else "verilator"
+    run_log = log_dir(
+        bbdir,
+        design,
+        "verilog",
+        datetime.now().strftime("%Y-%m-%d-%H-%M"),
+        "bebop-verilator",
+        test_type,
+        selection=input_data["target"],
+    )
     harness_args = [
         "--",
         "--workload-toml",
@@ -102,15 +112,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         elf_root,
         "--arch-config",
         design,
+        "--log-dir",
+        run_log,
         "--jobs",
         str(input_data.get("jobs", 1)),
     ]
-    if input_data.get("clean-before", input_data.get("clean_before", False)):
-        harness_args.append("--clean-before")
     if diff:
         harness_args.append("--diff")
-    if input_data.get("junit"):
-        harness_args.extend(["--junit", input_data["junit"]])
     harness = shlex.join(harness_args)
     test_cmd = (
         "nix develop -c cargo test --release --target-dir"
@@ -138,6 +146,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "test_type": test_type,
             "diff": diff,
             "workload_toml": workload_toml,
+            "log_dir": run_log,
+            "junit": os.path.join(run_log, "junit.xml"),
         },
         trace_id=origin_tid,
     )

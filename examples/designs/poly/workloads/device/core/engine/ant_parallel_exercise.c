@@ -1,18 +1,16 @@
 #include "ant_parallel.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
-static uint64_t input[BB_THREAD_CORE_COUNT][2][512]
+static uint64_t input[POLY_THREAD_CORES][2][512]
     __attribute__((aligned(4096), section(".noinit")));
-static uint64_t output[BB_THREAD_CORE_COUNT][2][512]
+static uint64_t output[POLY_THREAD_CORES][2][512]
     __attribute__((aligned(4096), section(".noinit")));
-unsigned parallel_done[BB_THREAD_CORE_COUNT];
+unsigned parallel_done[POLY_THREAD_CORES];
 static unsigned reached[3] __attribute__((aligned(64)));
 static void barrier(unsigned phase) {
   __atomic_fetch_add(&reached[phase], 1, __ATOMIC_ACQ_REL);
   while (__atomic_load_n(&reached[phase], __ATOMIC_ACQUIRE) !=
-         BB_THREAD_CORE_COUNT) {
+         POLY_THREAD_CORES) {
   }
 }
 void parallel_exercise(unsigned core) {
@@ -49,7 +47,7 @@ void parallel_exercise(unsigned core) {
   }
   thread_tss_write(0, &zero, sizeof(zero));
   barrier(0);
-  unsigned peer = (core + 1) % BB_THREAD_CORE_COUNT;
+  unsigned peer = (core + 1) % POLY_THREAD_CORES;
   for (unsigned context = 0; context < 2; ++context)
     for (unsigned word = 0; word < 2; ++word)
       if (*(volatile uint64_t *)&output[peer][context][word] != ~0ULL)

@@ -24,7 +24,7 @@ add_custom_target(soctests-build)
 function(add_buckyball_soctest SOURCE_FILE)
     get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
     set(TEST_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${BUCKYBALL_SOCTEST_TARGET}-soctest-${_stem}"
+        "${DESIGN_NAME}-${BUCKYBALL_SOCTEST_TARGET}-soctest-${_stem}"
     )
     set(SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/${SOURCE_FILE})
     file(STRINGS ${SOURCE} _lines)
@@ -37,23 +37,22 @@ function(add_buckyball_soctest SOURCE_FILE)
     endif()
 
     set(EXECUTABLE "${TEST_NAME}-baremetal")
-    set(PARAMS ${BUCKYBALL_ISA_DIR}/control/params.h)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
             ${ELF_CC} ${BUCKYBALL_SOCTEST_C_FLAGS} -o ${EXECUTABLE}
             ${BAREMETAL_DIR}/crt0.S ${BAREMETAL_DIR}/syscalls.c ${SOURCE}
-            -I${BUCKYBALL_ISA_DIR}/control -I${BUCKYBALL_ISA_DIR}/design
+            -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART} ${DESIGN_DEFINES}
             -I${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS
             ${SOURCE}
-            ${PARAMS}
             ${BAREMETAL_DIR}/crt0.S
             ${BBSIM_LD}
             ${BAREMETAL_DIR}/syscalls.c
             ${CMAKE_CURRENT_SOURCE_DIR}/soc.h
         COMMENT "Building SoC test: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
     add_custom_target(
         ${TEST_NAME}-baremetal-build

@@ -1,20 +1,19 @@
 #include "ant_coherence.h"
-#include <instances.h>
-#include <params.h>
+#include <bb_cores.h>
 #include <thread.h>
 _Static_assert(
-    BB_CORE_NUM == BB_THREAD_CORE_COUNT + 1 && BB_THREAD_CORE_COUNT >= 2 &&
-        !(BB_THREAD_CORE_COUNT & (BB_THREAD_CORE_COUNT - 1)),
+    BB_NUM_CORES == POLY_THREAD_CORES + 1 && POLY_THREAD_CORES >= 2 &&
+        !(POLY_THREAD_CORES & (POLY_THREAD_CORES - 1)),
     "coherence gate requires a power-of-two thread-bearing core count");
 extern const unsigned char ant_image[], ant_image_end[];
 // Separate 64-byte lines/sets for data and synchronization; avoid main's
 // top-of-page stack sets.
 enum {
   INPUT = 8,
-  OUTPUT = INPUT + BB_THREAD_CORE_COUNT,
-  READY = OUTPUT + BB_THREAD_CORE_COUNT,
-  DONE = READY + BB_THREAD_CORE_COUNT,
-  ROUND = DONE + BB_THREAD_CORE_COUNT
+  OUTPUT = INPUT + POLY_THREAD_CORES,
+  READY = OUTPUT + POLY_THREAD_CORES,
+  DONE = READY + POLY_THREAD_CORES,
+  ROUND = DONE + POLY_THREAD_CORES
 };
 static volatile uint64_t lines[ROUND + 1][8]
     __attribute__((section(".data"), aligned(4096))) = {0};
@@ -67,26 +66,26 @@ int main(void) {
   if (hart)
     controller(hart - 1);
   else {
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (!__atomic_load_n(&lines[READY + core][0], __ATOMIC_ACQUIRE)) {
       }
     for (unsigned round = 1; round <= 2; ++round) {
-      for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+      for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
         for (unsigned word = 0; word < 2; ++word) {
           lines[INPUT + core][word] = pattern(round, core, word);
           lines[OUTPUT + core][word] = ~pattern(round, core, word);
         }
       __atomic_store_n(&lines[ROUND][0], round, __ATOMIC_RELEASE);
-      for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+      for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
         while (__atomic_load_n(&lines[DONE + core][0], __ATOMIC_ACQUIRE) <
                round) {
         }
-      for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+      for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
         for (unsigned word = 0; word < 2; ++word)
           if (lines[OUTPUT + core][word] != pattern(round, core, word))
             __builtin_trap();
     }
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (__atomic_load_n(&lines[DONE + core][0], __ATOMIC_ACQUIRE) != 3) {
       }
   }

@@ -19,16 +19,16 @@ case class AccParam(
     "virtualBankCount must fit the frontend bank ID width"
   )
   require(
-    frontend.vbank_id_upper_bound < memDomain.virtualBankCount,
+    frontend.max_private_vbank < memDomain.virtualBankCount,
     "Private bank upper bound must be below virtualBankCount"
   )
   if (memDomain.sharedEnable) {
     require(
-      frontend.shared_bank_id_base > frontend.vbank_id_upper_bound,
+      frontend.shared_vbank_base > frontend.max_private_vbank,
       "Shared bank base must be above the private bank range"
     )
     require(
-      frontend.shared_bank_id_base <= memDomain.virtualBankCount,
+      frontend.shared_vbank_base <= memDomain.virtualBankCount,
       "Shared bank base must not exceed virtualBankCount"
     )
   }

@@ -1,13 +1,12 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 // One ACC row spans four configured physical bank rows.
-enum { ROWS = 16, COLS = (4 * BANK_WIDTH / 32) };
+enum { ROWS = 16, COLS = (4 * THREAD_MEM_BANK_WIDTH / 32) };
 
 static result_t output_matrix[ROWS * COLS] __attribute__((aligned(64)));
 static result_t expected_matrix[ROWS * COLS] __attribute__((aligned(64)));

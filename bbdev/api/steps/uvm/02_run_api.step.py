@@ -23,6 +23,8 @@ def check_args(body: dict) -> str | None:
         return "Parameter --ball requires a value"
     if body.get("ip") is True:
         return "Parameter --ip requires a value"
+    if body.get("ball") and not body.get("design"):
+        return "Ball UVM requires --design and --device <config>"
     if body.get("ball") and body.get("ip"):
         return "Parameters --ball and --ip are mutually exclusive"
     return None
@@ -30,13 +32,19 @@ def check_args(body: dict) -> str | None:
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    try:
-        selection = require_target(body, ("device", "ip", "ball"))
-    except ValueError as error:
-        return ApiResponse(status=400, body={"error": str(error)})
     error = check_args(body)
     if error:
         return ApiResponse(status=400, body={"error": error})
+    # A design is verified through one of its device configs.
+    selection = None
+    if "design" in body:
+        try:
+            selection = require_target(
+                {key: body[key] for key in ("design", "device") if key in body},
+                ("device",),
+            )
+        except ValueError as error:
+            return ApiResponse(status=400, body={"error": str(error)})
 
     await ctx.enqueue(
         {

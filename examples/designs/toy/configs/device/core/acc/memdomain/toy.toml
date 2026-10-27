@@ -1,6 +1,8 @@
 # Toy ACC Memory Domain Configuration (default)
 # Private (per-thread) memory parameters. Shared memory lives in the core TOML.
 
+addrLen = 39
+
 [bank]
 layoutEnable = true
 num = 16
@@ -18,6 +20,3 @@ bankNum = 16
 bankEntries = 64
 bankWidth = 8
 readWidth = 8
-
-[mem]
-addrLen = 39

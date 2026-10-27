@@ -420,15 +420,18 @@ class Sequencer(b: ExecutionParam, localRocc: Boolean) extends Module {
     host.complete.ready                                           := true.B
     when(host.complete.fire)(commandsLive(host.complete.bits.tag) := false.B)
   }
-  // PMP replies retain the accepted decision through backpressure.
+  // Privileged answers an authorization one cycle after it is presented; the reply then retains
+  // the decision through backpressure.
   for ((virtual, index) <- Seq(io.fetch, io.memory).zipWithIndex) {
-    val pending = RegInit(false.B)
-    val allowed = Reg(Bool())
+    val deciding = RegInit(false.B)
+    val pending  = RegInit(false.B)
+    val allowed  = Reg(Bool())
     io.privileged.authorization(index)               := virtual.authorizationRequest.bits
-    virtual.authorizationRequest.ready               := !pending
+    virtual.authorizationRequest.ready               := !deciding && !pending
     virtual.authorizationResponse.valid              := pending
     virtual.authorizationResponse.bits               := allowed
-    when(virtual.authorizationRequest.fire) { pending := true.B; allowed := io.privileged.permitted(index) }
+    when(virtual.authorizationRequest.fire)(deciding := true.B)
+    when(deciding) { deciding := false.B; pending := true.B; allowed := io.privileged.permitted(index) }
     when(virtual.authorizationResponse.fire)(pending := false.B)
   }
 

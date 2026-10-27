@@ -25,7 +25,9 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     if set(body) - {"design", "device", "core"}:
-        raise ValueError("stack build takes --design and --device or --core")
+        raise ValueError(
+            "stack build takes --design and --device <config> or --core <entry>"
+        )
     if not isinstance(body.get("design"), str):
         raise ValueError("--design requires a design name")
     await ctx.enqueue(

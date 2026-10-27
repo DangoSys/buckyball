@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum { LANES = BANK_WIDTH / 8, INPUT_ROWS = 36, OUTPUT_ROWS = 9 };
+enum { LANES = THREAD_MEM_BANK_WIDTH / 8, INPUT_ROWS = 36, OUTPUT_ROWS = 9 };
 static int8_t input[INPUT_ROWS * LANES] __attribute__((aligned(64)));
 static int8_t output[OUTPUT_ROWS * LANES] __attribute__((aligned(64)));
 

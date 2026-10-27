@@ -1,5 +1,4 @@
 #include "ant_corelink_reduce.h"
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
 void ant_corelink_reduce_phase(unsigned core,

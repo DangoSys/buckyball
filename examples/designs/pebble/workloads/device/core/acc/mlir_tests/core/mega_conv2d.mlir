@@ -1,9 +1,9 @@
-// FORM: custom.op "conv2d_i8"{{.*}}custom.spatial_chain
-// FORM: custom.op "relu"{{.*}}custom.spatial_chain
-// FORM: custom.op "depthwise_conv2d_i8"{{.*}}custom.spatial_chain
-// FORM: custom.op "maxpool2d"{{.*}}custom.spatial_chain
-// FORM: "frontend.fp32_to_int8"{{.*}}custom.spatial_chain
-// BANK: buckyball.bank_mvout
+// FORM: %[[FIRST:.*]] = custom.op "conv2d_i8"{{.*}}pool = 1 : i64, relu = true{{.*}}-> tensor<1x4x4x16xi8>
+// FORM: custom.op "depthwise_conv2d_i8"(%[[FIRST]],{{.*}}pool = 2 : i64, relu = false{{.*}}-> tensor<1x2x2x16xi8>
+// FORM-NOT: frontend.fp32_to_int8
+// BANK: toint8_ball.bank_int32_to_int8 {{.*}}relu>
+// BANK: im2col_ball.bank_im2col_i8
+// BANK: maxpool_ball.bank_maxpool_i8
 // BANK: return
 func.func private @check_result(memref<1x16x2x2xi8>) -> ()
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -80,6 +81,7 @@ def _walk_file(
     path: Path,
     includes: list[str],
     stack: list[str],
+    override: bool = False,
 ) -> dict[str, Any]:
     path = path.resolve()
     key = str(path)
@@ -89,7 +91,7 @@ def _walk_file(
         includes.append(key)
     data = _load(path)
     stack.append(key)
-    out = _walk(data, path.parent, includes, stack)
+    out = _walk(data, path.parent, includes, stack, override=override)
     stack.pop()
     if not isinstance(out, dict):
         _die(f"{path}: root must be a table")
@@ -105,6 +107,7 @@ def _walk(
     includes: list[str],
     stack: list[str],
     slot: str | None = None,
+    override: bool = False,
 ) -> Any:
     if isinstance(obj, dict):
         inc = obj.get("include")
@@ -113,9 +116,13 @@ def _walk(
                 _die(f"{base}: include must be a non-empty string")
             loaded = _walk_file(_reference(base, inc, slot), includes, stack)
             rest = {k: v for k, v in obj.items() if k != "include"}
-            walked = _walk(rest, base, includes, stack)
+            walked = _walk(rest, base, includes, stack, override=override)
             if not isinstance(walked, dict):
                 _die(f"{base}: include siblings must be a table")
+            if override:
+                # Inside a device config, include siblings replace included keys.
+                _override(loaded, walked, str(base / inc))
+                return loaded
             return _merge(loaded, walked, base / inc)
         result = {}
         for key, value in obj.items():
@@ -130,23 +137,26 @@ def _walk(
                     _die(f"{base}: invalid Ball component {component!r}")
                 path = (
                     Path(__file__).resolve().parents[5]
-                    / "examples/components/balls"
+                    / "examples/prefab/balls"
                     / component
                     / "configs/default.toml"
                 )
                 result[key] = _walk_file(path, includes, stack)
             else:
-                result[key] = _walk(value, base, includes, stack, key)
+                # A device config holds overrides of the design config.
+                result[key] = _walk(
+                    value, base, includes, stack, key, override or key == "configs"
+                )
         return result
     if isinstance(obj, list):
-        return [_walk(x, base, includes, stack, slot) for x in obj]
+        return [_walk(x, base, includes, stack, slot, override) for x in obj]
     if isinstance(obj, str) and obj == "default" and slot in CONFIG_REFERENCES:
         return _walk_file(_reference(base, obj, slot), includes, stack)
     if isinstance(obj, str) and obj.endswith(".toml"):
         path = (base / obj).resolve()
         if not path.is_file():
             _die(f"toml path does not exist: {path} (from {base} + {obj!r})")
-        return _walk_file(path, includes, stack)
+        return _walk_file(path, includes, stack, override)
     return obj
 
 
@@ -190,10 +200,64 @@ def design2json(top: Path) -> dict[str, Any]:
     return data
 
 
+def _override(config: dict, override: dict, path: str) -> None:
+    for key, value in override.items():
+        if key == "_file":
+            continue
+        if key not in config:
+            _die(f"{path}: override key {key!r} is not in the design config")
+        if isinstance(config[key], dict) and isinstance(value, dict):
+            _override(config[key], value, f"{path}.{key}")
+        else:
+            config[key] = value
+
+
+def simulations(data: dict[str, Any]) -> list[tuple[str, str | None, str]]:
+    """(entry, config, selection) of every simulation of the design: one per
+    config registered on the device entry, one per core entry."""
+    design = Path(data["_file"]).parent.parent.name
+    prefix = "".join(part.capitalize() for part in re.split("[-_]", design))
+    result = []
+    for entry, registration in data["sims"]["targets"].items():
+        if entry == "_file":
+            continue
+        if entry != "device":
+            if "configs" in registration:
+                _die(f"targets.{entry}: only the device entry registers configs")
+            result.append((entry, None, entry))
+            continue
+        if not registration["configs"]:
+            _die("targets.device.configs registers no config")
+        for name in registration["configs"]:
+            if not re.fullmatch(prefix + "[A-Za-z0-9]*Config", name):
+                _die(f"targets.device.configs: {name!r} must be {prefix}<Name>Config")
+            result.append((entry, name, f"device/{name}"))
+    return result
+
+
+def simulation2json(
+    data: dict[str, Any], entry: str, name: str | None, selection: str
+) -> dict[str, Any]:
+    """The config of one simulation: the design config with the tables of device
+    config `name` replacing the same keys (arrays whole)."""
+    config = json.loads(json.dumps(data))
+    registration = config["sims"]["targets"][entry]
+    if name is not None:
+        overrides = registration.pop("configs")[name]
+        _override(config, overrides, overrides["_file"])
+    config["sims"]["targets"] = {entry: registration}
+    config["sims"]["selection"] = selection
+    return config
+
+
 def main() -> None:
-    if len(sys.argv) != 2:
-        _die(f"usage: {sys.argv[0]} DESIGN.toml")
-    out = design2json(Path(sys.argv[1]))
+    if len(sys.argv) != 3:
+        _die(f"usage: {sys.argv[0]} DESIGN.toml SELECTION")
+    data = design2json(Path(sys.argv[1]))
+    found = [s for s in simulations(data) if s[2] == sys.argv[2]]
+    if not found:
+        _die(f"{sys.argv[1]}: no simulation {sys.argv[2]!r}")
+    out = simulation2json(data, *found[0])
     sys.stdout.write(json.dumps(out, indent=2, sort_keys=True) + "\n")
 
 

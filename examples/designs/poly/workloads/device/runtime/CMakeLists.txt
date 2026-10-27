@@ -1,13 +1,6 @@
-foreach(
-    POLY_ANT_CASE
-    mesh_move
-    corelink
-    corelink_bank
-    corelink_reduce
-    coherence
-    mesh_private
-    mesh_shared
-)
+# POLY_ANT_CASES comes from the simulation entry: CoreLink and coherence cases
+# need a power-of-two count (>= 2) of thread-bearing cores.
+foreach(POLY_ANT_CASE IN LISTS POLY_ANT_CASES)
     set(POLY_ANT_THREAD attention)
     set(POLY_ANT_HEADER ant_${POLY_ANT_CASE}.h)
     set(POLY_ANT_HOST_DEFINITIONS)
@@ -23,7 +16,7 @@ foreach(
     endif()
 
     set(POLY_ANT_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${POLY_ANT_THREAD}-ctest-design-ant_${POLY_ANT_CASE}"
+        "${DESIGN_NAME}-${POLY_ANT_THREAD}-ctest-design-ant_${POLY_ANT_CASE}"
     )
     set(POLY_ANT_IMAGE ${POLY_ANT_IMAGE_DIR}/${POLY_ANT_NAME}-ant)
     set(POLY_ANT_CONTROL_SOURCES)
@@ -55,7 +48,7 @@ foreach(
 
     buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN}")
     set(POLY_ANT_HOST_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-main-ctest-design-ant_${POLY_ANT_CASE}"
+        "${DESIGN_NAME}-main-ctest-design-ant_${POLY_ANT_CASE}"
     )
     set(BUCKYBALL_CTEST_TARGET ${POLY_ANT_THREAD})
 
@@ -66,12 +59,14 @@ foreach(
         set(POLY_ANT_CONTROL_OBJECTS
             ${CMAKE_CURRENT_BINARY_DIR}/ant_corelink_reduce_control.o
         )
+        set(POLY_ANT_DEFINES ${DESIGN_TARGET_DEFS_${POLY_ANT_THREAD}})
+        list(TRANSFORM POLY_ANT_DEFINES PREPEND "-D")
         add_custom_command(
             OUTPUT ${POLY_ANT_CONTROL_OBJECTS}
             COMMAND
                 ${ELF_CC} -O2 -g -march=rv64gc -mcmodel=medany
                 -msmall-data-limit=0 -fno-builtin -I${POLY_ANT_SOURCE_DIR}
-                -I${BUCKYBALL_ISA_DIR}/${POLY_ANT_THREAD}
+                ${POLY_ANT_DEFINES}
                 -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
                 -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
                 -I${BUCKYBALL_REPO_ROOT}/stack/engine/include -c
@@ -79,12 +74,14 @@ foreach(
             DEPENDS
                 ${POLY_ANT_CONTROL_SOURCES}
                 ${POLY_ANT_SOURCE_DIR}/ant_corelink_reduce.h
-                ${BUCKYBALL_ISA_DIR}/${POLY_ANT_THREAD}/params.h
+            VERBATIM
         )
         set(POLY_ANT_CONTROL_SOURCES)
     endif()
 
     set(POLY_ANT_HOST_ELF ${POLY_ANT_HOST_NAME}-multicore-baremetal)
+    set(POLY_ANT_HOST_DEFINES ${DESIGN_TARGET_DEFS_${POLY_ANT_HOST_THREAD}})
+    list(TRANSFORM POLY_ANT_HOST_DEFINES PREPEND "-D")
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_ANT_HOST_ELF}
         COMMAND
@@ -92,9 +89,9 @@ foreach(
             -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax
             -Wl,-T,${BBSIM_LD} ${POLY_ANT_HOST_DEFINITIONS}
             -I${POLY_ANT_SOURCE_DIR}
-            -I${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}
-            -I${BUCKYBALL_ISA_DIR}/design -I${WORKLOAD_LIB_DIR}
-            -I${BUCKYBALL_REPO_ROOT}/examples/components/balls/f32add/workloads
+            ${POLY_ANT_HOST_DEFINES}
+            ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR} -I${WORKLOAD_LIB_DIR}
+            -I${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/f32add/workloads
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
             -I${BUCKYBALL_REPO_ROOT}/stack/engine/include -I${BAREMETAL_DIR}
@@ -112,16 +109,14 @@ foreach(
             ${BBSIM_LD}
             ${POLY_ANT_CONTROL_SOURCES}
             ${POLY_ANT_CONTROL_OBJECTS}
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}/params.h
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_HOST_THREAD}/ballISA.h
             ${POLY_ANT_IMAGE}.bin
             ${BUCKYBALL_REPO_ROOT}/stack/engine/src/thread.c
             ${BUCKYBALL_REPO_ROOT}/stack/engine/include/thread.h
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.c
             ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.h
-            ${BUCKYBALL_ISA_DIR}/${POLY_ANT_THREAD}/params.h
-            ${BUCKYBALL_ISA_DIR}/design/instances.h
+            ${RUNTIME_INCLUDE_DIR}/bb_cores.h
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        VERBATIM
     )
     add_custom_target(
         ${POLY_ANT_HOST_NAME}-ctest-build
@@ -130,16 +125,20 @@ foreach(
     add_dependencies(poly-ctests-build ${POLY_ANT_HOST_NAME}-ctest-build)
 endforeach()
 
-set(POLY_STREAM_NAME "${BUCKYBALL_WORKLOAD_DESIGN}-main-ctest-design-stream")
+set(POLY_STREAM_NAME "${DESIGN_NAME}-main-ctest-design-stream")
 buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/stream_main.c")
 add_executable(${POLY_STREAM_NAME}-linux stream_main.c)
 target_include_directories(
     ${POLY_STREAM_NAME}-linux
     PRIVATE
-        ${BUCKYBALL_ISA_DIR}/design
-        ${BUCKYBALL_ISA_DIR}/attention
+        ${RUNTIME_INCLUDE_DIR}
         ${WORKLOAD_LIB_DIR}
-        ${BUCKYBALL_REPO_ROOT}/examples/components/balls/mxmm/workloads
+        ${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/mxmm/workloads
+)
+# The Ball instructions of the job go into the attention thread's stream.
+target_compile_definitions(
+    ${POLY_STREAM_NAME}-linux
+    PRIVATE ${DESIGN_DEFS} ${DESIGN_TARGET_DEFS_attention} BUCKYBALL_STREAM
 )
 target_link_libraries(${POLY_STREAM_NAME}-linux PRIVATE engine runtime-linux)
 add_dependencies(poly-ctests-build ${POLY_STREAM_NAME}-linux)

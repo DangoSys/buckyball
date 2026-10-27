@@ -148,9 +148,9 @@ class GlobalDecoder(
   bankAccess.wr_update   := inplaceUpdate
 
   def legalBank(raw: UInt): Bool =
-    raw <= frontendParam.vbank_id_upper_bound.U ||
+    raw <= frontendParam.max_private_vbank.U ||
       (gpParam.enable.B && raw >= memParam.virtualBankCount.U && raw < (memParam.virtualBankCount + 2).U) ||
-      (memParam.sharedEnable.B && raw >= frontendParam.shared_bank_id_base.U &&
+      (memParam.sharedEnable.B && raw >= frontendParam.shared_vbank_base.U &&
         raw < memParam.virtualBankCount.U)
 
   val usesArchitecturalBank = is_ball_inst || func7 === MSET_BITPAT || func7 === MVIN_BITPAT ||

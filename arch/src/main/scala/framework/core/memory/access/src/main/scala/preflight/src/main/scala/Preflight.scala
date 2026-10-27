@@ -55,24 +55,33 @@ class Preflight(b: ModuleParam) extends Module {
     )
   }
 
-  val idle :: checkShape :: span :: sendSpan :: segment :: walk :: waitWalk :: authorize :: waitPermission :: save :: Nil =
-    Enum(10)
-  val state                                                                                                               = RegInit(idle)
-  val worker                                                                                                              = Reg(UInt(contextBits.W))
-  val cursor                                                                                                              = RegInit(0.U(contextBits.W))
-  val row                                                                                                                 = Reg(UInt(32.W)); val column      = Reg(UInt(32.W))
-  val dense                                                                                                               = Reg(Bool()); val wholeBytes      = Reg(UInt(32.W))
-  val spanAddress                                                                                                         = Reg(UInt(64.W)); val spanBytes   = Reg(UInt(32.W))
-  val spanLast                                                                                                            = Reg(Bool())
-  val currentVA                                                                                                           = Reg(UInt(64.W)); val currentPA   = Reg(UInt(p.bus.addressBits.W))
-  val currentBytes                                                                                                        = Reg(UInt(13.W)); val segmentLast = Reg(Bool())
-  val unionAuthorization                                                                                                  = RegInit(false.B)
-  val previous                                                                                                            = (counts(worker) - 1.U)(2, 0)
-  val previousVA                                                                                                          = vas(worker)(previous)
-  val previousPA                                                                                                          = pas(worker)(previous)
-  val previousEnd                                                                                                         = previousVA +& sizes(worker)(previous)
-  val currentEnd                                                                                                          = currentVA +& currentBytes
-  val cancelSegmenter                                                                                                     = WireDefault(false.B)
+  val (idle :: checkShape :: multiply :: measure :: span :: sendSpan :: segment :: walk :: waitWalk :: authorize ::
+    waitPermission :: save :: retire :: Nil) = Enum(13)
+  val state                                  = RegInit(idle)
+  val worker                                 = Reg(UInt(contextBits.W))
+  val cursor                                 = RegInit(0.U(contextBits.W))
+  val row                                    = Reg(UInt(32.W)); val column      = Reg(UInt(32.W))
+  val dense                                  = Reg(Bool()); val wholeBytes      = Reg(UInt(32.W))
+  val spanAddress                            = Reg(UInt(64.W)); val spanBytes   = Reg(UInt(32.W))
+  val spanLast                               = Reg(Bool())
+  val currentVA                              = Reg(UInt(64.W)); val currentPA   = Reg(UInt(p.bus.addressBits.W))
+  val currentBytes                           = Reg(UInt(13.W)); val segmentLast = Reg(Bool())
+  val unionAuthorization                     = RegInit(false.B)
+  // The worker's command, copied when it is selected so shape arithmetic starts at registers.
+  val cmd                                    = Reg(new Command(b))
+  // VA of the current row and of the current span: baseVA + row * rowStride (+ column * columnStride).
+  val rowStart                               = Reg(UInt(67.W)); val spanStart   = Reg(UInt(67.W))
+  // Shape products, built eight multiplier bits per cycle: columns * spanBytes, rows * rowStride,
+  // columns * columnStride and rows * (columns * spanBytes)(31, 0).
+  val products                               = Reg(Vec(4, UInt(64.W)))
+  val product                                = Reg(UInt(2.W)); val digit        = Reg(UInt(2.W))
+  val outcome                                = Reg(UInt(3.W)); val outcomeVA    = Reg(UInt(64.W))
+  val previous                               = (counts(worker) - 1.U)(2, 0)
+  val previousVA                             = vas(worker)(previous)
+  val previousPA                             = pas(worker)(previous)
+  val previousEnd                            = previousVA +& sizes(worker)(previous)
+  val currentEnd                             = currentVA +& currentBytes
+  val cancelSegmenter                        = WireDefault(false.B)
 
   val splitter: Instance[Segmenter] = Instantiate(new Segmenter)
 
@@ -80,46 +89,71 @@ class Preflight(b: ModuleParam) extends Module {
 
   val walker: Instance[Walker] = Instantiate(new Walker(p.walker))
 
-  val cmd = commands(worker)
-
+  // The outcome is recorded one cycle after it is decided.
   def finish(code: UInt, address: UInt): Unit = {
-    errors(worker) := code; faultVA(worker) := address; phase(worker) := ready; state := idle
-    when(code =/= Error.Ok.U) { counts(worker) := 0.U; cancelSegmenter := true.B }
+    outcome := code; outcomeVA := address; state := retire
   }
 
-  val waiting = VecInit(phase.map(_ === queued))
+  when(state === retire) {
+    errors(worker) := outcome; faultVA(worker) := outcomeVA; phase(worker) := ready; state := idle
+    when(outcome =/= Error.Ok.U) { counts(worker) := 0.U; cancelSegmenter := true.B }
+  }
+
+  val waiting        = VecInit(phase.map(_ === queued))
   when(state === idle && waiting.asUInt.orR) {
     val slot = select(waiting, cursor)
-    worker := slot; cursor := slot + 1.U; phase(slot) := working; state := checkShape
+    worker := slot; cursor := slot + 1.U; phase(slot) := working; cmd := commands(slot); state := checkShape
   }
   when(state === checkShape) {
-    val rowExtent = cmd.columns * cmd.spanBytes
-    val total     = cmd.rows * rowExtent
-    val isDense   = (cmd.columns === 1.U || cmd.columnStride === cmd.spanBytes) &&
-      (cmd.rows === 1.U || cmd.rowStride === rowExtent)
-    val end       = cmd.baseVA.pad(67) + ((cmd.rows - 1.U) * cmd.rowStride).pad(67) +
-      ((cmd.columns - 1.U) * cmd.columnStride).pad(67) + cmd.spanBytes.pad(67) - 1.U
     when(cmd.rows === 0.U || cmd.columns === 0.U || cmd.spanBytes === 0.U ||
       (cmd.rows > 1.U && cmd.rowStride === 0.U) || (cmd.columns > 1.U && cmd.columnStride === 0.U)) {
       finish(Error.Shape.U, cmd.baseVA)
     }.elsewhen(cmd.mode =/= 0.U && cmd.mode =/= 8.U || cmd.privilege === 2.U) {
       finish(Error.Context.U, cmd.baseVA)
-    }.elsewhen(end(66, 64).orR || (isDense && total > "hffffffff".U)) {
+    }.otherwise {
+      product := 0.U; digit := 0.U; state := multiply
+    }
+  }
+  // Least significant multiplier byte first. The upper half of products(k) carries the running
+  // sum, which stays below 2^32; each step shifts one finished product byte into the lower half.
+  val multiplicand   = VecInit(cmd.columns, cmd.rows, cmd.columns, cmd.rows)(product)
+  val multiplier     = VecInit(cmd.spanBytes, cmd.rowStride, cmd.columnStride, products(0)(31, 0))(product)
+  val multiplierByte = VecInit((0 until 4).map(i => multiplier(8 * i + 7, 8 * i)))(digit)
+  when(state === multiply) {
+    val step = Mux(digit === 0.U, 0.U, products(product)(63, 32)) +& multiplicand * multiplierByte
+    products(product) := Cat(step(39, 0), products(product)(31, 8))
+    digit             := digit + 1.U
+    when(digit === 3.U) {
+      product                     := product + 1.U
+      when(product === 3.U)(state := measure)
+    }
+  }
+  when(state === measure) {
+    val rowExtent = products(0)
+    val total     = products(3)
+    val isDense   = (cmd.columns === 1.U || cmd.columnStride === cmd.spanBytes) &&
+      (cmd.rows === 1.U || cmd.rowStride === rowExtent)
+    // baseVA + (rows - 1) * rowStride + (columns - 1) * columnStride + spanBytes - 1
+    val end       = cmd.baseVA.pad(67) + products(1).pad(67) - cmd.rowStride.pad(67) + products(2).pad(67) -
+      cmd.columnStride.pad(67) + cmd.spanBytes.pad(67) - 1.U
+    // rows >= 1, so rows * rowExtent exceeds 32 bits whenever rowExtent does.
+    when(end(66, 64).orR || (isDense && (rowExtent(63, 32).orR || total(63, 32).orR))) {
       finish(Error.Overflow.U, cmd.baseVA)
     }.otherwise {
-      dense := isDense; wholeBytes := total(31, 0); row := 0.U; column := 0.U; state := span
+      dense    := isDense; wholeBytes   := total(31, 0); row := 0.U; column := 0.U
+      rowStart := cmd.baseVA; spanStart := cmd.baseVA; state := span
     }
   }
   when(state === span) {
-    val start  = cmd.baseVA.pad(67) + (row * cmd.rowStride).pad(67) + (column * cmd.columnStride).pad(67)
-    val bytes  = Mux(dense, wholeBytes, cmd.spanBytes)
-    val mask   = (~(BigInt(p.beatBytes) - 1) & ((BigInt(1) << 67) - 1)).U(67.W)
-    val first  = Mux(cmd.write, start, start & mask)
-    val end    = Mux(cmd.write, start + bytes.pad(67), (start + bytes.pad(67) + (p.beatBytes - 1).U) & mask)
-    val length = end - first
-    when(length > "hffffffff".U)(finish(Error.Overflow.U, start(63, 0)))
+    val bytes     = Mux(dense, wholeBytes, cmd.spanBytes)
+    val beatShift = log2Ceil(p.beatBytes)
+    // Reads widen to whole beats: (start % beat + bytes + beat - 1) rounded down to a beat.
+    val widened   = (spanStart(beatShift - 1, 0).pad(34) + bytes.pad(34) + (p.beatBytes - 1).U) >> beatShift << beatShift
+    val length    = Mux(cmd.write, bytes.pad(34), widened)
+    val first     = Mux(cmd.write, spanStart(63, 0), spanStart(63, beatShift) << beatShift)
+    when(length(33, 32).orR)(finish(Error.Overflow.U, spanStart(63, 0)))
       .otherwise {
-        spanAddress := first(63, 0); spanBytes := length(31, 0)
+        spanAddress := first; spanBytes := length(31, 0)
         spanLast    := dense || (row === cmd.rows - 1.U && column === cmd.columns - 1.U)
         state       := sendSpan
       }
@@ -219,9 +253,11 @@ class Preflight(b: ModuleParam) extends Module {
     }
     when(segmentLast && spanLast)(finish(Error.Ok.U, currentVA))
       .elsewhen(segmentLast) {
-        when(column === cmd.columns - 1.U) { column := 0.U; row := row + 1.U }
-          .otherwise(column := column + 1.U)
-        state               := span
+        when(column === cmd.columns - 1.U) {
+          column   := 0.U; row                            := row + 1.U
+          rowStart := rowStart + cmd.rowStride; spanStart := rowStart + cmd.rowStride
+        }.otherwise { column := column + 1.U; spanStart := spanStart + cmd.columnStride }
+        state := span
       }.otherwise(state := segment)
   }
   val offer        = RegInit(false.B); val outputSlot = Reg(UInt(contextBits.W)); val outputIndex = Reg(UInt(3.W))

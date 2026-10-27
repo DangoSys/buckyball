@@ -12,11 +12,17 @@ fn independent_devices_keep_gemmini_configuration_and_memory_private() {
     let repo = manifest.ancestors().nth(6).expect("simulation entry location");
     let output = manifest.join("target/verification/instance-isolation");
     std::fs::create_dir_all(&output).unwrap();
-    let isa = output.join("isa");
     run(Command::new("python3").arg(repo.join("stack/scripts/design.py"))
-        .arg("--design-pb").arg(repo.join("examples/designs/toy/output/generated/design.pb"))
-        .arg("--target").arg("device")
+        .arg("--design-pb").arg(concat!(env!("OUT_DIR"), "/design.pb"))
         .arg("--out").arg(&output));
+    // The compile definitions of the toy target, as design.cmake lists them.
+    let cmake = std::fs::read_to_string(output.join("design.cmake")).unwrap();
+    let defs: Vec<String> = cmake.lines()
+        .find_map(|line| line.strip_prefix("set(DESIGN_TARGET_DEFS_toy "))
+        .expect("toy target in design.cmake")
+        .trim_end_matches(')').split_whitespace()
+        .map(|def| format!("-D{}", def.trim_matches('"')))
+        .collect();
     let bare = repo.join("stack/os/baremetal");
     bebop_bemu::configs::load(simulation::SIMULATION.design);
     let mut cpus = Vec::new();
@@ -26,11 +32,11 @@ fn independent_devices_keep_gemmini_configuration_and_memory_private() {
             .args(["-nostdlib", "-nostartfiles", "-O2", "-march=rv64gc", "-mabi=lp64d",
                    "-mcmodel=medany", "-msmall-data-limit=0", "-fno-builtin", "-Wl,--no-relax"])
             .arg("-T").arg(bare.join("bbsim.ld"))
-            .arg("-I").arg(isa.join("toy"))
+            .args(&defs)
             .arg("-I").arg(repo.join("bb-tests/workloads/lib"))
-            .arg("-I").arg(repo.join("examples/components/balls/gemmini/workloads"))
+            .arg("-I").arg(repo.join("examples/prefab/balls/gemmini/workloads"))
             .arg(bare.join("crt0.S"))
-            .arg(repo.join(format!("examples/components/balls/gemmini/workloads/ctests/{name}.c")))
+            .arg(repo.join(format!("examples/prefab/balls/gemmini/workloads/ctests/{name}.c")))
             .arg("-o").arg(&elf));
         let log = output.join(name);
         let args = Args::try_parse_from([Path::new("test"), Path::new("--elf"), &elf,

@@ -1,0 +1,9 @@
+# PolyVerilatorConfig: functional simulation (BEMU / Verilator) with the reduce
+# core and one poly core.
+[device]
+cores = [
+  { include = "../device/cores/core0/default.toml", memory = { home = { agents = 6 } }, c2c = { peerCores = 2 } },
+  { include = "../device/cores/core1/default.toml", memory = { home = { agents = 6 } }, c2c = { peerCores = 2 } },
+]
+clint = { hartIds = [0, 1] }
+plic = { hartIds = [0, 1] }

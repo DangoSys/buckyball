@@ -1,3 +1,8 @@
+// FORM: custom.op "linear_i8"{{.*}}custom.resident, relu = true{{.*}}-> tensor<1x32xi8>
+// BANK: toint8_ball.bank_int32_to_int8
+// BANK: buckyball.bank_transfer
+// BANK-NOT: buckyball.bank_mvout
+// BANK: smatmul_ball.bank_matmul_i8 {{.*}}k = 16>
 func.func private @check_result(memref<1x16xf32>)
 
 func.func @main() -> i8 {

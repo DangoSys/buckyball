@@ -28,7 +28,7 @@ object CoherenceParams {
       CacheParams.fromProto(p.getCache),
       p.getAgents,
       p.getMshrEntries,
-      p.getHomeId
+      p.getNodeId
     )
 
 }

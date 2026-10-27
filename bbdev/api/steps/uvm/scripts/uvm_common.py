@@ -13,7 +13,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, log_dir
+from utils.path import design_arch_root, get_buckyball_path, log_dir
 from steps.mill.scripts.mill import mill_cmd
 from utils.stream_run import stream_run_logger
 
@@ -23,31 +23,17 @@ config_scripts = os.path.abspath(
 sys.path.insert(0, config_scripts)
 
 
-def load_design(bbdir: str, design: str):
-    import design_pb2
+def load_design(bbdir: str, design: str, selection: str):
+    from utils.path import load_design_config
 
-    path = (
-        Path(bbdir)
-        / "examples"
-        / "designs"
-        / design
-        / "output"
-        / "generated"
-        / "design.pb"
-    )
-    if not path.is_file():
-        raise FileNotFoundError(f"missing {path}; run bbdev config --install")
-    msg = design_pb2.Design()
-    msg.ParseFromString(path.read_bytes())
+    msg = load_design_config(bbdir, design, selection=selection)
     if not msg.name or not msg.device.cores:
-        raise ValueError(f"empty design.pb: {path}")
+        raise ValueError(f"empty design.pb of {design} {selection}")
     return msg
 
 
-def load_design_uvm(bbdir: str, design: str) -> dict[str, list[str]]:
-    from utils.path import load_design_config
-
-    msg = load_design_config(bbdir, design)
+def load_design_uvm(bbdir: str, design: str, selection: str) -> dict[str, list[str]]:
+    msg = load_design(bbdir, design, selection)
     config = {"balls": list(msg.verification.balls), "ips": list(msg.verification.ips)}
     if not config["balls"] and not config["ips"]:
         raise ValueError(f"design {design}: protobuf has no UVM targets")
@@ -75,7 +61,7 @@ def ball_domain(design, ball: str | None = None):
         (domain, mapping)
         for domain in domains
         for mapping in domain.balls
-        if mapping.ball_dir == ball
+        if mapping.component == ball
     ]
     if not matches:
         raise ValueError(f"ball {ball!r} not in design.pb")
@@ -89,7 +75,7 @@ def selected_mappings(domain, ball: str | None):
     if ball is None:
         return list(domain.balls)
     for m in domain.balls:
-        if m.ball_dir == ball:
+        if m.component == ball:
             return [m]
     raise ValueError(f"ball {ball!r} not in design.pb")
 
@@ -102,7 +88,7 @@ def ball_owner(design, ball):
         owners.extend(
             (acc, core)
             for acc in accelerators
-            if any(item.ball_dir == ball for item in acc.balldomain.balls)
+            if any(item.component == ball for item in acc.balldomain.balls)
         )
     if not owners:
         raise ValueError(f"ball {ball!r} not in design.pb")
@@ -123,7 +109,7 @@ def ball_owner(design, ball):
 
 def vcs_defines(domain, mapping, thread, core, parameters):
     shared_bank_num = (
-        core.shared_mem.entries // thread.mem.bank.entries
+        core.shared_mem.entries // core.shared_mem.bank_entries
         if core.shared_mem.enable
         else 0
     )
@@ -167,11 +153,13 @@ def _filelist(
     return str(dst)
 
 
-def load_ip(bbdir: str, name: str, design: str | None = None) -> list[dict]:
+def load_ip(
+    bbdir: str, name: str, design: str | None, selection: str | None
+) -> list[dict]:
     from verification import default_ip_config
 
     if design is not None:
-        msg = load_design(bbdir, design)
+        msg = load_design(bbdir, design, selection)
     else:
         import design_pb2
 
@@ -368,9 +356,11 @@ def check_uvm_result(
         )
 
 
-def build_ip(bbdir: str, design: str | None, name: str, ctx) -> dict:
+def build_ip(
+    bbdir: str, design: str | None, selection: str | None, name: str, ctx
+) -> dict:
     targets = []
-    for config in load_ip(bbdir, name, design):
+    for config in load_ip(bbdir, name, design, selection):
         build_ip_profile(bbdir, design, name, ctx, config)
         targets.extend(config["targets"])
     return {"targets": targets}
@@ -628,10 +618,12 @@ def report_ip_coverage(
             )
 
 
-def run_ip(bbdir: str, design: str | None, name: str, ctx, cov_root: str) -> dict:
+def run_ip(
+    bbdir: str, design: str | None, selection: str | None, name: str, ctx, cov_root: str
+) -> dict:
     results = [
         run_ip_profile(bbdir, design, name, ctx, cov_root, config)
-        for config in load_ip(bbdir, name, design)
+        for config in load_ip(bbdir, name, design, selection)
     ]
     return {"design": design, "results": results, "failures": []}
 
@@ -727,21 +719,17 @@ def run_ip_profile(
 
 
 def build_ball(
-    bbdir: str, design_name: str, mill_cfg: str, domain, mapping, ctx
+    bbdir: str, design_name: str, selection: str, mill_cfg: str, domain, mapping, ctx
 ) -> None:
-    ball = mapping.ball_dir
-    verify_dir = Path(bbdir) / "examples" / "components" / "balls" / ball / "verify"
+    ball = mapping.component
+    verify_dir = Path(bbdir) / "examples" / "prefab" / "balls" / ball / "verify"
     casegen = verify_dir / "casegen" / "Cargo.toml"
-    rtl_dir = (
-        Path(bbdir)
-        / "examples/designs"
-        / design_name
-        / "output/sims/device/arch"
-        / mill_cfg
+    rtl_dir = Path(design_arch_root(bbdir, design_name, selection=selection)) / (
+        f"verilog/{mill_cfg}"
     )
-    design = load_design(bbdir, design_name)
+    design = load_design(bbdir, design_name, selection)
     thread, core = ball_owner(design, ball)
-    sim_dir = verify_dir.parent / "output" / "uvm" / design_name
+    sim_dir = verify_dir.parent / "output" / "uvm" / design_name / selection
     uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
     flist = _filelist(verify_dir, ball, uvm_rel, rtl_dir, sim_dir)
     parameters_path = verify_dir / "parameters.toml"
@@ -799,12 +787,19 @@ def build_ball(
 
 
 def run_ball(
-    bbdir: str, design_name: str, mill_cfg: str, domain, mapping, ctx, cov_dir: str
+    bbdir: str,
+    design_name: str,
+    selection: str,
+    mill_cfg: str,
+    domain,
+    mapping,
+    ctx,
+    cov_dir: str,
 ) -> None:
-    ball = mapping.ball_dir
-    verify_dir = Path(bbdir) / "examples" / "components" / "balls" / ball / "verify"
-    simv = verify_dir.parent / "output" / "uvm" / design_name / "simv"
-    build_ball(bbdir, design_name, mill_cfg, domain, mapping, ctx)
+    ball = mapping.component
+    verify_dir = Path(bbdir) / "examples" / "prefab" / "balls" / ball / "verify"
+    simv = verify_dir.parent / "output" / "uvm" / design_name / selection / "simv"
+    build_ball(bbdir, design_name, selection, mill_cfg, domain, mapping, ctx)
     crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())[
         "package"
     ]["name"]
@@ -817,12 +812,17 @@ def run_ball(
     )
     test = f"{ball}_ball_test"
     verify_config = (
-        verify_dir.parent / "output" / "uvm" / design_name / "verify_config.env"
+        verify_dir.parent
+        / "output"
+        / "uvm"
+        / design_name
+        / selection
+        / "verify_config.env"
     )
-    design = load_design(bbdir, design_name)
+    design = load_design(bbdir, design_name, selection)
     thread, _ = ball_owner(design, ball)
     verify_config.write_text(
-        f"bank_entries={thread.mem.bank.entries}\nball_id={mapping.ball_id}\n"
+        f"bank_entries={thread.mem.bank.entries}\nball_id={mapping.id}\n"
     )
     simv_q = shlex.quote(str(simv))
     script = (
@@ -832,7 +832,7 @@ def run_ball(
         f"BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} "
         f'"$loader" --library-path "$library_path" {simv_q} -no_save '
         f"-sv_lib {shlex.quote(str(dpi))} "
-        f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.ball_id} "
+        f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.id} "
         f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
     )
     cmd = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -ic {shlex.quote(script)}"
@@ -880,10 +880,12 @@ def dashboard_summary(cov_dir: str) -> dict[str, str]:
     return dict(zip(keys, vals))
 
 
-def run_design(bbdir: str, design: str, ball: str | None, ctx, do_run: bool) -> dict:
-    msg = load_design(bbdir, design)
+def run_design(
+    bbdir: str, design: str, selection: str, ball: str | None, ctx, do_run: bool
+) -> dict:
+    msg = load_design(bbdir, design, selection)
     domain = ball_domain(msg, ball)
-    mill_cfg = msg.simulations["device"].top
+    mill_cfg = msg.simulation.top
     if not mill_cfg:
         raise ValueError(f"design {design!r} has no sims.verilator for UVM")
     maps = selected_mappings(domain, ball)
@@ -892,22 +894,24 @@ def run_design(bbdir: str, design: str, ball: str | None, ctx, do_run: bool) -> 
     run_root = None
     if do_run:
         stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-        run_name = "all" if ball is None else maps[0].ball_dir
-        run_root = log_dir(bbdir, design, "verilog", stamp, "uvm", run_name)
+        run_name = "all" if ball is None else maps[0].component
+        run_root = log_dir(
+            bbdir, design, "verilog", stamp, "uvm", run_name, selection=selection
+        )
     for m in maps:
         if do_run:
             cov = (
-                os.path.join(run_root, m.ball_dir, "coverage")
+                os.path.join(run_root, m.component, "coverage")
                 if ball is None
                 else os.path.join(run_root, "coverage")
             )
-            run_ball(bbdir, design, mill_cfg, domain, m, ctx, cov)
+            run_ball(bbdir, design, selection, mill_cfg, domain, m, ctx, cov)
             if not (Path(cov) / "dashboard.txt").is_file():
                 raise RuntimeError(f"urg wrote no dashboard.txt under {cov}")
-            covs.append((m.ball_dir, cov))
+            covs.append((m.component, cov))
         else:
-            build_ball(bbdir, design, mill_cfg, domain, m, ctx)
-        ran.append(m.ball_dir)
+            build_ball(bbdir, design, selection, mill_cfg, domain, m, ctx)
+        ran.append(m.component)
     info = {"design": design, "mill": mill_cfg, "balls": ran}
     if do_run and ball is None:
         index_dir = Path(run_root) / "coverage"
@@ -931,13 +935,14 @@ def run_design(bbdir: str, design: str, ball: str | None, ctx, do_run: bool) -> 
 def run_uvm(
     bbdir: str,
     design: str,
+    selection: str,
     ball: str | None,
     ip: str | None,
     ctx,
     do_run: bool,
 ) -> dict:
     if ball is not None:
-        return run_design(bbdir, design, ball, ctx, do_run)
+        return run_design(bbdir, design, selection, ball, ctx, do_run)
     if ip is not None:
         if do_run:
             stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -949,19 +954,19 @@ def run_uvm(
                 "uvm",
                 ip,
             )
-            return run_ip(bbdir, design, ip, ctx, run_root)
-        config = build_ip(bbdir, design, ip, ctx)
+            return run_ip(bbdir, design, selection, ip, ctx, run_root)
+        config = build_ip(bbdir, design, selection, ip, ctx)
         return {
             "design": design,
             "ip": ip,
             "targets": [target["name"] for target in config["targets"]],
         }
 
-    targets = load_design_uvm(bbdir, design)
+    targets = load_design_uvm(bbdir, design, selection)
     results, failures = [], []
     for ball in targets["balls"]:
         try:
-            results.append(run_design(bbdir, design, ball, ctx, do_run))
+            results.append(run_design(bbdir, design, selection, ball, ctx, do_run))
         except Exception as error:
             if not do_run:
                 raise
@@ -979,9 +984,11 @@ def run_uvm(
                     "uvm",
                     ip,
                 )
-                results.extend(run_ip(bbdir, design, ip, ctx, run_root)["results"])
+                results.extend(
+                    run_ip(bbdir, design, selection, ip, ctx, run_root)["results"]
+                )
             else:
-                config = build_ip(bbdir, design, ip, ctx)
+                config = build_ip(bbdir, design, selection, ip, ctx)
                 results.append(
                     {
                         "design": design,

@@ -1,5 +1,4 @@
 #include <bbhw/isa/isa.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -17,20 +16,20 @@ int main(void) {
       0,
       12,
       0x40002000,
-      {BB_BANK0(2) | BB_BANK2(2) | BB_ITER(16), BANK_LINES,
-       BB_BANK0(3) | BB_BANK2(3) | BB_ITER(16), BANK_LINES},
+      {BB_BANK0(2) | BB_BANK2(2) | BB_ITER(16), THREAD_MEM_BANK_ENTRIES,
+       BB_BANK0(3) | BB_BANK2(3) | BB_ITER(16), THREAD_MEM_BANK_ENTRIES},
       0};
   bb_mvin((uintptr_t)input, 2, 16, 1);
   bb_mvin((uintptr_t)&call, 0, sizeof(call) / 16, 1);
   bb_mem_alloc(4, 1, 1);
   bb_mem_transfer(0, 3);
   bb_mem_transfer(2, 3);
-  mvin_kernel(image, sizeof(image), VIRTUAL_BANK_NUM);
-  run_kernel(4, VIRTUAL_BANK_NUM, 3, 0);
+  mvin_kernel(image, sizeof(image), CORE_VIRTUAL_BANK_COUNT);
+  run_kernel(4, CORE_VIRTUAL_BANK_COUNT, 3, 0);
   int32_t groups[2][64] __attribute__((aligned(16)));
   bb_mvout_group((uintptr_t)groups[0], 3, 1, 16, 1);
   bb_mvout_group((uintptr_t)groups[1], 3, 2, 16, 1);
-  release_kernel(VIRTUAL_BANK_NUM);
+  release_kernel(CORE_VIRTUAL_BANK_COUNT);
   for (unsigned row = 0; row < 16; ++row)
     for (unsigned group = 0; group < 2; ++group)
       for (unsigned lane = 0; lane < 4; ++lane)

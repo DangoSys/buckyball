@@ -1,5 +1,5 @@
 #define _GNU_SOURCE
-#include <instances.h>
+#include <bb_cores.h>
 #include <stdint.h>
 #ifdef __linux__
 #include <pthread.h>
@@ -9,7 +9,7 @@
 #include <unistd.h>
 #endif
 // Controllers publish cache-line payloads and contend on one atomic counter.
-enum { CONTROLLERS = BB_CORE_NUM, ROUNDS = 2 };
+enum { CONTROLLERS = BB_NUM_CORES, ROUNDS = 2 };
 static uint64_t payload[CONTROLLERS][8] __attribute__((aligned(64)));
 static uint64_t counter __attribute__((aligned(64)));
 static uint64_t turn __attribute__((aligned(64)));

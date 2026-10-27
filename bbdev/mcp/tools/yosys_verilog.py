@@ -13,7 +13,7 @@ def register(mcp):
         design: str,
         top: Optional[str] = None,
         output_dir: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Generate Verilog for yosys flow. POST /yosys/verilog."""
@@ -24,8 +24,8 @@ def register(mcp):
             top=top,
             output_dir=output_dir,
         )
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

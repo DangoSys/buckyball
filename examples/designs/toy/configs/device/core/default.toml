@@ -27,7 +27,7 @@ entries = 16384
 inputChannels = 1
 defaultGroupCount = 1
 virtualBankCount = 16
-memCycles = 10
+latency = 10
 bankEntries = 1024
 bankWidth = 128
 

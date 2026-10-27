@@ -2,7 +2,7 @@
 # The software stack of the poly device simulation: every level the device
 # needs, built bottom up.
 #
-#   bbdev stack --build "--design poly"
+#   bbdev stack --build "--design poly --device <config>"
 #
 # configures this with DESIGN_CMAKE, generated from design.pb. Each level is a
 # CMake build of its own: cores and threads build buddy-opt plugins for the

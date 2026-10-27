@@ -15,7 +15,7 @@ def register(mcp):
         top: Optional[str] = None,
         output_dir: Optional[str] = None,
         next_topic: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Assemble synthesis source list plus SRAM macros. POST /ip/replace."""
@@ -28,8 +28,8 @@ def register(mcp):
             output_dir=output_dir,
             next_topic=next_topic,
         )
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

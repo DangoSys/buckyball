@@ -14,9 +14,9 @@ case class FrontendParam(
   bank_alias_enable:        Boolean,
   rs_out_of_order_response: Boolean,
   bank_id_len:              Int,
-  vbank_id_upper_bound:     Int,
+  max_private_vbank:        Int,
   /** ISA bank-id namespace base for shared banks: raw id >= this means shared. */
-  shared_bank_id_base:      Int,
+  shared_vbank_base:        Int,
   iter_len:                 Int,
   sub_rob_enable:           Boolean,
   sub_rob_depth:            Int)
@@ -32,8 +32,8 @@ object FrontendParam {
       p.getBankAliasEnable,
       p.getRsOutOfOrderResponse,
       p.getBankIdLen,
-      p.getVbankIdUpperBound,
-      p.getSharedBankIdBase,
+      p.getMaxPrivateVbank,
+      p.getSharedVbankBase,
       p.getIterLen,
       p.getSubRobEnable,
       p.getSubRobDepth

@@ -12,7 +12,7 @@ int main() {
                       __ATOMIC_RELEASE);
     __atomic_add_fetch(&completed, 1, __ATOMIC_RELEASE);
   }
-  if (hart == BB_REPORT_HART) {
+  if (hart == WORKLOAD_REPORT_HART) {
     while (__atomic_load_n(&completed, __ATOMIC_ACQUIRE) != expected)
       asm volatile("nop");
     return __atomic_load_n(&failed, __ATOMIC_ACQUIRE) != 0;

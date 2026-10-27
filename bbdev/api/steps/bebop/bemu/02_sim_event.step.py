@@ -143,14 +143,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         run_args.append("--disasm")
     if input_data.get("tool-profile"):
         run_args.append("--tool-profile")
-    for trace_name in ("itrace", "mtrace"):
+    for trace_name in ("itrace", "mtrace", "ctrace"):
         if input_data.get(trace_name, False):
             run_args.append(f"--{trace_name}")
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(run_args)}"
     run_cmd = f"nix develop -c sh -c {shlex.quote(inner_cmd)}"
     run_cmd = f"set -o pipefail; {run_cmd} 2>&1 | tee {shlex.quote(str(Path(run_log) / 'run.log'))}"
     ctx.logger.info(f"Running bebop bemu: {run_cmd}")
-    report_context = source_context(bbdir, design)
+    report_context = source_context(bbdir, design, input_data["target"])
     run_result = await stream_run_logger_async(
         cmd=run_cmd,
         logger=ctx.logger,

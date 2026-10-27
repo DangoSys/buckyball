@@ -30,182 +30,181 @@ workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW_COMMANDS = {
     "verilator": {
         "clean": (
-            'Clean build directory. Args: "--design <design> (--device | --core'
+            'Clean build directory. Args: "--design <design> (--device <config> | --core'
             ' <entry>)"'
         ),
         "verilog": (
-            'Generate verilog files. Args: "--design <design> (--device | --core'
+            'Generate verilog files. Args: "--design <design> (--device <config> | --core'
             ' <entry>)"'
         ),
         "build": (
-            'Build simulation executable. Args: "--design <design> (--device | --core'
+            'Build simulation executable. Args: "--design <design> (--device <config> | --core'
             ' <entry>) [--jobs <num>]"'
         ),
         "sim": (
             "Run a built simulation on a baremetal workload of the entry. Args:"
-            ' "--design <design> (--device | --core <entry>) --binary <workload name>'
+            ' "--design <design> (--device <config> | --core <entry>) --binary <workload name>'
             " [--batch] [--no-wave] [--coverage] [--itrace] [--mtrace] [--pmctrace]"
             ' [--ctrace] [--banktrace]"'
         ),
         "run": (
-            'Generate RTL, build and run. Args: "--design <design> (--device | --core'
+            'Generate RTL, build and run. Args: "--design <design> (--device <config> | --core'
             " <entry>) --binary <workload name> [--jobs <num>] [--batch] [--no-wave]"
             ' [--coverage] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
         ),
     },
     "vcs": {
         "clean": (
-            'Clean the entry VCS build. Args: "--design <design> (--device | --core'
+            'Clean the entry VCS build. Args: "--design <design> (--device <config> | --core'
             ' <entry>)"'
         ),
         "verilog": (
-            'Generate the entry tapeout RTL for VCS. Args: "--design <design> (--device'
+            'Generate the entry tapeout RTL for VCS. Args: "--design <design> (--device <config>'
             ' | --core <entry>)"'
         ),
         "build": (
-            'Build the entry VCS simv. Args: "--design <design> (--device | --core'
+            'Build the entry VCS simv. Args: "--design <design> (--device <config> | --core'
             ' <entry>) [--jobs <num>]"'
         ),
         "sim": (
             'Run a built simv on a baremetal workload of the entry. Args: "--design'
-            " <design> (--device | --core <entry>) --binary <workload name> [--batch]"
+            " <design> (--device <config> | --core <entry>) --binary <workload name> [--batch]"
             ' [--wave]"'
         ),
         "run": (
-            'Generate RTL, build and run VCS. Args: "--design <design> (--device |'
+            'Generate RTL, build and run VCS. Args: "--design <design> (--device <config> |'
             ' --core <entry>) --binary <workload name> [--jobs <num>] [--batch]"'
         ),
     },
     "workload": {
         "clean": (
-            'Clean workload output directory. Args: "--design <design> (--device |'
+            'Clean workload output directory. Args: "--design <design> (--device <config> |'
             ' --core <entry>)"'
         ),
         "build": (
-            'Build test workloads. Args: "--design <design> (--device | --core <entry>)'
+            'Build test workloads. Args: "--design <design> (--device <config> | --core <entry>)'
             ' [--ctest|--mlirtest|--soctest]"'
         ),
         "tohex": (
-            'Convert design workload ELF to hex. Args: "--design <design> (--device |'
+            'Convert design workload ELF to hex. Args: "--design <design> (--device <config> |'
             ' --core <entry>)"'
         ),
     },
     "model": {
         "build": (
             "Build model recipes on the device of a design (all its models when --model"
-            ' is omitted). Args: "--design <design> [--model <name>]"'
+            ' is omitted). Args: "--design <design> --device <config> [--model <name>]"'
         ),
     },
     "kernel": {
         "build": (
             "Build RISC-V kernel + rootfs carrying the Linux programs of a design."
-            ' Args: "--design <design> --device [--interactive]"'
+            ' Args: "--design <design> --device <config> [--interactive]"'
         ),
     },
     "firesim": {
         "enumeratefpgas": (
-            'Enumerate FPGAs. Args: "--design <design> (--device | --core <entry>)"'
+            'Enumerate FPGAs. Args: "--design <design> (--device <config> | --core <entry>)"'
         ),
         "buildbitstream": (
-            'Build bitstream. Args: "--design <design> (--device | --core <entry>)"'
+            'Build bitstream. Args: "--design <design> (--device <config> | --core <entry>)"'
         ),
         "infrasetup": (
-            'Infrasetup. Args: "--design <design> (--device | --core <entry>)"'
+            'Infrasetup. Args: "--design <design> (--device <config> | --core <entry>)"'
         ),
         "runworkload": (
-            'Run workload. Args: "--design <design> (--device | --core <entry>)"'
+            'Run workload. Args: "--design <design> (--device <config> | --core <entry>)"'
         ),
     },
     "stack": {
         "build": (
-            'Build a registered simulation stack. Args: "--design <design> (--device |'
+            'Build a registered simulation stack. Args: "--design <design> (--device <config> |'
             ' --core <entry>)"'
         ),
     },
     "bebop-bemu": {
         "sim": (
-            'Run Bebop emulator simulation. Args: "--design <design> (--device | --core'
+            'Run Bebop emulator simulation. Args: "--design <design> (--device <config> | --core'
             " <entry>) --binary <file-name> [--disasm] [--tool-profile] [--itrace]"
-            ' [--mtrace]"; resolves files in the selected design workload/kernel'
+            ' [--mtrace] [--ctrace]"; resolves files in the selected design workload/kernel'
             " outputs"
         ),
         "analysis": (
             'Analyze itrace/mtrace in an existing log dir. Args: "--design <design>'
-            ' (--device | --core <entry>) --run <name> --itrace|--mtrace"'
+            ' (--device <config> | --core <entry>) --run <name> --itrace|--mtrace"'
         ),
         "batch": (
-            'Run Bebop BEMU batch regression. Args: "--design <design> --device --test'
-            ' <bare-tests|linux-tests> [--jobs <num>] [--clean-before]"'
+            'Run Bebop BEMU batch regression. Args: "--design <design> --device <config> --test'
+            ' <bare-tests|linux-tests> [--jobs <num>]"'
         ),
     },
     "bebop-verilator": {
         "clean": (
-            'Clean the entry RTL. Args: "--design <design> (--device | --core <entry>)"'
+            'Clean the entry RTL. Args: "--design <design> (--device <config> | --core <entry>)"'
         ),
         "verilog": (
-            'Generate the entry RTL. Args: "--design <design> (--device | --core'
+            'Generate the entry RTL. Args: "--design <design> (--device <config> | --core'
             ' <entry>) [--diff]"'
         ),
         "build": (
-            'Build the entry Verilator runner. Args: "--design <design> (--device |'
+            'Build the entry Verilator runner. Args: "--design <design> (--device <config> |'
             ' --core <entry>) [--diff] [--jobs <num>]"'
         ),
         "sim": (
             'Run a built runner on a workload of the entry. Args: "--design <design>'
-            " (--device | --core <entry>) --binary <workload name> [--diff] [--no-wave]"
+            " (--device <config> | --core <entry>) --binary <workload name> [--diff] [--no-wave]"
             ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
         ),
         "run": (
-            'Generate RTL, build and run. Args: "--design <design> (--device | --core'
+            'Generate RTL, build and run. Args: "--design <design> (--device <config> | --core'
             " <entry>) --binary <workload name> [--diff] [--jobs <num>] [--no-wave]"
             ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
         ),
         "batch": (
-            'Run the entry regression. Args: "--design <design> --device --test'
-            " <bare-tests|linux-tests> [--diff] [--jobs <num>] [--clean-before]"
-            ' [--junit <file>]"'
+            'Run the entry regression. Args: "--design <design> --device <config> --test'
+            ' <bare-tests|linux-tests> [--diff] [--jobs <num>]"'
         ),
     },
     "bebop-vcs": {
         "sim": (
             'Run one SoC workload through the Bebop VCS node. Args: "--design <design>'
-            ' (--device | --core <entry>) --binary <name> [--wave]"'
+            ' (--device <config> | --core <entry>) --binary <name> [--wave]"'
         ),
         "verilog": (
-            'Generate Bebop VCS RTL once. Args: "--design <design> (--device | --core'
+            'Generate Bebop VCS RTL once. Args: "--design <design> (--device <config> | --core'
             ' <entry>)"'
         ),
         "build": (
-            'Build the reusable Bebop VCS simv. Args: "--design <design> (--device |'
+            'Build the reusable Bebop VCS simv. Args: "--design <design> (--device <config> |'
             ' --core <entry>) [--jobs <num>]"'
         ),
         "batch": (
-            'Run design-owned VCS regression. Args: "--design <design> --device --test'
-            ' <bare-tests|linux-tests> [--jobs <num>] [--junit <absolute-path>]"'
+            'Run design-owned VCS regression. Args: "--design <design> --device <config> --test'
+            ' <bare-tests|linux-tests> [--jobs <num>]"'
         ),
     },
     "bebop-p2e": {
         "clean": (
-            'Clean Bebop P2E build directory. Args: "--design <design> (--device |'
+            'Clean Bebop P2E build directory. Args: "--design <design> (--device <config> |'
             ' --core <entry>) [--output-dir <dir>]"'
         ),
         "verilog": (
             'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--design'
-            ' <design> (--device | --core <entry>) [--diff] [--output-dir <dir>]"'
+            ' <design> (--device <config> | --core <entry>) [--diff] [--output-dir <dir>]"'
         ),
         "buildbitstream": (
-            'Build Bebop P2E runtime case. Args: "--design <design> (--device | --core'
+            'Build Bebop P2E runtime case. Args: "--design <design> (--device <config> | --core'
             " <entry>) [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir"
             ' <dir>]"'
         ),
         "runworkload": (
-            'Cold-load Bebop P2E workload. Args: "--design <design> (--device | --core'
+            'Cold-load Bebop P2E workload. Args: "--design <design> (--device <config> | --core'
             " <entry>) --image <hex-workload-name> --bitstream <path> [--fpga-location"
             " <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace]"
             ' [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"'
         ),
         "batch": (
-            'Run Bebop P2E batch regression. Args: "--design <design> --device'
+            'Run Bebop P2E batch regression. Args: "--design <design> --device <config>'
             " --bitstream <path> --test <bare-tests|linux-tests> [--diff]"
             ' [--fpga-location <N.X>]"'
         ),
@@ -213,17 +212,17 @@ WORKFLOW_COMMANDS = {
     "dc": {
         "verilog": (
             "Generate top-scoped DC RTL under arch/build/<design>/<config>. Args:"
-            ' "--design <design> (--device | --core <entry>) [--top <module>]"'
+            ' "--design <design> (--device <config> | --core <entry>) [--top <module>]"'
         ),
         "area": (
             "Generate RTL, run DC synthesis, and report area under"
             ' log/<timestamp>/<design>/<config>/area. Args: "--design <design>'
-            ' (--device | --core <entry>) [--top <module>]".'
+            ' (--device <config> | --core <entry>) [--top <module>]".'
         ),
         "power": (
             "Generate RTL, run design-owned power simulation, then run PrimeTime PX"
             ' under log/<timestamp>/<design>/<config>/power. Args: "--design <design>'
-            " (--device | --core <entry>) [--top <module>] [--workload <built ELF"
+            " (--device <config> | --core <entry>) [--top <module>] [--workload <built ELF"
             " name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format"
             ' <saif|vcd|fsdb>]".'
         ),
@@ -231,24 +230,24 @@ WORKFLOW_COMMANDS = {
     "ip": {
         "generate": (
             "Generate SRAM macros from elaborator mems.conf under"
-            ' arch/build/<design>/<config>. Args: "--design <design> (--device | --core'
+            ' arch/build/<design>/<config>. Args: "--design <design> (--device <config> | --core'
             " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
             ' [--next-topic <topic>]"'
         ),
         "replace": (
             "Assemble top-scoped synthesis RTL plus SRAM macros under"
-            ' arch/build/<design>/<config>. Args: "--design <design> (--device | --core'
+            ' arch/build/<design>/<config>. Args: "--design <design> (--device <config> | --core'
             " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
             ' [--next-topic <topic>]"'
         ),
     },
     "yosys": {
         "run": (
-            'Run yosys flow. Args: "[--top <top_module>] [--design <design> (--device |'
+            'Run yosys flow. Args: "[--top <top_module>] [--design <design> (--device <config> |'
             ' --core <entry>)] [--output-dir <dir>] [--vcd <file>]"'
         ),
         "verilog": (
-            'Generate verilog for yosys flow. Args: "[--design <design> (--device |'
+            'Generate verilog for yosys flow. Args: "[--design <design> (--device <config> |'
             ' --core <entry>)] [--output-dir <dir>]"'
         ),
         "synth": (
@@ -262,18 +261,18 @@ WORKFLOW_COMMANDS = {
             ' <dir>"'
         ),
         "build": (
-            'Build a Ball or IP UVM simulation. Args: "[--design <design>] (--device |'
-            ' --ball <name> | --ip <name>)"'
+            'Build a Ball or IP UVM simulation. Args: "[--design <design> --device'
+            ' <config>] [--ball <name> | --ip <name>]"'
         ),
         "run": (
-            'Build and run a Ball or IP UVM simulation. Args: "[--design <design>]'
-            ' (--device | --ball <name> | --ip <name>)"'
+            'Build and run a Ball or IP UVM simulation. Args: "[--design <design>'
+            ' --device <config>] [--ball <name> | --ip <name>]"'
         ),
     },
     "config": {
         "install": (
-            'Install design configurations. Args: "[--design <design> (--device |'
-            ' --core <entry>)]"'
+            "Install design configurations: one design.pb per device config and core"
+            ' entry. Args: "[--design <design>]"'
         ),
     },
 }
@@ -369,7 +368,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(
         prog="bbdev",
-        description="Development tool for buckyball project",
+        description=(
+            "Development tool for buckyball project.\n"
+            "--device <config> names a device config registered in the design's sims"
+            " config\n(configs/sims/default.toml [targets.device.configs]), e.g."
+            " --device PolyVerilatorConfig."
+        ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
 

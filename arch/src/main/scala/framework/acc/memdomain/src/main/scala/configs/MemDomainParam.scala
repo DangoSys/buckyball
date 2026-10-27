@@ -52,7 +52,7 @@ object MemDomainParam {
     virtualBanks: Int,
     participants: Int
   ): MemDomainParam = {
-    require(p.hasBank && p.hasDma && p.hasMmio && p.hasMem, "Memory domain configuration is incomplete")
+    require(p.hasBank && p.hasDma && p.hasMmio, "Memory domain configuration is incomplete")
     if (shared.getEnable) require(participants > 0 && shared.getInputChannels % participants == 0)
     val bank = p.getBank
     require(bank.hasLayoutEnable, "Bank layout policy is required")
@@ -77,7 +77,7 @@ object MemDomainParam {
       shared.getDefaultGroupCount,
       bank.getRequestPorts,
       p.getDma.getBusWidth,
-      p.getMem.getAddrLen,
+      p.getAddrLen,
       mmio.getEnable,
       mmio.getBankNum,
       mmio.getBankEntries,

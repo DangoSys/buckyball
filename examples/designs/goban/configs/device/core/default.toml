@@ -26,7 +26,7 @@ entries = 16384
 inputChannels = 52
 defaultGroupCount = 1
 virtualBankCount = 64
-memCycles = 10
+latency = 10
 bankEntries = 1024
 bankWidth = 128
 
@@ -39,22 +39,22 @@ dataBits = 128
 id = 0
 name = "matmul0"
 component = "matmul"
-include = "../../../../../components/threads/matmul/configs/default.toml"
+include = "../../../../../prefab/threads/matmul/configs/default.toml"
 
 [[threads]]
 id = 1
 name = "matmul1"
 component = "matmul"
-include = "../../../../../components/threads/matmul/configs/default.toml"
+include = "../../../../../prefab/threads/matmul/configs/default.toml"
 
 [[threads]]
 id = 2
 name = "matmul2"
 component = "matmul"
-include = "../../../../../components/threads/matmul/configs/default.toml"
+include = "../../../../../prefab/threads/matmul/configs/default.toml"
 
 [[threads]]
 id = 3
 name = "matmul3"
 component = "matmul"
-include = "../../../../../components/threads/matmul/configs/default.toml"
+include = "../../../../../prefab/threads/matmul/configs/default.toml"

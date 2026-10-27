@@ -49,16 +49,17 @@ nix develop
 
 **3. Verify Installation**
 
-Run Verilator simulation test to verify installation:
+Run Verilator simulation test to verify installation. `--device` names a device config
+registered in the design's `configs/sims/default.toml` (`[targets.device.configs]`):
 
 ```bash
-bbdev verilator --run '--jobs 16 --design toy --device --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --batch'
+bbdev verilator --run '--jobs 16 --design toy --device ToyVerilatorConfig --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --batch'
 ```
 
 **4. Try faster simulation using bebop**
 
 ```bash
-bbdev bebop-verilator --run '--design toy --device --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace'
+bbdev bebop-verilator --run '--design toy --device ToyVerilatorConfig --binary toy-toy-ctest-relu_i32_16x16_test-baremetal --itrace --mtrace --pmctrace --ctrace'
 ```
 
 ## Tutorial

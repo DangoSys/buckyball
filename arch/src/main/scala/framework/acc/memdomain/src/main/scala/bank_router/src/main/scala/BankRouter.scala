@@ -28,6 +28,12 @@ class BankMapping(frontendParam: FrontendParam) extends Bundle {
   val write    = Bool()
 }
 
+// The BLT installs an accepted mapping over several cycles; busy stays high
+// until it is installed, and the ROB holds the issuing instruction meanwhile.
+class BankMappingIO(frontendParam: FrontendParam) extends DecoupledIO(new BankMapping(frontendParam)) {
+  val busy = Input(Bool())
+}
+
 @instantiable
 class BankRouter(
   val frontendParam: FrontendParam,
@@ -54,7 +60,7 @@ class BankRouter(
     val requests           = Vec(memParam.bankRequestPorts, Flipped(new BankPort(frontendParam, memParam)))
     val directRequest      = Vec(gpRequests + 2, Flipped(new BankPort(frontendParam, memParam)))
     val config             = Flipped(Decoupled(new LayoutConfig(frontendParam, memParam)))
-    val mapping            = Flipped(Decoupled(new BankMapping(frontendParam)))
+    val mapping            = Flipped(new BankMappingIO(frontendParam))
     val queryVbank         = Input(UInt(frontendParam.bank_id_len.W))
     val queryShared        = Input(Bool())
     val queryGroups        = Output(UInt(memParam.groupCountWidth.W))
@@ -153,7 +159,7 @@ class BankRouter(
       val sharedCount    = RegNext(sharedGroups(delayedBank), 0.U)
       val owner          = owners(bank)
       val shared         = memParam.sharedEnable.B &&
-        owner >= frontendParam.shared_bank_id_base.U &&
+        owner >= frontendParam.shared_vbank_base.U &&
         owner < memParam.virtualBankCount.U
       val returnedShared = RegNext(RegNext(shared, false.B), false.B)
       val enabled        = RegNext(RegNext(request.bits.enabled(operand), false.B), false.B)
@@ -169,7 +175,7 @@ class BankRouter(
   val localBusy = WireDefault(false.B)
 
   val sharedMapping =
-    memParam.sharedEnable.B && io.mapping.bits.bank >= frontendParam.shared_bank_id_base.U &&
+    memParam.sharedEnable.B && io.mapping.bits.bank >= frontendParam.shared_vbank_base.U &&
       io.mapping.bits.bank < memParam.virtualBankCount.U &&
       (io.mapping.bits.allocate || io.mapping.bits.retire || io.mapping.bits.write)
 
@@ -179,6 +185,7 @@ class BankRouter(
   io.shared.mapping.valid := io.mapping.valid && sharedMapping
   io.shared.mapping.bits  := io.mapping.bits
   io.mapping.ready        := Mux(sharedMapping, io.shared.mapping.ready, blt.io.mapping.ready && retireAllowed)
+  io.mapping.busy         := blt.io.mapping.busy
   when(io.mapping.fire && (io.mapping.bits.allocate || io.mapping.bits.write)) {
     owners(io.mapping.bits.vbank) := io.mapping.bits.bank
   }
@@ -249,7 +256,7 @@ class BankRouter(
     when(normal.write.req.fire)(normalWritePending  := true.B)
     when(normal.write.resp.fire)(normalWritePending := false.B)
     when(local.request.fire) {
-      assert(local.request.bits.bank <= frontendParam.vbank_id_upper_bound.U)
+      assert(local.request.bits.bank <= frontendParam.max_private_vbank.U)
       assert(local.request.bits.addr < memParam.bankEntries.U)
       assert(!local.request.bits.write || local.request.bits.mask.andR)
       localPending := true.B
@@ -274,7 +281,7 @@ class BankRouter(
     val memory  = privateRequests(i)
     val owner   = owners(request.bank_id)
     val shared  =
-      memParam.sharedEnable.B && owner >= frontendParam.shared_bank_id_base.U &&
+      memParam.sharedEnable.B && owner >= frontendParam.shared_vbank_base.U &&
         owner < memParam.virtualBankCount.U
     memory <> request
     memory.is_shared := false.B

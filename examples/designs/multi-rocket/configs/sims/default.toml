@@ -10,5 +10,8 @@ stack_name = "multi-rocket"
 regression = "sims/device/regression"
 kernel = "sims/device/workloads/kernel"
 
+[targets.device.configs]
+MultiRocketVerilatorConfig = "verilator.toml"
+
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

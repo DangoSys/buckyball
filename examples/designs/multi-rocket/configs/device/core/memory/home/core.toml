@@ -1,6 +1,6 @@
 agents = 64
 mshrEntries = 8
-homeId = 96
+nodeId = 96
 requesters = "default"
 
 [cache]

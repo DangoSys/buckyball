@@ -20,7 +20,7 @@ def register(mcp):
         pmctrace: bool = False,
         ctrace: bool = False,
         banktrace: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Run one workload on non-bebop Verilator. POST /verilator/sim."""
@@ -40,8 +40,8 @@ def register(mcp):
         }
         if coverage:
             params["coverage"] = True
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/verilator/sim", params))

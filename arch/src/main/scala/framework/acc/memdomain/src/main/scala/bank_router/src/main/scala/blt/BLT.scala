@@ -12,7 +12,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.acc.memdomain.{LayoutConfig, LayoutQuery}
 import framework.acc.memdomain.BankPort
 import framework.acc.debug.trace.MemoryEvent
-import framework.acc.memdomain.bank_router.BankMapping
+import framework.acc.memdomain.bank_router.{BankMapping, BankMappingIO}
 import framework.acc.memdomain.prm.PhysicalBankPort
 import framework.acc.memdomain.PhysicalBankHash
 
@@ -45,7 +45,7 @@ class BankLayoutTable(
     val mem_req     = Vec(memParam.bankRequestPorts, Flipped(new BankPort(frontendParam, memParam)))
     val kernel_req  = Vec(kernelRequests + 2, Flipped(new BankPort(frontendParam, memParam)))
     val config      = Flipped(Decoupled(new LayoutConfig(frontendParam, memParam)))
-    val mapping     = Flipped(Decoupled(new BankMapping(frontendParam)))
+    val mapping     = Flipped(new BankMappingIO(frontendParam))
 
     // Query interface for frontend to get group count
     val query_vbank_id    = Input(UInt(frontendParam.bank_id_len.W))
@@ -106,7 +106,7 @@ class BankLayoutTable(
     VecInit(Seq.fill(memParam.bankNum)(0.U.asTypeOf(new MappingTableEntry)))
   )
 
-  // The frontend contract reserves [0, vbank_id_upper_bound] for private
+  // The frontend contract reserves [0, max_private_vbank] for private
   // banks. Keep the direct route table at that architectural size.
   val privateVbankCount =
     2 * (memParam.virtualBankCount + (if (gpParam.enable) 2
@@ -237,6 +237,9 @@ class BankLayoutTable(
   }
   io.clearBusy := VecInit(banks.map(_.clearing)).asUInt.orR
 
+  // High while a mapping is being installed (see Bank Alloc/Release).
+  val mappingBusy = RegInit(false.B)
+
   val realloc = io.config.bits.group_id === 0.U
 
   val freePbankMask =
@@ -274,8 +277,8 @@ class BankLayoutTable(
       )
     }
   }
-  io.config.ready := !io.config.bits.alloc || configBankAvailable
-  when(io.config.valid && io.config.bits.alloc && !configBankAvailable) {
+  io.config.ready := !mappingBusy && (!io.config.bits.alloc || configBankAvailable)
+  when(io.config.valid && !mappingBusy && io.config.bits.alloc && !configBankAvailable) {
     assert(false.B, "BLT allocation failed: no free physical bank\n")
   }
 
@@ -283,20 +286,43 @@ class BankLayoutTable(
   // Bank Alloc/Release
   // -----------------------------------------------------------------------------
 
-  val change    = io.mapping.bits
+  // A mapping is accepted into registers and installed over the following
+  // cycles, one group per cycle. busy stays high until it is installed; the
+  // ROB holds the issuing instruction until then, so no consumer ever sees a
+  // partially installed mapping.
+  val change    = Reg(new BankMapping(frontendParam))
+  val nextGroup = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
+  io.mapping.busy := mappingBusy
+
+  // An allocation is accepted only when enough banks exist: the unbound ones
+  // plus, for an in-place rename, the groups of the alias it replaces.
+  val incoming = io.mapping.bits
+  val reusable = Mux(incoming.reuse, groupCountByVbank(incoming.previous(privateVbankIdWidth - 1, 0)), 0.U)
+  val enough   = PopCount(mappingTable.map(!_.valid)) +& reusable >= architecturalColumns(incoming.bank)
+  io.mapping.ready := !mappingBusy && !io.config.valid && (!incoming.allocate ||
+    (if (memParam.bankLayoutEnable) enough else true.B))
+  when(io.mapping.fire) {
+    change      := incoming
+    nextGroup   := 0.U
+    mappingBusy := true.B
+  }
+
   val columns   = architecturalColumns(change.bank)
   val freeBanks =
     VecInit(mappingTable.map(entry => !entry.valid || (change.reuse && entry.vbank_id === change.previous))).asUInt
-  io.mapping.ready := !io.config.valid && (!change.allocate ||
-    (if (memParam.bankLayoutEnable) PopCount(freeBanks) >= columns else true.B))
-  when(io.mapping.fire && change.allocate) {
+  val first     = mappingBusy && nextGroup === 0.U
+  when(mappingBusy) {
+    nextGroup                                                        := nextGroup + 1.U
+    when(!change.allocate || nextGroup + 1.U >= columns)(mappingBusy := false.B)
+  }
+  when(first && change.allocate) {
     assert(
       columns =/= 0.U && columns <= memParam.bankNum.U,
       "Renamed bank requires an allocated layout"
     )
     owners(change.vbank) := change.bank
   }
-  when(io.mapping.fire && change.retire) {
+  when(first && change.retire) {
     committed(change.bank)             := change.vbank
     singleRouteValid(change.previous)  := false.B
     groupCountByVbank(change.previous) := 0.U
@@ -305,47 +331,34 @@ class BankLayoutTable(
     }
   }
   for (bank <- 0 until memParam.bankNum) {
-    when(io.mapping.fire && change.write && !change.allocate &&
+    when(first && change.write && !change.allocate &&
       mappingTable(bank).valid && mappingTable(bank).vbank_id === change.vbank) {
       io.physical(bank).bind := true.B
     }
   }
 
-  val remaining = Wire(Vec(
-    memParam.bankNum + 1,
-    UInt(memParam.bankNum.W)
-  ))
-
-  remaining(0) := freeBanks
-  for (group <- 0 until memParam.bankNum) {
+  when(mappingBusy && change.allocate) {
     val physical =
-      if (memParam.bankLayoutEnable) PriorityEncoder(remaining(group))
-      else (change.bank + group.U)(pbankIndexWidth - 1, 0)
-    remaining(group + 1) := remaining(group) & ~UIntToOH(
-      physical,
-      memParam.bankNum
-    )
-    when(io.mapping.fire && change.allocate && group.U < columns) {
-      if (memParam.bankLayoutEnable) {
-        addEntry(change.threadId, change.vbank, physical, columns > 1.U, group.U)
-        mappingTable(physical).architectural_id := change.bank
-      } else {
-        assert(
-          mappingTable(physical).valid && mappingTable(physical).architectural_id === change.bank,
-          "Fixed bank alias requires its allocated physical slot"
-        )
-        mappingTable(physical).vbank_id := change.vbank
-      }
-
-      for (bank <- 0 until memParam.bankNum) {
-        when(physical === bank.U)(io.physical(bank).bind := true.B)
-      }
-
-      when(group.U === 0.U) {
-        singleRoutePbank(change.vbank)  := physical
-        singleRouteValid(change.vbank)  := columns === 1.U
-        groupCountByVbank(change.vbank) := columns
-      }
+      if (memParam.bankLayoutEnable) PriorityEncoder(freeBanks)
+      else (change.bank + nextGroup)(pbankIndexWidth - 1, 0)
+    if (memParam.bankLayoutEnable) {
+      assert(freeBanks.orR, "BLT mapping found no free physical bank")
+      addEntry(change.threadId, change.vbank, physical, columns > 1.U, nextGroup)
+      mappingTable(physical).architectural_id := change.bank
+    } else {
+      assert(
+        mappingTable(physical).valid && mappingTable(physical).architectural_id === change.bank,
+        "Fixed bank alias requires its allocated physical slot"
+      )
+      mappingTable(physical).vbank_id := change.vbank
+    }
+    for (bank <- 0 until memParam.bankNum) {
+      when(physical === bank.U)(io.physical(bank).bind := true.B)
+    }
+    when(nextGroup === 0.U) {
+      singleRoutePbank(change.vbank)  := physical
+      singleRouteValid(change.vbank)  := columns === 1.U
+      groupCountByVbank(change.vbank) := columns
     }
   }
 

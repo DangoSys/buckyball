@@ -28,7 +28,7 @@ virtualBankCount = 24
 entries = 16384
 inputChannels = 1
 defaultGroupCount = 1
-memCycles = 10
+latency = 10
 
 [compiler]
 name = "pebble"

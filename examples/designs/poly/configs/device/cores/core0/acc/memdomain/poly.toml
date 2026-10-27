@@ -1,3 +1,5 @@
+addrLen = 39
+
 [bank]
 layoutEnable = true
 num = 4
@@ -15,6 +17,3 @@ bankNum = 1
 bankEntries = 1
 bankWidth = 128
 readWidth = 8
-
-[mem]
-addrLen = 39

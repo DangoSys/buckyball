@@ -56,22 +56,35 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     toml2json = _load_script("1_toml2json.py")
     derive = _load_script("2_parameter_derivation.py")
 
-    # step 1: generate design config JSONs from toml files
+    # step 1: expand each design, then apply the overrides of each of its simulations
     json_outs: list[Path] = []
+    designs_of: list[str] = []
     for top in tops:
         data = toml2json.design2json(top)
-        out = top.parent.parent / "output" / "generated" / "config" / "config.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(
-            json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
-        json_outs.append(out)
-        ctx.logger.info(f"Wrote design config JSON: {out}")
+        for entry, name, selection in toml2json.simulations(data):
+            out = (
+                top.parent.parent
+                / "output/sims"
+                / selection
+                / "generated/config/config.json"
+            )
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(
+                json.dumps(
+                    toml2json.simulation2json(data, entry, name, selection),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            json_outs.append(out)
+            designs_of.append(top.parent.parent.name)
+            ctx.logger.info(f"Wrote simulation config JSON: {out}")
 
-    # step 2: derive computed parameters from config JSONs
+    # step 2: derive computed parameters from each simulation config
     derived_outs: list[Path] = []
-    for top, json_path in zip(tops, json_outs):
-        design = top.parent.parent.name
+    for design, json_path in zip(designs_of, json_outs):
         data = json.loads(json_path.read_text(encoding="utf-8"))
         derived_path = json_path.parent / "derived.json"
         derive.write_derived(data, bbdir, design, derived_path)
@@ -84,12 +97,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         schemas = [
             scripts / "proto" / "design.proto",
             scripts / "proto" / "hardware.proto",
-            *sorted(
-                Path(bbdir).glob("examples/components/balls/*/configs/*_params.proto")
-            ),
-            *sorted(
-                Path(bbdir).glob("examples/components/cores/*/configs/*_params.proto")
-            ),
+            *sorted(Path(bbdir).glob("examples/prefab/balls/*/configs/*_params.proto")),
+            *sorted(Path(bbdir).glob("examples/prefab/cores/*/configs/*_params.proto")),
         ]
         includes = sorted({schema.parent for schema in schemas})
         cmd = " ".join(
@@ -117,14 +126,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 destination.write_bytes(content)
     ctx.logger.info(f"Generated design python bindings: {scripts / 'design_pb2.py'}")
 
-    # step 3.2: design.pb, the one input of every build system
+    # step 3.2: one design.pb per simulation, the one input of every build system
     json2proto = _load_script("3_json2proto.py")
     pb_outs: list[Path] = []
     for json_path, derived_path in zip(json_outs, derived_outs):
         out = json_path.parent.parent / "design.pb"
         json2proto.write_design_pb(json_path, derived_path, out, bbdir)
         pb_outs.append(out)
-        ctx.logger.info(f"Wrote design protobuf: {out}")
+        ctx.logger.info(f"Wrote simulation protobuf: {out}")
 
     await check_result(
         ctx,

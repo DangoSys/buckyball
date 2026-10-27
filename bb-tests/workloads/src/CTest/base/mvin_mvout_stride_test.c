@@ -1,11 +1,15 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-enum { ROW_BYTES = (BANK_WIDTH / 8), ROWS = 4, IN_STRIDE = 3, OUT_STRIDE = 5 };
+enum {
+  ROW_BYTES = (THREAD_MEM_BANK_WIDTH / 8),
+  ROWS = 4,
+  IN_STRIDE = 3,
+  OUT_STRIDE = 5
+};
 
 static elem_t input_matrix[ROWS * IN_STRIDE * ROW_BYTES]
     __attribute__((aligned(128)));

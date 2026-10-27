@@ -67,7 +67,7 @@ bebop = { path = "../../../../../../bebop" }
 bebop-verilator = { path = "../../../../../../bebop/src/nodes/verilator", optional = true }
 bebop-bemu = { path = "../../../../../../bebop/src/nodes/bemu" }
 bebop-design-poly = { path = "../../../emu" }
-bebop-core-reduce = { path = "../../../../../components/cores/reduce/emu" }
+bebop-core-reduce = { path = "../../../../../prefab/cores/reduce/emu" }
 clap = { version = "4", features = ["derive"] }
 
 [build-dependencies]

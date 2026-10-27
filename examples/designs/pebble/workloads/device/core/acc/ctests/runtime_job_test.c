@@ -1,8 +1,7 @@
 // Two runtime jobs on the core under test: the first moves data through a
 // bank of its accelerator, the second depends on it and checks the data.
+#include <bb_cores.h>
 #include <bbhw/isa/isa.h>
-#include <instances.h>
-#include <params.h>
 #include <runtime.h>
 #include <stdint.h>
 #include <stdio.h>

@@ -10,7 +10,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.path import get_buckyball_path, load_design_config
+from utils.path import design_output_root, get_buckyball_path, load_design_config
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 
@@ -24,22 +24,19 @@ config = {
 
 
 def kernel_build_dir(
-    bbdir: str, hart_count: int, design: str, interactive: bool, guest_memory_mib: int
+    bbdir: str,
+    hart_count: int,
+    design: str,
+    selection: str,
+    interactive: bool,
+    guest_memory_mib: int,
 ) -> str:
     suffix = "" if guest_memory_mib == 512 else f"-mem{guest_memory_mib}M"
-    suffix += f"-design-{design}"
+    suffix += f"-design-{design}-{selection.replace('/', '-')}"
     if interactive:
         suffix += "-interactive"
     name = "kernel" if hart_count == 64 else f"kernel-h{hart_count}"
     return os.path.join(bbdir, "bb-tests", "build", f"{name}{suffix}")
-
-
-def fw_payload_name(hart_count: int, design: str, guest_memory_mib: int) -> str:
-    name = "fw_payload" if hart_count == 64 else f"fw_payload-h{hart_count}"
-    name += f"-{design}-linux"
-    if guest_memory_mib != 512:
-        name += f"-mem{guest_memory_mib}M"
-    return name
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -48,19 +45,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     kernel_src = os.path.join(bbdir, "stack", "os", "linux")
     design = input_data["design"]
-    design_config = load_design_config(bbdir, design)
+    design_config = load_design_config(bbdir, design, selection=input_data["target"])
     hart_count = len(design_config.device.cores)
     ddr = design_config.device.ddr
     guest_memory_mib = (ddr.bytes - ddr.model) // (1024 * 1024)
     # A DDR without a model region leaves the base empty: init runs no model.
     model_base = f"{ddr.base + ddr.bytes - ddr.model:#x}" if ddr.model else ""
     interactive = input_data.get("interactive", False)
-    output_dir = os.path.join(
-        bbdir, "examples/designs", design, "output/sims/device/workloads/kernel"
-    )
+    output_root = design_output_root(bbdir, design, selection=input_data["target"])
+    output_dir = os.path.join(output_root, "workloads/kernel")
     os.makedirs(output_dir, exist_ok=True)
     kernel_build = kernel_build_dir(
-        bbdir, hart_count, design, interactive, guest_memory_mib
+        bbdir, hart_count, design, input_data["target"], interactive, guest_memory_mib
     )
     interactive_arg = "ON" if interactive else "OFF"
     programs = design_resource_dir(
@@ -73,6 +69,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_HART_COUNT={hart_count} "
         f"-DBUCKYBALL_GUEST_MEMORY_MIB={guest_memory_mib} "
         f"-DBUCKYBALL_KERNEL_DESIGN={design} "
+        f"-DBUCKYBALL_KERNEL_OUTPUT={output_root} "
         f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg} "
         f"-DBUCKYBALL_MODEL_BASE={model_base} "
         f"-DBUCKYBALL_KERNEL_WORKLOADS={programs}"
@@ -105,7 +102,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    payload_name = fw_payload_name(hart_count, design, guest_memory_mib)
+    # The output directory belongs to one device config, so the name is fixed.
+    payload_name = "fw_payload-linux"
     fw_payload_bin = os.path.join(output_dir, f"{payload_name}.bin")
     fw_payload_elf = os.path.join(output_dir, f"{payload_name}.elf")
     built_payload_elf = os.path.join(

@@ -1,4 +1,3 @@
-from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
 config = {
@@ -12,12 +11,7 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
-    if "design" in body:
-        try:
-            require_target(body)
-        except ValueError as error:
-            return ApiResponse(status=400, body={"error": str(error)})
-    unknown = set(body) - {"design", "device", "core"}
+    unknown = set(body) - {"design"}
     if unknown:
         return ApiResponse(
             status=400, body={"error": f"Unexpected parameters: {sorted(unknown)}"}

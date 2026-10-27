@@ -1,13 +1,12 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 #include <stdio.h>
 
 enum {
   SOURCE_HEIGHT = 5,
   SOURCE_WIDTH = 7,
-  PANEL_BYTES = (BANK_WIDTH / 8),
+  PANEL_BYTES = (THREAD_MEM_BANK_WIDTH / 8),
   CHANNELS = (PANEL_BYTES + PANEL_BYTES / 2),
   CORE_HEIGHT = 4,
   CORE_WIDTH = 3,

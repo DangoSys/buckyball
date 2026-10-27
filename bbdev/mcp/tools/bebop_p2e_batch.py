@@ -9,7 +9,11 @@ from common import submit, err, fmt, need
 def register(mcp):
     @mcp.tool()
     def bbdev_bebop_p2e_batch(
-        design: str, bitstream: str, test: str, diff: bool = False, device: bool = False
+        design: str,
+        bitstream: str,
+        test: str,
+        diff: bool = False,
+        device: str | None = None,
     ) -> str:
         """Batch bebop-p2e regression. test: bare-tests|linux-tests. POST /bebop/p2e/batch."""
         for n, v in (("design", design), ("bitstream", bitstream)):
@@ -23,8 +27,8 @@ def register(mcp):
             "test": test,
             "diff": diff,
         }
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         return fmt(
             submit(
                 "/bebop/p2e/batch",

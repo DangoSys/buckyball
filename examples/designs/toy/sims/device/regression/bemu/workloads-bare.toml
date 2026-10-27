@@ -54,4 +54,13 @@ tests = [
   "toy-toy-mlirtest-linalg_conv2d_nhwc_hwcf_deep-baremetal",
   "toy-toy-mlirtest-base_bank_loop_carried-baremetal",
   "toy-toy-mlirtest-base_bank_transfer-baremetal",
+
+  "toy-toy-ctest-vecmat16_atranspose_16x16_test-baremetal",
+  "toy-toy-ctest-vecmat16_accumulate_k4_test-baremetal",
+  "toy-toy-mlirtest-ball_matmul_at_i8_16x16-baremetal",
+  "toy-toy-mlirtest-bank_matmul_at_i8_bank_depth-baremetal",
+  "toy-toy-ctest-mxfp4_e8m0_two_block_test-baremetal",
+  "toy-toy-ctest-mxfp4_e8m0_scale_range_test-baremetal",
+  "toy-toy-mlirtest-ball_mxfp4_i8_2blocks-baremetal",
+  "toy-toy-mlirtest-bank_mxfp4_i8_bank_blocks-baremetal",
 ]

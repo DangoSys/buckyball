@@ -1,5 +1,4 @@
 from utils.event_common import require_target
-import os
 from motia import ApiRequest, ApiResponse, FlowContext, api
 from utils.event_common import require_design
 
@@ -23,11 +22,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
     diff = bool(body.get("diff", False))
-    junit = body.get("junit")
-    if junit is not None and (not isinstance(junit, str) or not os.path.isabs(junit)):
-        return ApiResponse(
-            status=400, body={"error": "junit must be an absolute file path"}
-        )
     test_type = body.get("test")
     if not test_type:
         return ApiResponse(
@@ -46,9 +40,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     data = {
         "design": design,
         "test": test_type,
-        "junit": junit,
         "jobs": body.get("jobs", 1),
-        "clean-before": body.get("clean-before", body.get("clean_before", False)),
         "diff": diff,
     }
     await ctx.enqueue(

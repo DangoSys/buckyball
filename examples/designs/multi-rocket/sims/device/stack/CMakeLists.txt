@@ -2,7 +2,7 @@
 # The software stack of the multi-rocket device simulation: every level the device
 # needs, built bottom up.
 #
-#   bbdev stack --build "--design multi-rocket"
+#   bbdev stack --build "--design multi-rocket --device <config>"
 #
 # configures this with DESIGN_CMAKE, generated from design.pb. Each level is a
 # CMake build of its own: cores and threads build buddy-opt plugins for the

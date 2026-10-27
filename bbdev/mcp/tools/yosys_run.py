@@ -14,7 +14,7 @@ def register(mcp):
         top: Optional[str] = None,
         output_dir: Optional[str] = None,
         vcd: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Full yosys flow. POST /yosys/run."""
@@ -26,8 +26,8 @@ def register(mcp):
             output_dir=output_dir,
             vcd=vcd,
         )
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

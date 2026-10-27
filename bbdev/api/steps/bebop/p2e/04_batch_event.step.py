@@ -8,8 +8,9 @@ Runs bebop p2e batch regression (aligned with runworkload):
 """
 
 from utils.path import runner_manifest
+from datetime import datetime
 from pathlib import Path
-from utils.path import design_output_root
+from utils.path import design_output_root, log_dir
 
 
 import os
@@ -176,6 +177,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         bitstream,
         "--p2e-fpga-location",
         input_data.get("fpga-location", "0.A"),
+        "--log-dir",
+        log_dir(
+            bbdir,
+            design,
+            "p2e",
+            datetime.now().strftime("%Y-%m-%d-%H-%M"),
+            "bebop-p2e",
+            test_type,
+            selection=input_data["target"],
+        ),
     ]
     if diff:
         harness_args.append("--diff")

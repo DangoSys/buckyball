@@ -19,7 +19,9 @@ def _hex_u(value: object, field: str, line_no: int) -> int:
     return int(value, 16)
 
 
-def design_maps(bbdir: str, design: str) -> tuple[dict[int, str], set[int], int]:
+def design_maps(
+    bbdir: str, design: str, selection: str
+) -> tuple[dict[int, str], set[int], int]:
     system_isa = {
         0: "fence",
         1: "barrier",
@@ -31,12 +33,12 @@ def design_maps(bbdir: str, design: str) -> tuple[dict[int, str], set[int], int]
     }
     from utils.path import load_design_config
 
-    data = load_design_config(bbdir, design)
+    data = load_design_config(bbdir, design, selection=selection)
     configurations = {
         (
-            p.config.balldomain.SerializeToString(deterministic=True),
-            p.config.mem.bank.entries,
-        ): p.config
+            p.thread.balldomain.SerializeToString(deterministic=True),
+            p.thread.mem.bank.entries,
+        ): p.thread
         for p in data.profiles
     }
     if len(configurations) != 1:
@@ -176,6 +178,7 @@ def write_report(log_dir: Path, text: str) -> Path:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--design", required=True)
+    parser.add_argument("--target", required=True)
     parser.add_argument("--run", required=True)
     parser.add_argument("--bbdir", type=Path)
     parser.add_argument("--itrace", action="store_true")
@@ -190,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
 
     bbdir = args.bbdir if args.bbdir is not None else Path(get_buckyball_path())
     log_dir = run_log_dir(bbdir, args.run)
-    names, matrix, depth = design_maps(str(bbdir), args.design)
+    names, matrix, depth = design_maps(str(bbdir), args.design, args.target)
     text = analysis_dir(
         log_dir,
         names=names,

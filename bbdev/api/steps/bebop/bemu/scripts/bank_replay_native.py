@@ -370,7 +370,7 @@ if __name__ == "__main__":
     coefficients = np.zeros((128, 4))
     for ball in thread.balldomain.balls:
         for isa in ball.instructions:
-            bids[isa.funct7] = ball.ball_id
+            bids[isa.funct7] = ball.id
     for f, row in calibration.items():
         if "model" in row:
             assert (

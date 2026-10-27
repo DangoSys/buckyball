@@ -63,8 +63,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--jobs",
         str(input_data.get("jobs", 1)),
     ]
-    if input_data.get("junit"):
-        command.extend(["--junit", input_data["junit"]])
     result = await stream_run_logger_async(
         cmd=shlex.join(command),
         logger=ctx.logger,
@@ -79,7 +77,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "task": "batch",
             "backend": "vcs",
             "log_dir": str(report),
-            "junit": input_data.get("junit"),
+            "junit": str(report / "junit.xml"),
         },
         trace_id=origin_tid,
     )

@@ -2,7 +2,7 @@
 # The software stack of the pebble device simulation: every level the device
 # needs, built bottom up.
 #
-#   bbdev stack --build "--design pebble"
+#   bbdev stack --build "--design pebble --device <config>"
 #
 # configures this with DESIGN_CMAKE, generated from design.pb. Each level is a
 # CMake build of its own: cores and threads build buddy-opt plugins for the

@@ -1,9 +1,9 @@
-#ifndef BB_FUNC7_H
-#define BB_FUNC7_H
+#ifndef FUNCT7_H
+#define FUNCT7_H
 
-#include "ballISA.h"
-
-#define BB_FUNC7(mne) BB_FUNC7_##mne
-#define BB_FUNC7_INSTANCE(id, mne) BB_FUNC7_BALL_##id##_##mne
+// The funct7 of instruction `mne` of the Ball in directory `ball`, from the
+// compile definitions of the target (DESIGN_TARGET_DEFS in design.cmake).
+#define FUNCT7(ball, mne)                                                      \
+  THREAD_BALLDOMAIN_BALLS_##ball##_INSTRUCTIONS_##mne##_FUNCT7
 
 #endif

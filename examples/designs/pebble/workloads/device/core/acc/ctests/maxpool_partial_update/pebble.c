@@ -5,10 +5,10 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum { ROWS = 16, LANES = BANK_WIDTH / 8 };
-static int8_t input[BB_CORE_NUM][2 * LANES] __attribute__((aligned(64)));
-static int8_t initial[BB_CORE_NUM][ROWS * LANES] __attribute__((aligned(64)));
-static int8_t output[BB_CORE_NUM][ROWS * LANES] __attribute__((aligned(64)));
+enum { ROWS = 16, LANES = THREAD_MEM_BANK_WIDTH / 8 };
+static int8_t input[BB_NUM_CORES][2 * LANES] __attribute__((aligned(64)));
+static int8_t initial[BB_NUM_CORES][ROWS * LANES] __attribute__((aligned(64)));
+static int8_t output[BB_NUM_CORES][ROWS * LANES] __attribute__((aligned(64)));
 
 extern "C" int pebble_pipeline(uint32_t instance) {
   int c = instance;

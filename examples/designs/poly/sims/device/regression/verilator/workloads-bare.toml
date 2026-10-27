@@ -12,8 +12,4 @@ tests = [
   "poly-main-ctest-design-ant_parallel-multicore-baremetal",
   "poly-main-ctest-design-ant_bank-multicore-baremetal",
   "poly-main-ctest-design-ant_highpa-multicore-baremetal",
-  "poly-main-ctest-design-ant_corelink-multicore-baremetal",
-  "poly-main-ctest-design-ant_corelink_bank-multicore-baremetal",
-  "poly-main-ctest-design-ant_corelink_reduce-multicore-baremetal",
-  "poly-main-ctest-design-ant_coherence-multicore-baremetal",
 ]

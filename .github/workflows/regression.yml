@@ -71,18 +71,23 @@ jobs:
       matrix:
         include:
           - design: toy
+            config: ToyVerilatorConfig
             run_area: true
             run_power: false
           - design: pebble
+            config: PebbleVerilatorConfig
             run_area: true
             run_power: false
           - design: goban
+            config: GobanVerilatorConfig
             run_area: true
             run_power: false
           - design: poly
+            config: PolyTapeoutConfig
             run_area: true
             run_power: false
           - design: multi-rocket
+            config: MultiRocketVerilatorConfig
             run_area: true
             run_power: false
     env:
@@ -111,7 +116,7 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev dc --area '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev dc --area '--design ${{ matrix.design }} --device ${{ matrix.config }}'
 
       - name: DC power
         if: matrix.run_power
@@ -123,7 +128,7 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev dc --power '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev dc --power '--design ${{ matrix.design }} --device ${{ matrix.config }}'
 
       - name: Exit repo lock
         if: always() && (matrix.run_area || matrix.run_power)
@@ -143,14 +148,19 @@ jobs:
       matrix:
         include:
           - design: toy
+            config: ToyVerilatorConfig
             run_uvm: true
           - design: pebble
+            config: PebbleVerilatorConfig
             run_uvm: true
           - design: goban
+            config: GobanVerilatorConfig
             run_uvm: true
           - design: poly
+            config: PolyVerilatorConfig
             run_uvm: true
           - design: multi-rocket
+            config: MultiRocketVerilatorConfig
             run_uvm: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -178,8 +188,8 @@ jobs:
           set +u
           source ~/.zshrc
           set -u
-          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device'
-          nix develop -c bbdev uvm --run '--design ${{ matrix.design }} --device'
+          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev uvm --run '--design ${{ matrix.design }} --device ${{ matrix.config }}'
 
       - name: Exit repo lock
         if: always() && matrix.run_uvm
@@ -200,14 +210,19 @@ jobs:
       matrix:
         include:
           - design: toy
+            config: ToyVerilatorConfig
             build_bitstream: true
           - design: pebble
+            config: PebbleVerilatorConfig
             build_bitstream: true
           - design: goban
+            config: GobanVerilatorConfig
             build_bitstream: true
           - design: poly
+            config: PolyP2EConfig
             build_bitstream: true
           - design: multi-rocket
+            config: MultiRocketVerilatorConfig
             build_bitstream: true
     env:
       BB_ROOT: ~/Code/buckyball
@@ -234,8 +249,8 @@ jobs:
           for build_dir in "${root}"/bebop/build/"${{ matrix.design }}"-*(N); do
             rm -rf "${build_dir}"
           done
-          nix develop -c bbdev bebop-p2e --verilog '--design ${{ matrix.design }} --device --diff'
-          nix develop -c bbdev bebop-p2e --buildbitstream '--design ${{ matrix.design }} --device --diff'
+          nix develop -c bbdev bebop-p2e --verilog '--design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
+          nix develop -c bbdev bebop-p2e --buildbitstream '--design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
           bits=("${root}"/bebop/build/"${{ matrix.design }}"-*/fpgaCompDir/bitstream.bit(N))
           if (( ${#bits} != 1 )); then
             echo "ERROR: expected exactly 1 bitstream.bit for ${{ matrix.design }}, got ${#bits}" >&2
@@ -262,18 +277,23 @@ jobs:
       matrix:
         include:
           - design: toy
+            config: ToyVerilatorConfig
             run_fpga_bare: true
             run_fpga_linux: true
           - design: pebble
+            config: PebbleVerilatorConfig
             run_fpga_bare: true
             run_fpga_linux: true
           - design: goban
+            config: GobanVerilatorConfig
             run_fpga_bare: true
             run_fpga_linux: false
           - design: poly
+            config: PolyP2EConfig
             run_fpga_bare: true
             run_fpga_linux: false
           - design: multi-rocket
+            config: MultiRocketVerilatorConfig
             run_fpga_bare: true
             run_fpga_linux: false
     env:
@@ -306,15 +326,15 @@ jobs:
           fi
 
           if [[ "${{ matrix.run_fpga_bare }}" == "true" ]]; then
-            nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device"
-            nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device"
-            nix develop -c bbdev workload --tohex "--design ${{ matrix.design }} --device"
-            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --test bare-tests --diff"
+            nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device ${{ matrix.config }}"
+            nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device ${{ matrix.config }}"
+            nix develop -c bbdev workload --tohex "--design ${{ matrix.design }} --device ${{ matrix.config }}"
+            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --bitstream ${bits[1]} --test bare-tests --diff"
           fi
 
           if [[ "${{ matrix.run_fpga_linux }}" == "true" ]]; then
-            nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device"
-            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --test linux-tests --diff"
+            nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device ${{ matrix.config }}"
+            nix develop -c bbdev bebop-p2e --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --bitstream ${bits[1]} --test linux-tests --diff"
           fi
 
       - name: Exit repo lock
@@ -335,12 +355,16 @@ jobs:
       matrix:
         include:
           - design: pebble
+            config: PebbleVerilatorConfig
             model: lenet
           - design: pebble
+            config: PebbleVerilatorConfig
             model: mobilenet
           # - design: pebble
+          #   config: PebbleVerilatorConfig
           #   model: resnet
           # - design: pebble
+          #   config: PebbleVerilatorConfig
           #   model: yolo
     env:
       BB_ROOT: ~/Code/buckyball
@@ -366,9 +390,9 @@ jobs:
             echo "ERROR: eval-performance requires a real model, got model=none" >&2
             exit 1
           fi
-          nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device"
-          nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device --model ${{ matrix.model }}"
-          nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device --model ${{ matrix.model }}"
+          nix develop -c bbdev stack --build "--design ${{ matrix.design }} --device ${{ matrix.config }}"
+          nix develop -c bbdev workload --build "--design ${{ matrix.design }} --device ${{ matrix.config }} --model ${{ matrix.model }}"
+          nix develop -c bbdev kernel --build "--design ${{ matrix.design }} --device ${{ matrix.config }} --model ${{ matrix.model }}"
 
       - name: Model performance
         shell: zsh {0}
@@ -382,7 +406,7 @@ jobs:
             printf '%s\n' "${bits[@]}" >&2
             exit 1
           fi
-          nix develop -c bbdev bebop-p2e --runworkload "--design ${{ matrix.design }} --device --bitstream ${bits[1]} --model ${{ matrix.model }}"
+          nix develop -c bbdev bebop-p2e --runworkload "--design ${{ matrix.design }} --device ${{ matrix.config }} --bitstream ${bits[1]} --model ${{ matrix.model }}"
 
       - name: Exit repo lock
         if: always()

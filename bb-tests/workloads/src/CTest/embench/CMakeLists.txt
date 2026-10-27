@@ -34,7 +34,7 @@ set(EMBENCH_C_FLAGS
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
     -I${WORKLOAD_LIB_DIR}
-    -I${BUCKYBALL_ISA_DIR}/control
+    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
     -ffunction-sections
     -fdata-sections
     -Wl,--gc-sections
@@ -51,7 +51,7 @@ set(EMBENCH_TOP_OBJ_FLAGS
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
     -I${WORKLOAD_LIB_DIR}
-    -I${BUCKYBALL_ISA_DIR}/control
+    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
     -ffunction-sections
     -fdata-sections
     -I${EMBENCH_SUPPORT_DIR}
@@ -60,7 +60,7 @@ set(EMBENCH_TOP_OBJ_FLAGS
 function(add_embench_target BMARK_NAME)
     file(GLOB BMARK_SOURCES "${EMBENCH_SRC_DIR}/${BMARK_NAME}/*.c")
     set(EMBENCH_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${EMBENCH_THREAD}-ctest-benchmark-embench_${BMARK_NAME}"
+        "${DESIGN_NAME}-${EMBENCH_THREAD}-ctest-benchmark-embench_${BMARK_NAME}"
     )
     set(EXECUTABLE "${EMBENCH_NAME}-baremetal")
 
@@ -91,7 +91,7 @@ function(add_embench_target BMARK_NAME)
         OR BMARK_NAME STREQUAL "sglib-combined"
     )
         set(CHECK_NAME
-            "${BUCKYBALL_WORKLOAD_DESIGN}-${EMBENCH_THREAD}-ctest-check-embench_${BMARK_NAME}"
+            "${DESIGN_NAME}-${EMBENCH_THREAD}-ctest-check-embench_${BMARK_NAME}"
         )
         set(CHECK_EXECUTABLE ${CHECK_NAME}-baremetal)
         set(CHECK_SUPPORT_SOURCES ${EMBENCH_SUPPORT_SOURCES})
@@ -176,7 +176,7 @@ function(add_embench_top_target)
     add_embench_top_benchmark(wikisort wikisort)
 
     set(EMBENCH_TOP_NAME
-        "${BUCKYBALL_WORKLOAD_DESIGN}-${EMBENCH_THREAD}-ctest-benchmark-embench_top"
+        "${DESIGN_NAME}-${EMBENCH_THREAD}-ctest-benchmark-embench_top"
     )
     set(EXECUTABLE "${EMBENCH_TOP_NAME}-baremetal")
     add_custom_command(

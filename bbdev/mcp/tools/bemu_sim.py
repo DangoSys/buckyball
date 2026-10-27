@@ -18,7 +18,8 @@ def register(mcp):
         tool_profile: bool = False,
         itrace: bool = False,
         mtrace: bool = False,
-        device: bool = False,
+        ctrace: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Run a workload or kernel ELF on BEMU. POST /bebop/bemu/sim."""
@@ -32,6 +33,7 @@ def register(mcp):
             "tool-profile": tool_profile,
             "itrace": itrace,
             "mtrace": mtrace,
+            "ctrace": ctrace,
         }
         for key, value in (
             ("dtb", dtb),
@@ -40,8 +42,8 @@ def register(mcp):
         ):
             if value is not None:
                 params[key] = value
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/bebop/bemu/sim", params))

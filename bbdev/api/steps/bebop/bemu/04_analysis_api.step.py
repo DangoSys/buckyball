@@ -50,7 +50,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     if not design:
         return _fail("design parameter is required")
     try:
-        design_maps(get_buckyball_path(), design)
+        design_maps(get_buckyball_path(), design, selection)
     except ValueError as e:
         return _fail(str(e))
 

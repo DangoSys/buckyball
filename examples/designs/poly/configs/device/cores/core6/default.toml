@@ -33,39 +33,39 @@ virtualBankCount = 40
 entries = 16384
 inputChannels = 65
 defaultGroupCount = 1
-memCycles = 10
+latency = 10
 
 [[threads]]
 id = 0
 name = "attention0"
 component = "attention"
 transport = "../core1/transport.toml"
-include = "../../../../../../components/threads/attention/configs/default.toml"
+include = "../../../../../../prefab/threads/attention/configs/default.toml"
 
 [[threads]]
 id = 1
 name = "attention1"
 component = "attention"
 transport = "../core1/transport.toml"
-include = "../../../../../../components/threads/attention/configs/default.toml"
+include = "../../../../../../prefab/threads/attention/configs/default.toml"
 
 [[threads]]
 id = 2
 name = "ffn0"
 component = "ffn"
 transport = "../core1/transport.toml"
-include = "../../../../../../components/threads/ffn/configs/default.toml"
+include = "../../../../../../prefab/threads/ffn/configs/default.toml"
 
 [[threads]]
 id = 3
 name = "ffn1"
 component = "ffn"
 transport = "../core1/transport.toml"
-include = "../../../../../../components/threads/ffn/configs/default.toml"
+include = "../../../../../../prefab/threads/ffn/configs/default.toml"
 
 [[threads]]
 id = 4
 name = "ffn2"
 component = "ffn"
 transport = "../core1/transport.toml"
-include = "../../../../../../components/threads/ffn/configs/default.toml"
+include = "../../../../../../prefab/threads/ffn/configs/default.toml"

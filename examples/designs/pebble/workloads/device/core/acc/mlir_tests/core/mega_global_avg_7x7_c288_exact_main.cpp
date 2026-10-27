@@ -5,7 +5,6 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 
 static void fail(void) {
 #ifdef BAREMETAL
@@ -18,12 +17,12 @@ static void fail(void) {
 }
 
 enum {
-  PHYSICAL_BANKS = BANK_NUM,
-  BANK_ROWS = BANK_LINES,
-  ROW_BYTES = BANK_WIDTH / 8
+  PHYSICAL_BANKS = THREAD_MEM_BANK_NUM,
+  BANK_ROWS = THREAD_MEM_BANK_ENTRIES,
+  ROW_BYTES = THREAD_MEM_BANK_WIDTH / 8
 };
 static_assert(
-    VIRTUAL_BANK_NUM >= PHYSICAL_BANKS,
+    CORE_VIRTUAL_BANK_COUNT >= PHYSICAL_BANKS,
     "bank reuse regression requires every physical bank to be addressable");
 static elem_t stale_bank[BANK_ROWS * ROW_BYTES] __attribute__((aligned(64)));
 

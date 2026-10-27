@@ -10,5 +10,11 @@ stack_name = "poly"
 regression = "sims/device/regression"
 kernel = "sims/device/workloads/kernel"
 
+# Each device config overrides a few tables of the design config.
+[targets.device.configs]
+PolyVerilatorConfig = "verilator.toml"
+PolyTapeoutConfig = "tapeout.toml"
+PolyP2EConfig = "p2e.toml"
+
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

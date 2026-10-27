@@ -3,6 +3,9 @@ class reference_model extends uvm_subscriber #(cycle_item);
   chandle reference;
   int pmp_offsets[16][8] = `PRIV_PMP_OFFSETS;
   uvm_analysis_port #(result_item) expected_ap, actual_ap;
+  // permitted answers the authorization of the previous cycle.
+  bit [1:0] permitted;
+  bit primed;
   covergroup behavior with function sample (
       int address, int operation, bit write, int privilege, bit trap, bit returning, bit interrupt
   );
@@ -34,6 +37,7 @@ class reference_model extends uvm_subscriber #(cycle_item);
     longint unsigned interrupts, cfg;
     if (t.reset) begin
       privileged_reset(reference);
+      primed = 0;
       return;
     end
     expected = result_item::type_id::create("expected");
@@ -85,7 +89,11 @@ class reference_model extends uvm_subscriber #(cycle_item);
     expected.payload[`PRIV_OUT_TVM_OFFSET+:`PRIV_OUT_TVM_WIDTH] = privileged_value(reference, 15);
     expected.payload[`PRIV_OUT_TW_OFFSET+:`PRIV_OUT_TW_WIDTH] = privileged_value(reference, 16);
     expected.payload[`PRIV_OUT_TSR_OFFSET+:`PRIV_OUT_TSR_WIDTH] = privileged_value(reference, 17);
-    expected.payload[`PRIV_OUT_PERMITTED_0_OFFSET +: `PRIV_OUT_PERMITTED_0_WIDTH] = privileged_permitted(
+    expected.payload[`PRIV_OUT_PERMITTED_0_OFFSET+:`PRIV_OUT_PERMITTED_0_WIDTH] =
+        primed ? permitted[0] : actual.payload[`PRIV_OUT_PERMITTED_0_OFFSET+:`PRIV_OUT_PERMITTED_0_WIDTH];
+    expected.payload[`PRIV_OUT_PERMITTED_1_OFFSET+:`PRIV_OUT_PERMITTED_1_WIDTH] =
+        primed ? permitted[1] : actual.payload[`PRIV_OUT_PERMITTED_1_OFFSET+:`PRIV_OUT_PERMITTED_1_WIDTH];
+    permitted[0] = privileged_permitted(
         reference,
         `PIN(t.inputs, AUTHORIZATION_0_PADDR),
         `PIN(t.inputs, AUTHORIZATION_0_SIZE),
@@ -94,7 +102,7 @@ class reference_model extends uvm_subscriber #(cycle_item);
         `PIN(t.inputs, AUTHORIZATION_0_EXECUTE),
         `PIN(t.inputs, AUTHORIZATION_0_PRIVILEGE)
     );
-    expected.payload[`PRIV_OUT_PERMITTED_1_OFFSET +: `PRIV_OUT_PERMITTED_1_WIDTH] = privileged_permitted(
+    permitted[1] = privileged_permitted(
         reference,
         `PIN(t.inputs, AUTHORIZATION_1_PADDR),
         `PIN(t.inputs, AUTHORIZATION_1_SIZE),
@@ -103,6 +111,7 @@ class reference_model extends uvm_subscriber #(cycle_item);
         `PIN(t.inputs, AUTHORIZATION_1_EXECUTE),
         `PIN(t.inputs, AUTHORIZATION_1_PRIVILEGE)
     );
+    primed = 1;
     for (int index = 0; index < 16; index++) begin
       cfg = privileged_pmp(reference, index, 0);
       expected.payload[pmp_offsets[index][0]] = cfg[7];

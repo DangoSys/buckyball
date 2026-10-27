@@ -2,7 +2,7 @@ import mill._
 import mill.scalalib._
 import $file.^.^.^.^.arch.src.main.scala.framework.device.cbus.{build => cbus_build}
 import $file.^.^.^.{build => examples}
-import $file.^.^.^.components.cores.rocket.arch.{build => rocket}
+import $file.^.^.^.prefab.cores.rocket.arch.{build => rocket}
 
 val designRoot: os.Path = millSourcePath / os.up
 

@@ -27,19 +27,16 @@ foreach(BUCKYBALL_COMPONENT_WORKLOAD_TARGET IN LISTS DESIGN_CPU_TARGETS)
     if(
         COMPONENT_WORKLOADS
             STREQUAL
-            "${BUCKYBALL_REPO_ROOT}/examples/designs/${BUCKYBALL_WORKLOAD_DESIGN}/workloads"
+            "${BUCKYBALL_REPO_ROOT}/examples/designs/${DESIGN_NAME}/workloads"
     )
         continue()
     endif()
-    set(BUCKYBALL_COMPONENT_WORKLOAD_PROFILE
-        "${DESIGN_TARGET_ID_${BUCKYBALL_COMPONENT_WORKLOAD_TARGET}}"
-    )
     set(BUCKYBALL_CTEST_TARGET "${BUCKYBALL_COMPONENT_WORKLOAD_TARGET}")
     set(BUCKYBALL_CTEST_GROUP_TARGET component-ctests-build)
     if(IS_DIRECTORY "${COMPONENT_WORKLOADS}/ctests")
         add_subdirectory(
             "${COMPONENT_WORKLOADS}/ctests"
-            "${CMAKE_CURRENT_BINARY_DIR}/components/${BUCKYBALL_COMPONENT_WORKLOAD_TARGET}/ctests"
+            "${CMAKE_CURRENT_BINARY_DIR}/prefab/${BUCKYBALL_COMPONENT_WORKLOAD_TARGET}/ctests"
         )
     endif()
 endforeach()
@@ -58,9 +55,9 @@ add_subdirectory(
 )
 foreach(BUCKYBALL_TARGET IN LISTS DESIGN_CPU_TARGETS)
     set(BUCKYBALL_MLIR_ACTIVE_TARGET "${BUCKYBALL_TARGET}")
-    foreach(BUCKYBALL_BALL_DIR IN LISTS DESIGN_TARGET_BALLS_${BUCKYBALL_TARGET})
+    foreach(BUCKYBALL_BALL_DIR IN LISTS DESIGN_PROFILES_${BUCKYBALL_TARGET}_THREAD_BALLDOMAIN_BALLS)
         set(BALL_MLIR_TESTS
-            "${BUCKYBALL_REPO_ROOT}/examples/components/balls/${BUCKYBALL_BALL_DIR}/workloads/mlir_tests"
+            "${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/${BUCKYBALL_BALL_DIR}/workloads/mlir_tests"
         )
         if(IS_DIRECTORY "${BALL_MLIR_TESTS}")
             add_subdirectory(
@@ -72,6 +69,12 @@ foreach(BUCKYBALL_TARGET IN LISTS DESIGN_CPU_TARGETS)
 endforeach()
 add_dependencies(MLIRTest-all base-mlirtest-build balls-mlir-tests-build)
 
+# The multicore Ant cases this entry's cores can run.
+set(POLY_ANT_CASES
+    mesh_move
+    mesh_private
+    mesh_shared
+)
 add_subdirectory(
     "${BUCKYBALL_REPO_ROOT}/examples/designs/poly/workloads"
     design

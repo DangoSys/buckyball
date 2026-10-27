@@ -1,9 +1,7 @@
 #include "ant_shared.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
-unsigned shared_done[BB_THREAD_CORE_COUNT];
+unsigned shared_done[POLY_THREAD_CORES];
 void shared_exercise(unsigned core) {
   const uint32_t contexts[] = {thread_find(THREAD_SIGNATURE, 0),
                                thread_find(THREAD_SIGNATURE, 1)};

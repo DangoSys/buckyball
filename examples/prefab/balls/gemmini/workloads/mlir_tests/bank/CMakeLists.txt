@@ -1,0 +1,11 @@
+if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
+  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+endif()
+set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+set(_lines ${DESIGN_PROFILES_${BUCKYBALL_MLIR_ACTIVE_TARGET}_THREAD_MEM_BANK_ENTRIES})
+if(NOT _lines EQUAL 1024)
+  message(FATAL_ERROR
+    "Gemmini BankOp tests require 1024 bank entries (got ${_lines})")
+endif()
+add_buckyball_mlir_test(gemmini_compute_preloaded_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+add_buckyball_mlir_test(gemmini_compute_accumulated_bank_tiles TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})

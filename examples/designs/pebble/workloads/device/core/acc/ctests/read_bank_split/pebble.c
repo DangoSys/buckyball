@@ -7,13 +7,13 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum { M = 8, N = 16, K = 16, LANES = BANK_WIDTH / 8 };
-static int8_t input[BB_CORE_NUM][K * N] __attribute__((aligned(64)));
-static int8_t weight[BB_CORE_NUM][K * N] __attribute__((aligned(64)));
-static int32_t bias[BB_CORE_NUM][N] __attribute__((aligned(64)));
-static int8_t transposed[BB_CORE_NUM][K * N] __attribute__((aligned(64)));
-static int32_t product[BB_CORE_NUM][M * N] __attribute__((aligned(64)));
-static volatile int32_t warmup[BB_CORE_NUM][N] __attribute__((aligned(64)));
+enum { M = 8, N = 16, K = 16, LANES = THREAD_MEM_BANK_WIDTH / 8 };
+static int8_t input[BB_NUM_CORES][K * N] __attribute__((aligned(64)));
+static int8_t weight[BB_NUM_CORES][K * N] __attribute__((aligned(64)));
+static int32_t bias[BB_NUM_CORES][N] __attribute__((aligned(64)));
+static int8_t transposed[BB_NUM_CORES][K * N] __attribute__((aligned(64)));
+static int32_t product[BB_NUM_CORES][M * N] __attribute__((aligned(64)));
+static volatile int32_t warmup[BB_NUM_CORES][N] __attribute__((aligned(64)));
 extern "C" int pebble_pipeline(uint32_t instance) {
   int c = instance;
   for (int i = 0; i < K * N; ++i) {

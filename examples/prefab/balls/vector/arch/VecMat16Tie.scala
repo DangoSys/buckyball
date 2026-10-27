@@ -1,0 +1,59 @@
+package examples.balls.vector
+
+import framework.acc.memdomain.configs.MemDomainParam
+
+import chisel3._
+import chisel3.util._
+import framework.acc.memdomain.{BankRead, BankWrite}
+
+object VecMat16Tie {
+
+  def offRead(ports: Vec[BankRead], robId: UInt): Unit = {
+    for (p <- ports) {
+      p.rob_id           := robId
+      p.bank_id          := 0.U
+      p.group_id         := 0.U
+      p.io.req.valid     := false.B
+      p.io.req.bits.addr := 0.U
+      p.io.resp.ready    := false.B
+    }
+  }
+
+  def offWrite(
+    ports:    Vec[BankWrite],
+    robId:    UInt,
+    wrBank:   UInt,
+    wrGroup:  UInt,
+    memParam: MemDomainParam
+  ): Unit = {
+    for ((p, i) <- ports.zipWithIndex) {
+      p.rob_id           := robId
+      p.bank_id          := wrBank
+      p.group_id         := wrGroup + i.U
+      p.io.req.valid     := false.B
+      p.io.req.bits.addr := 0.U
+      p.io.req.bits.data := 0.U
+      p.io.req.bits.mask := VecInit(Seq.fill(memParam.bankMaskLen)(false.B))
+      p.io.resp.ready    := false.B
+    }
+  }
+
+  def takeRead(parent: BankRead, child: BankRead): Unit = {
+    parent.rob_id        := child.rob_id
+    parent.bank_id       := child.bank_id
+    parent.group_id      := child.group_id
+    parent.io.req.valid  := child.io.req.valid
+    parent.io.req.bits   := child.io.req.bits
+    parent.io.resp.ready := child.io.resp.ready
+  }
+
+  def takeWrite(parent: BankWrite, child: BankWrite): Unit = {
+    parent.rob_id        := child.rob_id
+    parent.bank_id       := child.bank_id
+    parent.group_id      := child.group_id
+    parent.io.req.valid  := child.io.req.valid
+    parent.io.req.bits   := child.io.req.bits
+    parent.io.resp.ready := child.io.resp.ready
+  }
+
+}

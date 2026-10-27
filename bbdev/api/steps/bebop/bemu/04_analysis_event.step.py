@@ -53,7 +53,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     itrace = bool(input_data.get("itrace", False))
     mtrace = bool(input_data.get("mtrace", False))
     try:
-        names, matrix, depth = design_maps(get_buckyball_path(), design)
+        names, matrix, depth = design_maps(
+            get_buckyball_path(), design, input_data["target"]
+        )
         text = analysis_dir(
             log_path,
             names=names,

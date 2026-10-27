@@ -7,12 +7,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
-enum { ROWS = 16, NEW_ROWS = 8, BYTES = ROWS * BANK_WIDTH / 8 };
-static int8_t input[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t left[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t right[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static volatile int8_t warmup[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
-static int8_t output[BB_CORE_NUM][BYTES] __attribute__((aligned(64)));
+enum { ROWS = 16, NEW_ROWS = 8, BYTES = ROWS * THREAD_MEM_BANK_WIDTH / 8 };
+static int8_t input[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t left[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t right[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static volatile int8_t warmup[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
+static int8_t output[BB_NUM_CORES][BYTES] __attribute__((aligned(64)));
 
 extern "C" int pebble_pipeline(uint32_t instance) {
   int c = instance;
@@ -32,7 +32,7 @@ extern "C" int pebble_pipeline(uint32_t instance) {
   bb_transpose(0, 2, ROWS, 8);
   bb_int8add(3, 4, 2, NEW_ROWS, 1.0f, 1.0f);
   bb_mvout((uintptr_t)output[c], 2, NEW_ROWS, 1);
-  for (int i = 0; i < NEW_ROWS * BANK_WIDTH / 8; ++i)
+  for (int i = 0; i < NEW_ROWS * THREAD_MEM_BANK_WIDTH / 8; ++i)
     if (output[c][i] != 7)
       return 1;
   for (int bank = 0; bank < 5; ++bank)

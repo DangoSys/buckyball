@@ -19,7 +19,7 @@ def register(mcp):
         ctrace: bool = False,
         reuse_runtime: bool = False,
         diff: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Cold-load one hex image on P2E."""
@@ -43,8 +43,8 @@ def register(mcp):
             params["ctrace"] = True
         if diff:
             params["diff"] = True
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/bebop/p2e/runworkload", params))

@@ -1,5 +1,5 @@
 translationEntries = 16
-accessTagBits = 6
+tagBits = 6
 resultLineBits = 0
 [[regions]]
 base = 0x80000000

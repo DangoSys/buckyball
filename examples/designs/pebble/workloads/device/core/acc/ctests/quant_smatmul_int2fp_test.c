@@ -11,8 +11,8 @@ enum {
   M = 16,
   N = 16,
   K = 16,
-  F32_ROWS = M * N * 32 / BANK_WIDTH,
-  CHANNEL_ROWS = N * 32 / BANK_WIDTH
+  F32_ROWS = M * N * 32 / THREAD_MEM_BANK_WIDTH,
+  CHANNEL_ROWS = N * 32 / THREAD_MEM_BANK_WIDTH
 };
 static float input[M * K] __attribute__((aligned(64)));
 static int8_t weight[K * N] __attribute__((aligned(64)));

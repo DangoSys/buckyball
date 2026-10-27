@@ -35,14 +35,14 @@ case class BallRouteParam(
 object BallRouteParam {
 
   def fromProto(source: BallInstanceProto): BallRouteParam = BallRouteParam(
-    source.getBallId,
-    source.getBallName,
+    source.getId,
+    source.getName,
     source.getInBw,
     source.getOutBw,
     source.getMmioReadBw,
     source.getMmioWriteBw,
     source.getInstructionsList.asScala.map(i => InstructionParam(i.getMnemonic, i.getFunct7)).toSeq,
-    source.getBallDir,
+    source.getComponent,
     source.getParameters,
     source.getRtlClass
   )

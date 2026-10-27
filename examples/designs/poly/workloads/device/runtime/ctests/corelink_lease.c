@@ -1,6 +1,5 @@
 #include <bbhw/isa/isa.h>
 #include <corelink.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -9,7 +8,7 @@ static const uint32_t input[2][4] __attribute__((aligned(64))) = {
 static volatile uint32_t output[8] __attribute__((aligned(64)));
 
 int main(void) {
-  unsigned bank = BB_SHARED_BANK_BASE;
+  unsigned bank = THREAD_FRONTEND_SHARED_VBANK_BASE;
   bb_mem_alloc(bank, 1, 2);
   for (unsigned i = 0; i < 8; ++i)
     output[i] = 0xaaaaaaaa;

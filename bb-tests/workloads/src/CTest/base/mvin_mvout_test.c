@@ -1,12 +1,11 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
 #include <dma.h>
-#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-enum { ROWS = 16, COLS = (BANK_WIDTH / 8) };
+enum { ROWS = 16, COLS = (THREAD_MEM_BANK_WIDTH / 8) };
 
 // Test matrices
 static elem_t input_matrix[ROWS * COLS] __attribute__((aligned(128)));

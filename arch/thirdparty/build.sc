@@ -11,7 +11,7 @@ object protoJava extends JavaModule {
   def protoSources = T.sources {
     Seq(PathRef(protoDir() / "design.proto"), PathRef(protoDir() / "hardware.proto")) ++
       Seq("balls", "cores").flatMap(kind =>
-        os.walk(archRoot / os.up / "examples" / "components" / kind).filter(p => p.ext == "proto" && !p.toString.contains("/thirdparty/") && !p.toString.contains("/out/")).map(PathRef(_)))
+        os.walk(archRoot / os.up / "examples" / "prefab" / kind).filter(p => p.ext == "proto" && !p.toString.contains("/thirdparty/") && !p.toString.contains("/out/")).map(PathRef(_)))
   }
 
   def generatedSources = T {

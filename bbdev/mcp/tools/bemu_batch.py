@@ -10,10 +10,8 @@ def register(mcp):
     def bbdev_bemu_batch(
         design: str,
         test: str,
-        clean_before: bool = False,
         jobs: int = 1,
-        junit: str | None = None,
-        device: bool = False,
+        device: str | None = None,
     ) -> str:
         """Batch bemu regression. test: bare-tests|linux-tests. POST /bebop/bemu/batch."""
         if e := need("design", design):
@@ -23,12 +21,10 @@ def register(mcp):
         request = {
             "design": design,
             "test": test,
-            "clean-before": clean_before,
             "jobs": jobs,
-            "junit": junit,
         }
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         return fmt(
             submit(
                 "/bebop/bemu/batch",

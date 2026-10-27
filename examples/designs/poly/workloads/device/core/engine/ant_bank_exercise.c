@@ -1,22 +1,20 @@
 #include "ant_bank.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
 enum {
-  WORDS = BANK_LINES * BANK_WIDTH / 64,
-  SHARED_WORDS = BB_SHARED_BANK_LINES * BANK_WIDTH / 64,
+  WORDS = THREAD_MEM_BANK_ENTRIES * THREAD_MEM_BANK_WIDTH / 64,
+  SHARED_WORDS = CORE_SHARED_MEM_BANK_ENTRIES * THREAD_MEM_BANK_WIDTH / 64,
   INPUT_WORDS = WORDS > SHARED_WORDS ? WORDS : SHARED_WORDS
 };
-static uint64_t input[BB_THREAD_CORE_COUNT][INPUT_WORDS]
+static uint64_t input[POLY_THREAD_CORES][INPUT_WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t private_out[BB_THREAD_CORE_COUNT][WORDS]
+static uint64_t private_out[POLY_THREAD_CORES][WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t shared_out[BB_THREAD_CORE_COUNT][SHARED_WORDS]
+static uint64_t shared_out[POLY_THREAD_CORES][SHARED_WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t tail_out[BB_THREAD_CORE_COUNT][8]
+static uint64_t tail_out[POLY_THREAD_CORES][8]
     __attribute__((section(".data"), aligned(4096))) = {0};
-unsigned bank_done[BB_THREAD_CORE_COUNT];
+unsigned bank_done[POLY_THREAD_CORES];
 void bank_exercise(unsigned core) {
   const unsigned context = thread_find(THREAD_SIGNATURE, 0);
   for (unsigned i = 0; i < INPUT_WORDS; ++i)
@@ -31,10 +29,10 @@ void bank_exercise(unsigned core) {
   if (bytes > thread_query(context, THREAD_FIELD_CODE_BYTES) ||
       thread_query(context, THREAD_FIELD_SIGNATURE) != THREAD_SIGNATURE)
     __builtin_trap();
-  struct ant_bank_args args = {(uintptr_t)input[core],
-                               (uintptr_t)private_out[core],
-                               (uintptr_t)shared_out[core],
-                               (uintptr_t)tail_out[core], BB_SHARED_BANK_LINES};
+  struct ant_bank_args args = {
+      (uintptr_t)input[core], (uintptr_t)private_out[core],
+      (uintptr_t)shared_out[core], (uintptr_t)tail_out[core],
+      CORE_SHARED_MEM_BANK_ENTRIES};
   thread_tss_write(0, ant_image, bytes);
   thread_load(context, THREAD_CODE, 0, 0, (bytes + 7) & ~7u);
   thread_tss_write(0, &args, sizeof(args));

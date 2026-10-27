@@ -1,4 +1,4 @@
 [workloads]
 tests = [
-  "fw_payload-h1-toy-linux.elf",
+  "fw_payload-linux.elf",
 ]

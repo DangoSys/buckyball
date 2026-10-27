@@ -1,7 +1,5 @@
 #define _GNU_SOURCE
 #include "ant_shared.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 #ifdef __linux__
 #include <pthread.h>
@@ -23,21 +21,21 @@ static void *worker(void *argument) {
 #endif
 int main(void) {
 #ifdef __linux__
-  pthread_t threads[BB_THREAD_CORE_COUNT];
-  for (uintptr_t core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+  pthread_t threads[POLY_THREAD_CORES];
+  for (uintptr_t core = 0; core < POLY_THREAD_CORES; ++core)
     if (pthread_create(&threads[core], NULL, worker, (void *)core))
       abort();
-  for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+  for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
     if (pthread_join(threads[core], NULL))
       abort();
-  printf("Ant shared/cancel PASS cores=%u\n", (unsigned)BB_THREAD_CORE_COUNT);
+  printf("Ant shared/cancel PASS cores=%u\n", (unsigned)POLY_THREAD_CORES);
 #else
   uintptr_t hart;
   __asm__ volatile("csrr %0, mhartid" : "=r"(hart));
-  if (hart != BB_REPORT_HART)
+  if (hart != WORKLOAD_REPORT_HART)
     shared_exercise(hart - 1);
   else
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (!__atomic_load_n(&shared_done[core], __ATOMIC_ACQUIRE)) {
       }
 #endif

@@ -134,7 +134,7 @@ def _derive_threads(repo: Path, topo: dict[str, Any]) -> list[dict[str, Any]]:
             if not isinstance(bd, dict):
                 _die(f"{pkg}: missing balldomain")
             entry["balls"] = [
-                {"ball_id": ball["id"], "ball_dir": ball["component"]}
+                {"id": ball["id"], "component": ball["component"]}
                 for ball in bd["balls"]
             ]
         out.append(entry)
@@ -248,7 +248,7 @@ def _bemu_balls(repo: Path, profiles: list[dict[str, Any]]) -> list[dict[str, st
             emu_lib = (
                 repo
                 / "examples"
-                / "components"
+                / "prefab"
                 / "balls"
                 / ball_dir
                 / "emu"
@@ -259,8 +259,8 @@ def _bemu_balls(repo: Path, profiles: list[dict[str, Any]]) -> list[dict[str, st
                 _die(f"missing BEMU ball source for {ball_class}: {emu_lib}")
             balls.append(
                 {
-                    "ball_class": ball_class,
-                    "ball_dir": ball_dir,
+                    "emu_class": ball_class,
+                    "component": ball_dir,
                     "emu_lib": _repo_rel(repo, emu_lib),
                 }
             )
@@ -276,7 +276,7 @@ def _ball_ctest_dirs(repo: Path, thread: dict[str, Any]) -> list[str]:
         path = (
             repo
             / "examples"
-            / "components"
+            / "prefab"
             / "balls"
             / ball["component"]
             / "workloads"
@@ -319,11 +319,8 @@ def _derive_targets(
     targets = {}
     for profile in profiles:
         name, pkg, config = profile["name"], profile["component"], profile["config"]
-        num, width, entries = bank_params(config, pkg)
+        bank_params(config, pkg)
         targets[name] = {
-            "pkg": pkg,
-            "compiler": "compiler",
-            "bank": {"num": num, "width": width, "entries": entries},
             "ball_ctest_dirs": _ball_ctest_dirs(repo, config),
         }
     return targets
@@ -333,15 +330,6 @@ def _derive_harts(
     cores: list[dict[str, Any]], threads: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     return [{"hart_id": core["hart_id"]} for core in cores]
-
-
-def _workload(
-    design: str, targets: dict[str, dict[str, Any]], repo: Path
-) -> dict[str, Any]:
-    defs: dict[str, str] = {
-        "BUCKYBALL_WORKLOAD_DESIGN": design,
-    }
-    return {"cmake_param": defs}
 
 
 def derive(data: dict[str, Any], repo: Path, design: str) -> dict[str, Any]:
@@ -373,7 +361,7 @@ def derive(data: dict[str, Any], repo: Path, design: str) -> dict[str, Any]:
     return {
         "design": design,
         "name": Path(root_file).parent.parent.name,
-        "design_path": _repo_rel(repo, root_file),
+        "path": _repo_rel(repo, root_file),
         "core_config_path": _repo_rel(repo, design_file),
         "includes": [_repo_rel(repo, p) for p in includes_raw],
         "n_cores": n_cores,
@@ -384,7 +372,6 @@ def derive(data: dict[str, Any], repo: Path, design: str) -> dict[str, Any]:
         "bemu": {
             "balls": _bemu_balls(repo, profiles),
         },
-        "workload": _workload(design, targets, repo),
     }
 
 

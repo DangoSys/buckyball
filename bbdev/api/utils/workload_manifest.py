@@ -16,10 +16,6 @@ def validate_design(design: str | None) -> str:
 def design_regression_dir(
     design: str, backend: str, bbdir: str | None = None, *, selection: str
 ) -> Path:
-    if selection != "device":
-        raise ValueError(
-            "batch regression requires --device; use a single workload for --core"
-        )
     design = validate_design(design)
     root = Path(bbdir or get_buckyball_path())
     return (

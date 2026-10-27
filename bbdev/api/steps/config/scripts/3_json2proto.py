@@ -65,17 +65,17 @@ def _fill_mem(msg: pb.MemDomainConfig, d: dict[str, Any], bbdir: Path) -> None:
     msg.mmio.bank_entries = mmio["bankEntries"]
     msg.mmio.bank_width = mmio["bankWidth"]
     msg.mmio.read_width = mmio["readWidth"]
-    msg.mem.addr_len = d["mem"]["addrLen"]
+    msg.addr_len = d["addrLen"]
 
 
 def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
     for ball in d["balls"]:
         instance = msg.balls.add()
-        instance.ball_id = ball["id"]
-        instance.ball_name = ball["name"]
-        instance.ball_dir = ball["component"]
+        instance.id = ball["id"]
+        instance.name = ball["name"]
+        instance.component = ball["component"]
         classes = []
-        root = bbdir / "examples/components/balls" / ball["component"] / "arch"
+        root = bbdir / "examples/prefab/balls" / ball["component"] / "arch"
         for source in sorted(root.rglob("*Ball.scala")):
             text = source.read_text()
             names = re.findall(
@@ -118,8 +118,8 @@ def _fill_frontend(msg: pb.FrontendConfig, d: dict[str, Any], bbdir: Path) -> No
     msg.rob_entries = d["robEntries"]
     msg.rs_out_of_order_response = d["rsOutOfOrderResponse"]
     msg.bank_id_len = d["bankIdLen"]
-    msg.vbank_id_upper_bound = d["vbankIdUpperBound"]
-    msg.shared_bank_id_base = d["sharedBankIdBase"]
+    msg.max_private_vbank = d["maxPrivateVbank"]
+    msg.shared_vbank_base = d["sharedVbankBase"]
     msg.iter_len = d["iterLen"]
     msg.sub_rob_enable = d["subRobEnable"]
     msg.sub_rob_depth = d["subRobDepth"]
@@ -258,7 +258,7 @@ def fill_design(
     """Serialize explicitly declared instances and their typed parameters into design.pb."""
     b = pb.Design()
     b.name = derived["name"]
-    b.design_path = derived["design_path"]
+    b.path = derived["path"]
     b.n_cores = derived["n_cores"]
     b.includes.extend(derived["includes"])
 
@@ -289,36 +289,36 @@ def fill_design(
     if not b.device.IsInitialized() or not b.sims.IsInitialized():
         raise ValueError("Device and simulation parameters must be complete")
 
-    root = Path(derived["design_path"]).parent.parent
-    for name, registration in config["sims"]["targets"].items():
-        if name == "_file":
-            continue
-        if name != "device" and not re.fullmatch(r"core/[A-Za-z0-9_-]+", name):
-            raise ValueError(f"invalid simulation target: {name}")
-        if name.startswith("core/") and "regression" in registration:
-            raise ValueError(f"{name}: regression belongs to the device entry")
-        target = b.simulations[name]
-        target.directory = str(root / "sims" / name)
-        for field in ("emu", "stack", "workloads"):
-            setattr(target, field, str(root / "sims" / name / field))
-        target.arch.directory = str(root / "sims" / name / "arch")
-        target.arch.module = "simulation"
-        target.arch.config = str(root / "output/generated/design.pb")
-        target.entry_class = registration["config"]
-        target.top = "BBSimHarness"
-        target.stack_name = registration["stack_name"]
-        manifest = bbdir / target.emu / "Cargo.toml"
-        target.emu_package = tomllib.loads(manifest.read_text())["package"]["name"]
-        for resource in ("regression", "kernel", "tapeout"):
-            if resource in registration:
-                target.resources[resource] = str(root / registration[resource])
-        for entry in (
-            Path(target.arch.directory) / "build.sc",
-            Path(target.stack) / "CMakeLists.txt",
-            Path(target.workloads) / "CMakeLists.txt",
-        ):
-            if not (bbdir / entry).is_file():
-                raise FileNotFoundError(bbdir / entry)
+    root = Path(derived["path"]).parent.parent
+    ((name, registration),) = config["sims"]["targets"].items()
+    if not re.fullmatch(r"(core/)?[A-Za-z0-9_-]+", name) or name == "core":
+        raise ValueError(f"invalid simulation target: {name}")
+    if name.startswith("core/") and "regression" in registration:
+        raise ValueError(f"{name}: regression belongs to the device entry")
+    target = b.simulation
+    target.selection = config["sims"]["selection"]
+    target.output = str(root / "output/sims" / target.selection)
+    target.directory = str(root / "sims" / name)
+    for field in ("emu", "stack", "workloads"):
+        setattr(target, field, str(root / "sims" / name / field))
+    target.arch.directory = str(root / "sims" / name / "arch")
+    target.arch.module = "simulation"
+    target.arch.config = str(Path(target.output) / "generated/design.pb")
+    target.entry_class = registration["config"]
+    target.top = "BBSimHarness"
+    target.stack_name = registration["stack_name"]
+    manifest = bbdir / target.emu / "Cargo.toml"
+    target.emu_package = tomllib.loads(manifest.read_text())["package"]["name"]
+    for resource in ("regression", "kernel", "tapeout"):
+        if resource in registration:
+            target.resources[resource] = str(root / registration[resource])
+    for entry in (
+        Path(target.arch.directory) / "build.sc",
+        Path(target.stack) / "CMakeLists.txt",
+        Path(target.workloads) / "CMakeLists.txt",
+    ):
+        if not (bbdir / entry).is_file():
+            raise FileNotFoundError(bbdir / entry)
     from verification import ip_registrations
 
     profiles = ip_registrations(
@@ -355,7 +355,7 @@ def fill_design(
     ]
     domains.extend(thread.balldomain for thread in b.threads)
     b.verification.balls.extend(
-        dict.fromkeys(ball.ball_dir for domain in domains for ball in domain.balls)
+        dict.fromkeys(ball.component for domain in domains for ball in domain.balls)
     )
 
     targets = derived["targets"]
@@ -376,7 +376,7 @@ def fill_design(
         instance = pb.ThreadInstance()
         _fill_thread(instance, raw, meta, bbdir, hardware=False)
         if name in compiled:
-            if compiled[name].config.signature != instance.signature:
+            if compiled[name].thread.signature != instance.signature:
                 raise ValueError(
                     f"compiler {name}: instances have different parameters; declare distinct compiler names"
                 )
@@ -384,37 +384,24 @@ def fill_design(
         p = b.profiles.add()
         compiled[name] = p
         p.name = name
-        p.pkg = profile["component"]
-        p.compiler = "compiler"
-        bank = targets[name]["bank"]
-        p.bank_num, p.bank_width, p.bank_entries = (
-            bank["num"],
-            bank["width"],
-            bank["entries"],
-        )
         p.ball_ctest_dirs.extend(targets[name]["ball_ctest_dirs"])
-        p.config.CopyFrom(instance)
-
-    for name, selected in config["workloads"].get("profiles", {}).items():
-        if name == "_file":
-            continue
-        if (
-            type(selected) is not int
-            or selected < 0
-            or not any(
-                c.hart_id == selected and c.profile == name for c in b.device.cores
+        p.thread.CopyFrom(instance)
+        # Programs of the profile run on the first core that runs it, on its
+        # accelerator or on one of its threads.
+        p.core.CopyFrom(
+            next(
+                core
+                for core in b.device.cores
+                if core.profile == name
+                or any(b.threads[i].profile == name for i in core.thread_indices)
             )
-        ):
-            raise ValueError(
-                f"compiler {name}: test hart is not a direct accelerator binding"
-            )
-        compiled[name].test_core = selected
+        )
 
     bemu = derived["bemu"]
     for ball in bemu["balls"]:
         e = b.bemu.balls.add()
-        e.ball_class = ball["ball_class"]
-        e.ball_dir = ball["ball_dir"]
+        e.emu_class = ball["emu_class"]
+        e.component = ball["component"]
         e.emu_lib = ball["emu_lib"]
 
     harts = {core.hart_id for core in b.device.cores}
@@ -424,9 +411,6 @@ def fill_design(
         if type(hart) is not int or hart not in harts:
             raise ValueError(f"workload {key}: unknown hart {hart!r}")
         setattr(b.workload, field, hart)
-
-    for key, val in derived["workload"]["cmake_param"].items():
-        b.workload.cmake_param[key] = val
     return b
 
 
@@ -493,7 +477,7 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
     core.shared_mem.input_channels = shared["inputChannels"]
     core.shared_mem.default_group_count = shared["defaultGroupCount"]
     core.shared_mem.virtual_bank_count = shared["virtualBankCount"]
-    core.shared_mem.mem_cycles = shared["memCycles"]
+    core.shared_mem.latency = shared["latency"]
     if "accelerator" in raw:
         acc = raw["accelerator"]
         _fill_ball(core.accelerator.balldomain, acc["balldomain"], bbdir)
@@ -577,9 +561,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Build a configured core protobuf using the standard TOML expansion"
     )
-    source_kind = parser.add_mutually_exclusive_group(required=True)
-    source_kind.add_argument("--core", type=Path)
-    source_kind.add_argument("--design", type=Path)
+    parser.add_argument("--core", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repo", type=Path, required=True)
     options = parser.parse_args()
@@ -587,17 +569,5 @@ if __name__ == "__main__":
     spec = importlib.util.spec_from_file_location("toml_expansion", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    if options.core is not None:
-        output = write_core_pb(
-            module.toml2json(options.core), options.output, options.repo
-        )
-    else:
-        data = module.design2json(options.design)
-        derived = _derive.derive(
-            data, options.repo, options.design.resolve().parent.parent.name
-        )
-        design = fill_design(data, derived, options.repo)
-        options.output.parent.mkdir(parents=True, exist_ok=True)
-        options.output.write_bytes(design.SerializeToString(deterministic=True))
-        output = options.output
+    output = write_core_pb(module.toml2json(options.core), options.output, options.repo)
     print(output)

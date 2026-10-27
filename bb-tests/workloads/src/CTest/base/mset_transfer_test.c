@@ -1,16 +1,16 @@
 #include <bbhw/isa/isa.h>
-#include <params.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
-enum { ROW_BYTES = BANK_WIDTH / 8 };
+enum { ROW_BYTES = THREAD_MEM_BANK_WIDTH / 8 };
 
 static uint8_t first[2 * ROW_BYTES] __attribute__((aligned(16)));
 static uint8_t second[4 * ROW_BYTES] __attribute__((aligned(16)));
 static uint8_t replacement[2 * ROW_BYTES] __attribute__((aligned(16)));
 static uint8_t result[6 * ROW_BYTES] __attribute__((aligned(16)));
-static uint8_t zeros[BANK_NUM * ROW_BYTES] __attribute__((aligned(16)));
+static uint8_t zeros[THREAD_MEM_BANK_NUM * ROW_BYTES]
+    __attribute__((aligned(16)));
 
 int main(int argc, char **argv) {
   for (unsigned i = 0; i < sizeof(first); ++i) {
@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
   }
   bb_mem_release(0);
   bb_mem_release(3);
-  bb_mset_clear(4, 1, BANK_NUM);
+  bb_mset_clear(4, 1, THREAD_MEM_BANK_NUM);
   bb_mvout((uintptr_t)zeros, 4, 1, 1);
   for (unsigned i = 0; i < sizeof(zeros); ++i)
     if (zeros[i])

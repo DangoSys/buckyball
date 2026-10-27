@@ -12,7 +12,7 @@ def register(mcp):
     def bbdev_kernel_build(
         design: str,
         interactive: bool = False,
-        device: bool = False,
+        device: str | None = None,
         model: str | None = None,
     ) -> str:
         """Build RISC-V kernel + rootfs. POST /kernel/build.
@@ -30,8 +30,8 @@ def register(mcp):
         }
         if interactive:
             params["interactive"] = True
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if model is not None:
             params["model"] = model
         return fmt(submit("/kernel/build", params))

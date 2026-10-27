@@ -23,7 +23,7 @@ import framework.acc.memdomain.tomem.ToMem
 import framework.core.memory.MemoryPort
 import framework.core.memory.access.preflight.Preparation
 import framework.ip.bus.axi4
-import framework.acc.memdomain.bank_router.{BankMapping, BankRouter}
+import framework.acc.memdomain.bank_router.{BankMappingIO, BankRouter}
 import framework.acc.memdomain.prm.PRM
 import framework.acc.memdomain.{MvoverISA, MvoverPort}
 import framework.ip.memory.mesh_shm.MeshLocalBankPort
@@ -109,7 +109,7 @@ class MemDomain(
 // Command Channel
     val issue              = Flipped(Decoupled(new MemoryIssue(frontendParam, memParam, permissionParam)))
     val complete           = Decoupled(new Response(frontendParam))
-    val mapping            = Flipped(Decoupled(new BankMapping(frontendParam)))
+    val mapping            = Flipped(new BankMappingIO(frontendParam))
 // Inside Channel
     val banks              = Vec(memParam.bankRequestPorts, Flipped(new BankPort(frontendParam, memParam)))
     val ballLayoutRequest  = Flipped(Decoupled(new BankLayoutRequest(frontendParam)))

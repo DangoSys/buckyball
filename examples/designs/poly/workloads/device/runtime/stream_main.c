@@ -1,8 +1,7 @@
+#include <bb_cores.h>
 #include <bbhw/isa/isa.h>
-#include <instances.h>
 #include <isa/mxmm.h>
 #include <linux.h>
-#include <params.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stream.h>

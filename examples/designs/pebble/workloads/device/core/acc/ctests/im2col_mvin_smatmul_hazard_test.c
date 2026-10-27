@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-static int8_t input[4096 * 16] __attribute__((aligned(128)));
+static int8_t input[THREAD_MEM_BANK_ENTRIES * 16] __attribute__((aligned(128)));
 static int8_t pixel_input[28 * 24] __attribute__((aligned(128)));
 static int8_t weights[16 * 16] __attribute__((aligned(128)));
 static const int32_t bias[16] __attribute__((aligned(128)));
@@ -46,7 +46,7 @@ int main(void) {
   bb_mvin((uintptr_t)bias, 4, 4, 1);
   bb_smatmul_bias(4, 0);
   bb_mvin((uintptr_t)input, 8, 18, 1);
-  bb_mvin((uintptr_t)input, 8, 4096, 1);
+  bb_mvin((uintptr_t)input, 8, THREAD_MEM_BANK_ENTRIES, 1);
   bb_mvin_2d((uintptr_t)pixel_input, 8, 1, 24, 28, 6, 3, 16);
   bb_mvin_2d((uintptr_t)(pixel_input + 16), 8, 1, 24, 28, 15, 3, 8);
   for (int iteration = 0; iteration < iterations; ++iteration)

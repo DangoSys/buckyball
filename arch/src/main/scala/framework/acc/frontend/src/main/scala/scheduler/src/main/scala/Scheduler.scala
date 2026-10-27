@@ -20,7 +20,7 @@ import framework.acc.frontend.scheduler.bat.BankAliasTable
 import framework.acc.frontend.scheduler.scoreboard.{BankAccessInfo, BankScoreboard}
 import framework.acc.debug.trace.InstructionEvent
 import framework.acc.debug.DebugPort
-import framework.acc.memdomain.bank_router.BankMapping
+import framework.acc.memdomain.bank_router.BankMappingIO
 import framework.acc.memdomain.{Response => MemoryResponse, MemoryContext}
 import framework.acc.memdomain.toddr.DmaError
 
@@ -74,7 +74,7 @@ class Scheduler(
     val gpRequest        = Option.when(gpParam.enable)(Decoupled(new Issue(frontendParam, memParam)))
     val gpCompletion     =
       Option.when(gpParam.enable)(Flipped(Decoupled(new Complete(frontendParam))))
-    val mappingUpdate    = Decoupled(new BankMapping(frontendParam))
+    val mappingUpdate    = new BankMappingIO(frontendParam)
 
     val barrier = new Bundle {
       val arrive  = Output(Bool())

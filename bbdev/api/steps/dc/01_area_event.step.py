@@ -137,7 +137,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     script_path = contract.dc_script
-    report_context = source_context(get_buckyball_path(), contract.design)
+    report_context = source_context(
+        get_buckyball_path(), contract.design, input_data["target"]
+    )
     dc_log = os.path.join(analysis_dir, "dc_shell.log")
     ctx.logger.info(
         f"Running design-owned DC synthesis for {contract.design}, top {top_module}: {script_path}"

@@ -1,0 +1,14 @@
+add_buckyball_ctest(smatmul_bias_accumulate_test.c)
+add_buckyball_ctest(smatmul_1x16x64_test.c)
+add_buckyball_ctest(smatmul_8x16_test.c)
+add_buckyball_ctest(smatmul_16x16_test.c)
+add_buckyball_ctest(smatmul_16x16x32_test.c)
+add_buckyball_ctest(smatmul_nondefault_banks_test.c)
+add_buckyball_ctest(smatmul_k_groups_test.c)
+add_buckyball_ctest(smatmul_c_groups_test.c)
+if(
+    DEFINED
+        DESIGN_PROFILES_${BUCKYBALL_CTEST_TARGET}_THREAD_BALLDOMAIN_BALLS_smatmul_INSTRUCTIONS_SMATMUL_F32_FUNCT7
+)
+    add_buckyball_ctest(smatmul_f32_test.c)
+endif()

@@ -6,6 +6,8 @@ class env extends uvm_env;
   virtual stream_if #(`PF_MAP_READY_WIDTH) mapped;
   virtual stream_if #(`PF_RELEASE_WIDTH) retire;
   chandle model;
+  // A lookup answers in the third cycle of a held query; recent queries and expectations per port.
+  logic [`PF_QUERY_WIDTH+`PF_RESULT_WIDTH-1:0] recent[2][$];
   bit notified[int];
   int status[int];
   int
@@ -48,13 +50,23 @@ class env extends uvm_env;
                     this, "", "retire", retire), "retire missing");
     model = pmap_ref_create(`PF_ADDRESS_BITS);
   endfunction
-  function void query_check(logic [`PF_QUERY_WIDTH-1:0] q, logic [`PF_RESULT_WIDTH-1:0] actual);
+  function void query_check(int port, logic [`PF_QUERY_WIDTH-1:0] q,
+                            logic [`PF_RESULT_WIDTH-1:0] actual);
     int hit, error;
     u64 pa;
+    logic [`PF_RESULT_WIDTH-1:0] expected = '0;
     pmap_ref_query(model, q[`PF(QUERY, VALID)], q[`PF(QUERY, ID)], q[`PF(QUERY, VA)], q[
                    `PF(QUERY, BYTES)], q[`PF(QUERY, WRITE)],
                    retire.sample.valid && retire.sample.ready, retire.sample.bits[`PF(RELEASE, ID)],
                    hit, pa, error);
+    expected[`PF(RESULT, HIT)] = 1'(hit);
+    expected[`PF(RESULT, PA)] = `PF_ADDRESS_BITS'(pa);
+    expected[`PF(RESULT, ERROR)] = 3'(error);
+    recent[port].push_back({q, expected});
+    if (recent[port].size() > 3) void'(recent[port].pop_front());
+    if (recent[port].size() < 3 || recent[port][0] !== recent[port][1] ||
+        recent[port][1] !== recent[port][2])
+      return;
     verify_contract(actual[`PF(RESULT, HIT)] === 1'(hit) && actual[`PF(RESULT, PA)
                     ] === `PF_ADDRESS_BITS'(pa) && actual[`PF(RESULT, ERROR)] === 3'(error),
                     $sformatf(

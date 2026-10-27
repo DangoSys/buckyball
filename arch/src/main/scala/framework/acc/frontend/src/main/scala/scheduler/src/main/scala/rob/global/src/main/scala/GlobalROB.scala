@@ -16,7 +16,7 @@ import framework.acc.frontend.scheduler.scoreboard.BankAccessInfo
 import framework.acc.memdomain.DISA.MSET_BITPAT
 import framework.acc.memdomain.DISA.MVIN_KERNEL_BITPAT
 import framework.acc.gpdomain.decoder.DISA.RUN_KERNEL_BITPAT
-import framework.acc.memdomain.bank_router.BankMapping
+import framework.acc.memdomain.bank_router.{BankMapping, BankMappingIO}
 import framework.acc.memdomain.{MemoryContext, PhysicalBankHash}
 import framework.acc.debug.trace.InstructionEvent
 import framework.acc.debug.DebugPort
@@ -64,8 +64,8 @@ class GlobalROB(
   val physicalBankCount = memParam.bankNum + sharedHashCount
 
   require(
-    frontendParam.vbank_id_upper_bound < memParam.virtualBankCount,
-    s"vbank_id_upper_bound(${frontendParam.vbank_id_upper_bound}) must be < virtualBankCount(${memParam.virtualBankCount})"
+    frontendParam.max_private_vbank < memParam.virtualBankCount,
+    s"max_private_vbank(${frontendParam.max_private_vbank}) must be < virtualBankCount(${memParam.virtualBankCount})"
   )
 
   @public
@@ -75,7 +75,7 @@ class GlobalROB(
       Flipped(new DecoupledIO(new DecodedInstruction(frontendParam, memParam, permissionParam)))
     val issue             = new DecoupledIO(new GlobalRobEntry(frontendParam, memParam, permissionParam))
     val complete          = Flipped(new DecoupledIO(UInt(idWidth.W)))
-    val mapping           = Decoupled(new BankMapping(frontendParam))
+    val mapping           = new BankMappingIO(frontendParam)
 
     val bat = new Bundle {
 
@@ -117,7 +117,9 @@ class GlobalROB(
   val mappings      = Instantiate(new Arbiter(new BankMapping(frontendParam), 2))
   mappings.io.in(0) <> mappingRetire
   mappings.io.in(1) <> mappingIssue
-  io.mapping <> mappings.io.out
+  io.mapping.valid      := mappings.io.out.valid
+  io.mapping.bits       := mappings.io.out.bits
+  mappings.io.out.ready := io.mapping.ready
 
   // ---------------------------------------------------------------------------
   // Passive instruction observations consumed by the thread trace collector.
@@ -379,7 +381,8 @@ class GlobalROB(
   // remains one while the extra latency is hidden by in-flight commands.
   val issuePtrValid = RegInit(false.B)
   val issuePtr      = Reg(UInt(idWidth.W))
-  val issuePtrFire  = issuePtrValid && issueStageReady
+  // The BLT is still installing the mapping this instruction issued; hold it.
+  val issuePtrFire  = issuePtrValid && issueStageReady && !io.mapping.busy
   val issuePtrReady = !issuePtrValid || issuePtrFire
   mappingIssue.bits.bank  := robEntries(actualIssuePtr).cmd.bankAccess.wr_bank_id
   mappingIssue.bits.vbank := robEntries(actualIssuePtr).renamedBankAccess.wr_bank_id
@@ -418,7 +421,7 @@ class GlobalROB(
     }
   }
   when(issueStageReady) {
-    issueStageValid := issuePtrValid
+    issueStageValid := issuePtrFire
     when(issuePtrFire) {
       issueStageEntry := issuePayload
     }

@@ -171,7 +171,7 @@ path = "arch/src/main/scala/framework/acc/frontend"
 [modules.frontend.build]
 directory = "arch/src/main/scala/framework"
 module = "acc.frontend"
-arguments = ["--config", "{repo}/examples/designs/{design}/output/generated/design.pb"]
+arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
 [modules.memdomain]
 level = "domain"
@@ -189,7 +189,7 @@ path = "arch/src/main/scala/framework/acc/gpdomain"
 [modules.gpdomain.build]
 directory = "arch/src/main/scala/framework"
 module = "acc.gpdomain"
-arguments = ["--config", "{repo}/examples/designs/{design}/output/generated/design.pb"]
+arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
 [modules.balldomain]
 level = "domain"
@@ -199,7 +199,7 @@ path = "arch/src/main/scala/framework/acc/balldomain"
 runtime = [{ directory = "examples", module = "library" }]
 directory = "arch/src/main/scala/framework"
 module = "acc.balldomain"
-arguments = ["--config", "{repo}/examples/designs/{design}/output/generated/design.pb"]
+arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
 [modules.ant]
 level = "thread"
@@ -208,7 +208,7 @@ path = "arch/src/main/scala/framework/thread/ant"
 [modules.ant.build]
 directory = "arch/src/main/scala/framework"
 module = "thread.ant"
-arguments = ["--config", "{repo}/examples/designs/{design}/output/generated/design.pb", "--core", "1"]
+arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb", "--core", "1"]
 
 [modules.mesh_shm]
 level = "subsystem"

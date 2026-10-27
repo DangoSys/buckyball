@@ -27,7 +27,7 @@ file mkdir $output_dir $report_dir [file join $report_dir work]
 set target_library [list $RUN_TARGET_LIBRARY]
 set synthetic_library $RUN_SYNTHETIC_LIBRARY
 set link_library [concat [list *] $target_library $synthetic_library $RUN_LINK_LIBRARY]
-set_host_options -max_cores $RUN_MAX_CORES
+set_host_options -max_cores $RUN_MAX_THREADS
 define_design_lib WORK -path [file join $report_dir work]
 set search_path [list . [file dirname $RUN_SOURCE_LIST] [file dirname [file dirname $RUN_SOURCE_LIST]] [file dirname [file dirname [file dirname $RUN_SOURCE_LIST]]]]
 set_app_var verilogout_no_tri true

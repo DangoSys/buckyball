@@ -16,7 +16,7 @@ def register(mcp):
         mtrace: bool = False,
         vsrc_dir: Optional[str] = None,
         output_dir: Optional[str] = None,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Build bebop-p2e bitstream. POST /bebop/p2e/buildbitstream."""
@@ -27,8 +27,8 @@ def register(mcp):
             vsrc_dir=vsrc_dir,
             output_dir=output_dir,
         )
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

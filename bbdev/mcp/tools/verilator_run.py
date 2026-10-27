@@ -21,7 +21,7 @@ def register(mcp):
         pmctrace: bool = False,
         ctrace: bool = False,
         banktrace: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Full non-bebop Verilator flow. POST /verilator/run."""
@@ -43,8 +43,8 @@ def register(mcp):
         }
         if jobs is not None:
             params["jobs"] = jobs
-        if device:
-            params["device"] = True
+        if device is not None:
+            params["device"] = device
         if core is not None:
             params["core"] = core
         return fmt(submit("/verilator/run", params))

@@ -280,31 +280,49 @@ class Privileged(b: ModuleParam) extends Module {
     }
   }
 
-  for (i    <- 0 until 16) {
+  for (i <- 0 until 16) {
     io.pmp(i).cfg  := pmpConfig(i).asTypeOf(io.pmp(i).cfg)
     io.pmp(i).addr := pmpAddress(i)
     io.pmp(i).mask := ((pmpAddress(i) ^ (pmpAddress(i) + 1.U)) << 2) | 3.U
   }
+  // PMP bounds and the authorization are registered: permitted answers the authorization of the
+  // previous cycle against the PMP state of that same cycle. Bounds are inclusive so the
+  // decision path only compares.
+  val bounds = Reg(Vec(16, new PmpBound))
+  val requests = RegNext(io.authorization)
+  // Last byte of each authorization: paddr + 2^size - 1.
+  val lasts    = RegNext(VecInit(io.authorization.map(a => a.paddr +& ((1.U(8.W) << a.size) - 1.U))))
+  for (i    <- 0 until 16) {
+    val encoded = (pmpAddress(i) << 2).pad(64)
+    val mask    = io.pmp(i).mask.pad(64)
+    val mode    = pmpConfig(i)(4, 3)
+    val below   = if (i == 0) 0.U(64.W) else (pmpAddress(i - 1) << 2).pad(64)
+    bounds(i).low     := Mux(mode === 1.U, below, Mux(mode === 3.U, encoded & ~mask, encoded))
+    bounds(i).last    := MuxLookup(mode, encoded | 3.U)(Seq(
+      1.U -> ((pmpAddress(i) - 1.U) << 2 | 3.U).pad(64),
+      3.U -> (encoded | mask)
+    ))
+    bounds(i).enabled := mode =/= 0.U && (mode =/= 1.U || below < encoded)
+    bounds(i).config  := pmpConfig(i)
+  }
   for (port <- 0 until 2) {
-    val request = io.authorization(port)
-    val end     = request.paddr +& (1.U(65.W) << request.size)
-    val matches = (0 until 16).map { i =>
-      val encoded = (pmpAddress(i) << 2).pad(64)
-      val mask    = io.pmp(i).mask.pad(64)
-      val mode    = pmpConfig(i)(4, 3)
-      val low     = Mux(
-        mode === 1.U,
-        if (i == 0) 0.U(64.W) else (pmpAddress(i - 1) << 2).pad(64),
-        Mux(mode === 3.U, encoded & ~mask, encoded)
-      )
-      val high    = Mux(mode === 1.U, encoded.pad(65), Mux(mode === 3.U, low +& mask + 1.U, encoded +& 4.U))
-      val hit     = mode =/= 0.U && low < high && request.paddr < high && end > low
-      val allowed = (request.privilege === 3.U && !pmpConfig(i)(7)) ||
-        ((!request.read || pmpConfig(i)(0)) && (!request.write || pmpConfig(i)(1)) && (!request.execute || pmpConfig(i)(
-          2
-        )))
-      hit -> (allowed && request.paddr >= low && end <= high)
+    val request = requests(port)
+    val last    = lasts(port)
+    val matches = bounds.map { bound =>
+      val hit     = bound.enabled && request.paddr <= bound.last && last >= bound.low
+      val allowed = (request.privilege === 3.U && !bound.config(7)) ||
+        ((!request.read || bound.config(0)) && (!request.write || bound.config(1)) &&
+          (!request.execute || bound.config(2)))
+      hit -> (allowed && request.paddr >= bound.low && last <= bound.last)
     }
     io.permitted(port) := PriorityMux(matches :+ (true.B -> (request.privilege === 3.U)))
   }
+}
+
+/** One PMP entry as an inclusive byte range [low, last]. */
+class PmpBound extends Bundle {
+  val low     = UInt(64.W)
+  val last    = UInt(64.W)
+  val enabled = Bool()
+  val config  = UInt(8.W)
 }

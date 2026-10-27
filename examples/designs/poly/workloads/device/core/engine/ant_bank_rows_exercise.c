@@ -1,21 +1,19 @@
 #include "ant_bank_rows.h"
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
 enum {
-  WORDS = ANT_BANK_ROWS * BANK_WIDTH / 64,
-  SHARED_WORDS = ANT_BANK_ROWS * BANK_WIDTH / 64
+  WORDS = ANT_BANK_ROWS * THREAD_MEM_BANK_WIDTH / 64,
+  SHARED_WORDS = ANT_BANK_ROWS * THREAD_MEM_BANK_WIDTH / 64
 };
-static uint64_t input[BB_THREAD_CORE_COUNT][WORDS]
+static uint64_t input[POLY_THREAD_CORES][WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t private_out[BB_THREAD_CORE_COUNT][WORDS]
+static uint64_t private_out[POLY_THREAD_CORES][WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t shared_out[BB_THREAD_CORE_COUNT][SHARED_WORDS]
+static uint64_t shared_out[POLY_THREAD_CORES][SHARED_WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t tail_out[BB_THREAD_CORE_COUNT][8]
+static uint64_t tail_out[POLY_THREAD_CORES][8]
     __attribute__((section(".data"), aligned(4096))) = {0};
-unsigned bank_rows_done[BB_THREAD_CORE_COUNT];
+unsigned bank_rows_done[POLY_THREAD_CORES];
 void bank_rows_exercise(unsigned core) {
   const unsigned context = thread_find(THREAD_SIGNATURE, 0);
   for (unsigned i = 0; i < WORDS; ++i)

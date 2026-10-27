@@ -46,15 +46,15 @@ class Decoder(val frontendParam: FrontendParam, val memParam: MemDomainParam) ex
   val commandDataBits = frontendParam.commandDataBits
   import DecodeConstants._
 
-  val sharedBankIdBase = frontendParam.shared_bank_id_base
-  require(sharedBankIdBase > 0, s"sharedBankIdBase($sharedBankIdBase) must be > 0")
+  val sharedVbankBase = frontendParam.shared_vbank_base
+  require(sharedVbankBase > 0, s"sharedVbankBase($sharedVbankBase) must be > 0")
   require(
-    sharedBankIdBase < (1 << frontendParam.bank_id_len),
-    s"sharedBankIdBase($sharedBankIdBase) must fit in bankIdLen(${frontendParam.bank_id_len})"
+    sharedVbankBase < (1 << frontendParam.bank_id_len),
+    s"sharedVbankBase($sharedVbankBase) must fit in bankIdLen(${frontendParam.bank_id_len})"
   )
   require(
-    sharedBankIdBase > frontendParam.vbank_id_upper_bound,
-    s"sharedBankIdBase($sharedBankIdBase) must be > vbankIdUpperBound(${frontendParam.vbank_id_upper_bound})"
+    sharedVbankBase > frontendParam.max_private_vbank,
+    s"sharedVbankBase($sharedVbankBase) must be > maxPrivateVbank(${frontendParam.max_private_vbank})"
   )
 
   @public
@@ -117,7 +117,7 @@ class Decoder(val frontendParam: FrontendParam, val memParam: MemDomainParam) ex
 
   val config_bank    = Mux(func7 === MSET_BITPAT && !transfer, io.request.bits.bankAccess.wr_bank_id, architectural_bank)
   val shared_bank_id =
-    memParam.sharedEnable.B && config_bank >= sharedBankIdBase.U
+    memParam.sharedEnable.B && config_bank >= sharedVbankBase.U
   // format: off
   // BB_BANK0 is encoded in rs1[9:0]. Keep the configured architectural ID;
   // private and shared banks occupy disjoint ranges in that namespace.
@@ -139,7 +139,7 @@ class Decoder(val frontendParam: FrontendParam, val memParam: MemDomainParam) ex
       assert(rs1(63, 30) === 0.U && rs1(19, 10) === 0.U, "MSET transfer reserves rs1 outside BANK0/BANK2")
       assert(rs2 === (1.U << 12), "MSET transfer reserves other rs2 bits")
       assert(rs1(9, 0) =/= rs1(29, 20), "MSET transfer requires distinct source and target")
-      assert((rs1(9, 0) >= sharedBankIdBase.U) === (rs1(29, 20) >= sharedBankIdBase.U), "MSET transfer requires one bank namespace")
+      assert((rs1(9, 0) >= sharedVbankBase.U) === (rs1(29, 20) >= sharedVbankBase.U), "MSET transfer requires one bank namespace")
     }.otherwise {
       assert(rs1(63, 10) === 0.U, "MSET reserves rs1[63:10]")
       assert(rs2(63, 12) === 0.U, "MSET reserves rs2[63:12]")

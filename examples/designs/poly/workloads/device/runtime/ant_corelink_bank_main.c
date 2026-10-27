@@ -1,23 +1,22 @@
 #include "ant_corelink_bank.h"
+#include <bb_cores.h>
 #include <corelink.h>
-#include <instances.h>
-#include <params.h>
 #include <thread.h>
 _Static_assert(
-    BB_CORE_NUM == BB_THREAD_CORE_COUNT + 1 && BB_THREAD_CORE_COUNT >= 2 &&
-        !(BB_THREAD_CORE_COUNT & (BB_THREAD_CORE_COUNT - 1)),
+    BB_NUM_CORES == POLY_THREAD_CORES + 1 && POLY_THREAD_CORES >= 2 &&
+        !(POLY_THREAD_CORES & (POLY_THREAD_CORES - 1)),
     "CoreLink gate requires a power-of-two thread-bearing core count");
 extern const unsigned char ant_image[], ant_image_end[];
-static uint64_t input[BB_THREAD_CORE_COUNT][CORELINK_CROSS_BYTES / 8]
+static uint64_t input[POLY_THREAD_CORES][CORELINK_CROSS_BYTES / 8]
     __attribute__((aligned(64)));
-static uint64_t output[BB_THREAD_CORE_COUNT][CORELINK_CROSS_BYTES / 8]
+static uint64_t output[POLY_THREAD_CORES][CORELINK_CROSS_BYTES / 8]
     __attribute__((aligned(64)));
-static unsigned ready[BB_THREAD_CORE_COUNT], done[BB_THREAD_CORE_COUNT];
+static unsigned ready[POLY_THREAD_CORES], done[POLY_THREAD_CORES];
 static unsigned arrived[2];
 static void barrier(unsigned phase) {
   __atomic_fetch_add(&arrived[phase], 1, __ATOMIC_ACQ_REL);
   while (__atomic_load_n(&arrived[phase], __ATOMIC_ACQUIRE) !=
-         BB_THREAD_CORE_COUNT) {
+         POLY_THREAD_CORES) {
   }
 }
 static unsigned pattern(unsigned core, unsigned i) {
@@ -48,7 +47,7 @@ static void phase(unsigned core, unsigned operation) {
 static void exercise(unsigned core) {
   uint64_t bank_bytes = corelink_query(CORELINK_BANK_BYTES);
   if (corelink_query(CORELINK_CORE_ID) != core + 1 ||
-      corelink_query(CORELINK_CORE_COUNT) != BB_CORE_NUM ||
+      corelink_query(CORELINK_CORE_COUNT) != BB_NUM_CORES ||
       bank_bytes < CORELINK_CROSS_BYTES ||
       corelink_query(CORELINK_SHARED_BYTES) < bank_bytes * 2)
     __builtin_trap();
@@ -67,8 +66,8 @@ static void exercise(unsigned core) {
   }
   phase(core, 0);
   barrier(0);
-  unsigned next = (core + 1) % BB_THREAD_CORE_COUNT;
-  unsigned previous = (core + BB_THREAD_CORE_COUNT - 1) % BB_THREAD_CORE_COUNT;
+  unsigned next = (core + 1) % POLY_THREAD_CORES;
+  unsigned previous = (core + POLY_THREAD_CORES - 1) % POLY_THREAD_CORES;
   corelink_transfer(0, next + 1, bank_bytes - 16, 37);
   barrier(1);
   corelink_transfer(bank_bytes - 16, previous + 1, 128, 37);
@@ -90,7 +89,7 @@ int main(void) {
   if (hart)
     exercise(hart - 1);
   else
-    for (unsigned core = 0; core < BB_THREAD_CORE_COUNT; ++core)
+    for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
       while (!__atomic_load_n(&done[core], __ATOMIC_ACQUIRE)) {
       }
   return 0;

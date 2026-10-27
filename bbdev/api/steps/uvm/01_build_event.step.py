@@ -32,13 +32,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         if input_data.get("ball") is not None:
             info = await asyncio.to_thread(
-                run_design, bbdir, input_data["design"], input_data["ball"], ctx, False
+                run_design,
+                bbdir,
+                input_data["design"],
+                input_data["target"],
+                input_data["ball"],
+                ctx,
+                False,
             )
         else:
             info = await asyncio.to_thread(
                 run_verification,
                 bbdir,
                 input_data.get("design"),
+                input_data["target"],
                 input_data.get("ip"),
                 ctx,
                 False,

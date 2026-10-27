@@ -1,6 +1,6 @@
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_design
+from utils.event_common import require_design, require_target
 
 config = {
     "name": "model-build-api",
@@ -15,6 +15,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
         design = require_design(body)
+        selection = require_target(body, ("device",))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue(
@@ -23,6 +24,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             "data": {
                 "design": design,
                 "model": body.get("model"),
+                "target": selection,
                 "_trace_id": ctx.trace_id,
             },
         }

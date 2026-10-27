@@ -3,30 +3,10 @@ add_subdirectory(MLIRTest)
 add_subdirectory(SocTest)
 
 # ===============================================================
-# Design-specific workloads
+# Design-specific workloads: the workload entry of the simulation.
+# It defines target design-workloads-build.
 # ===============================================================
-if(NOT DEFINED BUCKYBALL_DESIGN_WORKLOAD_DIR)
-    message(
-        FATAL_ERROR
-        "BUCKYBALL_DESIGN_WORKLOAD_DIR must select a registered simulation workload entry"
-    )
-endif()
-
-if(NOT EXISTS ${BUCKYBALL_DESIGN_WORKLOAD_DIR}/CMakeLists.txt)
-    message(
-        FATAL_ERROR
-        "Buckyball design workloads do not exist: ${BUCKYBALL_DESIGN_WORKLOAD_DIR}"
-    )
-endif()
-
 add_subdirectory(
-    ${BUCKYBALL_DESIGN_WORKLOAD_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/CTest/designs/${BUCKYBALL_WORKLOAD_DESIGN}
+    ${DESIGN_WORKLOADS}
+    ${CMAKE_CURRENT_BINARY_DIR}/CTest/designs/${DESIGN_NAME}
 )
-
-if(NOT TARGET design-workloads-build)
-    message(
-        FATAL_ERROR
-        "Buckyball design workloads must define target design-workloads-build: ${BUCKYBALL_WORKLOAD_DESIGN}"
-    )
-endif()

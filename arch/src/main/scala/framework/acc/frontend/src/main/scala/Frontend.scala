@@ -14,7 +14,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.acc.frontend.boot.BootRom
 import framework.acc.frontend.decoder.GlobalDecoder
-import framework.acc.memdomain.bank_router.BankMapping
+import framework.acc.memdomain.bank_router.BankMappingIO
 import framework.acc.frontend.scheduler.{Complete, Issue, MemoryIssue, Scheduler}
 import framework.acc.memdomain.{Response => MemoryResponse}
 
@@ -51,7 +51,7 @@ class Frontend(
     val ballCompletion = Flipped(Decoupled(new MemoryResponse(frontendParam)))
 
     // Bank-version update request to MemDomain; its ready input gates the update.
-    val mappingUpdate    = Decoupled(new BankMapping(frontendParam))
+    val mappingUpdate    = new BankMappingIO(frontendParam)
     val memoryRequest    = Decoupled(new MemoryIssue(frontendParam, memParam, permissionParam))
     val memoryCompletion = Flipped(Decoupled(new MemoryResponse(frontendParam)))
 

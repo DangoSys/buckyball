@@ -33,7 +33,7 @@ set(COREMARK_C_FLAGS
     -Wl,-T,${BBSIM_LD}
     -I${COREMARK_SRC_DIR}
     -I${COREMARK_PORT_DIR}
-    -I${BUCKYBALL_ISA_DIR}/control
+    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
     -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
     -I${WORKLOAD_LIB_DIR}
@@ -45,7 +45,7 @@ set(COREMARK_C_FLAGS
 )
 
 set(COREMARK_NAME
-    "${BUCKYBALL_WORKLOAD_DESIGN}-${COREMARK_THREAD}-ctest-benchmark-coremark"
+    "${DESIGN_NAME}-${COREMARK_THREAD}-ctest-benchmark-coremark"
 )
 set(EXECUTABLE "${COREMARK_NAME}-baremetal")
 
@@ -59,7 +59,6 @@ add_custom_command(
         ${COREMARK_HEADERS}
         ${BAREMETAL_DIR}/crt0.S
         ${BAREMETAL_DIR}/syscalls.c
-        ${BUCKYBALL_ISA_DIR}/control/params.h
     COMMENT "Building coremark: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )

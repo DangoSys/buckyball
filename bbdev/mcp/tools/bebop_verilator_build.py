@@ -12,15 +12,15 @@ def register(mcp):
         design: str,
         jobs: int = 16,
         diff: bool = False,
-        device: bool = False,
+        device: str | None = None,
         core: str | None = None,
     ) -> str:
         """Build bebop verilator binary. POST /bebop/verilator/build."""
         if e := need("design", design):
             return err(e)
         request = {"design": design, "jobs": jobs, "diff": diff}
-        if device:
-            request["device"] = True
+        if device is not None:
+            request["device"] = device
         if core is not None:
             request["core"] = core
         return fmt(

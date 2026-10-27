@@ -36,24 +36,25 @@ class ReadDma(val b: ModuleParam) extends Module {
 
   })
 
-  val idle :: shape :: divide :: products :: offset :: check :: plan :: query :: offer :: receive :: respond :: drain :: failed :: Nil =
-    Enum(13)
-  val state                                                                                                                            = RegInit(idle)
-  val command                                                                                                                          = Reg(new ReadTransfer)
-  val parent                                                                                                                           = Reg(UInt(prepared.idBits.W))
-  val total                                                                                                                            = Reg(UInt(17.W))
-  val progress                                                                                                                         = RegInit(0.U(17.W))
-  val group                                                                                                                            = RegInit(0.U(6.W))
-  val column                                                                                                                           = RegInit(0.U(4.W))
-  val address                                                                                                                          = Reg(UInt(64.W))
-  val queryVA                                                                                                                          = Reg(UInt(64.W))
-  val physical                                                                                                                         = Reg(UInt(axiParams.addressBits.W))
-  val candidate                                                                                                                        = Reg(UInt(9.W))
-  val remaining                                                                                                                        = Reg(UInt(9.W))
-  val second                                                                                                                           = RegInit(false.B)
-  val firstPart                                                                                                                        = Reg(UInt(128.W))
-  val result                                                                                                                           = Reg(UInt(128.W))
-  val fault                                                                                                                            = RegInit(0.U.asTypeOf(new DmaStatus))
+  val (idle :: shape :: divide :: products :: offset :: check :: plan :: query :: lookup :: answer :: validate ::
+    offer :: receive :: respond :: drain :: failed :: Nil) = Enum(16)
+  val state                                                = RegInit(idle)
+  val command                                              = Reg(new ReadTransfer)
+  val parent                                               = Reg(UInt(prepared.idBits.W))
+  val total                                                = Reg(UInt(17.W))
+  val progress                                             = RegInit(0.U(17.W))
+  val group                                                = RegInit(0.U(6.W))
+  val column                                               = RegInit(0.U(4.W))
+  val address                                              = Reg(UInt(64.W))
+  val queryVA                                              = Reg(UInt(64.W))
+  val physical                                             = Reg(UInt(axiParams.addressBits.W))
+  val candidate                                            = Reg(UInt(9.W))
+  val remaining                                            = Reg(UInt(9.W))
+  val second                                               = RegInit(false.B)
+  val firstPart                                            = Reg(UInt(128.W))
+  val result                                               = Reg(UInt(128.W))
+  val fault                                                = RegInit(0.U.asTypeOf(new DmaStatus))
+  val mapped                                               = Reg(new MapResult(b.mapping))
 
   io.req.ready             := state === idle && io.decisionValid
   io.busy                  := state =/= idle
@@ -63,7 +64,8 @@ class ReadDma(val b: ModuleParam) extends Module {
   io.resp.bits.addrcounter := progress(15, 0)
   io.resp.bits.fault       := Mux(state === failed, fault, 0.U.asTypeOf(new DmaStatus))
   io.query                 := 0.U.asTypeOf(new MapQuery(b.mapping))
-  io.query.valid           := state === query
+  // The prepared map answers a query held for three cycles.
+  io.query.valid           := state === query || state === lookup || state === answer
   io.query.id              := parent
   io.query.va              := queryVA
   io.query.bytes           := candidate << 4
@@ -163,9 +165,12 @@ class ReadDma(val b: ModuleParam) extends Module {
     candidate := Mux(address(3, 0) =/= 0.U, 1.U, Mux(limited < pageBeats, limited, pageBeats))
     state     := query
   }
-  when(state === query) {
-    when(!io.mapping.hit || io.mapping.error =/= Error.Ok.U) {
-      val error = MuxLookup(io.mapping.error, DmaError.AccessFault.U)(Seq(
+  when(state === query)(state := lookup)
+  when(state === lookup)(state := answer)
+  when(state === answer) { mapped := io.mapping; state := validate }
+  when(state === validate) {
+    when(!mapped.hit || mapped.error =/= Error.Ok.U) {
+      val error = MuxLookup(mapped.error, DmaError.AccessFault.U)(Seq(
         Error.Shape.U     -> DmaError.Shape.U,
         Error.Overflow.U  -> DmaError.Shape.U,
         Error.PageFault.U -> DmaError.PageFault.U,
@@ -173,9 +178,9 @@ class ReadDma(val b: ModuleParam) extends Module {
         Error.Context.U   -> DmaError.Context.U
       ))
       fail(error, queryVA)
-    }.elsewhen(io.mapping.pa(3, 0) =/= 0.U || (io.mapping.pa(11, 0) +& (candidate << 4)) > 4096.U) {
+    }.elsewhen(mapped.pa(3, 0) =/= 0.U || (mapped.pa(11, 0) +& (candidate << 4)) > 4096.U) {
       fail(DmaError.AccessFault.U, queryVA)
-    }.otherwise { physical := io.mapping.pa; state := offer }
+    }.otherwise { physical := mapped.pa; state := offer }
   }
   when(io.axi.ar.fire) { remaining := candidate; state := receive }
   when(io.axi.r.fire) {
