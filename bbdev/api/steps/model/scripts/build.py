@@ -22,6 +22,23 @@ def build_model(
         else sorted(path.parent.name for path in recipes.glob("*/CMakeLists.txt"))
     )
     source = Path(repo) / "stack/models"
+    environment = [
+        "nix",
+        "build",
+        str(Path(repo) / "stack"),
+        "--out-link",
+        str(Path(repo) / "stack/result"),
+    ]
+    result = stream_run_logger(
+        cmd=shlex.join(environment),
+        cwd=repo,
+        logger=logger,
+        stdout_prefix="model environment",
+        stderr_prefix="model environment",
+        task_scope=task_scope,
+    )
+    if result.returncode:
+        raise RuntimeError(f"Model environment build failed ({result.returncode})")
     from steps.stack.scripts.build import build_design
 
     # Models compile with the design's compiler plugins and link its device runtime.
@@ -35,7 +52,7 @@ def build_model(
         # A recipe reads the prepared model while it configures, so the model
         # is prepared first, by its own project: its weights and checkpoints
         # are rebuilt only when their inputs change.
-        prepare = source / "build" / "models" / model
+        prepare = source / "build" / "prepare" / model
         commands = [
             # Prepared weights can predate this build tree; use file timestamps.
             [

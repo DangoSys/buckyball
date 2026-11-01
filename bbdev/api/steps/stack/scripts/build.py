@@ -103,14 +103,14 @@ def build_llvm(
         if not (llvm_build / "build.ninja").is_file():
             run(
                 cmake,
-                repo=root,
+                repo=root / "stack",
                 logger=logger,
                 task_scope=task_scope,
                 output_prefix="compiler llvm configure",
             )
         run(
             ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
-            repo=root,
+            repo=root / "stack",
             logger=logger,
             task_scope=task_scope,
             output_prefix="compiler llvm build",
@@ -143,6 +143,7 @@ def build_buddy(
         "-DLLVM_ENABLE_ASSERTIONS=ON",
         "-DCMAKE_BUILD_TYPE=RELEASE",
         "-DBUDDY_MLIR_ENABLE_PYTHON_PACKAGES=ON",
+        "-DCMAKE_MAKE_PROGRAM=ninja",
         f"-DPython3_EXECUTABLE={python}",
         f"-DPython_EXECUTABLE={python}",
     ]

@@ -8,6 +8,7 @@ clockHz = 1000000000
 config = "examples.designs.piplus.sims.device.DeviceConfig"
 stack_name = "piplus"
 regression = "sims/device/regression"
+kernel = "sims/device/workloads/kernel"
 
 [targets.device.configs]
 PiplusVerilatorConfig = "verilator.toml"

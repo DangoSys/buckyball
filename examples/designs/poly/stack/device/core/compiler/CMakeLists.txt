@@ -29,3 +29,36 @@ add_library(core-compiler MODULE)
 target_link_libraries(core-compiler PRIVATE buckyball-compiler)
 set_target_properties(core-compiler PROPERTIES
   LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.checked
+  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+          --load-dialect-plugin=$<TARGET_FILE:core-compiler>
+          --load-pass-plugin=$<TARGET_FILE:core-compiler>
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/materialized_outputs.mlir
+          -forward-materialized-tensors -o ${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.mlir
+  COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/materialized_outputs.mlir
+          --input-file=${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.mlir
+  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+          ${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.mlir
+          "-one-shot-bufferize=bufferize-function-boundaries" -o /dev/null
+  COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.checked
+  DEPENDS core-compiler ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/materialized_outputs.mlir
+  VERBATIM)
+add_custom_target(materialized-outputs-check ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/materialized-outputs.checked)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/loop-dim.checked
+  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/loop_dim.mlir
+          -convert-scf-to-cf -finalize-memref-to-llvm -convert-cf-to-llvm
+          -convert-arith-to-llvm -convert-func-to-llvm -reconcile-unrealized-casts
+          -o ${CMAKE_CURRENT_BINARY_DIR}/loop-dim.mlir
+  COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/loop_dim.mlir
+          --input-file=${CMAKE_CURRENT_BINARY_DIR}/loop-dim.mlir
+  COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/loop-dim.checked
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/loop_dim.mlir
+  VERBATIM)
+add_custom_target(loop-dim-check ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/loop-dim.checked)

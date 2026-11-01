@@ -3,7 +3,7 @@ tagBits = 6
 resultLineBits = 0
 [[regions]]
 base = 0x80000000
-bytes = 0x20000000
+bytes = 0x400000000
 cacheable = true
 executable = true
 readable = true

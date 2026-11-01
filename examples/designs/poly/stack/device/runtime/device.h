@@ -1,5 +1,5 @@
-/* The poly device runtime: values move between the cores over the core links
- * (see device.c). The program and its jobs run on the device program runtime
+/* The poly device runtime: values move between cores in coherent DDR.
+ * The program and its jobs run on the device program runtime
  * of the framework, program.h. */
 #pragma once
 
@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 /* Moves `bytes` from `source`, written by `after` on core `from`, to `target`
- * on core `to`, over the link between them; returns the job after which
+ * on core `to`; returns the job after which
  * `target` holds them. (lower-device) */
 uint64_t device_transfer(uint64_t from, uint64_t to, uint64_t target,
                          uint64_t source, uint64_t bytes, uint64_t after);

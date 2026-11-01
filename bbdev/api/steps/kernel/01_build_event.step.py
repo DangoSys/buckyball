@@ -49,8 +49,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     hart_count = len(design_config.device.cores)
     ddr = design_config.device.ddr
     guest_memory_mib = (ddr.bytes - ddr.model) // (1024 * 1024)
-    # A DDR without a model region leaves the base empty: init runs no model.
-    model_base = f"{ddr.base + ddr.bytes - ddr.model:#x}" if ddr.model else ""
+    model = input_data.get("model")
+    model_base = f"{ddr.base + ddr.bytes - ddr.model:#x}" if model else ""
     trace_base = f"{design_config.device.trace.base:#x}"
     interactive = input_data.get("interactive", False)
     output_root = design_output_root(bbdir, design, selection=input_data["target"])
@@ -123,7 +123,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     # BEMU takes the bin, P2E the hex.
     image = os.path.join(output_dir, f"{payload_name}-ddr")
     pack = os.path.join(kernel_build, "image-pack")
-    model = input_data.get("model")
     pack_cmd = [pack, f"{image}.bin", f"{image}.hex", str(ddr.bytes), fw_payload_bin]
     if model:
         pack_cmd += [

@@ -5,13 +5,14 @@
 // the limits of the Ball and the bank depth of the target (design.pb).
 //
 //   - MXINT8 products (both operands decoded MXINT8) run on
-//     Mxint8matmulBall over packed rows of k = K (one bank row group per
-//     row: K codes, K/32 exponents, zero padding to 16 bytes); a dynamic K
-//     is split into blocks of 32 chained with `accumulate`.
+//     Mxint8matmulBall over packed K blocks (codes, exponents and padding
+//     to 16 bytes), chained with `accumulate`. Static K blocks divide K
+//     within bank capacity; dynamic K uses blocks of 32.
 //   - FP32 products run on MxmmBall (f32, rows one or a multiple of 16).
 //
 // Operands: a packed operand (a weight, or an activation the reduce core
-// quantized) is read in place; it must be in the Ball layout, rows of
+// quantized) is read in place when K fits, otherwise repacked into blocks.
+// It must be in the Ball layout, rows of
 // 16 * S(K) bytes (the recipe packs weights so offline). An operand
 // quantized online is quantized by Mxint8quantizeBall straight into the
 // [batch][block][row][S] layout the product reads, several rows per
@@ -277,9 +278,25 @@ public:
               productOp.getIndexingMapsArray()[1].getResult(batched ? 1 : 0))
               .getPosition() == (batched ? 2 : 1);
 
-      // The K block: all of a static K (one block), 32 for a dynamic K.
-      int64_t chunk = k < 0 ? 32 : k;
-      int64_t chunks = k < 0 ? ShapedType::kDynamic : 1;
+      // FP32 tiles need at least sixteen columns in the weight bank.
+      // A divisor keeps each K block aligned without padding the reduction.
+      int64_t chunk = k < 0 ? 32 : divisor(k, depth / 4);
+      if (mx && k >= 0) {
+        int64_t limit = (depth / 4 * 16 / 33) * 32;
+        if (a.quant || w.quant)
+          limit = std::min(limit, depth * 4);
+        chunk = 8 * divisor(k / 8, limit / 8);
+      }
+      if (mx && !w.quant) {
+        auto packed = cast<RankedTensorType>(w.decode.getInput().getType());
+        if (packed.getRank() == 3 && w.decode.getAxis() == 2)
+          chunk = packed.getDimSize(2) / 33 * 32;
+      }
+      if (chunk <= 0 || chunk % (mx ? 32 : 4) || (k >= 0 && k % chunk)) {
+        op->emitError("poly product cannot fit an aligned K block in a bank");
+        return signalPassFailure();
+      }
+      int64_t chunks = k < 0 ? ShapedType::kDynamic : k / chunk;
       Value chunkCount = b.createOrFold<arith::DivUIOp>(
           loc,
           b.createOrFold<arith::AddIOp>(loc, kSize, index(b, loc, chunk - 1)),
@@ -311,8 +328,34 @@ public:
           source = slice.getSource();
         }
         auto type = cast<RankedTensorType>(source.getType());
+        if (rhs && type.getRank() == 3 && type.hasStaticShape() &&
+            input.decode.getAxis() == 2 && type.getDimSize(0) == chunks &&
+            type.getDimSize(2) == width) {
+          ArrayRef<Operation *> views = input.views;
+          if (!transposedRhs && !views.empty()) {
+            auto transpose = dyn_cast<linalg::TransposeOp>(views.front());
+            if (!transpose ||
+                transpose.getPermutation() != ArrayRef<int64_t>{1, 0})
+              return Value();
+            views = views.drop_front();
+          }
+          if (views.size() != 2)
+            return Value();
+          auto collapse = dyn_cast<tensor::CollapseShapeOp>(views[0]);
+          auto transpose = dyn_cast<linalg::TransposeOp>(views[1]);
+          if (collapse && transpose &&
+              (collapse.getReassociationIndices() ==
+                   SmallVector<ReassociationIndices>{{0}, {1, 2}} ||
+               (chunks == 1 &&
+                collapse.getReassociationIndices() ==
+                    SmallVector<ReassociationIndices>{{0, 1}, {2}})) &&
+              transpose.getPermutation() == ArrayRef<int64_t>{1, 0, 2})
+            return source;
+          return Value();
+        }
         if (k < 0 || type.getRank() != 2 || !rows ||
-            int64_t(input.decode.getAxis()) != 1 || type.getDimSize(1) != width)
+            int64_t(input.decode.getAxis()) != 1 ||
+            type.getDimSize(1) != packedRows(k) * 16)
           return Value();
         return source;
       };
@@ -331,9 +374,9 @@ public:
       // past it), else as wide as the bank allows, balanced over N.
       int64_t columns;
       if (wSource) {
+        auto type = cast<RankedTensorType>(wSource.getType());
         columns =
-            divisor(cast<RankedTensorType>(wSource.getType()).getDimSize(0),
-                    std::min(fit, square));
+            divisor(type.getDimSize(type.getRank() - 2), std::min(fit, square));
       } else if (!mx) {
         columns = std::min<int64_t>(fit - fit % 16, 64);
         if (n >= 0)
@@ -389,7 +432,7 @@ public:
           dynamic.push_back(storedExtent);
         Value storage;
         bool direct =
-            k >= 0 && !(rhs && padded) &&
+            k >= 0 && chunks == 1 && !(rhs && padded) &&
             (online ? int64_t(input.quant.getAxis()) == sourceType.getRank() - 1
                     : (!rhs || transposedRhs)) &&
             sourceType.getShape().back() == k &&
@@ -404,10 +447,11 @@ public:
                1});
           storage = memref::ReinterpretCastOp::create(
               b, loc,
-              MemRefType::get({batch, 1, rowCount, chunk}, element, layout),
+              MemRefType::get({batch, chunks, rowCount, chunk}, element,
+                              layout),
               sourceBuffer, b.getIndexAttr(0),
               ArrayRef<OpFoldResult>{
-                  b.getIndexAttr(batch), b.getIndexAttr(1),
+                  b.getIndexAttr(batch), b.getIndexAttr(chunks),
                   rowCount < 0 ? OpFoldResult(extent)
                                : OpFoldResult(b.getIndexAttr(rowCount)),
                   b.getIndexAttr(chunk)},
@@ -547,8 +591,63 @@ public:
         Value memory = buffer(b, loc, source);
         memory.getDefiningOp()->setAttr("read_only", b.getUnitAttr());
         auto type = cast<MemRefType>(memory.getType());
+        if (type.getRank() == 3) {
+          int64_t height = type.getDimSize(1);
+          int64_t plane = height * width;
+          return memref::ReinterpretCastOp::create(
+              b, loc,
+              MemRefType::get({1, chunks, height, width},
+                              type.getElementType()),
+              memory, b.getIndexAttr(0),
+              ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(chunks),
+                                     b.getIndexAttr(height),
+                                     b.getIndexAttr(width)},
+              ArrayRef<OpFoldResult>{b.getIndexAttr(chunks * plane),
+                                     b.getIndexAttr(plane),
+                                     b.getIndexAttr(width), b.getIndexAttr(1)});
+        }
         int64_t height = type.getDimSize(0);
         Value extent = memref::DimOp::create(b, loc, memory, 0);
+        if (chunks > 1) {
+          // Keep each block's codes and exponents together in the Ball layout.
+          SmallVector<Value> dynamic;
+          if (height < 0)
+            dynamic.push_back(extent);
+          Value blocks = memref::AllocOp::create(
+              b, loc,
+              MemRefType::get({1, chunks, height, width}, b.getI8Type()),
+              dynamic);
+          linalg::FillOp::create(
+              b, loc, ValueRange{arith::ConstantIntOp::create(b, loc, 0, 8)},
+              blocks);
+          loops(b, loc, {index(b, loc, chunks), extent}, false,
+                [&](ValueRange at) {
+                  for (bool exponent : {false, true}) {
+                    int64_t count = exponent ? chunk / 32 : chunk;
+                    Value start = arith::MulIOp::create(b, loc, at[0],
+                                                        index(b, loc, count));
+                    if (exponent)
+                      start = arith::AddIOp::create(b, loc, start,
+                                                    index(b, loc, k));
+                    loops(b, loc, {index(b, loc, count)}, false,
+                          [&](ValueRange offset) {
+                            Value from =
+                                arith::AddIOp::create(b, loc, start, offset[0]);
+                            Value to = exponent ? arith::AddIOp::create(
+                                                      b, loc, offset[0],
+                                                      index(b, loc, chunk))
+                                                      .getResult()
+                                                : offset[0];
+                            Value byte = memref::LoadOp::create(
+                                b, loc, memory, ValueRange{at[1], from});
+                            memref::StoreOp::create(
+                                b, loc, byte, blocks,
+                                ValueRange{index(b, loc, 0), at[0], at[1], to});
+                          });
+                  }
+                });
+          return blocks;
+        }
         auto layout = StridedLayoutAttr::get(
             b.getContext(), 0,
             {height < 0 ? ShapedType::kDynamic : height * width,
@@ -644,6 +743,15 @@ public:
             };
             if (resident) {
               product(zeroIndex, false, true);
+            } else if (!mx) {
+              product(zeroIndex, false, false);
+              loops(b, loc, {index(b, loc, chunks - 2)}, true,
+                    [&](ValueRange part) {
+                      product(arith::AddIOp::create(b, loc, part[0],
+                                                    index(b, loc, 1)),
+                              true, false);
+                    });
+              product(index(b, loc, chunks - 1), true, true);
             } else {
               product(zeroIndex, false, false);
               loops(

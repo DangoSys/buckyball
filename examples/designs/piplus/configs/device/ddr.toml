@@ -4,8 +4,8 @@ dataBits = 128
 idBits = 4
 idBase = 0
 base = 0x80000000
-bytes = 0x80000000
-model = 0
+bytes = 0x400000000
+model = 0x40000000
 
 [line]
 nodeIdBits = 7

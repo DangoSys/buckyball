@@ -39,4 +39,30 @@ target_link_libraries(
 )
 add_dependencies(poly-ctests-build ${POLY_STREAM_NAME}-linux)
 
+buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/program.c")
+add_executable(poly-main-ctest-program-linux program.c)
+target_link_libraries(poly-main-ctest-program-linux PRIVATE runtime-program-linux)
+add_dependencies(poly-ctests-build poly-main-ctest-program-linux)
+
+buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/program_transfer.c")
+add_executable(poly-main-ctest-program_transfer-linux program_transfer.c)
+target_link_libraries(poly-main-ctest-program_transfer-linux PRIVATE poly-runtime-linux)
+add_dependencies(poly-ctests-build poly-main-ctest-program_transfer-linux)
+
+buckyball_enforce_ctest_line_limit("${CMAKE_CURRENT_SOURCE_DIR}/heap_tls.c")
+set(HEAP_TLS_ELF "${CMAKE_CURRENT_BINARY_DIR}/poly-main-ctest-heap_tls-multicore-baremetal")
+set(DEVICE_BOOT "${BUCKYBALL_REPO_ROOT}/stack/runtime/boot")
+add_custom_command(
+  OUTPUT ${HEAP_TLS_ELF}
+  COMMAND ${ELF_CC} -O2 -static -march=rv64gc -mabi=lp64d -mcmodel=medany
+          -fno-builtin
+          -specs=nano.specs -specs=nosys.specs -nostartfiles
+          -Wl,-T,${DEVICE_BOOT}/device.ld ${DESIGN_DEFINES}
+          ${DEVICE_BOOT}/start.S ${DEVICE_BOOT}/syscalls.c ${CMAKE_CURRENT_SOURCE_DIR}/heap_tls.c
+          -lgcc -o ${HEAP_TLS_ELF}
+  DEPENDS heap_tls.c ${DEVICE_BOOT}/start.S ${DEVICE_BOOT}/syscalls.c ${DEVICE_BOOT}/device.ld
+  COMMAND_EXPAND_LISTS VERBATIM)
+add_custom_target(heap-tls-build DEPENDS ${HEAP_TLS_ELF})
+add_dependencies(poly-ctests-build heap-tls-build)
+
 add_subdirectory(ctests)

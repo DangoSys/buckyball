@@ -1,5 +1,9 @@
 [workloads]
 tests = [
+  "poly-core1-mlirtest-compiler_offline_k_blocks-baremetal",
+  "poly-main-ctest-heap_tls-multicore-baremetal",
+  "poly-core1-mlirtest-compiler_mxint8_k_blocks-baremetal",
+  "poly-core1-mlirtest-compiler_fp32_k_blocks-baremetal",
   "poly-core1-mlirtest-compiler_packed_weights-baremetal",
   "poly-core1-mlirtest-compiler_dynamic_attention-baremetal",
   "poly-core1-mlirtest-compiler_dynamic_mxint8-baremetal",

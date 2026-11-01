@@ -26,7 +26,9 @@ add_library(bindings INTERFACE)
 target_link_options(bindings INTERFACE "${DESIGN_CORE_BUILD_control}/execute.o")
 target_link_options(bindings INTERFACE "${DESIGN_CORE_BUILD_dense}/execute.o")
 target_link_options(bindings INTERFACE "${DESIGN_CORE_BUILD_action}/execute.o")
-# No thread has Balls yet, so there are no bank DMA helpers.
+target_link_options(bindings INTERFACE "${DESIGN_THREAD_BUILD_dense}/loader.o")
+target_link_options(bindings INTERFACE "${DESIGN_THREAD_BUILD_action}/loader.o")
+# Bank transfers are recorded by the thread compiler.
 set(RUNTIME_DEFS)
 
 add_subdirectory("${DESIGN_REPO}/stack/engine" engine)
@@ -42,6 +44,13 @@ target_include_directories(piplus-runtime
 target_compile_options(piplus-runtime PRIVATE -O2 -ffreestanding -msmall-data-limit=0)
 target_link_libraries(piplus-runtime PUBLIC runtime-program)
 
+add_library(piplus-runtime-linux STATIC runtime/device.c)
+target_include_directories(piplus-runtime-linux
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/runtime>")
+target_compile_options(piplus-runtime-linux PRIVATE -O2)
+target_link_libraries(piplus-runtime-linux PUBLIC runtime-program-linux)
+
 export(TARGETS bindings runtime runtime-baremetal runtime-linux engine
   runtime-linux-shared engine-linux engine-shared runtime-program piplus-runtime
+  runtime-program-linux piplus-runtime-linux
   FILE device.cmake)

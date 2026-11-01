@@ -12,8 +12,7 @@
 #   bindings                                   how each core runs jobs and each
 #                                              hardware thread is loaded
 #   runtime-program                            the device program: jobs on the cores
-#   poly-runtime                               values between the cores over
-#                                              the core links
+#   poly-runtime                               coherent DDR transfers between cores
 # Its compiler, compiler/, is a project of its own for the host.
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
@@ -38,8 +37,8 @@ set(RUNTIME_DEFS ${DESIGN_TARGET_DEFS_${PARAMS_TARGET}})
 add_subdirectory("${DESIGN_REPO}/stack/engine" engine)
 add_subdirectory("${DESIGN_REPO}/stack/runtime" runtime)
 
-# The runtime of the device program (runtime/device.c): transfers over the
-# core links, on the device program runtime of the framework.
+# The runtime of the device program: coherent DDR transfers scheduled by
+# the device program runtime of the framework.
 list(TRANSFORM DESIGN_DEFS PREPEND "-D" OUTPUT_VARIABLE POLY_RUNTIME_DEFINES)
 add_library(poly-runtime STATIC runtime/device.c)
 target_include_directories(poly-runtime
@@ -49,6 +48,12 @@ target_compile_options(poly-runtime PRIVATE -O2 -ffreestanding -msmall-data-limi
   ${POLY_RUNTIME_DEFINES})
 target_link_libraries(poly-runtime PUBLIC runtime-program)
 
+add_library(poly-runtime-linux STATIC runtime/device.c)
+target_include_directories(poly-runtime-linux
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/runtime>")
+target_compile_options(poly-runtime-linux PRIVATE -O2 ${POLY_RUNTIME_DEFINES})
+target_link_libraries(poly-runtime-linux PUBLIC runtime-program-linux)
+
 export(TARGETS bindings runtime runtime-baremetal runtime-linux engine
-  runtime-linux-shared engine-linux engine-shared runtime-program poly-runtime
+  runtime-linux-shared engine-linux engine-shared runtime-program runtime-program-linux poly-runtime poly-runtime-linux
   FILE device.cmake)

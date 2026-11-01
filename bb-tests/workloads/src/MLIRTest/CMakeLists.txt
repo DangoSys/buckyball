@@ -110,7 +110,7 @@ function(add_mlir_test NAME)
   )
   set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
   set(CRUNNER_UTILS_SRC ${SERVICES_DIR}/mlir.cpp)
-  set(DMA_SRC ${SERVICES_DIR}/dma.c)
+  set(DMA_SRC ${SERVICES_DIR}/dma.c ${SERVICES_DIR}/dma_memory.c)
   set(LLVM_MLIR_EXECUTION_ENGINE_DIR ${STACK}/thirdparty/buddy-mlir/llvm/mlir/include/mlir/ExecutionEngine)
 
   if(ARG_PASSES)

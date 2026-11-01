@@ -5,8 +5,8 @@
 // CPU. A poly core has attention and ffn threads (design.pb, by component),
 // each with MXINT8 quantization/matrix Balls and mxmm. A thread takes:
 //
-//   - every fp32_to_mxint8 (mxint8quantize) but one only the operands of
-//     FP32 products read;
+//   - every fp32_to_mxint8 (mxint8quantize), including quantization whose
+//     packed result the CPU decodes for an FP32 product;
 //   - every linalg.matmul and linalg.batch_matmul (mxint8matmul when both
 //     operands are MXINT8, else mxmm in FP32). An operand of an MXINT8
 //     product that is an MXINT8 value decoded by a mxint8_to_fp32 and
@@ -306,9 +306,6 @@ public:
         continue;
       Block &body = function.getBody().front();
       DenseSet<Operation *> placed;
-      // The decodings of the operands of FP32 products (one operand not
-      // MXINT8): the CPU decodes them, and quantizes what only they read.
-      DenseSet<Operation *> software;
       bool attention = false;
       for (Operation &op : body) {
         if (!isa<linalg::MatmulOp, linalg::BatchMatmulOp>(op))
@@ -318,18 +315,13 @@ public:
         SmallVector<Operation *> lhs = decoding(op.getOperand(0)),
                                  rhs = decoding(op.getOperand(1));
         if (lhs.empty() || rhs.empty()) {
-          for (auto *chain : {&lhs, &rhs})
-            software.insert(chain->begin(), chain->end());
           continue;
         }
         placed.insert(lhs.begin(), lhs.end());
         placed.insert(rhs.begin(), rhs.end());
       }
       for (Operation &op : body)
-        if (isQuantize(&op) &&
-            !llvm::all_of(op.getUsers(), [&](Operation *user) {
-              return software.contains(user);
-            }))
+        if (isQuantize(&op) && !op.use_empty())
           placed.insert(&op);
       ArrayRef<int64_t> threads = kinds[attention ? "attention" : "ffn"];
 

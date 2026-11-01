@@ -155,6 +155,7 @@ version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
  "bebop-bemu-profile",
+ "bebop-cycle-trace",
  "bebop-dasm",
  "bebop-dtb",
  "bebop-elf",
@@ -186,6 +187,10 @@ version = "0.1.0"
 dependencies = [
  "bebop-bemu",
 ]
+
+[[package]]
+name = "bebop-cycle-trace"
+version = "0.1.0"
 
 [[package]]
 name = "bebop-dasm"
@@ -261,6 +266,7 @@ name = "bebop-rtl-trace"
 version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
+ "bebop-cycle-trace",
 ]
 
 [[package]]
