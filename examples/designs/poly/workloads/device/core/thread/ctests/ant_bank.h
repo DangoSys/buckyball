@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 struct ant_bank_args {
-  uint64_t input, private_out, shared_out, tail_out, shared_rows;
+  uint64_t input, private_out, tail_out;
 };
 
 extern unsigned bank_done[];

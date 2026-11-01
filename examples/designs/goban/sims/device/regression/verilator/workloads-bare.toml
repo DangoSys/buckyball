@@ -1,6 +1,10 @@
 [workloads]
 tests = [
+  "goban-matmul-ctest-design-copy_overlap-baremetal",
+  "goban-matmul-ctest-design-ball_cycles-baremetal",
+  "goban-matmul-ctest-design-ant_cycles-baremetal",
   "goban-matmul-ctest-design-matmul_threads-baremetal",
+  "goban-matmul-ctest-design-dataflow-baremetal",
   "goban-core0-soctest-clint_timer_interrupt-baremetal",
   "goban-core0-soctest-clint_software_interrupt-baremetal",
   "goban-core0-soctest-plic_register_access-baremetal",

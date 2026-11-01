@@ -82,16 +82,17 @@ class MTraceDPI extends BlackBox with HasBlackBoxInline {
                                                |  reg [31:0] write_mask_reg;
                                                |  reg [63:0] data_lo_reg;
                                                |  reg [63:0] data_hi_reg;
-                                               |  reg        valid_reg;
+                                               |  reg        valid_reg = 1'b0;
                                                |
                                                |  always @(posedge clock) begin
+                                               |    // Reset controls sampling, not the request for an accepted event.
+                                               |    if (valid_reg) begin
+                                               |      dpi_mtrace({24'b0, is_write_reg}, {24'b0, is_shared_reg}, channel_reg, thread_id_reg[31:0], thread_id_reg[63:32], rob_id_reg, inst_id_reg[31:0], inst_id_reg[63:32], vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
+                                               |    end
+                                               |
                                                |    if (reset) begin
                                                |      valid_reg <= 1'b0;
                                                |    end else begin
-                                               |      if (valid_reg) begin
-                                               |        dpi_mtrace({24'b0, is_write_reg}, {24'b0, is_shared_reg}, channel_reg, thread_id_reg[31:0], thread_id_reg[63:32], rob_id_reg, inst_id_reg[31:0], inst_id_reg[63:32], vbank_id_reg, pbank_id_reg, group_id_reg, addr_reg, write_mask_reg, data_lo_reg[31:0], data_lo_reg[63:32], data_hi_reg[31:0], data_hi_reg[63:32]);
-                                               |      end
-                                               |
                                                |      valid_reg <= enable;
                                                |      if (enable) begin
                                                |        is_write_reg  <= is_write;

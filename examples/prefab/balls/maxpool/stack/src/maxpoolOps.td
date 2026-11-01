@@ -13,7 +13,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def MaxPoolBall_Dialect : Dialect {
   let name = "maxpool_ball";

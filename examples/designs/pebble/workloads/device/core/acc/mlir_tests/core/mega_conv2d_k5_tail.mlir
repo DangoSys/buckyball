@@ -49,7 +49,7 @@ func.func @main() -> i8 {
   %weight_tensor = bufferization.to_tensor %weight restrict : memref<16x2x5x5xi8> to tensor<16x2x5x5xi8>
   %bias_tensor = bufferization.to_tensor %bias restrict : memref<16xi32> to tensor<16xi32>
   %weight_step = arith.constant dense<1.0> : tensor<16x1x1x1xf32>
-  %result = custom.op "conv2d_i8"(%input_float, %weight_tensor, %bias_tensor, %input_step, %input_step, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 2, 2, 2, 2>} : (tensor<1x5x5x2xf32>, tensor<16x2x5x5xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x5x5x16xf32>
+  %result = bbacc.custom "conv2d_i8"(%input_float, %weight_tensor, %bias_tensor, %input_step, %input_step, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 2, 2, 2, 2>} : (tensor<1x5x5x2xf32>, tensor<16x2x5x5xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x5x5x16xf32>
   %empty = tensor.empty() : tensor<1x16x5x5xf32>
   %nchw = linalg.transpose ins(%result: tensor<1x5x5x16xf32>) outs(%empty: tensor<1x16x5x5xf32>) permutation = [0, 3, 1, 2]
   %memory = bufferization.to_buffer %nchw : tensor<1x16x5x5xf32> to memref<1x16x5x5xf32>

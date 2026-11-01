@@ -57,7 +57,9 @@ class ControlPort(transportParam: TransportParam, permissionParam: PmpParams) ex
 class Port(transportParam: TransportParam, permissionParam: PmpParams) extends Bundle {
   val control = new ControlPort(transportParam, permissionParam)
 
-  val axi = new axi4.Port(transportParam.axi)
+  val readAddress  = Output(UInt(64.W))
+  val writeAddress = Output(UInt(64.W))
+  val axi          = new axi4.Port(transportParam.axi)
 
 }
 
@@ -113,6 +115,8 @@ class ToMem(
   io.memory.control.queries     := toDDR.io.queries
   toDDR.io.mappings             := io.memory.control.mappings
   io.memory.axi <> toDDR.io.axi
+  io.memory.readAddress         := toDDR.io.readAddress
+  io.memory.writeAddress        := toDDR.io.writeAddress
   io.memory.control.coherence <> toL1.io
   io.memory.control.read.bits   := dma.read.bits
   io.memory.control.write.valid := dma.write.valid
@@ -147,19 +151,22 @@ class ToMem(
   val writeCursor                                                                                                          = Reg(UInt(64.W))
   val writeFinal                                                                                                           = Reg(Bool())
   val readsFinished                                                                                                        = RegInit(false.B)
+  val readRejected                                                                                                         = Reg(Bool())
+  val writeRejected                                                                                                        = Reg(Bool())
 
   val wantsWrite = io.request.bits.cmd.is_store
   io.request.ready                := setup === idle && Mux(wantsWrite, writeState === writeIdle, readState === readIdle)
   when(io.request.fire) { request := io.request.bits; setup := query }
   io.queryVbank                   := request.cmd.bank_id
-  io.queryShared                  := request.cmd.is_shared
+  io.queryShared                  := false.B
   when(setup === query)(setup     := queryWait)
   when(setup === queryWait)(setup := prepare)
 
-  val selected = request.cmd.special(63) && !request.cmd.is_mvin_2d && !request.cmd.is_image && !request.cmd.is_mmio
-  val groups   =
+  val selected  = request.cmd.special(63) && !request.cmd.is_mvin_2d && !request.cmd.is_image && !request.cmd.is_mmio
+  val groups    =
     Mux(request.cmd.is_image || request.cmd.is_config || request.cmd.is_mmio, 1.U, Mux(selected, 1.U, io.queryGroups))
-  val base     = Mux(selected, request.cmd.special(62, 58), 0.U)
+  val base      = Mux(selected, request.cmd.special(62, 58), 0.U)
+  val sharedDma = request.cmd.is_shared && !request.cmd.is_image && !request.cmd.is_config && !request.cmd.is_mmio
   when(setup === prepare) {
     setup := idle
     when(request.cmd.is_image || request.cmd.is_config) {
@@ -171,6 +178,7 @@ class ToMem(
     }
     when(request.cmd.is_store) {
       writeFault     := 0.U.asTypeOf(new DmaStatus)
+      writeRejected  := sharedDma
       write          := request
       writeGroups    := groups
       writeGroupBase := base
@@ -181,6 +189,11 @@ class ToMem(
       readsFinished := false.B
       writeFinal    := false.B
       writeState    := writeOffer
+      when(sharedDma) {
+        writeFault.error   := DmaError.Bank.U
+        writeFault.address := request.cmd.mem_addr
+        writeState         := writeComplete
+      }
     }.otherwise {
       read          := request
       readGroups    := groups
@@ -192,9 +205,15 @@ class ToMem(
       imageBytes    := request.cmd.iter
       imageStarted  := false.B
       readFault     := 0.U.asTypeOf(readFault)
+      readRejected  := sharedDma
       readState     := Mux(request.cmd.is_config, readComplete, readOffer)
+      when(sharedDma) {
+        readFault.error   := DmaError.Bank.U
+        readFault.address := request.cmd.mem_addr
+        readState         := readComplete
+      }
     }
-    when(!request.cmd.is_image && !request.cmd.is_config && !request.cmd.is_mmio) {
+    when(!request.cmd.is_image && !request.cmd.is_config && !request.cmd.is_mmio && !sharedDma) {
       assert(groups =/= 0.U, "Memory stream requires an allocated bank")
       when(selected)(assert(base < io.queryGroups, "Selected group exceeds allocation"))
     }
@@ -382,32 +401,38 @@ class ToMem(
 
   val readProducer = Mux(imageRead, 2.U, 0.U)
   for (i <- 0 until 3) {
-    io.memory.control.finished(i).valid := (if (i == 1) writeState === writeComplete
+    io.memory.control.finished(i).valid := (if (i == 1) writeState === writeComplete && !writeRejected
                                             else
-                                              readState === readComplete && !read.cmd.is_config && readProducer === i.U)
+                                              readState === readComplete && !readRejected && !read.cmd.is_config && readProducer === i.U)
     io.memory.control.finished(i).bits  := (if (i == 1) writeFault else readFault)
     io.memory.control.complete(i).ready := false.B
   }
   val completion = Instantiate(new Arbiter(new Response(frontendParam), 2))
   completion.io.in(0).valid                 := readState === readComplete &&
-    (read.cmd.is_config || io.memory.control.complete(readProducer).valid)
+    (readRejected || read.cmd.is_config || io.memory.control.complete(readProducer).valid)
   completion.io.in(0).bits.rob_id           := read.rob_id
-  completion.io.in(0).bits.fault            := Mux(read.cmd.is_config, readFault, io.memory.control.complete(readProducer).bits)
-  completion.io.in(1).valid                 := writeState === writeComplete && io.memory.control.complete(1).valid
+  completion.io.in(0).bits.fault            := Mux(
+    readRejected || read.cmd.is_config,
+    readFault,
+    io.memory.control.complete(readProducer).bits
+  )
+  completion.io.in(1).valid                 := writeState === writeComplete && (writeRejected || io.memory.control.complete(1).valid)
   completion.io.in(1).bits.rob_id           := write.rob_id
-  completion.io.in(1).bits.fault            := io.memory.control.complete(1).bits
+  completion.io.in(1).bits.fault            := Mux(writeRejected, writeFault, io.memory.control.complete(1).bits)
   io.memory.control.complete(
     0
-  ).ready                                   := readState === readComplete && !imageRead && !read.cmd.is_config && completion.io.in(0).ready
+  ).ready                                   := readState === readComplete && !readRejected && !imageRead && !read.cmd.is_config && completion.io.in(
+    0
+  ).ready
   io.memory.control.complete(
     2
   ).ready                                   := readState === readComplete && imageRead && !read.cmd.is_config && completion.io.in(0).ready
-  io.memory.control.complete(1).ready       := writeState === writeComplete && completion.io.in(1).ready
+  io.memory.control.complete(1).ready       := writeState === writeComplete && !writeRejected && completion.io.in(1).ready
   io.response <> completion.io.out
   when(completion.io.in(0).fire)(readState  := readIdle)
   when(completion.io.in(1).fire)(writeState := writeIdle)
-  io.bankRead.is_shared                     := write.cmd.is_shared
-  io.bankWrite.is_shared                    := read.cmd.is_shared
+  io.bankRead.is_shared                     := false.B
+  io.bankWrite.is_shared                    := false.B
 
   // Publish the read shape before image-loader backpressure can delay DMA.
   // The setup stage accepts streams in order; coherence reservation follows that order.

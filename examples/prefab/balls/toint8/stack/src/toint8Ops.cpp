@@ -10,8 +10,6 @@
 #include "Conversion/Buckyball.h"
 #include "Target/BuckyballTargetRegistry.h"
 
-#include "mlir/Dialect/Arith/IR/Arith.h"
-
 using namespace mlir;
 using namespace ::buddy::toint8_ball;
 using mlir::buddy::bankFields;
@@ -40,31 +38,28 @@ namespace {
 } // namespace
 
 SmallVector<Value, 2> BankFp32ToInt8Op::getSourceBanks() {
-  return {getInput()};
+  return {getInput(), getScales()};
 }
 Value BankFp32ToInt8Op::getDestinationBank() { return getOutput(); }
 bool BankFp32ToInt8Op::readsDestination() { return false; }
 Operation *BankFp32ToInt8Op::buildPhysical(OpBuilder &builder,
                                            ArrayRef<int64_t> sources,
                                            int64_t destination) {
-  return Fp32ToInt8Op::create(builder, getLoc(), getMultiplier(), sources[0],
+  return Fp32ToInt8Op::create(builder, getLoc(), sources[0], sources[1],
                               destination, getRows());
 }
 
 SmallVector<int64_t, 2> Fp32ToInt8Op::getSourceBanks() {
-  return {int64_t(getInput())};
+  return {int64_t(getInput()), int64_t(getScales())};
 }
 int64_t Fp32ToInt8Op::getDestinationBank() { return getOutput(); }
 LogicalResult Fp32ToInt8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
-  uint64_t rs1 =
-      bankFields({int64_t(getInput())}, getOutput(), false, getRows());
-  Value bits = arith::BitcastOp::create(builder, loc, builder.getI32Type(),
-                                        getMultiplier());
-  Value rs2 = arith::ExtUIOp::create(builder, loc, builder.getI64Type(), bits);
+  uint64_t rs1 = bankFields({int64_t(getInput()), int64_t(getScales())},
+                            getOutput(), false, getRows());
   emitInstruction(builder, loc,
                   buckyball_target::getBuckyballFunct7("QUANT_F32_TO_I8"),
-                  constantI64(builder, loc, rs1), rs2);
+                  constantI64(builder, loc, rs1), constantI64(builder, loc, 0));
   return success();
 }
 

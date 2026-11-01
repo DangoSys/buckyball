@@ -8,6 +8,7 @@ import os
 import shlex
 import shutil
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from motia import FlowContext, queue
@@ -127,7 +128,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     installed.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(target / "release/bebop-bemu", installed)
+    with tempfile.TemporaryDirectory(dir=installed.parent) as staging:
+        executable = Path(staging) / "bebop-bemu"
+        shutil.copy2(target / "release/bebop-bemu", executable)
+        os.replace(executable, installed)
     run_args = [str(installed), "--elf", binary_path, "--log-dir", run_log]
     # `bbdev kernel --build` lays the kernel and the model into <name>-ddr.bin
     # next to the firmware ELF.

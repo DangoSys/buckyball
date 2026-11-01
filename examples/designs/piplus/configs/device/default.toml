@@ -1,0 +1,234 @@
+# The piplus device, v1 at ~10x the area of the first sketch: one control
+# core, eight dense cores and five action cores. Classes and counts are this
+# list; each instance takes its hart and its coherence node IDs
+# (1..memory/home/core.toml agents) here.
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+trace = "default"
+
+# core0: runtime, tokenization, Euler update and scheduling.
+[[cores]]
+include = "core/control/default.toml"
+hartId = 0
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 1
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 2
+
+# core1..core8: large-M dense matrix products (vision, prefix).
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 1
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 3
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 4
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 5
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 2
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 6
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 7
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 8
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 3
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 9
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 10
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 11
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 4
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 12
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 13
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 14
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 5
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 15
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 16
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 17
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 6
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 18
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 19
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 20
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 7
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 21
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 22
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 23
+
+[[cores]]
+include = "core/dense/default.toml"
+hartId = 8
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 24
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 25
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 26
+
+# core9..core13: small-M denoising steps; five, one per KV head of the
+# action expert.
+[[cores]]
+include = "core/action/default.toml"
+hartId = 9
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 27
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 28
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 29
+
+[[cores]]
+include = "core/action/default.toml"
+hartId = 10
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 30
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 31
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 32
+
+[[cores]]
+include = "core/action/default.toml"
+hartId = 11
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 33
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 34
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 35
+
+[[cores]]
+include = "core/action/default.toml"
+hartId = 12
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 36
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 37
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 38
+
+[[cores]]
+include = "core/action/default.toml"
+hartId = 13
+
+[cores.memory.icache]
+include = "memory/cache.toml"
+nodeId = 39
+
+[cores.memory.dcache.cache]
+include = "memory/cache.toml"
+nodeId = 40
+
+[cores.dmaCache]
+include = "memory/dma-cache.toml"
+nodeId = 41

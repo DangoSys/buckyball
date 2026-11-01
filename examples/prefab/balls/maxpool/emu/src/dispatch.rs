@@ -24,8 +24,7 @@ pub fn cycles_after_issue(
     ball_class: &str,
     funct: u32,
     xs1: u64,
-    xs2: u64,
-) -> Option<u64> {
+    xs2: u64, _ctx: &bebop_bemu::ExecContext) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }

@@ -5,7 +5,6 @@ import framework.core.memory.access.preflight.configs.PmpParams
 
 import framework.thread.ant.{Launch, TaskContext}
 import framework.thread.ant.Completion
-import framework.device.cbus.ControlRequest
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
@@ -22,7 +21,14 @@ object ControlOp {
 
 /** A management request carries the submitter's context through every accepting endpoint. */
 class TaskRequest(permission: PmpParams) extends Bundle {
-  val control = new ControlRequest
+
+  val control = new Bundle {
+    val operation = UInt(7.W)
+    val context   = UInt(32.W)
+    val field     = UInt(32.W)
+    val data      = UInt(64.W)
+  }
+
   val context = new TaskContext(permission)
 }
 

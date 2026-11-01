@@ -1,5 +1,5 @@
-# Embench: baremetal benchmarks sharing toy's linker script and startup
-# code in stack/os/baremetal/.
+# Embench: baremetal benchmarks on the control hart, booted by
+# the crt0 of the control hart of the C API.
 set(CTEST_EMBENCH_WORKLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(EMBENCH_SUPPORT_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/support)
 set(EMBENCH_SRC_DIR ${CTEST_EMBENCH_WORKLOAD_DIR}/src)
@@ -30,11 +30,7 @@ set(EMBENCH_C_FLAGS
     -specs=nano.specs
     -specs=nosys.specs
     -nostartfiles
-    -Wl,-T,${BBSIM_LD}
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-    -I${WORKLOAD_LIB_DIR}
-    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
+    $<TARGET_PROPERTY:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal,INTERFACE_LINK_OPTIONS>
     -ffunction-sections
     -fdata-sections
     -Wl,--gc-sections
@@ -48,10 +44,6 @@ set(EMBENCH_TOP_OBJ_FLAGS
     -march=rv64gc
     -mcmodel=medany
     -fno-builtin-printf
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-    -I${WORKLOAD_LIB_DIR}
-    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
     -ffunction-sections
     -fdata-sections
     -I${EMBENCH_SUPPORT_DIR}
@@ -68,16 +60,16 @@ function(add_embench_target BMARK_NAME)
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
             ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
-            ${BAREMETAL_DIR}/crt0.S ${BAREMETAL_DIR}/syscalls.c
+            $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal> $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
             ${EMBENCH_SUPPORT_SOURCES} ${BMARK_SOURCES} -lm
         DEPENDS
             ${BMARK_SOURCES}
             ${EMBENCH_SUPPORT_SOURCES}
-            ${BBSIM_LD}
-            ${BAREMETAL_DIR}/crt0.S
-            ${BAREMETAL_DIR}/syscalls.c
+            $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+            $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
         COMMENT "Building embench: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
     )
 
     add_custom_target(
@@ -100,17 +92,17 @@ function(add_embench_target BMARK_NAME)
             OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${CHECK_EXECUTABLE}
             COMMAND
                 ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${CHECK_EXECUTABLE}
-                ${BAREMETAL_DIR}/crt0.S ${BAREMETAL_DIR}/syscalls.c
+                $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal> $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
                 ${EMBENCH_SUPPORT_DIR}/check.c ${CHECK_SUPPORT_SOURCES}
                 ${BMARK_SOURCES} -lm
             DEPENDS
                 ${EMBENCH_SUPPORT_DIR}/check.c
                 ${CHECK_SUPPORT_SOURCES}
                 ${BMARK_SOURCES}
-                ${BAREMETAL_DIR}/crt0.S
-                ${BAREMETAL_DIR}/syscalls.c
-                ${BBSIM_LD}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+                $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+            COMMAND_EXPAND_LISTS
         )
         add_custom_target(
             embench_check_${BMARK_NAME}
@@ -140,6 +132,7 @@ macro(add_embench_top_object BMARK_NAME PREFIX SOURCE_FILES)
         DEPENDS ${SOURCE_FILES}
         COMMENT "Building embench top object: ${BMARK_NAME}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
     )
 
     list(APPEND EMBENCH_TOP_OBJECTS ${OBJ})
@@ -183,16 +176,16 @@ function(add_embench_top_target)
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
             ${ELF_CC} ${EMBENCH_C_FLAGS} -o ${EXECUTABLE}
-            ${BAREMETAL_DIR}/crt0.S ${BAREMETAL_DIR}/syscalls.c
+            $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal> $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
             ${EMBENCH_TOP_SUPPORT_SOURCES} ${EMBENCH_TOP_OBJECTS} -lm
         DEPENDS
             ${EMBENCH_TOP_SUPPORT_SOURCES}
-            ${BBSIM_LD}
             ${EMBENCH_TOP_OBJECTS}
-            ${BAREMETAL_DIR}/crt0.S
-            ${BAREMETAL_DIR}/syscalls.c
+            $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+            $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
         COMMENT "Building embench top: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
     )
 
     add_custom_target(

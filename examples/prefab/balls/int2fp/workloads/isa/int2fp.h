@@ -1,8 +1,7 @@
 #ifndef _BB_INT2FP_H_
 #define _BB_INT2FP_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Group g of every operand bank is channel block g (channels 16g..16g+15).
 // Input, scale, and output banks have the same number of groups; every group

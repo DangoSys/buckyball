@@ -6,8 +6,6 @@
 #include <dma.h>
 #endif
 
-#define BB_MSET_FUNC7 32
-
 #define BB_MSET_CLEAR_BIT 11
 
 #define BB_MSET_RS2(row, col, alloc, clear)                                    \

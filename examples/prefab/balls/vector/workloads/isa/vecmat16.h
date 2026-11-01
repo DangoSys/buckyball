@@ -1,8 +1,7 @@
 #ifndef _BB_VECMAT16_H_
 #define _BB_VECMAT16_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // C += A^T * B with int8 inputs and int32 accumulators.
 //   op1 bank (one group): A^T, iter rows of sixteen int8; row k is column k

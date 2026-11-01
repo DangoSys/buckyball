@@ -1,5 +1,6 @@
 //===- FormSpatialOps.cpp - Recognize quantized convolution chains --------===//
-#include "Custom/CustomOps.h"
+#include "Acc/AccOps.h"
+#include "Frontend/FrontendOps.h"
 #include "Lowering.h"
 #include "Target/BuckyballTargetRegistry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -12,7 +13,7 @@
 #include <limits>
 
 using namespace mlir;
-using ::buddy::custom::CustomOp;
+using ::buddy::acc::CustomOp;
 
 namespace {
 Operation *frontend(Value value, StringRef name) {
@@ -178,8 +179,8 @@ void pebble::formSpatialOps(func::FuncOp function) {
       Operation *user = *value.getUsers().begin();
       if (user->getBlock() != root->getBlock())
         break;
-      if (user->getName().getStringRef() == "buddy_trace.end") {
-        if (cast<BoolAttr>(user->getAttr("tensor")).getValue())
+      if (auto end = dyn_cast<::buddy::frontend::TraceEndOp>(user)) {
+        if (end.getTensor())
           break;
         traces.push_back(user);
       } else if (auto maximum = dyn_cast<linalg::GenericOp>(user)) {
@@ -255,7 +256,8 @@ void pebble::formSpatialOps(func::FuncOp function) {
     for (Operation *between = root->getNextNode(); between != consumer;
          between = between->getNextNode())
       if (!isMemoryEffectFree(between) &&
-          between->getName().getDialectNamespace() != "buddy_trace") {
+          !isa<::buddy::frontend::TraceStartOp, ::buddy::frontend::TraceEndOp>(
+              between)) {
         barrier = true;
         break;
       }
@@ -276,7 +278,7 @@ void pebble::formSpatialOps(func::FuncOp function) {
                                .getElementType()
                                .isF32());
     auto producer = root.getInputs()[0].getDefiningOp<CustomOp>();
-    bool residentInput = producer && producer->hasAttr("custom.resident");
+    bool residentInput = producer && producer->hasAttr("bbacc.resident");
     if (barrier || (!residentInput && !tiling.side))
       continue;
 
@@ -323,6 +325,7 @@ void pebble::formSpatialOps(func::FuncOp function) {
       }
     }
 
+    pebble::moveTraceStarts(root, traces);
     rewriter.setInsertionPoint(root);
     SmallVector<Value> inputs(root.getInputs());
     inputs.push_back(multiplier);
@@ -335,7 +338,7 @@ void pebble::formSpatialOps(func::FuncOp function) {
     fused->setAttr("relu", rewriter.getBoolAttr(relu));
     fused->setAttr("pool", rewriter.getI64IntegerAttr(pool));
     if (resident)
-      fused->setAttr("custom.resident", rewriter.getUnitAttr());
+      fused->setAttr("bbacc.resident", rewriter.getUnitAttr());
     Value codes = fused.getResult(0);
     // Cycle markers now observe the fused result.
     rewriter.setInsertionPointAfter(fused);

@@ -37,7 +37,7 @@ class XiangShan(
     p.chi,
     p.axi,
     p.axi,
-    None
+    false
   )))
 
   val native = Instantiate(new Native)

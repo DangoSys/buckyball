@@ -1,0 +1,6 @@
+# The action thread's MXINT8 matrix product: a 4x16 array, short along M for
+# the ~50-row denoising steps.
+include = "../../../balls/mxint8mm/configs/default.toml"
+
+rows = 4
+cols = 16

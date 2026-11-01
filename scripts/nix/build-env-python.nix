@@ -21,13 +21,32 @@ let
     # No tests in PyPI tarball
     doCheck = false;
   };
+
+  # lerobot carries the VLA policies (SmolVLA, pi0.5) the model recipes export.
+  # The test inputs of gymnasium pull tensorflow-bin, which has no build for
+  # this Python; torchcodec only decodes dataset videos, which no recipe reads;
+  # the cmake wheel it lists would shadow the toolchain's cmake.
+  python3 = pkgs.python3.override {
+    packageOverrides = self: super: {
+      gymnasium = super.gymnasium.overridePythonAttrs (o: {
+        doCheck = false;
+        nativeCheckInputs = [ ];
+      });
+      lerobot = super.lerobot.overridePythonAttrs (o: {
+        dependencies = builtins.filter (d: !builtins.elem d.pname [ "torchcodec" "cmake" ]) o.dependencies;
+        doCheck = false;
+        dontCheckRuntimeDeps = true;
+        pythonImportsCheck = [ ];
+      });
+    };
+  };
 in
 {
   # Python and pip packages
-  python3 = pkgs.python3;
+  inherit python3;
 
   # Python packages
-  python3Packages = pkgs.python3.withPackages (ps: with ps; [
+  python3Packages = python3.withPackages (ps: with ps; [
     # bbdev
     pydantic
     python-dotenv
@@ -66,6 +85,9 @@ in
     diffusers
     nanobind
     ultralytics
+    lerobot
+    av
+    num2words
 
     # testing
     pytest

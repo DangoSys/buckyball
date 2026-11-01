@@ -155,6 +155,7 @@ version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
  "bebop-bemu-profile",
+ "bebop-cycle-trace",
  "bebop-dasm",
  "bebop-dtb",
  "bebop-elf",
@@ -181,6 +182,10 @@ name = "bebop-bemu-profile"
 version = "0.1.0"
 
 [[package]]
+name = "bebop-cycle-trace"
+version = "0.1.0"
+
+[[package]]
 name = "bebop-dasm"
 version = "0.1.0"
 
@@ -189,6 +194,7 @@ name = "bebop-design-goban"
 version = "0.1.0"
 dependencies = [
  "bebop-bemu",
+ "buckyball-core-shm",
 ]
 
 [[package]]
@@ -252,6 +258,7 @@ name = "bebop-rtl-trace"
 version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
+ "bebop-cycle-trace",
 ]
 
 [[package]]
@@ -278,6 +285,7 @@ dependencies = [
  "clap",
  "libtest-mimic",
  "predicates",
+ "prost",
  "serde",
  "toml",
  "walkdir",
@@ -370,6 +378,10 @@ dependencies = [
  "regex-automata",
  "serde_core",
 ]
+
+[[package]]
+name = "buckyball-core-shm"
+version = "0.1.0"
 
 [[package]]
 name = "bumpalo"

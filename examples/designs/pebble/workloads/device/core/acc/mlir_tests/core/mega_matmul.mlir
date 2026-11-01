@@ -38,7 +38,7 @@ func.func @main() -> i8 {
   %unit = arith.constant dense<1.0> : tensor<1x1xf32>
   %weight_step = arith.constant dense<1.0> : tensor<1x16xf32>
   %input_float = "frontend.int8_to_fp32"(%it, %unit) : (tensor<1x16xi8>, tensor<1x1xf32>) -> tensor<1x16xf32>
-  %result = custom.op "linear_i8"(%input_float, %wt, %bias_tensor, %unit, %unit, %weight_step) : (tensor<1x16xf32>, tensor<16x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
+  %result = bbacc.custom "linear_i8"(%input_float, %wt, %bias_tensor, %unit, %unit, %weight_step) : (tensor<1x16xf32>, tensor<16x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
   %memory = bufferization.to_buffer %result : tensor<1x16xf32> to memref<1x16xf32>
   func.call @check_result(%memory) : (memref<1x16xf32>) -> ()
   return %zero_i8 : i8

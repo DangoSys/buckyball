@@ -15,7 +15,7 @@ class scenario_sequence extends uvm_sequence #(cycle_item);
     observed = t.outputs;
   endtask
   task send(int tag, int kind, longint unsigned address, int rows, int bank_id,
-            longint unsigned special = (64'd1 << 39));
+            longint unsigned special = (64'd1 << 39), bit shared_bank = 0);
     pins[`TM_IN_REQUEST_BITS_ROB_ID_OFFSET+:`TM_IN_REQUEST_BITS_ROB_ID_WIDTH] = tag;
     pins[`TM_IN_REQUEST_BITS_INSTID_OFFSET+:`TM_IN_REQUEST_BITS_INSTID_WIDTH]=64'h123456789abcdef0+tag;
     pins[`TM_IN_REQUEST_BITS_CONTEXT_PRIVILEGE_OFFSET+:`TM_IN_REQUEST_BITS_CONTEXT_PRIVILEGE_WIDTH]=3;
@@ -26,6 +26,7 @@ class scenario_sequence extends uvm_sequence #(cycle_item);
     pins[`TM_IN_REQUEST_BITS_CMD_IS_IMAGE_OFFSET+:`TM_IN_REQUEST_BITS_CMD_IS_IMAGE_WIDTH]=kind==3;
     pins[`TM_IN_REQUEST_BITS_CMD_IS_MMIO_OFFSET+:`TM_IN_REQUEST_BITS_CMD_IS_MMIO_WIDTH] = kind == 4;
     pins[`TM_IN_REQUEST_BITS_CMD_IS_CONFIG_OFFSET+:`TM_IN_REQUEST_BITS_CMD_IS_CONFIG_WIDTH]=kind==5;
+    pins[`TM_IN_REQUEST_BITS_CMD_IS_SHARED_OFFSET+:`TM_IN_REQUEST_BITS_CMD_IS_SHARED_WIDTH]=shared_bank;
     pins[`TM_IN_REQUEST_BITS_CMD_MEM_ADDR_OFFSET+:`TM_IN_REQUEST_BITS_CMD_MEM_ADDR_WIDTH] = address;
     pins[`TM_IN_REQUEST_BITS_CMD_ITER_OFFSET+:`TM_IN_REQUEST_BITS_CMD_ITER_WIDTH] = rows;
     pins[`TM_IN_REQUEST_BITS_CMD_BANK_ID_OFFSET+:`TM_IN_REQUEST_BITS_CMD_BANK_ID_WIDTH] = bank_id;
@@ -44,6 +45,11 @@ class scenario_sequence extends uvm_sequence #(cycle_item);
     pins[`TM_IN_RESPONSE_READY_OFFSET+:`TM_IN_RESPONSE_READY_WIDTH] = 1;
     repeat (3) tick(1);
     tick();
+    // A rejected shared-bank DMA must not issue memory or bank transactions.
+    for (int kind = 0; kind < 3; kind++) begin
+      send(0, kind, 'hd000, 2, 0, 64'd1 << 39, 1);
+      completed(0);
+    end
     for (int offset = 0; offset < 16; offset++) begin
       send(0, 0, 'h1000 + offset, 2, 0);
       completed(0);

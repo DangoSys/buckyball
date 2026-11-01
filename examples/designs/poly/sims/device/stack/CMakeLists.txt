@@ -7,10 +7,12 @@
 # configures this with DESIGN_CMAKE, generated from design.pb. Each level is a
 # CMake build of its own: cores and threads build buddy-opt plugins for the
 # host, the device builds RISC-V libraries.
-#   thread/attention, thread/ffn  lib<thread>-compiler.so, program.bin, loader.o,
-#                                 libkernels*.a
+#   thread/attention, thread/ffn  lib<thread>-compiler.so, program.bin, loader.o
 #   core/reduce, core/poly        execute.o and their compiler plugins
-#   device         runtime, runtime-baremetal, runtime-linux, engine; device.cmake
+#   device/core/compiler  libcore-compiler.so
+#   device         runtime, runtime-baremetal, runtime-linux, engine,
+#                  runtime-program, poly-runtime; device.cmake
+#   device/compiler  libdevice-compiler.so
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
 project(poly-device-stack NONE)
@@ -51,6 +53,24 @@ ExternalProject_Add(core-poly
   CMAKE_GENERATOR Ninja
   CMAKE_ARGS "-DDESIGN_CMAKE=${DESIGN_CMAKE}" -DCORE=poly
   DEPENDS thread-attention thread-ffn
+  BUILD_ALWAYS ON
+  INSTALL_COMMAND "")
+
+# The compiler of the graphs on the poly cores, for the host.
+ExternalProject_Add(core-compiler
+  SOURCE_DIR "${DESIGN_DEVICE_STACK}/core/compiler"
+  BINARY_DIR "${DESIGN_DEVICE_BUILD}/core/compiler"
+  CMAKE_GENERATOR Ninja
+  CMAKE_ARGS "-DDESIGN_CMAKE=${DESIGN_CMAKE}"
+  BUILD_ALWAYS ON
+  INSTALL_COMMAND "")
+
+# The compiler of the device program, for the host.
+ExternalProject_Add(device-compiler
+  SOURCE_DIR "${DESIGN_DEVICE_STACK}/compiler"
+  BINARY_DIR "${DESIGN_DEVICE_BUILD}/compiler"
+  CMAKE_GENERATOR Ninja
+  CMAKE_ARGS "-DDESIGN_CMAKE=${DESIGN_CMAKE}"
   BUILD_ALWAYS ON
   INSTALL_COMMAND "")
 

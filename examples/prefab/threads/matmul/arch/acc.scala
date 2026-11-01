@@ -16,8 +16,7 @@ import framework.acc.memdomain.{MemDomain, PhysicalBankHash}
 import framework.acc.gpdomain.GpDomain
 import framework.acc.balldomain.BallDomain
 import framework.acc.balldomain.bbus.BBus
-import framework.core.memory.MemoryPort
-import framework.thread.tlink.SharedLink
+import framework.core.memory.MemCtrl
 import framework.ip.bus.axi4
 
 @instantiable
@@ -44,14 +43,11 @@ class Acc(
   val io = IO(new Bundle {
     val debug = new AcceleratorDebugPort(frontp, memp, gpp, ballp, simp)
 
-    val rocc   = new RoCCIO(commandDataBits, permissionp)
-    val ddr    = new axi4.Port(transportp.axi)
-    val memory = new MemoryPort(trackingp, walkerp)
-    val shm    = new SharedLink(frontp, memp)
-
-    val shared_bank_hashes = Option.when(diffTest && memp.sharedEnable)(
-      Input(Vec(sharedHashCount, new PhysicalBankHash(frontp)))
-    )
+    val rocc         = new RoCCIO(commandDataBits, permissionp)
+    val ddr          = new axi4.Port(transportp.axi)
+    val readAddress  = Output(UInt(64.W))
+    val writeAddress = Output(UInt(64.W))
+    val memory       = new MemCtrl(trackingp, walkerp)
 
   })
 
@@ -68,7 +64,7 @@ class Acc(
     if (gpp.enable) Some(Instantiate(new GpDomain(frontp, memp, gpp)))
     else None
 
-  memDomain.io.shared_bank_hashes.foreach(_ := io.shared_bank_hashes.get)
+  require(!memp.sharedEnable && memp.sharedPorts == 0)
 
   io.debug.frontend <> frontend.io.debug
   io.debug.banks.zip(memDomain.io.bank_hashes).foreach { case (sink, source) => sink := source }
@@ -79,6 +75,8 @@ class Acc(
   io.rocc <> frontend.io.rocc
   io.memory <> memDomain.io.memory
   io.ddr <> memDomain.io.ddr
+  io.readAddress  := memDomain.io.readAddress
+  io.writeAddress := memDomain.io.writeAddress
 
   // --- Frontend -> BallDomain ---
   memDomain.io.ball <> ballDomain.io.memory
@@ -105,15 +103,18 @@ class Acc(
   memDomain.io.ballLayoutRequest <> ballDomain.io.layoutRequest
   ballDomain.io.layoutResponse <> memDomain.io.ballLayoutResponse
 
-  // --- Shared memory passthrough ---
-  io.shm.bank.requests <> memDomain.io.shared.bank.requests
-  io.shm.move <> memDomain.io.shared.move
-  io.shm.bank.local <> memDomain.io.shared.bank.local
-  io.shm.bank.config <> memDomain.io.shared.bank.config
-  io.shm.bank.mapping <> memDomain.io.shared.bank.mapping
-
-  // --- Barrier passthrough ---
-  io.shm.barrierArrive        := frontend.io.barrier.arrive
-  frontend.io.barrier.release := io.shm.barrierRelease
+  memDomain.io.shared.bank.mapping.ready        := true.B
+  memDomain.io.shared.bank.config.ready         := true.B
+  memDomain.io.shared.bank.local.request.valid  := false.B
+  memDomain.io.shared.bank.local.request.bits   := 0.U.asTypeOf(memDomain.io.shared.bank.local.request.bits)
+  memDomain.io.shared.bank.local.response.ready := true.B
+  memDomain.io.shared.move.command.ready        := false.B
+  memDomain.io.shared.move.completion.valid     := false.B
+  memDomain.io.shared.move.completion.bits      := false.B
+  frontend.io.barrier.release                   := false.B
+  when(!reset.asBool) {
+    assert(!memDomain.io.shared.move.command.valid, "Thread program cannot access another thread's banks")
+    assert(!frontend.io.barrier.arrive, "Thread program cannot issue a core barrier")
+  }
 
 }

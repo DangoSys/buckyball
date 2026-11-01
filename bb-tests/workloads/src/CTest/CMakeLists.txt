@@ -45,20 +45,15 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     if(_buckyball_target_index EQUAL -1)
         message(FATAL_ERROR "unknown C test target: ${BUCKYBALL_CTEST_TARGET}")
     endif()
-    file(
-        GLOB BUCKYBALL_ISA_DEPS
-        CONFIGURE_DEPENDS
-        ${WORKLOAD_LIB_DIR}/bbhw/isa/*
-    )
     set(DEPS
         ${SOURCE_DIR}/${SOURCE_FILE}
-        ${WORKLOAD_LIB_DIR}/buckyball.c
-        ${WORKLOAD_LIB_DIR}/buckyball.h
-        ${BBHW_MEM_C}
-        ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/dma.h
+        $<TARGET_FILE:bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal>
+        $<TARGET_FILE:bbsw-core-baremetal>
+        $<TARGET_FILE:bbsw-device-baremetal>
+        $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_PROFILES_${BUCKYBALL_CTEST_TARGET}_CORE_HART_ID}-baremetal>
+        ${BUCKYBALL_BBSW_HEADERS}
         ${BUCKYBALL_DESIGN_COMMON_SOURCES}
         ${BUCKYBALL_DESIGN_COMMON_HEADERS}
-        ${BUCKYBALL_ISA_DEPS}
         ${BUCKYBALL_BALL_ISA_DEPS}
     )
     file(GLOB _LOCAL_HDRS CONFIGURE_DEPENDS ${SOURCE_DIR}/*.h)
@@ -67,35 +62,33 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     set(${OUT_DEPS} ${DEPS} PARENT_SCOPE)
 endfunction()
 
+# A C test for Linux: the C API of the target thread, the core and the device.
 function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     set(EXECUTABLE "${TEST_NAME}-linux")
 
     add_executable(
         ${EXECUTABLE}
         ${SOURCE_DIR}/${SOURCE_FILE}
-        ${WORKLOAD_LIB_DIR}/buckyball.c
-        ${BBHW_MEM_C}
         ${BUCKYBALL_DESIGN_COMMON_SOURCES}
     )
     target_include_directories(
         ${EXECUTABLE}
-        PRIVATE
-            ${WORKLOAD_LIB_DIR}
-            ${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-            ${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            ${BUCKYBALL_DESIGN_COMMON_INCLUDE_DIRS}
-            ${BUCKYBALL_BALL_WORKLOAD_DIRS}
-            ${SOURCE_DIR}
+        PRIVATE ${BUCKYBALL_DESIGN_COMMON_INCLUDE_DIRS} ${SOURCE_DIR}
     )
-    target_compile_definitions(
+    target_link_libraries(
         ${EXECUTABLE}
-        PRIVATE ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}}
+        PRIVATE
+            bbsw-thread-${BUCKYBALL_CTEST_TARGET}-linux
+            bbsw-core-linux
+            bbsw-device-linux
     )
     set_target_properties(${EXECUTABLE} PROPERTIES LINKER_LANGUAGE C)
 
     add_custom_target(${TEST_NAME}-linux-build DEPENDS ${EXECUTABLE})
 endfunction()
 
+# A C test on the hart of the target: the C API of the target thread, the
+# core and the device, booted by crt0 of that hart.
 function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     set(EXECUTABLE "${TEST_NAME}-baremetal")
     buckyball_ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE})
@@ -107,29 +100,28 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
             -I${DESIGN_COMMON_INCLUDE_DIR}
         )
     endforeach()
-    set(TARGET_DEFINES ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}})
-    list(TRANSFORM TARGET_DEFINES PREPEND "-D")
-    set(BALL_ISA_INCLUDE_FLAGS)
-    foreach(BALL_WORKLOAD_DIR ${BUCKYBALL_BALL_WORKLOAD_DIRS})
-        list(APPEND BALL_ISA_INCLUDE_FLAGS -I${BALL_WORKLOAD_DIR})
-    endforeach()
+    set(THREAD bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal)
+    set(CRT0 bbsw-crt0-hart${DESIGN_PROFILES_${BUCKYBALL_CTEST_TARGET}_CORE_HART_ID}-baremetal)
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
-            ${ELF_CC} ${BUCKYBALL_CTEST_C_FLAGS} -o ${EXECUTABLE}
-            ${BAREMETAL_DIR}/crt0.S ${WORKLOAD_LIB_DIR}/buckyball.c
-            ${BBHW_MEM_C} ${BUCKYBALL_DESIGN_COMMON_SOURCES}
+            ${ELF_CC} ${BUCKYBALL_CTEST_C_FLAGS}
+            $<TARGET_PROPERTY:${CRT0},INTERFACE_LINK_OPTIONS> -o ${EXECUTABLE}
+            $<TARGET_OBJECTS:${CRT0}> ${BUCKYBALL_DESIGN_COMMON_SOURCES}
             ${SOURCE_DIR}/${SOURCE_FILE}
-            -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-            -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${WORKLOAD_LIB_DIR} ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR}
-            ${TARGET_DEFINES}
-            ${BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS} ${BALL_ISA_INCLUDE_FLAGS}
-            -I${SOURCE_DIR}
-        DEPENDS ${TEST_DEPS} ${BAREMETAL_DIR}/crt0.S ${BBSIM_LD}
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${THREAD},INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${THREAD},INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
+            ${BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS} -I${SOURCE_DIR}
+            $<TARGET_FILE:${THREAD}> $<TARGET_FILE:bbsw-core-baremetal>
+            $<TARGET_FILE:bbsw-device-baremetal>
+        DEPENDS ${TEST_DEPS}
         COMMENT "Building baremetal executable: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
         VERBATIM
     )
 
@@ -186,8 +178,6 @@ function(add_buckyball_component_workload NAME)
         )
     endif()
     list(FIND DESIGN_PROFILES "${BUCKYBALL_CTEST_TARGET}" _profile)
-    set(_defines ${DESIGN_TARGET_DEFS_${BUCKYBALL_CTEST_TARGET}})
-    list(TRANSFORM _defines PREPEND "-D")
     set(_test
         "${DESIGN_NAME}-${BUCKYBALL_CTEST_TARGET}-ctest-pipeline-${NAME}"
     )
@@ -197,31 +187,29 @@ function(add_buckyball_component_workload NAME)
         buckyball_enforce_ctest_line_limit("${_source}")
         list(APPEND _sources "${CMAKE_CURRENT_SOURCE_DIR}/${_source}")
     endforeach()
-    file(GLOB_RECURSE _headers CONFIGURE_DEPENDS "${WORKLOAD_LIB_DIR}/*.h")
-    set(_ball_includes)
-    foreach(_dir IN LISTS BUCKYBALL_BALL_WORKLOAD_DIRS)
-        list(APPEND _ball_includes -I${_dir})
-        file(GLOB_RECURSE _ball_headers CONFIGURE_DEPENDS "${_dir}/*.h")
-        list(APPEND _headers ${_ball_headers})
-    endforeach()
+    set(_thread bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal)
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${_elf}"
         COMMAND
             ${ELF_CXX} ${BUCKYBALL_CTEST_C_FLAGS}
+            $<TARGET_PROPERTY:bbsw-start-baremetal,INTERFACE_LINK_OPTIONS>
             -DBB_COMPONENT_WORKLOAD_PROFILE=${_profile}
-            -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-            -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${WORKLOAD_LIB_DIR} -I${BAREMETAL_DIR}/multithread
-            ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR}
-            ${_defines} ${_ball_includes}
-            -o ${_elf} ${BAREMETAL_DIR}/start.S ${_sources}
-            ${WORKLOAD_LIB_DIR}/buckyball.c ${BBHW_MEM_C}
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${_thread},INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${_thread},INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
+            -o ${_elf} $<TARGET_OBJECTS:bbsw-start-baremetal> ${_sources}
+            $<TARGET_FILE:${_thread}> $<TARGET_FILE:bbsw-core-baremetal>
+            $<TARGET_FILE:bbsw-device-baremetal>
         DEPENDS
             ${_sources}
-            ${_headers}
-            ${BAREMETAL_DIR}/start.S
-            ${RUNTIME_INCLUDE_DIR}/bb_cores.h
+            ${BUCKYBALL_BBSW_HEADERS}
+            ${BUCKYBALL_BALL_ISA_DEPS}
+            $<TARGET_FILE:${_thread}>
+            $<TARGET_OBJECTS:bbsw-start-baremetal>
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
         VERBATIM
     )
     add_custom_target(

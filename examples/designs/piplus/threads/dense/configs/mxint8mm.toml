@@ -1,0 +1,6 @@
+# The dense thread's MXINT8 matrix product: a 16x16 array for the large-M
+# vision and prefix products.
+include = "../../../balls/mxint8mm/configs/default.toml"
+
+rows = 16
+cols = 16

@@ -31,18 +31,18 @@ func.func @main() -> i8 {
       memref.store %bv, %b[%k, %lane] : memref<16x16xi8>
     }
   }
-  buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 4 : i64}>
-  buckyball.mvin %at <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mvin %b <{bank = 2 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.mvin %c <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
+  bbacc.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 4 : i64}>
+  bbacc.mvin %at <{bank = 1 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  bbacc.mvin %b <{bank = 2 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  bbacc.mvin %c <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
   // C += A^T * B with K = 16.
   vector_ball.matmul_at_i8 <{at = 1 : i64, b = 2 : i64, c = 3 : i64, rows = 16 : i64}>
-  buckyball.mvout %c <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
-  buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
-  buckyball.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mvout %c <{bank = 3 : i64, depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
+  bbacc.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
   memref.dealloc %at : memref<16x16xi8>
   memref.dealloc %b : memref<16x16xi8>

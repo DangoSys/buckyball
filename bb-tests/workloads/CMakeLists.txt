@@ -1,9 +1,16 @@
 # ===----------------------------------------------------------------------===
 # The workloads of one simulation of a design, configured with DESIGN_CMAKE,
-# generated from its design.pb by `bbdev stack --build`:
+# generated from its design.pb, and BBSW_CMAKE, the C API (lib/) built for it:
 #
+#   cmake -G Ninja -S bb-tests/workloads/lib -B <bbsw> -DDESIGN_CMAKE=<design.cmake>
+#   ninja -C <bbsw>
 #   cmake -G Ninja -S bb-tests/workloads -B <build> -DDESIGN_CMAKE=<design.cmake>
+#         -DBBSW_CMAKE=<bbsw>/bbsw.cmake
 #   ninja -C <build> sync-bin | sync-ctest-bin | sync-mlirtest-bin | sync-soctest-bin
+#
+# The C tests here program the hardware through the C API only. The workload
+# entry of the simulation (DESIGN_WORKLOADS) adds the tests of the design and
+# of its components, and whatever else it runs.
 #
 # Products are copied to ${DESIGN_OUTPUT}/workloads.
 # ===----------------------------------------------------------------------===
@@ -12,6 +19,8 @@ set(CMAKE_C_COMPILER riscv64-unknown-linux-gnu-gcc)
 set(CMAKE_CXX_COMPILER riscv64-unknown-linux-gnu-g++)
 project(BuckyballWorkloads C CXX)
 include("${DESIGN_CMAKE}")
+# The C API: bbsw-* libraries, see lib/CMakeLists.txt.
+include("${BBSW_CMAKE}")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_FLAGS_RELEASE "-O2 -UNDEBUG")
@@ -20,25 +29,16 @@ set(WORKLOAD_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(WORKLOAD_SRC_DIR ${WORKLOAD_DIR}/src)
 
 set(BUCKYBALL_REPO_ROOT ${DESIGN_REPO})
-set(WORKLOAD_LIB_DIR ${WORKLOAD_DIR}/lib)
-set(BAREMETAL_DIR ${BUCKYBALL_REPO_ROOT}/stack/os/baremetal)
-# bb_cores.h: the cores of DESIGN_DEFS.
-set(RUNTIME_INCLUDE_DIR ${BUCKYBALL_REPO_ROOT}/stack/runtime/include)
 
 find_program(ELF_CC riscv64-unknown-elf-gcc REQUIRED)
 find_program(ELF_CXX riscv64-unknown-elf-g++ REQUIRED)
 find_program(ELF_OBJCOPY riscv64-unknown-elf-objcopy REQUIRED)
-set(LINUX_CC ${CMAKE_C_COMPILER})
-set(LINUX_CXX ${CMAKE_CXX_COMPILER})
 
-# runtime, runtime-baremetal, runtime-linux and engine of every program here:
-# built by `bbdev stack --build "--design <design> --device <config>"`.
 set(BUCKYBALL_CONTROL_TARGET "core${DESIGN_WORKLOAD_CONTROL_HART}")
 # The definitions of every program of the design, as compiler flags.
 set(DESIGN_DEFINES ${DESIGN_DEFS})
 list(TRANSFORM DESIGN_DEFINES PREPEND "-D")
 
-set(BBSIM_LD ${BAREMETAL_DIR}/bbsim.ld)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=rv64gc")
 set(CMAKE_EXE_LINKER_FLAGS
     "${CMAKE_EXE_LINKER_FLAGS} -static -Wl,--no-dynamic-linker"
@@ -47,7 +47,6 @@ set(CMAKE_EXE_LINKER_FLAGS
 set(OUTPUT_BIN_DIR "${DESIGN_OUTPUT}/workloads")
 
 set(CTEST_MAX_LINES 100)
-set(BBHW_MEM_C ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/dma.c)
 set(BUCKYBALL_CTEST_C_FLAGS
     -g
     -fno-common
@@ -59,27 +58,26 @@ set(BUCKYBALL_CTEST_C_FLAGS
     -specs=nano.specs
     -specs=nosys.specs
     -nostartfiles
-    -Wl,-T,${BBSIM_LD}
 )
+# The headers of the C API and of the design's Balls: C tests depend on them.
 file(
-    GLOB BUCKYBALL_BALL_WORKLOAD_DIRS
+    GLOB_RECURSE BUCKYBALL_BBSW_HEADERS
     CONFIGURE_DEPENDS
-    "${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/*/workloads"
+    "${WORKLOAD_DIR}/lib/*.h"
+    "${WORKLOAD_DIR}/lib/bbhw/isa/*.c"
 )
-file(
-    GLOB BUCKYBALL_BALL_ISA_DEPS
-    CONFIGURE_DEPENDS
-    "${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/*/workloads/isa/*"
-)
+set(BUCKYBALL_BALL_ISA_DEPS)
+foreach(BALL_WORKLOAD_DIR ${DESIGN_BALL_WORKLOADS})
+    file(
+        GLOB BALL_ISA_HEADERS
+        CONFIGURE_DEPENDS
+        "${BALL_WORKLOAD_DIR}/isa/*"
+    )
+    list(APPEND BUCKYBALL_BALL_ISA_DEPS ${BALL_ISA_HEADERS})
+endforeach()
 
-set(BUDDY_MLIR_DIR ${BUCKYBALL_REPO_ROOT}/stack/thirdparty/buddy-mlir)
-
-set(BUCKYBALL_RISCV_MATTR "+xbuckyball,+m,+D")
+# The workload entry adds whatever else it builds to sync-bin.
+add_custom_target(sync-bin DEPENDS sync-native-bin sync-soctest-bin)
+add_custom_target(build-all ALL DEPENDS sync-bin)
 
 add_subdirectory(src)
-
-add_custom_target(
-    sync-bin
-    DEPENDS sync-native-bin sync-mlirtest-bin sync-soctest-bin
-)
-add_custom_target(build-all ALL DEPENDS sync-bin)

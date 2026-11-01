@@ -22,16 +22,16 @@ func.func @main() -> i8 {
       memref.store %b8, %b[%row, %lane] : memref<4x16xi8>
     }
   }
-  buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %a <{bank = 1 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
-  buckyball.mvin %b <{bank = 2 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
+  bbacc.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mvin %a <{bank = 1 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
+  bbacc.mvin %b <{bank = 2 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
   int8add_ball.add_i8 ratios(%ratio, %ratio) <{a = 1 : i64, b = 2 : i64, c = 3 : i64, rows = 4 : i64, relu}>
-  buckyball.mvout %out <{bank = 3 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
-  buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
-  buckyball.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mvout %out <{bank = 3 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x16xi8>
+  bbacc.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
   func.call @check_result(%out) : (memref<4x16xi8>) -> ()
   memref.dealloc %a : memref<4x16xi8>
   memref.dealloc %b : memref<4x16xi8>

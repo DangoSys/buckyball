@@ -99,7 +99,7 @@ WORKFLOW_COMMANDS = {
     "kernel": {
         "build": (
             "Build RISC-V kernel + rootfs carrying the Linux programs of a design."
-            ' Args: "--design <design> --device <config> [--interactive]"'
+            ' Args: "--design <design> --device <config> [--model <name>] [--interactive]"'
         ),
     },
     "firesim": {

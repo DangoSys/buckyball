@@ -3,8 +3,6 @@
 
 #include "isa.h"
 
-#define BB_MVIN_FUNC7 33
-
 #define bb_mvin(mem_addr, bank_id, depth, stride)                              \
   do {                                                                         \
     BUCKYBALL_INSTRUCTION_R_R(                                                 \

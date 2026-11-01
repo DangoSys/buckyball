@@ -8,6 +8,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import framework.device.peripherals.clint.Clint
 import framework.device.peripherals.plic.Plic
 import framework.device.peripherals.scu.SystemControl
+import framework.device.peripherals.trace.Trace
 import framework.ip.bus.axi4
 import framework.device.configs.DeviceParam
 import framework.device.peripherals.plic.configs.PlicParams
@@ -131,6 +132,7 @@ class Controller(device: DeviceParam, ap: axi4.Params, cp: AccessParams) extends
   val clint: Instance[Clint]         = Instantiate(new Clint(device.clint))
   val plic:  Instance[Plic]          = Instantiate(new Plic(device.plic))
   val scu:   Instance[SystemControl] = Instantiate(new SystemControl(device.scu, cp))
+  val trace: Instance[Trace]         = Instantiate(new Trace(device.trace))
   plic.io.sources := io.hardwareInterrupt.sources
   for (i <- hartIds.indices) {
     io.hardwareInterrupt.harts(i).timer              := clint.io.mtip(i)
@@ -143,6 +145,7 @@ class Controller(device: DeviceParam, ap: axi4.Params, cp: AccessParams) extends
   val inClint     = addr >= device.clint.base.U && addr < (device.clint.base + device.clint.bytes).U
   val inPlic      = addr >= device.plic.base.U && addr < (device.plic.base + device.plic.bytes).U
   val inScu       = addr >= device.scu.baseAddress.U && addr < (device.scu.baseAddress + device.scu.totalSizeBytes).U
+  val inTrace     = addr >= device.trace.base.U && addr < (device.trace.base + device.trace.bytes).U
   val pending     = RegInit(false.B)
   val selectedScu = Reg(Bool())
   val answer      = Reg(new UncachedResponse(cp))
@@ -150,7 +153,7 @@ class Controller(device: DeviceParam, ap: axi4.Params, cp: AccessParams) extends
   request.ready        := !pending && Mux(inScu && !invalidAccess && !noWrite, scu.io.request.ready, true.B)
   scu.io.request.valid := request.valid && !pending && inScu && !invalidAccess && !noWrite
   scu.io.request.bits  := request.bits
-  for (port <- Seq(clint.io.port, plic.io.port)) {
+  for (port <- Seq(clint.io.port, plic.io.port, trace.io.port)) {
     port.access.bits.addr  := addr
     port.access.bits.write := request.bits.write
     port.access.bits.size  := request.bits.size
@@ -158,6 +161,7 @@ class Controller(device: DeviceParam, ap: axi4.Params, cp: AccessParams) extends
   }
   clint.io.port.access.valid := request.fire && inClint && !invalidAccess && !noWrite
   plic.io.port.access.valid   := request.fire && inPlic && !invalidAccess && !noWrite
+  trace.io.port.access.valid  := request.fire && inTrace && !invalidAccess && !noWrite
   when(request.fire) {
     pending      := true.B
     selectedScu  := inScu && !invalidAccess && !noWrite
@@ -166,7 +170,7 @@ class Controller(device: DeviceParam, ap: axi4.Params, cp: AccessParams) extends
     answer.error := invalidAccess || (!noWrite && Mux(
       inClint,
       clint.io.port.error,
-      Mux(inPlic, plic.io.port.error, !inScu)
+      Mux(inPlic, plic.io.port.error, Mux(inTrace, trace.io.port.error, !inScu))
     ))
   }
   response.valid              := pending && Mux(selectedScu, scu.io.response.valid, true.B)

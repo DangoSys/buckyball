@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-set -e
-set -o pipefail
+set -euo pipefail
 
-BBDIR=$(git rev-parse --show-toplevel)
+BBDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 
 begin_step() {
   thisStepNum=$1
@@ -21,14 +20,17 @@ begin_step() {
 }
 
 begin_step "0-2" "submodules init"
-cd ${BBDIR}
-git submodule sync
+cd "$BBDIR"
+git submodule sync --recursive
 git submodule update --init --progress
-git -C ${BBDIR}/stack submodule update --init --progress os/linux
-git -C ${BBDIR}/stack submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
+git submodule foreach 'case "$sm_path" in
+  examples/prefab/*) git submodule update --init --recursive ;;
+esac'
+git -C "$BBDIR/stack" submodule update --init --progress os/linux
+git -C "$BBDIR/stack" submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   os/thirdparty/linux \
   os/thirdparty/busybox \
   os/thirdparty/opensbi
 begin_step "0-4" "buddy-mlir llvm init"
-git -C ${BBDIR}/stack submodule update --init --progress thirdparty/buddy-mlir
-git -C ${BBDIR}/stack/thirdparty/buddy-mlir submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm
+git -C "$BBDIR/stack" submodule update --init --progress thirdparty/buddy-mlir
+git -C "$BBDIR/stack/thirdparty/buddy-mlir" submodule update --init --depth 1 --single-branch --recommend-shallow --progress llvm

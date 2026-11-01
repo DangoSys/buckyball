@@ -7,8 +7,8 @@
 # configures this with DESIGN_CMAKE, generated from design.pb. Each level is a
 # CMake build of its own: cores and threads build buddy-opt plugins for the
 # host, the device builds RISC-V libraries.
-#   thread/matmul  libmatmul-compiler.so, program.bin, loader.o, libkernels*.a
-#   core/goban     libengine-compiler.so, execute.o
+#   thread/matmul  libmatmul-compiler.so, program.bin, loader.o
+#   core/goban     libcore-compiler.so, execute.o
 #   device         runtime, runtime-baremetal, runtime-linux, engine; device.cmake
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)

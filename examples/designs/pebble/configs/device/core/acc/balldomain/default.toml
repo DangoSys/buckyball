@@ -2,7 +2,7 @@
 id = 0
 name = "TransposeBall"
 component = "transpose"
-param = "default"
+param = "../../../../../../../prefab/balls/transpose/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "TRANSPOSE", funct7 = 49 },
@@ -23,7 +23,7 @@ instructions = [
 id = 2
 name = "Im2colBall"
 component = "im2col"
-param = "default"
+param = "balls/im2col/k11.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "IM2COL", funct7 = 48 },
@@ -33,10 +33,10 @@ instructions = [
 id = 3
 name = "ToInt8Ball"
 component = "toint8"
-param = "default"
+param = "../../../../../../../prefab/balls/toint8/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
-  { mnemonic = "QUANT_F32_TO_I8", funct7 = 51 },
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 74 },
   { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
 ]
 
@@ -44,7 +44,7 @@ instructions = [
 id = 4
 name = "Int2FpBall"
 component = "int2fp"
-param = "default"
+param = "../../../../../../../prefab/balls/int2fp/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "INT32_TO_FP32", funct7 = 68 },
@@ -54,7 +54,7 @@ instructions = [
 id = 5
 name = "LutBall"
 component = "lut"
-param = "default"
+param = "../../../../../../../prefab/balls/lut/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "LUT", funct7 = 66 },
@@ -64,7 +64,7 @@ instructions = [
 id = 6
 name = "MaxPoolBall"
 component = "maxpool"
-param = "default"
+param = "../../../../../../../prefab/balls/maxpool/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MAXPOOL", funct7 = 50 },
@@ -74,7 +74,7 @@ instructions = [
 id = 7
 name = "Int8AddBall"
 component = "int8add"
-param = "default"
+param = "../../../../../../../prefab/balls/int8add/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "INT8ADD", funct7 = 69 },
@@ -85,7 +85,7 @@ instructions = [
 id = 8
 name = "Int8MulBall"
 component = "int8mul"
-param = "default"
+param = "../../../../../../../prefab/balls/int8mul/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "INT8MUL", funct7 = 71 },
@@ -95,7 +95,7 @@ instructions = [
 id = 9
 name = "MatAddBall"
 component = "matadd"
-param = "default"
+param = "../../../../../../../prefab/balls/matadd/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MATADD", funct7 = 72 },

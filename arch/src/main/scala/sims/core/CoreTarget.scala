@@ -27,7 +27,7 @@ class CoreEnvironment(b: GlobalConfig, instantiateCore: () => CLinkIO) extends B
   val Seq(corep) = b.device.cores
   val core       = instantiateCore()
   require(core.p.harts == 1 && core.p.backing && core.p.requesters == 0)
-  require(core.c2c.isEmpty && core.banks.isEmpty)
+  require(core.service.isEmpty)
   require(b.device.ddr.clients == 1)
 
   val peripherals = Instantiate(new Controller(b.device, b.device.ddr.axi, corep.memory.memoryAccess.memory))
@@ -36,7 +36,8 @@ class CoreEnvironment(b: GlobalConfig, instantiateCore: () => CLinkIO) extends B
     Seq(
       (b.device.clint.base, b.device.clint.bytes),
       (b.device.plic.base, b.device.plic.bytes),
-      (b.device.scu.baseAddress, b.device.scu.totalSizeBytes)
+      (b.device.scu.baseAddress, b.device.scu.totalSizeBytes),
+      (b.device.trace.base, b.device.trace.bytes)
     ),
     b.device.ddr.axi
   ))

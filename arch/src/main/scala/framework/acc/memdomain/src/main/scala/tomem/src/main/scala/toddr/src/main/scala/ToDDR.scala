@@ -38,12 +38,16 @@ class ToDDR(val b: ModuleParam, permission: PmpParams) extends Module {
       new MapResult(b.mapping)
     ))
 
-    val axi = new axi4.Port(axiParams)
+    val readAddress  = Output(UInt(64.W))
+    val writeAddress = Output(UInt(64.W))
+    val axi          = new axi4.Port(axiParams)
 
   })
 
   val reader: Instance[ReadDma]  = Instantiate(new ReadDma(b))
   val writer: Instance[WriteDma] = Instantiate(new WriteDma(b, permission))
+  io.readAddress  := reader.io.virtualAddress
+  io.writeAddress := writer.io.virtualAddress
   val kernel       = io.dma.read.bits.producer === 2.U
   val readDecision = Mux(kernel, io.decisions(2), io.decisions(0))
   when(io.dma.read.valid) {

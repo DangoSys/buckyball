@@ -2,8 +2,10 @@
 # Wrapper to run pre-commit with Nix env (result/bin in PATH).
 # Git hooks run without nix develop, so we must load the env manually.
 
+set -euo pipefail
+
 HERE="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="${HERE}/../.."
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 export PATH="${REPO_ROOT}/result/bin:${PATH}"
 
 exec pre-commit hook-impl --config="${REPO_ROOT}/.pre-commit-config.yaml" \

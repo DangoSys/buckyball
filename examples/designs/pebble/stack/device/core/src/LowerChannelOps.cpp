@@ -1,5 +1,5 @@
 //===- LowerChannelOps.cpp - Per-channel INT8 operations and transpose ---===//
-#include "Buckyball/BuckyballOps.h"
+#include "Acc/AccOps.h"
 #include "Lowering.h"
 #include "Target/BuckyballTargetRegistry.h"
 #include "int8mulOps.h"
@@ -12,10 +12,9 @@
 #include "transposeOps.h"
 
 using namespace mlir;
-using namespace ::buddy::buckyball;
+using namespace ::buddy::acc;
 
-LogicalResult pebble::lowerChannelOp(::buddy::custom::CustomOp op,
-                                     Value &result) {
+LogicalResult pebble::lowerChannelOp(::buddy::acc::CustomOp op, Value &result) {
   bool lookup = op.getKind() == "lookup_i8";
   auto type = cast<RankedTensorType>(op.getInputs()[lookup ? 0 : 1].getType());
   auto otherType =
@@ -174,8 +173,7 @@ LogicalResult pebble::lowerChannelOp(::buddy::custom::CustomOp op,
   return success();
 }
 
-LogicalResult pebble::lowerTranspose(::buddy::custom::CustomOp op,
-                                     Value &result) {
+LogicalResult pebble::lowerTranspose(::buddy::acc::CustomOp op, Value &result) {
   auto type = cast<RankedTensorType>(op.getInputs()[0].getType());
   auto outputType = cast<RankedTensorType>(op.getResult(0).getType());
   if (!type.hasStaticShape() || type.getRank() != 2 ||

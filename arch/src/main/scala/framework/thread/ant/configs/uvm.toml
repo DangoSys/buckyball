@@ -1,0 +1,18 @@
+[parameters]
+codeBytes = 16384
+taskBits = 32
+signatures = ["6254060509610367567", "6254060509610367567"]
+paddrBits = 36
+pmps = 16
+
+[parameters.tls]
+base = "65536"
+bytes = 16384
+dataBits = 128
+
+[parameters.tss]
+base = "131072"
+bytes = 16384
+dataBits = 128
+
+[defines]

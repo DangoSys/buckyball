@@ -37,8 +37,8 @@ class Retire extends Bundle {
 }
 
 /**
- * One RV64IM execution context. Ordinary memory is strictly local. NPU work may remain
- * in flight after a command is accepted; completion waits for accelerator and storage drain.
+ * One RV64IM execution context in machine mode, which reads the mcycle CSR. Ordinary memory is strictly local. NPU
+ * work may remain in flight after a command is accepted; completion waits for accelerator and storage drain.
  * Cancellation also reaches the local stores, whose accepted operations must drain before reuse.
  */
 @instantiable
@@ -109,16 +109,22 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
   io.retired.valid := false.B
   io.retired.bits  := 0.U.asTypeOf(new Retire)
 
+  val writebackValid = WireDefault(false.B)
+  val writebackRd    = WireDefault(0.U(5.W))
+  val writebackData  = WireDefault(0.U(64.W))
+
   def retire(rd: UInt, value: UInt, next: UInt): Unit = {
     when(live) {
-      when(rd =/= 0.U)(registers(rd) := value)
-      io.retired.valid               := true.B
-      io.retired.bits.pc             := pc
-      io.retired.bits.instruction    := instruction
-      io.retired.bits.rd             := rd
-      io.retired.bits.data           := Mux(rd === 0.U, 0.U, value)
-      pc                             := next
-      state                          := fetch
+      writebackValid              := rd =/= 0.U
+      writebackRd                 := rd
+      writebackData               := value
+      io.retired.valid            := true.B
+      io.retired.bits.pc          := pc
+      io.retired.bits.instruction := instruction
+      io.retired.bits.rd          := rd
+      io.retired.bits.data        := Mux(rd === 0.U, 0.U, value)
+      pc                          := next
+      state                       := fetch
     }
   }
 
@@ -128,6 +134,10 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
     completion.cancelled := wasCancelled
     state                := complete
   }
+
+  // mcycle: the clock cycles since reset, read by `csrr rd, mcycle`.
+  val mcycle = RegInit(0.U(64.W))
+  mcycle := mcycle + 1.U
 
   def word(value: UInt): UInt = Mux(d.word, value(31, 0).asSInt.pad(64).asUInt, value)
 
@@ -226,12 +236,15 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
       is(Kind.multiply)(state := multiply)
       is(Kind.divide)(state   := divide)
       is(Kind.custom)(state   := issue)
-      is(Kind.fence)(retire(0.U, 0.U, nextPc)) // Ordinary LSU operations already complete in order.
+      // Ordinary LSU operations already complete in order; a fence also waits
+      // for the accelerator and the local stores to drain the thread's work.
+      is(Kind.fence)(when(drained)(retire(0.U, 0.U, nextPc)))
       is(Kind.exit) {
         assert(registers(17) === 0.U, "Ant unsupported ECALL: pc=0x%x a7=0x%x", pc, registers(17))
         when(registers(17) === 0.U)(finish(registers(10)))
       }
       is(Kind.breakpoint)(assert(false.B, "Ant breakpoint: pc=0x%x", pc))
+      is(Kind.cycle)(retire(d.rd, mcycle, nextPc))
     }
   }
 
@@ -296,24 +309,25 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
     retire(d.rd, word(divider.io.response.bits), nextPc)
   }
 
-  io.rocc.cmd.valid                     := state === issue && live
-  io.rocc.cmd.bits.instruction.raw_inst := instruction
-  io.rocc.cmd.bits.instruction.pc       := pc
-  io.rocc.cmd.bits.instruction.rs1Data  := Mux(instruction(13), a, 0.U)
-  io.rocc.cmd.bits.instruction.rs2Data  := Mux(instruction(12), rhs, 0.U)
-  io.rocc.cmd.bits.satp                 := context.satp
-  io.rocc.cmd.bits.effectivePrivilege   := context.effectivePrivilege
-  io.rocc.cmd.bits.sum                  := context.sum
-  io.rocc.cmd.bits.mxr                  := context.mxr
-  io.rocc.cmd.bits.pmp                  := context.pmp
-  io.rocc.resp.ready                    := false.B
+  io.rocc.cmd.valid                           := state === issue && live
+  io.rocc.cmd.bits.instruction.raw_inst       := instruction
+  io.rocc.cmd.bits.instruction.pc             := pc
+  io.rocc.cmd.bits.instruction.rs1Data        := Mux(instruction(13), a, 0.U)
+  io.rocc.cmd.bits.instruction.rs2Data        := Mux(instruction(12), rhs, 0.U)
+  io.rocc.cmd.bits.satp                       := context.satp
+  io.rocc.cmd.bits.effectivePrivilege         := context.effectivePrivilege
+  io.rocc.cmd.bits.sum                        := context.sum
+  io.rocc.cmd.bits.mxr                        := context.mxr
+  io.rocc.cmd.bits.pmp                        := context.pmp
+  io.rocc.resp.ready                          := false.B
   when(io.rocc.cmd.valid) {
     assert(!instruction(14), "Ant accelerator commands do not write integer registers")
   }
   when(io.rocc.cmd.fire)(retire(0.U, 0.U, nextPc))
+  when(writebackValid)(registers(writebackRd) := writebackData)
   assert(!io.rocc.resp.valid, "Ant received an unsolicited RoCC response")
   assert(!io.rocc.interrupt, "Ant accelerator fault")
-  when(io.result.fire)(state            := idle)
+  when(io.result.fire)(state                  := idle)
   when(io.cancel && state =/= idle && state =/= complete) {
     finish(0.U, true.B)
     cancelled        := true.B

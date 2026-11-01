@@ -278,6 +278,7 @@ dependencies = [
  "clap",
  "libtest-mimic",
  "predicates",
+ "prost",
  "serde",
  "toml",
  "walkdir",

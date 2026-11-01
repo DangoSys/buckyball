@@ -108,6 +108,11 @@ message ScuHardware {
   required uint64 total_size_bytes = 3;
   required uint32 max_harts = 4;
 }
+message TraceHardware {
+  required uint64 base = 1;
+  required uint64 bytes = 2;
+  required uint32 stride = 3;
+}
 message SimMemoryHardware {
   reserved 1, 2;
   required uint32 line_bytes = 3;
@@ -148,11 +153,6 @@ message FpuConfig { required uint32 f_len = 1; }
 message InterconnectConfig {
   required AxiHardware axi = 1;
   required uint32 slots = 2;
-}
-message C2CConfig {
-  required bool enabled = 1;
-  required uint32 peer_cores = 2;
-  required AxiHardware axi = 3;
 }
 message TBusConfig { repeated uint32 bank_nodes = 1; }
 message ControllerConfig { required bool moves = 1; }

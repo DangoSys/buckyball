@@ -33,7 +33,7 @@ func.func @main() -> i8 {
   }
   %x = bufferization.to_tensor %input restrict : memref<4x16xi8> to tensor<4x16xi8>
   %lut = bufferization.to_tensor %table restrict : memref<4096xi8> to tensor<4096xi8>
-  %result = custom.op "lookup_i8"(%x, %lut) : (tensor<4x16xi8>, tensor<4096xi8>) -> tensor<4x16xi8>
+  %result = bbacc.custom "lookup_i8"(%x, %lut) : (tensor<4x16xi8>, tensor<4096xi8>) -> tensor<4x16xi8>
   %memory = bufferization.to_buffer %result : tensor<4x16xi8> to memref<4x16xi8>
   func.call @check_result(%memory) : (memref<4x16xi8>) -> ()
   return %zero : i8

@@ -11,20 +11,21 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.core.tbus.configs.Layout
-import framework.thread.tlink.{ExternalLink, SharedLink}
+import framework.core.shm.{BankAccess, ExternalLink}
 import framework.core.tbus.router.Router
-import framework.acc.memdomain.{LayoutConfig, MvoverCommand, PhysicalBankHash}
-import framework.ip.memory.mesh_shm.MeshSharedMemIO
+import framework.acc.memdomain.{LayoutConfig, MvoverCommand, MvoverPort, PhysicalBankHash}
+import framework.core.shm.MeshSharedMemIO
 
-/** Shared-bank interconnect: endpoint arbitration, mapping and synchronization. */
+/** Shared-bank interconnect: endpoint arbitration, mapping and bank movement. */
 @instantiable
 class SharedNetwork(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val tbusParam:     TBusParam,
-  val endpointIds:   Seq[Int],
-  val traceIds:      Seq[Int],
-  val simp:          SimParam)
+  val frontendParam:    FrontendParam,
+  val memParam:         MemDomainParam,
+  val tbusParam:        TBusParam,
+  val endpointIds:      Seq[Int],
+  val traceIds:         Seq[Int],
+  val simp:             SimParam,
+  val physicalBankBase: Int)
     extends Module {
   val diffTest     = simp.diffTest
   val p            = tbusParam
@@ -36,14 +37,14 @@ class SharedNetwork(
   @public
   val io = IO(new Bundle {
     val shm        = Flipped(new MeshSharedMemIO(p.router.mesh(frontendParam, memParam, tbusParam)))
-    val threads    = Vec(participants.size, Flipped(new SharedLink(frontendParam, memParam)))
+    val banks      = Vec(participants.size, Flipped(new BankAccess(frontendParam, memParam)))
+    val moves      = Vec(participants.size, Flipped(new MvoverPort))
     val external   = Option.when(p.router.physicalPorts > 0 || p.externalMove)(new ExternalLink(memParam, tbusParam))
     val bankHashes = Option.when(diffTest)(Output(Vec(Layout.totalBank(memParam), new PhysicalBankHash(frontendParam))))
   })
 
-  val router:  Instance[Router]  =
-    Instantiate(new Router(frontendParam, memParam, tbusParam, endpointIds, traceIds, simp.diffTest))
-  val barrier: Instance[Barrier] = Instantiate(new Barrier(tbusParam))
+  val router: Instance[Router] =
+    Instantiate(new Router(frontendParam, memParam, tbusParam, endpointIds, traceIds, simp.diffTest, physicalBankBase))
 
   router.io.memory <> io.shm
   io.bankHashes.foreach(_ := router.io.bank_hashes.get)
@@ -62,14 +63,12 @@ class SharedNetwork(
   }
 
   for ((slot, endpoint) <- participants.zipWithIndex) {
-    val link = io.threads(endpoint)
+    val bank = io.banks(endpoint)
     for (port <- 0 until ports) {
-      router.io.mem_req(endpoint * ports + port) <> link.bank.requests(port)
+      router.io.mem_req(endpoint * ports + port) <> bank.requests(port)
     }
-    router.io.localBanks(slot) <> link.bank.local
-    router.io.mapping(slot) <> link.bank.mapping
-    barrier.io.arrive(endpoint) := link.barrierArrive
-    link.barrierRelease         := barrier.io.release(endpoint)
+    router.io.localBanks(slot) <> bank.local
+    router.io.mapping(slot) <> bank.mapping
   }
 
   for (slot <- 0 until p.slots if !participants.contains(slot)) {
@@ -81,7 +80,7 @@ class SharedNetwork(
     router.io.mapping(slot).bits  := 0.U.asTypeOf(router.io.mapping(slot).bits)
   }
 
-  val moves     = io.external.toSeq.flatMap(_.move.toSeq) ++ io.threads.map(_.move)
+  val moves     = io.external.toSeq.flatMap(_.move.toSeq) ++ io.moves
   val moveArb   = Instantiate(new Arbiter(new MvoverCommand, moves.size))
   val moveOwner = Reg(UInt(math.max(1, log2Ceil(moves.size)).W))
 
@@ -104,7 +103,7 @@ class SharedNetwork(
   }
 
   val layouts = Instantiate(new Arbiter(new LayoutConfig(frontendParam, memParam), participants.size))
-  for (endpoint <- participants.indices) { layouts.io.in(endpoint) <> io.threads(endpoint).bank.config }
+  for (endpoint <- participants.indices) { layouts.io.in(endpoint) <> io.banks(endpoint).config }
   router.io.config <> layouts.io.out
 }
 

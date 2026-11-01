@@ -14,7 +14,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def F32AddBall_Dialect : Dialect {
   let name = "f32add_ball";

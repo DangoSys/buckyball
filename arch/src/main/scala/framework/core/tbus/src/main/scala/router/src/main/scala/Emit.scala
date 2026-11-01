@@ -45,7 +45,7 @@ object Emit extends App {
   Files.createDirectories(Paths.get(directory))
   _root_.circt.stage.ChiselStage.emitSystemVerilogFile(
     {
-      val dut = new Router(frontend, memory, bus, endpointIds, traceIds, values("diffTest").bool)
+      val dut = new Router(frontend, memory, bus, endpointIds, traceIds, values("diffTest").bool, 0)
       for ((name, field) <- leaves(dut.io, "")) {
         val input     = DataMirror.directionOf(field) == ActualDirection.Input
         val direction = if (input) "IN" else "OUT"; val signal        = if (input) "inputs" else "outputs";

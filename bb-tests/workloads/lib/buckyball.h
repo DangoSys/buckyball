@@ -19,6 +19,10 @@ static inline void multithread(int target_hart_id) {
   // If hart_id == target_hart_id, continue execution
 }
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Utility functions
 void init_u8_random_matrix(elem_t *matrix, int rows, int cols, int seed);
 void init_u32_random_matrix(result_t *matrix, int rows, int cols, int seed);
@@ -35,5 +39,9 @@ void transpose_u8_matrix(elem_t *src, elem_t *dst, int rows, int cols);
 void cpu_matmul(elem_t *a, elem_t *b, result_t *c, int rows, int cols,
                 int inner);
 result_t gemmini_in_shift(result_t v, int shift);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

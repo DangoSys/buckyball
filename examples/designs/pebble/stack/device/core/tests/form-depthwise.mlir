@@ -1,6 +1,7 @@
 // CHECK-LABEL: func.func @depthwise
-// CHECK: custom.op "depthwise_conv2d_i8"
-// CHECK-SAME: padding = array<i64: 1, 1, 1, 1>
+// CHECK: toint8_ball.bank_fp32_to_int8
+// CHECK: im2col_ball.bank_im2col_i8 {{.*}}<input_side = 6, kernel = 3, stride = 1, padding = 0
+// CHECK: smatmul_ball.bank_matmul_i8
 // CHECK: return
 func.func @depthwise(%x: tensor<1x4x4x16xf32>, %w: tensor<16x1x3x3xi8>, %bias_codes: tensor<16xi32>, %input_step: tensor<1x1x1x1xf32>, %multiplier: tensor<1x1x1x1xf32>, %weight_step: tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32> {
   %q = "frontend.fp32_to_int8"(%x,%multiplier) : (tensor<1x4x4x16xf32>,tensor<1x1x1x1xf32>) -> tensor<1x4x4x16xi8>

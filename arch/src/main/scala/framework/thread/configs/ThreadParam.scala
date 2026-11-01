@@ -22,8 +22,18 @@ object ThreadParam {
   def fromProto(thread: ThreadInstance, core: CorePlacement): ThreadParam = {
     require(thread.hasLocalId && thread.hasSignature)
     require(core.hasTss && thread.hasCpu && thread.getCpu.getKind == "ant" && thread.getCpu.hasAnt)
-    val tss    = core.getTss
-    val shared = spm.Params(BigInt(java.lang.Long.toUnsignedString(tss.getBase)), tss.getBytes, tss.getDataBits)
+    val tss           = core.getTss
+    val shared        = spm.Params(BigInt(java.lang.Long.toUnsignedString(tss.getBase)), tss.getBytes, tss.getDataBits)
+    val accelerator   = AccParam.fromProto(thread, core)
+    val privateMemory = accelerator.memDomain.copy(
+      sharedPorts = 0,
+      sharedEnable = false,
+      sharedEntries = 0,
+      sharedBankEntries = 0,
+      sharedBankNum = 0,
+      sharedInputChannels = 0,
+      sharedDefaultGroupCount = 0
+    )
     ThreadParam(
       id = thread.getLocalId,
       name = thread.getRole,
@@ -31,7 +41,10 @@ object ThreadParam {
       rtlClass = thread.getRtlClass,
       signature = BigInt(java.lang.Long.toUnsignedString(thread.getSignature)),
       commandBits = core.getParam.getXLen,
-      acc = Some(AccParam.fromProto(thread, core)),
+      acc = Some(accelerator.copy(
+        memDomain = privateMemory,
+        frontend = accelerator.frontend.copy(shared_vbank_base = privateMemory.virtualBankCount)
+      )),
       ant = Some(AntParam.fromProto(thread.getCpu.getAnt, shared))
     )
   }

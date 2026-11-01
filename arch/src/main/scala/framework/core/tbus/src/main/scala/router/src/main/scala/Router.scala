@@ -17,17 +17,18 @@ import framework.acc.memdomain.PhysicalBankHash
 import framework.acc.memdomain.LayoutConfig
 import framework.core.tbus.configs.Layout
 import framework.acc.memdomain.bank_router.BankMapping
-import framework.ip.memory.mesh_shm.{MeshLocalBankPort, MeshSharedMemIO}
+import framework.core.shm.{LocalBank, MeshSharedMemIO}
 import framework.acc.memdomain.{MvoverISA, MvoverPort}
 
 @instantiable
 class Router(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val tbusParam:     TBusParam,
-  val endpointIds:   Seq[Int],
-  val traceIds:      Seq[Int],
-  val diffTest:      Boolean)
+  val frontendParam:    FrontendParam,
+  val memParam:         MemDomainParam,
+  val tbusParam:        TBusParam,
+  val endpointIds:      Seq[Int],
+  val traceIds:         Seq[Int],
+  val diffTest:         Boolean,
+  val physicalBankBase: Int)
     extends Module {
   val externalPhysicalPorts = tbusParam.router.physicalPorts
   require(externalPhysicalPorts >= 0)
@@ -53,12 +54,12 @@ class Router(
     val memory = Flipped(new MeshSharedMemIO(memoryParams))
 
     val mem_req            = Vec(totalChannel, Flipped(new BankPort(frontendParam, memParam)))
-    val lease              = Option.when(externalPhysicalPorts > 0)(Flipped(new LeasePort))
+    val lease              = Option.when(externalPhysicalPorts > 0)(Flipped(new Lease))
     val leaseOwnerThreadId = Option.when(externalPhysicalPorts > 0)(Input(UInt(64.W)))
 
     val physical = Vec(
       externalPhysicalPorts,
-      Flipped(new PhysicalPort(memParam.bankWidth))
+      Flipped(new PhysicalAccess(memParam.bankWidth))
     )
 
     val mvover = Flipped(new MvoverPort)
@@ -66,7 +67,7 @@ class Router(
     val localBanks =
       Vec(
         nThreads,
-        new MeshLocalBankPort(
+        new LocalBank(
           MvoverISA.AddressBits,
           MvoverISA.BankBits,
           memParam.bankWidth,
@@ -180,7 +181,7 @@ class Router(
     trace.io.rob_id     := 0.U
     trace.io.inst_id    := 0.U
     trace.io.vbank_id   := entry.vbank_id
-    trace.io.pbank_id   := physical.U
+    trace.io.pbank_id   := (physicalBankBase + physical).U
     trace.io.group_id   := entry.group_id
     trace.io.addr       := entry.architectural_id
     trace.io.write_mask := 0.U
@@ -278,7 +279,7 @@ class Router(
     trace.io.channel    := (totalChannel + i).U
     trace.io.thread_id  := traceId(entry.thread_id)
     trace.io.vbank_id   := entry.vbank_id
-    trace.io.pbank_id   := held.address >> bankBits
+    trace.io.pbank_id   := (held.address >> bankBits) + physicalBankBase.U
     trace.io.group_id   := entry.group_id
     trace.io.addr       := (held.address >> 4) & (memParam.sharedBankEntries - 1).U
     trace.io.write_mask := Mux(held.write, held.mask, 0.U)
@@ -497,7 +498,7 @@ class Router(
     mtraces(ch).io.rob_id     := io.mem_req(ch).rob_id
     mtraces(ch).io.inst_id    := io.mem_req(ch).inst_id
     mtraces(ch).io.vbank_id   := io.mem_req(ch).bank_id
-    mtraces(ch).io.pbank_id   := pbankId
+    mtraces(ch).io.pbank_id   := pbankId + physicalBankBase.U
     mtraces(ch).io.group_id   := io.mem_req(ch).group_id
     mtraces(ch).io.addr       := addr
     mtraces(ch).io.write_mask := writeMask
@@ -602,7 +603,7 @@ class Router(
       states(i).valid      := mappingTable(i).valid
       states(i).threadId   := mappingTable(i).thread_id
       states(i).vbankId    := mappingTable(i).vbank_id
-      states(i).pbankId    := i.U
+      states(i).pbankId    := (physicalBankBase + i).U
       states(i).groupId    := mappingTable(i).group_id
       states(i).statusHash := hashMonitors.get(i).io.statusHash
     }
@@ -625,7 +626,7 @@ class PhysicalResponse(dataBits: Int) extends Bundle {
 }
 
 /** One outstanding transaction per port; a write response acknowledges actual SRAM completion. */
-class PhysicalPort(dataBits: Int) extends Bundle {
+class PhysicalAccess(dataBits: Int) extends Bundle {
 
   val request  = Decoupled(new PhysicalRequest(dataBits))
   val response = Flipped(Decoupled(new PhysicalResponse(dataBits)))
@@ -639,7 +640,7 @@ class LeaseRequest extends Bundle {
 }
 
 /** One outstanding mapping lease operation; export returns its physical byte base. */
-class LeasePort extends Bundle {
+class Lease extends Bundle {
   val request  = Decoupled(new LeaseRequest)
   val response = Flipped(Decoupled(UInt(64.W)))
 }

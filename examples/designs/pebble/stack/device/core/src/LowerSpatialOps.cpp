@@ -3,14 +3,14 @@
 // A convolution computes sixteen output channels per matmul_i8 over a tile of
 // output pixels. The input tile, sixteen channels per group, goes through
 // im2col_i8 into the A operand; the host packs the weights in the same K
-// order into B. Input channels beyond one call form chunks whose partial
-// products add up with add_i32. A fused convolution requantizes for its
-// consumer and pools; when the consumer reads the whole result, the result
-// stays in banks, one group per channel block.
+// order into B. An FP32 input converts to INT8 with one multiplier per input
+// channel, or one for the whole input. Input channels beyond one call form
+// chunks whose partial products add up with add_i32. A fused convolution
+// requantizes for its consumer and pools; when the consumer reads the whole
+// result, the result stays in banks, one group per channel block.
 //
 //===----------------------------------------------------------------------===//
-#include "Buckyball/BuckyballOps.h"
-#include "Custom/CustomOps.h"
+#include "Acc/AccOps.h"
 #include "Lowering.h"
 #include "Target/BuckyballTargetRegistry.h"
 #include "im2colOps.h"
@@ -28,19 +28,19 @@
 #include "transposeOps.h"
 
 using namespace mlir;
-using namespace ::buddy::buckyball;
-using Computation = ::buddy::custom::CustomOp;
+using namespace ::buddy::acc;
+using Computation = ::buddy::acc::CustomOp;
 
 namespace {
 // Lowers `op`. A resident input is a bank with one group per input channel
-// block holding the whole input map. With custom.resident the INT8 result is
+// block holding the whole input map. With bbacc.resident the INT8 result is
 // returned in `image`, one group per output channel block; otherwise in
 // `tensorOutput`.
 LogicalResult convolution(Computation op, Value residentInput, Value &image,
                           Value &tensorOutput) {
   bool depthwise = op.getKind() == "depthwise_conv2d_i8";
   bool fused = op.getInputs().size() == 7;
-  bool resident = op->hasAttr("custom.resident");
+  bool resident = op->hasAttr("bbacc.resident");
   auto args = op.getInputs();
   auto inputType = cast<RankedTensorType>(args[0].getType());
   auto weightType = cast<RankedTensorType>(args[1].getType());
@@ -113,22 +113,42 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
   };
   Value zero = index(builder, 0);
   Value input;
+  // The host packs the input element by element; it may be a channel slice
+  // of a larger map, with any strides.
   if (!residentInput)
-    input = pebble::tensorBuffer(builder, loc, args[0]);
+    input = bufferization::ToBufferOp::create(
+        builder, loc,
+        MemRefType::get(inputType.getShape(), inputType.getElementType(),
+                        StridedLayoutAttr::get(
+                            builder.getContext(), ShapedType::kDynamic,
+                            SmallVector<int64_t>(4, ShapedType::kDynamic))),
+        args[0], true);
   Value weight = pebble::tensorBuffer(builder, loc, args[1]);
   Value bias = pebble::tensorBuffer(builder, loc, args[2]);
   Value weightSteps = pebble::tensorBuffer(builder, loc, args[5]);
   Value step = tensor::ExtractOp::create(builder, loc, args[4],
                                          ValueRange{zero, zero, zero, zero});
-  Value inputMultiplier, outputMultiplier;
-  if (floating)
-    inputMultiplier = tensor::ExtractOp::create(
-        builder, loc, args[3], ValueRange{zero, zero, zero, zero});
+  Value inputMultipliers, outputMultipliers;
+  bool perChannel = false;
+  if (floating) {
+    int64_t count = cast<RankedTensorType>(args[3].getType()).getDimSize(3);
+    if (count != 1 && count != cin)
+      return op.emitOpError("requires one input multiplier per input channel "
+                            "or one for the whole input");
+    perChannel = count == cin;
+    inputMultipliers = pebble::tensorBuffer(builder, loc, args[3]);
+  }
+  // A fused convolution converts its result with the input multipliers of
+  // its consumer: one per output channel, or one for the whole result.
+  bool perOutputChannel = false;
   if (fused) {
-    SmallVector<Value> indices(
-        cast<RankedTensorType>(args[6].getType()).getRank(), zero);
-    outputMultiplier =
-        tensor::ExtractOp::create(builder, loc, args[6], indices);
+    auto type = cast<RankedTensorType>(args[6].getType());
+    int64_t count = type.getDimSize(type.getRank() - 1);
+    if (count != 1 && count != cout)
+      return op.emitOpError("requires one output multiplier per output "
+                            "channel or one for the whole result");
+    perOutputChannel = count == cout;
+    outputMultipliers = pebble::tensorBuffer(builder, loc, args[6]);
   }
   Value output;
   if (!resident)
@@ -139,7 +159,7 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
   // of B, the input tile with sixteen channels per group, the bias row, the
   // scales and one tile of results.
   SmallVector<int64_t> groups;
-  SmallVector<Value> weightPacks, inputPacks;
+  SmallVector<Value> weightPacks, inputPacks, multiplierPacks;
   for (auto [start, blocks] : chunks) {
     int64_t outputGroups = pebble::im2colGroups(kernel, blocks, side * side);
     int64_t tiles = kernel * kernel * blocks / outputGroups;
@@ -154,6 +174,12 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
                                      builder.getF32Type())
                    : MemRefType::get({inputSide * inputSide, blocks * 16},
                                      builder.getI8Type())));
+    // The fp32_to_int8 multipliers of the chunk: rows 4g..4g+3 of one group
+    // for channel block g.
+    if (floating)
+      multiplierPacks.push_back(memref::AllocOp::create(
+          builder, loc,
+          MemRefType::get({blocks * 4, 4}, builder.getF32Type())));
   }
   Value biasPack = memref::AllocOp::create(
       builder, loc, MemRefType::get({16}, builder.getI32Type()));
@@ -235,6 +261,39 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
                                      lane)});
           });
     }
+    // Multiplier of channel c of a chunk: row c / 4, lane c % 4. A padding
+    // channel reads zero inputs; any positive multiplier converts them.
+    if (floating)
+      for (auto [index_, chunkRange] : llvm::enumerate(chunks)) {
+        int64_t start = chunkRange.first, blocks = chunkRange.second;
+        Value pack = multiplierPacks[index_];
+        linalg::FillOp::create(
+            b, loc,
+            ValueRange{arith::ConstantOp::create(b, loc, b.getF32FloatAttr(1))},
+            pack);
+        Value first =
+            depthwise
+                ? arith::DivUIOp::create(b, loc, oc, index(b, 16)).getResult()
+                : index(b, start);
+        loops(b, {index(b, blocks * 16)}, [&](OpBuilder &b, ValueRange at) {
+          Value channel = arith::AddIOp::create(
+              b, loc, arith::MulIOp::create(b, loc, first, index(b, 16)),
+              at[0]);
+          auto valid = scf::IfOp::create(
+              b, loc,
+              arith::CmpIOp::create(b, loc, arith::CmpIPredicate::ult, channel,
+                                    index(b, cin)),
+              false);
+          b.setInsertionPointToStart(&valid.getThenRegion().front());
+          Value value = memref::LoadOp::create(
+              b, loc, inputMultipliers,
+              ValueRange{zero, zero, zero, perChannel ? channel : zero});
+          memref::StoreOp::create(
+              b, loc, value, pack,
+              ValueRange{arith::DivUIOp::create(b, loc, at[0], index(b, 4)),
+                         arith::RemUIOp::create(b, loc, at[0], index(b, 4))});
+        });
+      }
     linalg::FillOp::create(b, loc, izero, biasPack);
     linalg::FillOp::create(
         b, loc,
@@ -249,8 +308,16 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
           memref::LoadOp::create(
               b, loc, weightSteps,
               ValueRange{o, index(b, 0), index(b, 0), index(b, 0)}));
-      if (fused)
-        scale = arith::MulFOp::create(b, loc, scale, outputMultiplier);
+      if (fused) {
+        SmallVector<Value> indices(
+            cast<MemRefType>(outputMultipliers.getType()).getRank(),
+            index(b, 0));
+        if (perOutputChannel)
+          indices.back() = o;
+        scale = arith::MulFOp::create(
+            b, loc, scale,
+            memref::LoadOp::create(b, loc, outputMultipliers, indices));
+      }
       memref::StoreOp::create(b, loc, scale, scalePack, at[0]);
     });
     Value scales = BankAllocOp::create(b, loc, i64, 1, 1);
@@ -367,10 +434,15 @@ LogicalResult convolution(Computation op, Value residentInput, Value &image,
                           BankAllocOp::create(b, loc, i64, 1, blocks);
                       values = BankMvinOp::create(b, loc, i64, pack, values,
                                                   pixels * 4, 1);
+                      Value multipliers =
+                          BankAllocOp::create(b, loc, i64, 1, 1);
+                      multipliers = BankMvinOp::create(
+                          b, loc, i64, multiplierPacks[index_], multipliers,
+                          blocks * 4, 1);
                       source = ::buddy::toint8_ball::BankFp32ToInt8Op::create(
-                          b, loc, i64, values, source, inputMultiplier,
-                          pixels * 4);
+                          b, loc, i64, values, multipliers, source, pixels * 4);
                       BankReleaseOp::create(b, loc, values);
+                      BankReleaseOp::create(b, loc, multipliers);
                     } else {
                       source = BankMvinOp::create(b, loc, i64, pack, source,
                                                   pixels, 1);

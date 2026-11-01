@@ -2,7 +2,7 @@
 bebop p2e runworkload event handler
 
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
-  1. Resolve image name to .hex file under bb-tests/output/
+  1. Resolve image name to .hex file under the selected simulation's workloads
   2. Validate bitstream .bit file path
   3. Run bebop --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>]
 """
@@ -27,7 +27,13 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 from utils.event_common import require_design
-from utils.path import bebop_target_dir, bebop_bin_path, get_buckyball_path, log_dir
+from utils.path import (
+    bebop_target_dir,
+    bebop_bin_path,
+    design_output_root,
+    get_buckyball_path,
+    log_dir,
+)
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
 from resolve_image import resolve_image
@@ -231,7 +237,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             features.append("bemu")
         for trace in ("itrace", "mtrace"):
             if trace in modes:
-                features.append(f"bebop-p2e/{trace}")
+                features.append(f"bebop/p2e-{trace}")
         build_cmd = shlex.join(
             [
                 "nix",
@@ -284,7 +290,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         os.replace(staged_runtime, bebop_p2e_path)
         rust_library = Path(target_release) / "deps/libbebop_p2e.so"
         shutil.copy2(rust_library, Path(runtime_lib_dir) / "libbebop_p2e.so")
-        design_libraries = Path(bbdir) / "examples/designs" / design / "output/lib"
+        design_libraries = (
+            Path(design_output_root(bbdir, design, selection=input_data["target"]))
+            / "lib"
+        )
         design_libraries.mkdir(parents=True, exist_ok=True)
         shutil.copy2(rust_library, design_libraries / "libbebop_p2e.so")
     installed_runtime = Path(

@@ -30,13 +30,8 @@ set(COREMARK_C_FLAGS
     -specs=nano.specs
     -specs=nosys.specs
     -nostartfiles
-    -Wl,-T,${BBSIM_LD}
     -I${COREMARK_SRC_DIR}
     -I${COREMARK_PORT_DIR}
-    -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART}
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
-    -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-    -I${WORKLOAD_LIB_DIR}
     -ffunction-sections
     -fdata-sections
     -Wl,--gc-sections
@@ -52,15 +47,18 @@ set(EXECUTABLE "${COREMARK_NAME}-baremetal")
 add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
     COMMAND
-        ${ELF_CC} ${COREMARK_C_FLAGS} -o ${EXECUTABLE} ${BAREMETAL_DIR}/crt0.S
-        ${BAREMETAL_DIR}/syscalls.c ${COREMARK_SOURCES} -lm
+        ${ELF_CC} ${COREMARK_C_FLAGS}
+        $<TARGET_PROPERTY:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal,INTERFACE_LINK_OPTIONS>
+        -o ${EXECUTABLE} $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+        $<TARGET_OBJECTS:bbsw-syscalls-baremetal> ${COREMARK_SOURCES} -lm
     DEPENDS
         ${COREMARK_SOURCES}
         ${COREMARK_HEADERS}
-        ${BAREMETAL_DIR}/crt0.S
-        ${BAREMETAL_DIR}/syscalls.c
+        $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+        $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
     COMMENT "Building coremark: ${EXECUTABLE}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND_EXPAND_LISTS
 )
 
 add_custom_target(

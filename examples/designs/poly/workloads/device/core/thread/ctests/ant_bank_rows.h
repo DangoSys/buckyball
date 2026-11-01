@@ -3,7 +3,7 @@
 enum { ANT_BANK_ROWS = 16 };
 
 struct ant_bank_rows_args {
-  uint64_t input, private_out, shared_out, tail_out, shared_rows;
+  uint64_t input, private_out, tail_out;
 };
 
 extern unsigned bank_rows_done[];

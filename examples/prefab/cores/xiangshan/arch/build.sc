@@ -78,8 +78,22 @@ trait ScalaBuild extends SbtModule {
   override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
   override def scalacOptions = Seq("-language:reflectiveCalls", "-Ymacro-annotations")
 }
+
+// The parameter message of this core.
+object parameters extends JavaModule {
+
+  def protoSource = T.source(componentRoot / "configs" / "xiangshan_params.proto")
+
+  def generatedSources = T {
+    val proto = protoSource().path
+    os.proc("protoc", s"--java_out=${T.dest}", s"-I${proto / os.up}", proto).call()
+    Seq(PathRef(T.dest))
+  }
+
+  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
+}
 object library extends ScalaBuild {
-  override def moduleDeps = Seq(framework.library)
+  override def moduleDeps = Seq(parameters, framework.library)
   override def sources = T.sources {
     os.walk(componentRoot / "arch").filter(p => p.ext == "scala" && !p.startsWith(nativeRoot)).map(PathRef(_)) ++
       Seq(PathRef(componentRoot / "configs"))

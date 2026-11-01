@@ -1,8 +1,7 @@
 #ifndef _BB_MXFP2INT_H_
 #define _BB_MXFP2INT_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Dequantizes iter MXFP4 blocks of 32 elements to int8.
 //   op1 bank: block b in row b, element e in byte e / 2, low nibble first;

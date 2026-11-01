@@ -1,4 +1,6 @@
 [paths]
+core_shm="arch/src/main/scala/framework/core/shm"
+device_shm="arch/src/main/scala/framework/device/shm"
 tbus_router="arch/src/main/scala/framework/core/tbus/src/main/scala/router"
 core_cache="arch/src/main/scala/framework/core/memory/access/src/main/scala/cache"
 home="arch/src/main/scala/framework/core/memory/home"
@@ -13,6 +15,7 @@ boot = "arch/src/main/scala/framework/acc/frontend/src/main/scala/boot"
 bat = "arch/src/main/scala/framework/acc/frontend/src/main/scala/scheduler/src/main/scala/bat"
 scoreboard = "arch/src/main/scala/framework/acc/frontend/src/main/scala/scheduler/src/main/scala/scoreboard"
 tss = "arch/src/main/scala/framework/core/tss"
+ant = "arch/src/main/scala/framework/thread/ant"
 preflight = "arch/src/main/scala/framework/core/memory/access/src/main/scala/preflight"
 ddr = "arch/src/main/scala/framework/device/ddr"
 interlock = "arch/src/main/scala/framework/ip/interlock"
@@ -35,9 +38,24 @@ privileged = "arch/src/main/scala/framework/core/execution/privileged"
 integer = "arch/src/main/scala/framework/core/execution/integer"
 register_file = "arch/src/main/scala/framework/core/execution/register_file"
 
+[build.ant]
+directory = "arch/src/main/scala/framework"
+module = "thread.ant"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
 [build.tss]
 directory = "arch/src/main/scala/framework"
 module = "core.tss"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.core_shm]
+directory = "arch/src/main/scala/framework/core/shm"
+module = "emit"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.device_shm]
+directory = "arch/src/main/scala/framework/device/shm"
+module = "emit"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.global_rob]
@@ -201,22 +219,13 @@ directory = "arch/src/main/scala/framework"
 module = "acc.balldomain"
 arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
-[modules.ant]
-level = "thread"
-path = "arch/src/main/scala/framework/thread/ant"
-
-[modules.ant.build]
-directory = "arch/src/main/scala/framework"
-module = "thread.ant"
-arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb", "--core", "1"]
-
-[modules.mesh_shm]
+[modules.core_shm]
 level = "subsystem"
-path = "arch/src/main/scala/framework/ip/mesh_shm"
+path = "arch/src/main/scala/framework/core/shm"
 
-[modules.mesh_shm.build]
+[modules.core_shm.build]
 directory = "arch/src/main/scala/framework"
-module = "ip.mesh_shm"
+module = "core.shm"
 
 [build.prm]
 directory = "arch/src/main/scala/framework"

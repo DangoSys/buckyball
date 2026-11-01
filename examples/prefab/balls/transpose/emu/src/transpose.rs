@@ -1,9 +1,12 @@
-use bebop_bemu::thread::banks::{bank_row_bytes, bank_size, bank_width};
 use super::decode::{pbank_group, rs1_b0, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
+use bebop_bemu::thread::banks::{bank_row_bytes, bank_size, bank_width};
 
 pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "transpose: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "transpose: reads no old destination; rs1[29] must be clear"
+    );
     let op1 = rs1_b0(xs1);
     let wr = rs1_b2(xs1);
     let iter = rs1_iter(xs1) as usize;
@@ -93,9 +96,12 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     0
 }
 
-pub(crate) fn latency(xs1: u64, xs2: u64) -> u64 {
-    let iter = rs1_iter(xs1).max(1);
-    let elem_bits = (xs2 & 0xff).max(1);
-    let epg = ((bank_width() as u64) / elem_bits).max(1);
-    iter.saturating_mul(epg).saturating_mul(2)
+pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+    let rows = rs1_iter(xs1);
+    let groups = ctx.config(rs1_b0(xs1)).cols;
+    let elements = bank_width() as u64 / (xs2 & 255);
+    let count = rows * groups * elements;
+    // The destination-order walk caches only the last source row.
+    let reads = if rows == 1 { groups } else { count };
+    8 + 5 * reads + count + 4 * rows * groups
 }

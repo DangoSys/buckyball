@@ -19,7 +19,7 @@ def register(mcp):
         """Generate Verilog for bebop-p2e. POST /bebop/p2e/verilog."""
         if e := need("design", design):
             return err(e)
-        request = opt({"design": design, "diff": diff}, output_dir=output_dir)
+        request = opt({"design": design, "diff": diff}, **{"output-dir": output_dir})
         if device is not None:
             request["device"] = device
         if core is not None:

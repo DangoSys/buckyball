@@ -1,0 +1,2 @@
+kind = "ant"
+config = "../../../../../../arch/src/main/scala/framework/thread/ant/configs/default.toml"

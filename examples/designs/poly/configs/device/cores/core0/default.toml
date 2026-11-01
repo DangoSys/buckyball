@@ -1,4 +1,4 @@
-component = "reduce"
+include = "../../../../../../prefab/cores/reduce/configs/default.toml"
 accelerator = "acc/default.toml"
 threads = []
 hartId = 0
@@ -9,7 +9,7 @@ memory = "memory/core.toml"
 fetch = "default"
 fpu = "default"
 interconnect = "interconnect/core.toml"
-c2c = "c2c/core.toml"
+service = true
 tbus = "tbus/core.toml"
 controller = "controller/core.toml"
 
@@ -34,4 +34,4 @@ latency = 10
 
 [compiler]
 name = "main"
-component = "reduce"
+include = "../../../../../../prefab/cores/reduce/configs/default.toml"

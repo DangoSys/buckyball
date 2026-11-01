@@ -67,16 +67,16 @@ class ITraceDPI extends BlackBox with HasBlackBoxInline {
                                                |  reg [63:0] pc_reg;
                                                |  reg [63:0] rs1_data_reg;
                                                |  reg [63:0] rs2_data_reg;
-                                               |  reg        valid_reg;
+                                               |  reg        valid_reg = 1'b0;
                                                |
                                                |  always @(posedge clock) begin
+                                               |    if (valid_reg) begin
+                                               |      dpi_itrace({24'b0, is_issue_reg}, thread_id_reg[31:0], thread_id_reg[63:32], rob_id_reg, inst_id_reg[31:0], inst_id_reg[63:32], domain_id_reg, funct_reg, pc_reg[31:0], pc_reg[63:32], rs1_data_reg[31:0], rs1_data_reg[63:32], rs2_data_reg[31:0], rs2_data_reg[63:32]);
+                                               |    end
+                                               |
                                                |    if (reset) begin
                                                |      valid_reg <= 1'b0;
                                                |    end else begin
-                                               |      if (valid_reg) begin
-                                               |        dpi_itrace({24'b0, is_issue_reg}, thread_id_reg[31:0], thread_id_reg[63:32], rob_id_reg, inst_id_reg[31:0], inst_id_reg[63:32], domain_id_reg, funct_reg, pc_reg[31:0], pc_reg[63:32], rs1_data_reg[31:0], rs1_data_reg[63:32], rs2_data_reg[31:0], rs2_data_reg[63:32]);
-                                               |      end
-                                               |
                                                |      valid_reg <= enable;
                                                |      if (enable) begin
                                                |        is_issue_reg    <= is_issue;

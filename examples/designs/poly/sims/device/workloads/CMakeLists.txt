@@ -49,32 +49,32 @@ add_dependencies(
 )
 add_dependencies(sync-native-bin embench-all coremark-all)
 
+# The MLIR tests of the compiler: the harness of the stack and its base tests.
 add_subdirectory(
-    "${WORKLOAD_SRC_DIR}/MLIRTest/base"
+    "${DESIGN_REPO}/bb-tests/workloads/src/MLIRTest"
+    "${CMAKE_BINARY_DIR}/src/MLIRTest"
+)
+add_subdirectory(
+    "${DESIGN_REPO}/bb-tests/workloads/src/MLIRTest/base"
     "${CMAKE_BINARY_DIR}/src/MLIRTest/mlir_tests/base"
 )
-foreach(BUCKYBALL_TARGET IN LISTS DESIGN_CPU_TARGETS)
-    set(BUCKYBALL_MLIR_ACTIVE_TARGET "${BUCKYBALL_TARGET}")
-    foreach(BUCKYBALL_BALL_DIR IN LISTS DESIGN_PROFILES_${BUCKYBALL_TARGET}_THREAD_BALLDOMAIN_BALLS)
+add_dependencies(sync-bin sync-mlirtest-bin)
+foreach(CPU_TARGET IN LISTS DESIGN_CPU_TARGETS)
+    set(MLIR_TEST_TARGET "${CPU_TARGET}")
+    foreach(BALL IN LISTS DESIGN_PROFILES_${CPU_TARGET}_THREAD_BALLDOMAIN_BALLS)
         set(BALL_MLIR_TESTS
-            "${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/${BUCKYBALL_BALL_DIR}/workloads/mlir_tests"
+            "${BUCKYBALL_REPO_ROOT}/${DESIGN_PROFILES_${CPU_TARGET}_THREAD_BALLDOMAIN_BALLS_${BALL}_SOURCE_PATH}/workloads/mlir_tests"
         )
         if(IS_DIRECTORY "${BALL_MLIR_TESTS}")
             add_subdirectory(
                 "${BALL_MLIR_TESTS}"
-                "${CMAKE_CURRENT_BINARY_DIR}/balls/${BUCKYBALL_TARGET}/${BUCKYBALL_BALL_DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}/balls/${CPU_TARGET}/${BALL}"
             )
         endif()
     endforeach()
 endforeach()
 add_dependencies(MLIRTest-all base-mlirtest-build balls-mlir-tests-build)
 
-# The multicore Ant cases this entry's cores can run.
-set(POLY_ANT_CASES
-    mesh_move
-    mesh_private
-    mesh_shared
-)
 add_subdirectory(
     "${BUCKYBALL_REPO_ROOT}/examples/designs/poly/workloads"
     design

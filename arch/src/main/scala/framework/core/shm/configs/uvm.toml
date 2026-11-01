@@ -1,0 +1,15 @@
+[parameters]
+rows = 3
+cols = 4
+entriesPerBank = 1024
+dataBits = 128
+tagBits = 8
+threads = [
+  { bank = 0, ports = 1 },
+  { bank = 3, ports = 1 },
+  { bank = 4, ports = 2 },
+  { bank = 7, ports = 2 },
+  { bank = 5, ports = 4 },
+]
+
+[defines]

@@ -1,4 +1,3 @@
-source = "../../../.."
 # Pebble accelerator profile
 
 balldomain = "balldomain/default.toml"

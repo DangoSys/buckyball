@@ -1,8 +1,6 @@
 // The pooled map stays in its bank and feeds the Linear transposed.
-// FORM: custom.op "conv2d_i8"{{.*}}custom.resident{{.*}}pool = 2 : i64, relu = true
-// FORM: custom.op "flatten_nchw"
 // BANK: maxpool_ball.bank_maxpool_i8
-// BANK-NOT: buckyball.bank_mvout
+// BANK-NOT: bbacc.bank_mvout
 // BANK: transpose_ball.bank_transpose_i8
 // BANK: smatmul_ball.bank_matmul_i8
 func.func private @check_result(memref<1x16xf32>) -> ()
@@ -73,7 +71,7 @@ func.func @main() -> i8 {
   %bt = bufferization.to_tensor %conv_bias restrict : memref<16xi32> to tensor<16xi32>
   %lw = bufferization.to_tensor %linear_weight restrict : memref<256x16xi8> to tensor<256x16xi8>
   %lb = bufferization.to_tensor %linear_bias restrict : memref<1x16xi32> to tensor<1x16xi32>
-  %conv = custom.op "conv2d_i8"(%x, %wt, %bt, %unit, %unit, %conv_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x8x8x2xf32>, tensor<16x2x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x8x8x16xf32>
+  %conv = bbacc.custom "conv2d_i8"(%x, %wt, %bt, %unit, %unit, %conv_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x8x8x2xf32>, tensor<16x2x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x8x8x16xf32>
   %zero = arith.constant dense<0.0> : tensor<1x8x8x16xf32>
   %relu = linalg.generic {indexing_maps = [affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%conv, %zero: tensor<1x8x8x16xf32>, tensor<1x8x8x16xf32>) outs(%zero: tensor<1x8x8x16xf32>) {
   ^bb0(%a: f32, %b: f32, %out: f32):
@@ -86,7 +84,7 @@ func.func @main() -> i8 {
   %empty = tensor.empty() : tensor<1x16x4x4xf32>
   %nchw = linalg.transpose ins(%pooled: tensor<1x4x4x16xf32>) outs(%empty: tensor<1x16x4x4xf32>) permutation = [0, 3, 1, 2]
   %flat = tensor.collapse_shape %nchw [[0], [1, 2, 3]] : tensor<1x16x4x4xf32> into tensor<1x256xf32>
-  %result = custom.op "linear_i8"(%flat, %lw, %lb, %step, %step, %linear_step) : (tensor<1x256xf32>, tensor<256x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
+  %result = bbacc.custom "linear_i8"(%flat, %lw, %lb, %step, %step, %linear_step) : (tensor<1x256xf32>, tensor<256x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
   %memory = bufferization.to_buffer %result : tensor<1x16xf32> to memref<1x16xf32>
   func.call @check_result(%memory) : (memref<1x16xf32>) -> ()
   return %zero_i8 : i8

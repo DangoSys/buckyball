@@ -1,21 +1,18 @@
-set(BUCKYBALL_MLIR_GROUP_TARGET pebble-mlir-tests-build)
-set(BUCKYBALL_MLIR_TEST_PREFIX core)
+set(MLIR_TEST_GROUP pebble-mlir-tests-build)
+set(MLIR_TEST_PREFIX core)
 
-add_buckyball_mlir_test(lookup_channel_i8
+add_mlir_test(lookup_channel_i8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -27,21 +24,18 @@ add_buckyball_mlir_test(lookup_channel_i8
     -finalize-memref-to-llvm
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
-add_buckyball_mlir_test(linear_chain_i8
+add_mlir_test(linear_chain_i8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -53,21 +47,18 @@ add_buckyball_mlir_test(linear_chain_i8
     -finalize-memref-to-llvm
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
-add_buckyball_mlir_test(linear_int8
+add_mlir_test(linear_int8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -79,21 +70,18 @@ add_buckyball_mlir_test(linear_int8
     -finalize-memref-to-llvm
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
-add_buckyball_mlir_test(generic_matmul_i8
+add_mlir_test(generic_matmul_i8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -106,21 +94,18 @@ add_buckyball_mlir_test(generic_matmul_i8
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_matmul_m17_k65_n17
+add_mlir_test(mega_matmul_m17_k65_n17
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -133,21 +118,18 @@ add_buckyball_mlir_test(mega_matmul_m17_k65_n17
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_conv2d
+add_mlir_test(mega_conv2d
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -160,21 +142,18 @@ add_buckyball_mlir_test(mega_conv2d
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_conv2d_resident
+add_mlir_test(mega_conv2d_resident
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -187,21 +166,18 @@ add_buckyball_mlir_test(mega_conv2d_resident
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_conv2d_flatten_linear
+add_mlir_test(mega_conv2d_flatten_linear
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -214,21 +190,18 @@ add_buckyball_mlir_test(mega_conv2d_flatten_linear
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_conv2d_k5_tail
+add_mlir_test(mega_conv2d_k5_tail
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -241,21 +214,18 @@ add_buckyball_mlir_test(mega_conv2d_k5_tail
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_conv2d_s2_depthwise_s2
+add_mlir_test(mega_conv2d_s2_depthwise_s2
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -278,21 +248,18 @@ file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv2_exact_weight2.i
   PEBBLE_GAP_CONV_WEIGHT2_HEX HEX)
 file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv2_exact_weight3.i8
   PEBBLE_GAP_CONV_WEIGHT3_HEX HEX)
-add_buckyball_mlir_test(mega_global_avg_conv_exact
+add_mlir_test(mega_global_avg_conv_exact
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -304,21 +271,20 @@ add_buckyball_mlir_test(mega_global_avg_conv_exact
     -finalize-memref-to-llvm
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
-add_buckyball_mlir_test(mega_global_avg_7x7_c288_exact
+add_mlir_test(mega_global_avg_7x7_c288_exact
   TARGET pebble
+  LIBRARIES bbsw-thread-pebble-linux
+  BAREMETAL_LIBRARIES bbsw-thread-pebble-baremetal
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -330,21 +296,20 @@ add_buckyball_mlir_test(mega_global_avg_7x7_c288_exact
     -finalize-memref-to-llvm
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
-add_buckyball_mlir_test(mega_global_avg_conv2_exact
+add_mlir_test(mega_global_avg_conv2_exact
   TARGET pebble
+  LIBRARIES bbsw-thread-pebble-linux
+  BAREMETAL_LIBRARIES bbsw-thread-pebble-baremetal
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -362,21 +327,18 @@ unset(PEBBLE_GAP_CONV_WEIGHT_HEX)
 unset(PEBBLE_GAP_CONV_WEIGHT2_HEX)
 unset(PEBBLE_GAP_CONV_WEIGHT3_HEX)
 
-add_buckyball_mlir_test(mega_se_gate_conv
+add_mlir_test(mega_se_gate_conv
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -389,21 +351,18 @@ add_buckyball_mlir_test(mega_se_gate_conv
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(mega_matmul
+add_mlir_test(mega_matmul
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -416,21 +375,18 @@ add_buckyball_mlir_test(mega_matmul
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(core_matmul_16x16_i8
+add_mlir_test(core_matmul_16x16_i8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine
@@ -443,21 +399,18 @@ add_buckyball_mlir_test(core_matmul_16x16_i8
     -convert-func-to-llvm
     -reconcile-unrealized-casts)
 
-add_buckyball_mlir_test(core_transpose_16x16_i8
+add_mlir_test(core_transpose_16x16_i8
   TARGET pebble
   PASSES
-    -allow-unregistered-dialect
-    -form-custom-ops
-    -convert-linalg-to-buckyball
-    -lower-frontend
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
     -eliminate-empty-tensors
     -one-shot-bufferize=bufferize-function-boundaries
     -ownership-based-buffer-deallocation
     -buffer-deallocation-simplification
     -bufferization-lower-deallocations
-    -convert-trace-to-llvm
     -assign-physical-banks
-    -lower-buckyball
+    -lower-acc
     -convert-linalg-to-loops
     -expand-strided-metadata
     -lower-affine

@@ -59,17 +59,17 @@ func.func @main() -> i8 {
   %c = memref.alloc() : memref<16x16xi32>
   func.call @fill_a(%a) : (memref<96x16xi8>) -> ()
   func.call @fill_b(%b) : (memref<96x16xi8>) -> ()
-  %ab = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %bb = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %cb = buckyball.bank_alloc <{row = 1 : i64, col = 4 : i64}>
-  %al = buckyball.bank_mvin %a, %ab <{depth = 96 : i64, stride = 1 : i64}> : memref<96x16xi8>
-  %bl = buckyball.bank_mvin %b, %bb <{depth = 96 : i64, stride = 1 : i64}> : memref<96x16xi8>
+  %ab = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %bb = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %cb = bbacc.bank_alloc <{row = 1 : i64, col = 4 : i64}>
+  %al = bbacc.bank_mvin %a, %ab <{depth = 96 : i64, stride = 1 : i64}> : memref<96x16xi8>
+  %bl = bbacc.bank_mvin %b, %bb <{depth = 96 : i64, stride = 1 : i64}> : memref<96x16xi8>
   %r = gemmini_ball.bank_matmul_i8_tile %al, %bl -> %cb <{k = 96 : i64}>
-  %stored = buckyball.bank_mvout %c, %r <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
+  %stored = bbacc.bank_mvout %c, %r <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
-  buckyball.bank_release %al
-  buckyball.bank_release %bl
-  buckyball.bank_release %stored
+  bbacc.bank_release %al
+  bbacc.bank_release %bl
+  bbacc.bank_release %stored
   memref.dealloc %a : memref<96x16xi8>
   memref.dealloc %b : memref<96x16xi8>
   memref.dealloc %c : memref<16x16xi32>

@@ -3,8 +3,6 @@
 
 #include "isa.h"
 
-enum { BB_MVOVER_FUNC7 = 0x0d };
-
 /* Move contiguous rows from a private Bank of one Thread to another in the same
  * Core. Bank IDs are Thread-local virtual IDs; row addresses are not byte
  * addresses.

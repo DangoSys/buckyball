@@ -3,27 +3,21 @@ use super::instruction::ExecContext;
 use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 
 fn max_iter(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<
-        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
-    >("im2col", instance)
-    .max_iter
-    .expect("maxIter") as usize
+    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+        .max_iter
+        .expect("maxIter") as usize
 }
 
 fn max_kernel(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<
-        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
-    >("im2col", instance)
-    .max_k_size
-    .expect("maxKSize") as usize
+    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+        .max_k_size
+        .expect("maxKSize") as usize
 }
 
 fn max_padding(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<
-        bebop_bemu::configs::ball_domain::parameters::im2col::Params,
-    >("im2col", instance)
-    .max_padding
-    .expect("maxPadding") as usize
+    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+        .max_padding
+        .expect("maxPadding") as usize
 }
 
 #[derive(Clone, Copy)]

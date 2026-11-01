@@ -84,13 +84,13 @@ func.func @main() -> i8 {
   %scale_tensor3 = tensor.expand_shape %s3_raw [[0,1]] output_shape [1,40] : tensor<40xf32> into tensor<1x40xf32>
   %table = bufferization.to_tensor %lut restrict : memref<256xi8> to tensor<256xi8>
   scf.for %iteration = %c0 to %c2 step %c1 {
-  %average = custom.op "global_avg_i8"(%source_tensor) {input_scale = 1.0 : f32, output_scale = 1.0 : f32} : (tensor<1x6x6x96xi8>) -> tensor<1x1x1x96xi8>
+  %average = bbacc.custom "global_avg_i8"(%source_tensor) {input_scale = 1.0 : f32, output_scale = 1.0 : f32} : (tensor<1x6x6x96xi8>) -> tensor<1x1x1x96xi8>
   %a1 = tensor.collapse_shape %average [[0,1,2],[3]] : tensor<1x1x1x96xi8> into tensor<1x96xi8>
-  %v1 = custom.op "linear_i8_requant"(%a1, %weights1, %bias_tensor1, %scale_tensor1) {relu = true} : (tensor<1x96xi8>, tensor<96x24xi8>, tensor<1x24xi32>, tensor<1x24xf32>) -> tensor<1x24xi8>
-  %v2 = custom.op "linear_i8_requant"(%v1, %weights2, %bias_tensor2, %scale_tensor2) {relu = false} : (tensor<1x24xi8>, tensor<24x96xi8>, tensor<1x96xi32>, tensor<1x96xf32>) -> tensor<1x96xi8>
-  %looked_up = custom.op "lookup_i8"(%v2, %table) : (tensor<1x96xi8>, tensor<256xi8>) -> tensor<1x96xi8>
-  %multiplied = custom.op "gate_mul_i8"(%looked_up, %source_matrix) {ratio = 1.000000015e-01 : f32} : (tensor<1x96xi8>, tensor<36x96xi8>) -> tensor<36x96xi8>
-  %v3 = custom.op "linear_i8_requant"(%multiplied, %weights3, %bias_tensor3, %scale_tensor3) {relu = false} : (tensor<36x96xi8>, tensor<96x40xi8>, tensor<1x40xi32>, tensor<1x40xf32>) -> tensor<36x40xi8>
+  %v1 = bbacc.custom "linear_i8_requant"(%a1, %weights1, %bias_tensor1, %scale_tensor1) {relu = true} : (tensor<1x96xi8>, tensor<96x24xi8>, tensor<1x24xi32>, tensor<1x24xf32>) -> tensor<1x24xi8>
+  %v2 = bbacc.custom "linear_i8_requant"(%v1, %weights2, %bias_tensor2, %scale_tensor2) {relu = false} : (tensor<1x24xi8>, tensor<24x96xi8>, tensor<1x96xi32>, tensor<1x96xf32>) -> tensor<1x96xi8>
+  %looked_up = bbacc.custom "lookup_i8"(%v2, %table) : (tensor<1x96xi8>, tensor<256xi8>) -> tensor<1x96xi8>
+  %multiplied = bbacc.custom "gate_mul_i8"(%looked_up, %source_matrix) {ratio = 1.000000015e-01 : f32} : (tensor<1x96xi8>, tensor<36x96xi8>) -> tensor<36x96xi8>
+  %v3 = bbacc.custom "linear_i8_requant"(%multiplied, %weights3, %bias_tensor3, %scale_tensor3) {relu = false} : (tensor<36x96xi8>, tensor<96x40xi8>, tensor<1x40xi32>, tensor<1x40xf32>) -> tensor<36x40xi8>
   %final = tensor.expand_shape %v3 [[0,1,2],[3]] output_shape [1,6,6,40] : tensor<36x40xi8> into tensor<1x6x6x40xi8>
   %memory = bufferization.to_buffer %final : tensor<1x6x6x40xi8> to memref<1x6x6x40xi8>
   func.call @check_result(%memory) : (memref<1x6x6x40xi8>) -> ()

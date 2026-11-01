@@ -23,7 +23,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import require_design
-from utils.path import bebop_target_dir, get_buckyball_path, rtl_dir
+from utils.path import bebop_target_dir, design_output_root, get_buckyball_path, rtl_dir
 from steps.bebop.p2e.scripts.timescale import normalize_p2e_timescale
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
@@ -60,15 +60,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     diff = bool(input_data.get("diff", False))
+    build_root = (
+        Path(design_output_root(bbdir, design, selection=input_data["target"])) / "p2e"
+    ).resolve()
     build_dir = input_data.get("output_dir") or str(
-        Path(bbdir)
-        / "examples/designs"
-        / design
-        / "output/p2e"
-        / f"{timestamp}{'-diff' if diff else ''}"
+        build_root / f"{timestamp}{'-diff' if diff else ''}"
     )
     build_path = Path(build_dir).resolve()
-    build_root = (Path(bbdir) / "examples/designs" / design / "output/p2e").resolve()
     if build_root not in build_path.parents:
         raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
     if build_path.exists():
@@ -79,7 +77,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     features = ["p2e"]
     for trace in ("itrace", "mtrace"):
         if input_data.get(trace, False):
-            features.append(f"bebop-p2e/{trace}")
+            features.append(f"bebop/p2e-{trace}")
     build_env = {
         **os.environ,
         "VSRC_PATH": vsrc_dir,

@@ -5,7 +5,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import examples.core.rocket.Execution
 import examples.core.rocket.configs.{Params => RocketParam}
 import framework.core.configs.CoreParam
-import framework.core.memory.{Memory, MemoryPort}
+import framework.core.memory.{MemCtrl, Memory}
 import framework.core.controller.admission.Commands
 import framework.core.clink.CoreInterrupts
 import framework.ip.bus.{axi4, chi}
@@ -19,10 +19,9 @@ class Loom(corep: CoreParam, rocketp: RocketParam) extends Module {
   val io = IO(new Bundle {
     val interrupts    = Input(new CoreInterrupts)
     val commands      = new Commands(corep.memory.dcache.tracking, corep.integer.xLen, corep.privileged.permission)
-    val drained       = Input(Bool())
     val memoryAllowed = Input(Bool())
     val memory        =
-      Vec(corep.threads.size, Flipped(new MemoryPort(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)))
+      Vec(corep.threads.size, Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)))
     val coherent      = Vec(2, new chi.RequesterPort(corep.memory.home.memory.chi))
     val uncached      = new axi4.Port(corep.memory.uncached.axi)
   })
@@ -55,6 +54,7 @@ class Loom(corep: CoreParam, rocketp: RocketParam) extends Module {
   io.commands.complete.ready              := true.B
   when(io.commands.complete.fire)(pending := false.B)
   rocc.resp <> io.commands.response
-  rocc.busy                               := pending || !io.drained
+  // Thread tasks outlive their management commands; the engine must keep running.
+  rocc.busy                               := pending
   rocc.interrupt                          := false.B
 }

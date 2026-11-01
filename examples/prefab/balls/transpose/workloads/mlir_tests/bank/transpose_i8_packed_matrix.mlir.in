@@ -1,13 +1,13 @@
-func.func private @check_result(memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
+func.func private @check_result(memref<@BANK_LINES@x@BANK_I8_LANES@xi8>) -> ()
 func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
   %zero = arith.constant 0 : index
   %one = arith.constant 1 : index
-  %rows = arith.constant @BB_BANK_LINES@ : index
-  %lanes = arith.constant @BB_BANK_I8_LANES@ : index
-  %lanes_i32 = arith.constant @BB_BANK_I8_LANES@ : i32
-  %input = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
-  %output = memref.alloc() : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %rows = arith.constant @BANK_LINES@ : index
+  %lanes = arith.constant @BANK_I8_LANES@ : index
+  %lanes_i32 = arith.constant @BANK_I8_LANES@ : i32
+  %input = memref.alloc() : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
+  %output = memref.alloc() : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
   scf.for %row = %zero to %rows step %one {
     scf.for %lane = %zero to %lanes step %one {
       %r = arith.index_cast %row : index to i32
@@ -15,18 +15,18 @@ func.func @main() -> i8 {
       %base = arith.muli %r, %lanes_i32 : i32
       %index = arith.addi %base, %l : i32
       %value = arith.trunci %index : i32 to i8
-      memref.store %value, %input[%row, %lane] : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+      memref.store %value, %input[%row, %lane] : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
     }
   }
-  %input_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %output_bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %loaded = buckyball.bank_mvin %input, %input_bank <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
-  %result = transpose_ball.bank_transpose_i8 %loaded -> %output_bank <{rows = @BB_BANK_LINES@ : i64, cols = @BB_BANK_I8_LANES@ : i64}>
-  %stored = buckyball.bank_mvout %output, %result <{depth = @BB_BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
-  buckyball.bank_release %loaded
-  buckyball.bank_release %stored
-  func.call @check_result(%output) : (memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>) -> ()
-  memref.dealloc %input : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
-  memref.dealloc %output : memref<@BB_BANK_LINES@x@BB_BANK_I8_LANES@xi8>
+  %input_bank = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %output_bank = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %loaded = bbacc.bank_mvin %input, %input_bank <{depth = @BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
+  %result = transpose_ball.bank_transpose_i8 %loaded -> %output_bank <{rows = @BANK_LINES@ : i64, cols = @BANK_I8_LANES@ : i64}>
+  %stored = bbacc.bank_mvout %output, %result <{depth = @BANK_LINES@ : i64, stride = 1 : i64}> : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
+  bbacc.bank_release %loaded
+  bbacc.bank_release %stored
+  func.call @check_result(%output) : (memref<@BANK_LINES@x@BANK_I8_LANES@xi8>) -> ()
+  memref.dealloc %input : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
+  memref.dealloc %output : memref<@BANK_LINES@x@BANK_I8_LANES@xi8>
   return %zero_i8 : i8
 }

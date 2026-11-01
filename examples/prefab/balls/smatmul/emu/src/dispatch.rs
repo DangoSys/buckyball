@@ -1,5 +1,5 @@
-use bebop_bemu::thread::instructions::decode;
 use bebop_bemu::ball::ExecContext;
+use bebop_bemu::thread::instructions::decode;
 
 use super::{fp32, mxfp8, smatmul};
 
@@ -24,14 +24,26 @@ pub fn execute_known(
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
     match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("SMATMUL_OS") => Some(smatmul::latency(xs1, xs2, bebop_bemu::configs::ball_domain::instance_for_funct(funct).expect("Ball instance"))),
-        Some("SMATMUL_MXFP8") => Some(smatmul::latency(xs1, xs2, bebop_bemu::configs::ball_domain::instance_for_funct(funct).expect("Ball instance"))),
-        Some("SMATMUL_F32") => Some(decode::rs1_iter(xs1) as u64 + (xs2 & 0xfff) + ((xs2 >> 12) & 0xfff)),
+        Some("SMATMUL_OS") => Some(smatmul::os_latency(xs1, xs2, ctx)),
+        Some("SMATMUL_MXFP8") => Some(smatmul::latency(
+            xs1,
+            xs2,
+            bebop_bemu::configs::ball_domain::instance_for_funct(funct).expect("Ball instance"),
+        )),
+        Some("SMATMUL_F32") => {
+            Some(decode::rs1_iter(xs1) as u64 + (xs2 & 0xfff) + ((xs2 >> 12) & 0xfff))
+        }
         Some("SMATMUL_BIAS") => Some(smatmul::bias_latency(xs1, xs2)),
         _ => None,
     }

@@ -69,6 +69,8 @@ bebop-bemu = { path = "../../../../../../bebop/src/nodes/bemu" }
 bebop-design-poly = { path = "../../../emu" }
 bebop-core-reduce = { path = "../../../../../prefab/cores/reduce/emu" }
 clap = { version = "4", features = ["derive"] }
+# The parameter messages of the Balls, compiled by bebop-sim-build.
+prost = "0.13"
 
 [build-dependencies]
 bebop-sim-build = { path = "../../../../../../bebop/src/nodes/lib/sim-build" }

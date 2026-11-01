@@ -175,29 +175,21 @@ pub(crate) fn validate(
     if op1_bank == wr_bank {
         panic!("ToInt8Ball input and output banks must differ");
     }
+    if op2_bank >= BANK_NUM {
+        panic!("ToInt8Ball scale bank is invalid");
+    }
+    if op1_bank == op2_bank || op2_bank == wr_bank {
+        panic!("ToInt8Ball input, scale, and output banks must differ");
+    }
+    // One scale group: rows 4g..4g+3 hold the scales of channel group g.
+    if op2_col != 1 || op1_col * 4 > BANK_ENTRIES {
+        panic!("ToInt8Ball scales must be one group of four rows per channel group");
+    }
     if kind == KIND_F32 {
-        if op2_bank != 0 {
-            panic!("QUANT_F32_TO_I8 reserves input bank 1");
-        }
-        if rs2 >> 32 != 0 {
-            panic!("QUANT_F32_TO_I8 reserves rs2[63:32]");
-        }
-        if !positive_finite(rs2 as u32) {
-            panic!("QUANT_F32_TO_I8 scale must be finite and positive");
+        if rs2 != 0 {
+            panic!("QUANT_F32_TO_I8 reserves rs2");
         }
     } else {
-        if op2_bank >= BANK_NUM {
-            panic!("QUANT_I32_TO_I8 scale bank is invalid");
-        }
-        if op2_col != op1_col {
-            panic!("QUANT_I32_TO_I8 scale must have one group per channel group");
-        }
-        if op1_bank == op2_bank {
-            panic!("QUANT_I32_TO_I8 input and scale banks must differ");
-        }
-        if op2_bank == wr_bank {
-            panic!("QUANT_I32_TO_I8 scale and output banks must differ");
-        }
         if rs2 >> 35 != 0 {
             panic!("QUANT_I32_TO_I8 reserves rs2[63:35]");
         }
@@ -226,10 +218,28 @@ pub(crate) fn validate(
     }
 }
 
-fn f32_dst(src: &[u128], scale: f32) -> Vec<u128> {
+fn scale_values(scales: &[u128]) -> [f32; 16] {
+    if scales.len() != SCALE_ROWS {
+        panic!("ToInt8Ball requires four scale rows per channel group");
+    }
+    let mut values = [0.0f32; 16];
+    for (row, word) in scales.iter().enumerate() {
+        for lane in 0..LANES {
+            let bits = (*word >> (lane * 32)) as u32;
+            if !positive_finite(bits) {
+                panic!("ToInt8Ball scales must be finite and positive");
+            }
+            values[row * LANES + lane] = f32::from_bits(bits);
+        }
+    }
+    values
+}
+
+fn f32_dst(src: &[u128], scales: &[u128]) -> Vec<u128> {
     if src.len() % 4 != 0 {
         panic!("QUANT_F32_TO_I8 src rows must be a multiple of four");
     }
+    let scale_vals = scale_values(scales);
     src.chunks(4)
         .map(|group| {
             let mut packed = 0u128;
@@ -239,8 +249,9 @@ fn f32_dst(src: &[u128], scale: f32) -> Vec<u128> {
                     if (bits >> 23) & 0xff == 0xff {
                         panic!("QUANT_F32_TO_I8 input must be finite");
                     }
-                    let q = quantize_f32(f32::from_bits(bits), scale, false) as u8;
-                    packed |= u128::from(q) << ((g * LANES + lane) * 8);
+                    let channel = g * LANES + lane;
+                    let q = quantize_f32(f32::from_bits(bits), scale_vals[channel], false) as u8;
+                    packed |= u128::from(q) << (channel * 8);
                 }
             }
             packed
@@ -252,19 +263,7 @@ fn i32_dst(src: &[u128], scales: &[u128], relu: bool) -> Vec<u128> {
     if src.len() % 4 != 0 {
         panic!("QUANT_I32_TO_I8 src rows must be a multiple of four");
     }
-    if scales.len() != SCALE_ROWS {
-        panic!("QUANT_I32_TO_I8 requires four scale rows");
-    }
-    let mut scale_vals = [0.0f32; 16];
-    for (row, word) in scales.iter().enumerate() {
-        for lane in 0..LANES {
-            let bits = (*word >> (lane * 32)) as u32;
-            if !positive_finite(bits) {
-                panic!("QUANT_I32_TO_I8 scales must be finite and positive");
-            }
-            scale_vals[row * LANES + lane] = f32::from_bits(bits);
-        }
-    }
+    let scale_vals = scale_values(scales);
     src.chunks(4)
         .map(|group| {
             let mut packed = 0u128;
@@ -317,12 +316,8 @@ fn finish(
     if dst.len() != (iter / 4 * cols) as usize || dst_addr.len() != dst.len() {
         panic!("toint8: dst rows do not match iter/4 per group");
     }
-    if kind == KIND_F32 {
-        if !scale.is_empty() {
-            panic!("QUANT_F32_TO_I8 must not emit scale rows");
-        }
-    } else if scale.len() != SCALE_ROWS * cols as usize {
-        panic!("QUANT_I32_TO_I8 must emit four scale rows per group");
+    if scale.len() != SCALE_ROWS * cols as usize {
+        panic!("ToInt8Ball must emit four scale rows per channel group");
     }
     let (rs2_lo, rs2_hi) = split_rs(rs2);
     ToInt8Case {
@@ -353,28 +348,15 @@ fn finish(
     }
 }
 
-fn f32_case(groups: [u32; 3], rob_id: u32, scale: f32, values: &[f32]) -> ToInt8Case {
+fn f32_case(groups: [u32; 3], rob_id: u32, scales: &[f32], values: &[f32]) -> ToInt8Case {
     let bits: Vec<u32> = values.iter().map(|v| v.to_bits()).collect();
     let src = pack_u32s(&bits);
+    let scale = pack_u32s(&scales.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
     let iter = src.len() as u32;
-    let dst = f32_dst(&src, scale);
+    let dst = f32_dst(&src, &scale);
     let dst_addr: Vec<u32> = (0..dst.len() as u32).collect();
     finish(
-        KIND_F32,
-        groups,
-        1,
-        iter,
-        0,
-        0,
-        1,
-        0,
-        rob_id,
-        u64::from(scale.to_bits()),
-        0,
-        src,
-        Vec::new(),
-        dst,
-        dst_addr,
+        KIND_F32, groups, 1, iter, 0, 1, 2, 1, rob_id, 0, 0, src, scale, dst, dst_addr,
     )
 }
 
@@ -422,7 +404,7 @@ fn f32_signed() -> ToInt8Case {
     f32_case(
         [0, 0, 0],
         2,
-        0.5,
+        &[0.5; 16],
         &[
             -300.0, -255.0, -5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0, 254.0, 255.0, 300.0, 2.0, 6.0,
             10.0, 14.0,
@@ -431,14 +413,14 @@ fn f32_signed() -> ToInt8Case {
 }
 
 fn f32_zero() -> ToInt8Case {
-    f32_case([1, 0, 2], 3, 1.0, &[0.0; 16])
+    f32_case([1, 0, 2], 3, &[1.0; 16], &[0.0; 16])
 }
 
 fn f32_rounding() -> ToInt8Case {
     f32_case(
         [2, 0, 1],
         4,
-        1.0,
+        &[1.0; 16],
         &[
             2.5, -2.5, 3.5, -3.5, 0.5, -0.5, 1.5, -1.5, 63.5, -63.5, 127.5, -128.5, 0.0, 1.0, 2.0,
             3.0,
@@ -450,7 +432,9 @@ fn f32_rows() -> ToInt8Case {
     f32_case(
         [3, 0, 3],
         5,
-        2.0,
+        &[
+            2.0, 1.0, 0.5, 4.0, 2.0, 1.0, 0.5, 4.0, 2.0, 1.0, 0.5, 4.0, 2.0, 1.0, 0.5, 4.0,
+        ],
         &[
             0.125, -0.125, 0.25, -0.25, 0.75, -0.75, 1.25, -1.25, 1.75, -1.75, 63.25, 63.75,
             -63.75, -64.75, 0.0, -0.0, 2.25, -2.25, 2.75, -2.75, 3.25, -3.25, 3.75, -3.75, 10.125,
@@ -495,7 +479,8 @@ fn i32_offset() -> ToInt8Case {
 }
 
 // Two channel groups; each group has two pixels (eight FP32 rows) quantized
-// with the same rows into group g of the output.
+// with the same rows into group g of the output, with the scales in rows
+// 4g..4g+3 of the one scale group.
 fn f32_two_groups() -> ToInt8Case {
     let mut values = [0.0f32; 64];
     for (i, value) in values.iter_mut().enumerate() {
@@ -503,7 +488,15 @@ fn f32_two_groups() -> ToInt8Case {
     }
     let bits: Vec<u32> = values.iter().map(|v| v.to_bits()).collect();
     let src = pack_u32s(&bits);
-    let dst = f32_dst(&src, 2.0);
+    let mut scale_bits = [0u32; 2 * 16];
+    for (i, bits) in scale_bits.iter_mut().enumerate() {
+        *bits = (if (i / 16 + i) % 2 == 1 { 2.0f32 } else { 0.5f32 }).to_bits();
+    }
+    let scale = pack_u32s(&scale_bits);
+    let mut dst = Vec::new();
+    for group in 0..2 {
+        dst.extend(f32_dst(&src[group * 8..group * 8 + 8], &scale[group * 4..group * 4 + 4]));
+    }
     // Output rows 0, 1 of group 0, then rows 0, 1 of group 1.
     finish(
         KIND_F32,
@@ -511,20 +504,21 @@ fn f32_two_groups() -> ToInt8Case {
         2,
         8,
         0,
-        0,
         1,
-        0,
+        2,
+        1,
         10,
-        u64::from(2.0f32.to_bits()),
+        0,
         0,
         src,
-        Vec::new(),
+        scale,
         dst,
         vec![0, 1, 0, 1],
     )
 }
 
-// Three channel groups, each with its own scales: input rows start at 3,
+// Three channel groups, each with its own scales in rows 4g..4g+3 of the one
+// scale group: input rows start at 3,
 // output core base 1, width 2, height 2, stride 3 -> rows 1, 2, 4, 5 in
 // every group.
 fn i32_three_groups() -> ToInt8Case {
@@ -555,7 +549,7 @@ fn i32_three_groups() -> ToInt8Case {
         0,
         1,
         2,
-        3,
+        1,
         11,
         rs2,
         3,

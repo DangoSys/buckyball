@@ -27,7 +27,7 @@ pub(super) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         128,
         "redmule: bank rows must be 128 bits"
     );
-    assert_eq!(bebop_bemu::configs::ball_domain::parameters::<bebop_bemu::configs::ball_domain::parameters::redmule::Params>("redmule", ctx.ball_id.expect("Ball instance")).lanes.expect("lanes") as usize, 8);
+    assert_eq!(bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("redmule", ctx.ball_id.expect("Ball instance")).lanes.expect("lanes") as usize, 8);
     for bank in [a, b, c] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,

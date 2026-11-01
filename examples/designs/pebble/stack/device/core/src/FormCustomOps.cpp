@@ -1,6 +1,7 @@
 //===- FormCustomOps.cpp - Recognize and fuse core computations -----------===//
 
-#include "Custom/CustomOps.h"
+#include "Acc/AccOps.h"
+#include "Frontend/FrontendOps.h"
 #include "Lowering.h"
 #include "Target/BuckyballTargetRegistry.h"
 #include "mlir/Dialect/Arith/IR/Arith.h"
@@ -11,10 +12,9 @@
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/SideEffectInterfaces.h"
-#include "mlir/Pass/Pass.h"
 
 using namespace mlir;
-using ::buddy::custom::CustomOp;
+using ::buddy::acc::CustomOp;
 
 namespace {
 Operation *frontend(Value value, StringRef name) {
@@ -50,262 +50,242 @@ bool pebble::elementwise(linalg::GenericOp op, StringRef name) {
   return true;
 }
 
-namespace {
-class FormCustomOpsPass
-    : public PassWrapper<FormCustomOpsPass, OperationPass<func::FuncOp>> {
-public:
-  MLIR_DEFINE_EXPLICIT_INTERNAL_INLINE_TYPE_ID(FormCustomOpsPass)
-  StringRef getArgument() const final { return "form-custom-ops"; }
-  StringRef getDescription() const final {
-    return "Recognize core computations and fuse them into custom tensor ops";
+// Recognizes the computations of the core and fuses them into custom
+// operations, which convert-linalg-to-acc then lowers.
+void pebble::formCustomOps(func::FuncOp function) {
+  // MLIR checks both indexing maps and scalar computations, including casts.
+  SmallVector<linalg::GenericOp> generics;
+  function.walk([&](linalg::GenericOp op) { generics.push_back(op); });
+  IRRewriter rewriter(function.getContext());
+  for (auto op : generics) {
+    if (op.hasPureTensorSemantics() && (linalg::isaContractionOpInterface(op) ||
+                                        linalg::isaTransposeOpInterface(op))) {
+      rewriter.setInsertionPoint(op);
+      (void)linalg::specializeGenericOp(rewriter, op);
+    }
   }
-  void getDependentDialects(DialectRegistry &registry) const override {
-    registry.insert<::buddy::custom::CustomDialect, linalg::LinalgDialect>();
-  }
-  void runOnOperation() override {
-    // MLIR checks both indexing maps and scalar computations, including casts.
-    SmallVector<linalg::GenericOp> generics;
-    getOperation().walk([&](linalg::GenericOp op) { generics.push_back(op); });
-    IRRewriter rewriter(&getContext());
-    for (auto op : generics) {
-      if (op.hasPureTensorSemantics() &&
-          (linalg::isaContractionOpInterface(op) ||
-           linalg::isaTransposeOpInterface(op))) {
-        rewriter.setInsertionPoint(op);
-        (void)linalg::specializeGenericOp(rewriter, op);
-      }
+
+  SmallVector<linalg::MatmulOp> matmuls;
+  function.walk([&](linalg::MatmulOp op) { matmuls.push_back(op); });
+  DominanceInfo dominance(function);
+  for (auto op : matmuls) {
+    if (!op.hasPureTensorSemantics() || op.hasUserDefinedMaps() ||
+        op.getCast() != linalg::TypeFn::cast_signed)
+      continue;
+    rewriter.setInsertionPoint(op);
+    auto a = cast<RankedTensorType>(op.getInputs()[0].getType());
+    auto b = cast<RankedTensorType>(op.getInputs()[1].getType());
+    auto result = cast<RankedTensorType>(op.getResult(0).getType());
+    if (a.getElementType().isInteger(8) && b.getElementType().isInteger(8) &&
+        result.getElementType().isInteger(32)) {
+      // matmul_i8(A, B, C) = C + A @ B, with signed INT8 operands.
+      auto custom = CustomOp::create(
+          rewriter, op.getLoc(), TypeRange{result}, "matmul_i8",
+          ValueRange{op.getInputs()[0], op.getInputs()[1], op.getOutputs()[0]});
+      rewriter.replaceOp(op, custom.getOutputs());
+      continue;
     }
 
-    SmallVector<linalg::MatmulOp> matmuls;
-    getOperation().walk([&](linalg::MatmulOp op) { matmuls.push_back(op); });
-    DominanceInfo dominance(getOperation());
-    for (auto op : matmuls) {
-      if (!op.hasPureTensorSemantics() || op.hasUserDefinedMaps() ||
-          op.getCast() != linalg::TypeFn::cast_signed)
-        continue;
-      rewriter.setInsertionPoint(op);
-      auto a = cast<RankedTensorType>(op.getInputs()[0].getType());
-      auto b = cast<RankedTensorType>(op.getInputs()[1].getType());
-      auto result = cast<RankedTensorType>(op.getResult(0).getType());
-      if (a.getElementType().isInteger(8) && b.getElementType().isInteger(8) &&
-          result.getElementType().isInteger(32)) {
-        // matmul_i8(A, B, C) = C + A @ B, with signed INT8 operands.
-        auto custom = CustomOp::create(
-            rewriter, op.getLoc(), TypeRange{result}, "matmul_i8",
-            ValueRange{op.getInputs()[0], op.getInputs()[1],
-                       op.getOutputs()[0]});
-        rewriter.replaceOp(op, custom.getOutputs());
-        continue;
+    Operation *lhs = frontend(op.getInputs()[0], "frontend.int8_to_fp32");
+    Operation *rhs = frontend(op.getInputs()[1], "frontend.int8_to_fp32");
+    if (!lhs || !rhs || !matchPattern(op.getOutputs()[0], m_AnyZeroFloat()))
+      continue;
+    Operation *quantize = frontend(lhs->getOperand(0), "frontend.fp32_to_int8");
+    if (!quantize)
+      continue;
+    // Match bias dequantized with exactly input_step * weight_step.
+    Value biasedResult = op.getResult(0);
+    Operation *trace = nullptr;
+    if (biasedResult.hasOneUse()) {
+      Operation *user = *biasedResult.getUsers().begin();
+      auto end = dyn_cast<::buddy::frontend::TraceEndOp>(user);
+      // Cycle markers follow the logical Linear. Tensor traces keep their
+      // observed boundary and therefore prevent folding bias across it.
+      if (end && !end.getTensor()) {
+        trace = user;
+        biasedResult = user->getResult(0);
       }
-
-      Operation *lhs = frontend(op.getInputs()[0], "frontend.int8_to_fp32");
-      Operation *rhs = frontend(op.getInputs()[1], "frontend.int8_to_fp32");
-      if (!lhs || !rhs || !matchPattern(op.getOutputs()[0], m_AnyZeroFloat()))
-        continue;
-      Operation *quantize =
-          frontend(lhs->getOperand(0), "frontend.fp32_to_int8");
-      if (!quantize)
-        continue;
-      // Match bias dequantized with exactly input_step * weight_step.
-      Value biasedResult = op.getResult(0);
-      Operation *trace = nullptr;
-      if (biasedResult.hasOneUse()) {
-        Operation *user = *biasedResult.getUsers().begin();
-        auto tensorTrace = user->getAttrOfType<BoolAttr>("tensor");
-        // Cycle markers follow the logical Linear. Tensor traces keep their
-        // observed boundary and therefore prevent folding bias across it.
-        if (user->getName().getStringRef() == "buddy_trace.end" &&
-            tensorTrace && !tensorTrace.getValue()) {
-          trace = user;
-          biasedResult = user->getResult(0);
-        }
-      }
-      Value bias;
-      linalg::GenericOp biasAdd, biasScale;
-      Operation *biasDequant = nullptr;
-      if (biasedResult.hasOneUse()) {
-        auto add =
-            dyn_cast<linalg::GenericOp>(*biasedResult.getUsers().begin());
-        if (pebble::elementwise(add, "arith.addf") &&
-            llvm::is_contained(add.getInputs(), biasedResult)) {
-          Value other =
-              add.getInputs()[add.getInputs()[0] == biasedResult ? 1 : 0];
-          auto dequant = frontend(other, "frontend.int32_to_fp32");
-          if (dequant) {
-            auto scale =
-                dequant->getOperand(1).getDefiningOp<linalg::GenericOp>();
-            auto biasType =
-                cast<RankedTensorType>(dequant->getOperand(0).getType());
-            if (pebble::elementwise(scale, "arith.mulf") &&
-                biasType.getElementType().isInteger(32) &&
-                biasType.getShape() == result.getShape() &&
-                ((scale.getInputs()[0] == lhs->getOperand(1) &&
-                  scale.getInputs()[1] == rhs->getOperand(1)) ||
-                 (scale.getInputs()[1] == lhs->getOperand(1) &&
-                  scale.getInputs()[0] == rhs->getOperand(1))) &&
-                dominance.properlyDominates(dequant->getOperand(0), op)) {
-              bias = dequant->getOperand(0);
-              biasAdd = add;
-              biasScale = scale;
-              biasDequant = dequant;
-            }
+    }
+    Value bias;
+    linalg::GenericOp biasAdd, biasScale;
+    Operation *biasDequant = nullptr;
+    if (biasedResult.hasOneUse()) {
+      auto add = dyn_cast<linalg::GenericOp>(*biasedResult.getUsers().begin());
+      if (pebble::elementwise(add, "arith.addf") &&
+          llvm::is_contained(add.getInputs(), biasedResult)) {
+        Value other =
+            add.getInputs()[add.getInputs()[0] == biasedResult ? 1 : 0];
+        auto dequant = frontend(other, "frontend.int32_to_fp32");
+        if (dequant) {
+          auto scale =
+              dequant->getOperand(1).getDefiningOp<linalg::GenericOp>();
+          auto biasType =
+              cast<RankedTensorType>(dequant->getOperand(0).getType());
+          if (pebble::elementwise(scale, "arith.mulf") &&
+              biasType.getElementType().isInteger(32) &&
+              biasType.getShape() == result.getShape() &&
+              ((scale.getInputs()[0] == lhs->getOperand(1) &&
+                scale.getInputs()[1] == rhs->getOperand(1)) ||
+               (scale.getInputs()[1] == lhs->getOperand(1) &&
+                scale.getInputs()[0] == rhs->getOperand(1))) &&
+              dominance.properlyDominates(dequant->getOperand(0), op)) {
+            bias = dequant->getOperand(0);
+            biasAdd = add;
+            biasScale = scale;
+            biasDequant = dequant;
           }
         }
       }
-      if (!bias) {
-        auto biasType =
-            RankedTensorType::get(result.getShape(), rewriter.getI32Type());
-        bias = arith::ConstantOp::create(rewriter, op.getLoc(), biasType,
-                                         rewriter.getZeroAttr(biasType));
-      }
-      // linear_i8(x, W, bias, multiplier, input_step, weight_step) accumulates
-      // signed INT8 products on INT32 bias, then restores FP32 values.
-      auto custom = CustomOp::create(
-          rewriter, op.getLoc(), TypeRange{result}, "linear_i8",
-          ValueRange{quantize->getOperand(0), rhs->getOperand(0), bias,
-                     quantize->getOperand(1), lhs->getOperand(1),
-                     rhs->getOperand(1)});
-      rewriter.replaceOp(op, custom.getOutputs());
-      if (biasAdd) {
-        rewriter.replaceOp(biasAdd,
-                           trace ? trace->getResult(0) : custom.getResult(0));
-        if (biasDequant->use_empty())
-          rewriter.eraseOp(biasDequant);
-        if (biasScale->use_empty())
-          rewriter.eraseOp(biasScale);
-      }
-      if (rhs != lhs && rhs->use_empty())
-        rewriter.eraseOp(rhs);
-      if (lhs->use_empty())
-        rewriter.eraseOp(lhs);
-      if (quantize->use_empty())
-        rewriter.eraseOp(quantize);
     }
-
-    SmallVector<linalg::TransposeOp> transposes;
-    getOperation().walk(
-        [&](linalg::TransposeOp op) { transposes.push_back(op); });
-    const auto &target = buckyball_target::getBuckyballTarget();
-    for (auto op : transposes) {
-      // TRANSPOSE holds the whole matrix in two groups of bank columns of at
-      // most 31 banks each.
-      auto type = dyn_cast<RankedTensorType>(op.getInput().getType());
-      if (!type || type.getRank() != 2 || !type.hasStaticShape() ||
-          !type.getElementType().isInteger(8) ||
-          op.getPermutation() != ArrayRef<int64_t>({1, 0}) ||
-          type.getDimSize(0) > target.bankDepth || type.getDimSize(1) % 16 ||
-          type.getDimSize(1) / 16 > 31 ||
-          2 * type.getDimSize(1) / 16 > target.bankNum)
-        continue;
-      rewriter.setInsertionPoint(op);
-      auto custom =
-          CustomOp::create(rewriter, op.getLoc(), op->getResultTypes(),
-                           "transpose_i8", ValueRange{op.getInput()});
-      rewriter.replaceOp(op, custom.getOutputs());
+    if (!bias) {
+      auto biasType =
+          RankedTensorType::get(result.getShape(), rewriter.getI32Type());
+      bias = arith::ConstantOp::create(rewriter, op.getLoc(), biasType,
+                                       rewriter.getZeroAttr(biasType));
     }
-    pebble::formSpatialOps(getOperation());
-
-    // A one-row Linear whose single consumer chain [relu] ends in another
-    // one-row Linear requantizes for it. Its INT8 row stays in banks, one
-    // group per sixteen columns, when both Linears fit the banks with it.
-    SmallVector<CustomOp> linears;
-    getOperation().walk([&](CustomOp op) {
-      if (op.getKind() == "linear_i8")
-        linears.push_back(op);
-    });
-    auto oneRow = [](CustomOp op) {
-      return cast<RankedTensorType>(op.getResult(0).getType()).getDimSize(0) ==
-             1;
-    };
-    for (CustomOp op : linears) {
-      if (!oneRow(op))
-        continue;
-      Value value = op.getResult(0);
-      SmallVector<Operation *> links, traces;
-      bool relu = false;
-      while (value.hasOneUse()) {
-        Operation *user = *value.getUsers().begin();
-        if (user->getBlock() != op->getBlock())
-          break;
-        if (user->getName().getStringRef() == "buddy_trace.end") {
-          if (cast<BoolAttr>(user->getAttr("tensor")).getValue())
-            break;
-          traces.push_back(user);
-        } else {
-          auto maximum = dyn_cast<linalg::GenericOp>(user);
-          if (relu || !pebble::elementwise(maximum, "arith.maximumf") ||
-              !llvm::is_contained(maximum.getInputs(), value) ||
-              !matchPattern(
-                  maximum.getInputs()[maximum.getInputs()[0] == value ? 1 : 0],
-                  m_AnyZeroFloat()))
-            break;
-          relu = true;
-        }
-        links.push_back(user);
-        value = user->getResult(0);
-      }
-      if (!value.hasOneUse())
-        continue;
-      auto next = dyn_cast<CustomOp>(*value.getUsers().begin());
-      if (!next || next.getKind() != "linear_i8" || !oneRow(next) ||
-          next.getInputs()[0] != value ||
-          !dominance.properlyDominates(next.getInputs()[3], op))
-        continue;
-      bool barrier = false;
-      for (Operation *between = op->getNextNode(); between != next;
-           between = between->getNextNode())
-        if (!isMemoryEffectFree(between) &&
-            between->getName().getDialectNamespace() != "buddy_trace") {
-          barrier = true;
-          break;
-        }
-      if (barrier)
-        continue;
-      // Banks of the producer: its A (and FP32 source) and B, or the resident
-      // row and B, the row it builds and four more; the consumer reads the
-      // row with as many groups of B.
-      auto input = op.getInputs()[0];
-      auto producer = input.getDefiningOp<CustomOp>();
-      bool residentInput = producer && (producer->hasAttr("custom.resident") ||
-                                        producer.getKind() == "flatten_nchw");
-      auto inputType = cast<RankedTensorType>(input.getType());
-      int64_t k = inputType.getDimSize(1);
-      int64_t n = cast<RankedTensorType>(value.getType()).getDimSize(1);
-      int64_t rowGroups = (n + 15) / 16;
-      int64_t inputBanks;
-      if (residentInput) {
-        inputBanks = producer.getKind() == "flatten_nchw" ? 2 : 2 * (k / 16);
-      } else {
-        bool floating = inputType.getElementType().isF32();
-        inputBanks =
-            (floating ? 3 : 2) * pebble::linearSplit(k, 1, floating).groups;
-      }
-      bool resident = n % 16 == 0 &&
-                      inputBanks + rowGroups + 4 <= target.bankNum - 1 &&
-                      2 * rowGroups + 4 <= target.bankNum - 1;
-      rewriter.setInsertionPoint(op);
-      SmallVector<Value> inputs(op.getInputs());
-      inputs.push_back(next.getInputs()[3]);
-      auto fused = CustomOp::create(
-          rewriter, op.getLoc(),
-          TypeRange{RankedTensorType::get({1, n}, rewriter.getI8Type())},
-          "linear_i8", inputs);
-      fused->setAttr("relu", rewriter.getBoolAttr(relu));
-      if (resident)
-        fused->setAttr("custom.resident", rewriter.getUnitAttr());
-      rewriter.setInsertionPointAfter(fused);
-      for (Operation *trace : traces) {
-        Operation *moved = rewriter.clone(*trace);
-        moved->setOperand(0, fused.getResult(0));
-        moved->getResult(0).setType(fused.getResult(0).getType());
-      }
-      next->setOperand(0, fused.getResult(0));
-      for (Operation *link : llvm::reverse(links))
-        rewriter.eraseOp(link);
-      rewriter.eraseOp(op);
+    // linear_i8(x, W, bias, multiplier, input_step, weight_step) accumulates
+    // signed INT8 products on INT32 bias, then restores FP32 values.
+    auto custom =
+        CustomOp::create(rewriter, op.getLoc(), TypeRange{result}, "linear_i8",
+                         ValueRange{quantize->getOperand(0), rhs->getOperand(0),
+                                    bias, quantize->getOperand(1),
+                                    lhs->getOperand(1), rhs->getOperand(1)});
+    rewriter.replaceOp(op, custom.getOutputs());
+    if (biasAdd) {
+      rewriter.replaceOp(biasAdd,
+                         trace ? trace->getResult(0) : custom.getResult(0));
+      if (biasDequant->use_empty())
+        rewriter.eraseOp(biasDequant);
+      if (biasScale->use_empty())
+        rewriter.eraseOp(biasScale);
     }
+    if (rhs != lhs && rhs->use_empty())
+      rewriter.eraseOp(rhs);
+    if (lhs->use_empty())
+      rewriter.eraseOp(lhs);
+    if (quantize->use_empty())
+      rewriter.eraseOp(quantize);
   }
-};
 
-PassRegistration<FormCustomOpsPass> registration;
-} // namespace
+  SmallVector<linalg::TransposeOp> transposes;
+  function.walk([&](linalg::TransposeOp op) { transposes.push_back(op); });
+  const auto &target = buckyball_target::getBuckyballTarget();
+  for (auto op : transposes) {
+    // TRANSPOSE holds the whole matrix in two groups of bank columns of at
+    // most 31 banks each.
+    auto type = dyn_cast<RankedTensorType>(op.getInput().getType());
+    if (!type || type.getRank() != 2 || !type.hasStaticShape() ||
+        !type.getElementType().isInteger(8) ||
+        op.getPermutation() != ArrayRef<int64_t>({1, 0}) ||
+        type.getDimSize(0) > target.bankDepth || type.getDimSize(1) % 16 ||
+        type.getDimSize(1) / 16 > 31 ||
+        2 * type.getDimSize(1) / 16 > target.bankNum)
+      continue;
+    rewriter.setInsertionPoint(op);
+    auto custom = CustomOp::create(rewriter, op.getLoc(), op->getResultTypes(),
+                                   "transpose_i8", ValueRange{op.getInput()});
+    rewriter.replaceOp(op, custom.getOutputs());
+  }
+  pebble::formSpatialOps(function);
+
+  // A one-row Linear whose single consumer chain [relu] ends in another
+  // one-row Linear requantizes for it. Its INT8 row stays in banks, one
+  // group per sixteen columns, when both Linears fit the banks with it.
+  SmallVector<CustomOp> linears;
+  function.walk([&](CustomOp op) {
+    if (op.getKind() == "linear_i8")
+      linears.push_back(op);
+  });
+  auto oneRow = [](CustomOp op) {
+    return cast<RankedTensorType>(op.getResult(0).getType()).getDimSize(0) == 1;
+  };
+  for (CustomOp op : linears) {
+    if (!oneRow(op))
+      continue;
+    Value value = op.getResult(0);
+    SmallVector<Operation *> links, traces;
+    bool relu = false;
+    while (value.hasOneUse()) {
+      Operation *user = *value.getUsers().begin();
+      if (user->getBlock() != op->getBlock())
+        break;
+      if (auto end = dyn_cast<::buddy::frontend::TraceEndOp>(user)) {
+        if (end.getTensor())
+          break;
+        traces.push_back(user);
+      } else {
+        auto maximum = dyn_cast<linalg::GenericOp>(user);
+        if (relu || !pebble::elementwise(maximum, "arith.maximumf") ||
+            !llvm::is_contained(maximum.getInputs(), value) ||
+            !matchPattern(
+                maximum.getInputs()[maximum.getInputs()[0] == value ? 1 : 0],
+                m_AnyZeroFloat()))
+          break;
+        relu = true;
+      }
+      links.push_back(user);
+      value = user->getResult(0);
+    }
+    if (!value.hasOneUse())
+      continue;
+    auto next = dyn_cast<CustomOp>(*value.getUsers().begin());
+    if (!next || next.getKind() != "linear_i8" || !oneRow(next) ||
+        next.getInputs()[0] != value ||
+        !dominance.properlyDominates(next.getInputs()[3], op))
+      continue;
+    bool barrier = false;
+    for (Operation *between = op->getNextNode(); between != next;
+         between = between->getNextNode())
+      if (!isMemoryEffectFree(between) &&
+          !isa<::buddy::frontend::TraceStartOp, ::buddy::frontend::TraceEndOp>(
+              between)) {
+        barrier = true;
+        break;
+      }
+    if (barrier)
+      continue;
+    // Banks of the producer: its A (and FP32 source) and B, or the resident
+    // row and B, the row it builds and four more; the consumer reads the
+    // row with as many groups of B.
+    auto input = op.getInputs()[0];
+    auto producer = input.getDefiningOp<CustomOp>();
+    bool residentInput = producer && (producer->hasAttr("bbacc.resident") ||
+                                      producer.getKind() == "flatten_nchw");
+    auto inputType = cast<RankedTensorType>(input.getType());
+    int64_t k = inputType.getDimSize(1);
+    int64_t n = cast<RankedTensorType>(value.getType()).getDimSize(1);
+    int64_t rowGroups = (n + 15) / 16;
+    int64_t inputBanks;
+    if (residentInput) {
+      inputBanks = producer.getKind() == "flatten_nchw" ? 2 : 2 * (k / 16);
+    } else {
+      bool floating = inputType.getElementType().isF32();
+      inputBanks =
+          (floating ? 3 : 2) * pebble::linearSplit(k, 1, floating).groups;
+    }
+    bool resident = n % 16 == 0 &&
+                    inputBanks + rowGroups + 4 <= target.bankNum - 1 &&
+                    2 * rowGroups + 4 <= target.bankNum - 1;
+    pebble::moveTraceStarts(op, traces);
+    rewriter.setInsertionPoint(op);
+    SmallVector<Value> inputs(op.getInputs());
+    inputs.push_back(next.getInputs()[3]);
+    auto fused = CustomOp::create(
+        rewriter, op.getLoc(),
+        TypeRange{RankedTensorType::get({1, n}, rewriter.getI8Type())},
+        "linear_i8", inputs);
+    fused->setAttr("relu", rewriter.getBoolAttr(relu));
+    if (resident)
+      fused->setAttr("bbacc.resident", rewriter.getUnitAttr());
+    rewriter.setInsertionPointAfter(fused);
+    for (Operation *trace : traces) {
+      Operation *moved = rewriter.clone(*trace);
+      moved->setOperand(0, fused.getResult(0));
+      moved->getResult(0).setType(fused.getResult(0).getType());
+    }
+    next->setOperand(0, fused.getResult(0));
+    for (Operation *link : llvm::reverse(links))
+      rewriter.eraseOp(link);
+    rewriter.eraseOp(op);
+  }
+}

@@ -1,8 +1,7 @@
 #ifndef _BB_IM2COL_H_
 #define _BB_IM2COL_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Input virtual bank: group g is channel block g (channels 16g..16g+15);
 // line input_base + y * input_size + x holds pixel (y, x) of that block.

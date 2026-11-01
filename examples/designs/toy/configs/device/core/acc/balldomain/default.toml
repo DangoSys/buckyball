@@ -2,7 +2,7 @@
 id = 0
 name = "GemminiBall"
 component = "gemmini"
-param = "default"
+param = "../../../../../../../prefab/balls/gemmini/configs/default.toml"
 port = { inBW = 2, outBW = 4, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "GEMMINI_LOOP_WS_CONFIG_BOUNDS", funct7 = 80 },
@@ -34,7 +34,7 @@ instructions = [
 id = 1
 name = "TraceBall"
 component = "trace"
-param = "default"
+param = "../../../../../../../prefab/balls/trace/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "BDB_COUNTER", funct7 = 4 },
@@ -44,7 +44,7 @@ instructions = [
 id = 3
 name = "ReluBall"
 component = "relu"
-param = "default"
+param = "../../../../../../../prefab/balls/relu/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "RELU", funct7 = 50 },
@@ -54,7 +54,7 @@ instructions = [
 id = 4
 name = "RedmuleBall"
 component = "redmule"
-param = "default"
+param = "../../../../../../../prefab/balls/redmule/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "REDMULE_F16", funct7 = 68 },
@@ -64,7 +64,7 @@ instructions = [
 id = 5
 name = "VecBall"
 component = "vector"
-param = "default"
+param = "../../../../../../../prefab/balls/vector/configs/default.toml"
 port = { inBW = 2, outBW = 4, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "VECMAT16", funct7 = 64 },
@@ -74,7 +74,7 @@ instructions = [
 id = 6
 name = "Mxfp2IntBall"
 component = "mxfp2int"
-param = "default"
+param = "../../../../../../../prefab/balls/mxfp2int/configs/default.toml"
 port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MXFP2INT", funct7 = 65 },

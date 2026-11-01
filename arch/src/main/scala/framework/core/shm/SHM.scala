@@ -6,7 +6,7 @@ import framework.core.tbus.configs.{Params => TBusParam}
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.ip.memory.mesh_shm.{MeshSharedMem, MeshSharedMemIO}
+import framework.core.shm.{MeshSharedMem, MeshSharedMemIO}
 
 @instantiable
 class SHM(frontendParam: FrontendParam, memParam: MemDomainParam, tbusParam: TBusParam) extends Module {

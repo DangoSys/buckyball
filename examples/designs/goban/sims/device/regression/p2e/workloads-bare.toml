@@ -1,0 +1,5 @@
+[workloads]
+tests = [
+  "goban-matmul-ctest-design-dataflow-baremetal",
+  "goban-matmul-ctest-design-matmul_threads-baremetal",
+]

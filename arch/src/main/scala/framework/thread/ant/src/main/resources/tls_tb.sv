@@ -3,7 +3,7 @@ module tls_tb;
   import uvm_pkg::*;
   import verification_pkg::*;
   import scenario_pkg::*;
-  import spm_pkg::*;
+  import ant_store_pkg::*;
   `include "uvm_macros.svh"
   logic clock = 0;
   always #5 clock = ~clock;
@@ -62,6 +62,7 @@ module tls_tb;
     run_test("protocol_test");
   end
   final foreach (models[i]) spm_destroy(models[i]);
+  `include "tls_random.svh"
   initial begin : exercise
     logic [127:0] value;
     wait (control.start);
@@ -109,6 +110,10 @@ module tls_tb;
     reset[0] = 0;
     ports[0].access(`LOCAL_BASE + 16, 0, 0);
     ports[3].access(`LOCAL_BASE + 16, 0, 0);
+    fork
+      tls_random(0, 600);
+      tls_random(1, 600);
+    join
     repeat (2) @(negedge clock);
     foreach (ports[i]) begin
       if (ports[i].scoreboard.pending() || ports[i].scoreboard.pending())

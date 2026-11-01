@@ -8,16 +8,16 @@ add_custom_command(
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${POLY_CONTROL_ELF}
     COMMAND
         ${ELF_CC} -O2 -g -march=rv64gc -mcmodel=medany -msmall-data-limit=0
-        -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax -Wl,-T,${BBSIM_LD}
-        ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR} -I${BAREMETAL_DIR} -o ${POLY_CONTROL_ELF}
+        -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax $<TARGET_PROPERTY:bbsw-start-baremetal,INTERFACE_LINK_OPTIONS>
+        ${DESIGN_DEFINES} "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" -o ${POLY_CONTROL_ELF}
         ${POLY_BOOT_SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/controllers.c -lgcc
     DEPENDS
         ${POLY_BOOT_SOURCE}
         controllers.c
-        ${BAREMETAL_DIR}/start.S
-        ${BBSIM_LD}
-        ${RUNTIME_INCLUDE_DIR}/bb_cores.h
+        $<TARGET_OBJECTS:bbsw-start-baremetal>
+        ${BUCKYBALL_BBSW_HEADERS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND_EXPAND_LISTS
     VERBATIM
 )
 add_custom_target(
@@ -28,10 +28,6 @@ add_dependencies(poly-ctests-build ${POLY_CONTROL_NAME}-ctest-build)
 
 set(BUCKYBALL_CTEST_TARGET attention)
 add_buckyball_linux_ctest(${POLY_CONTROL_NAME} ${CMAKE_CURRENT_SOURCE_DIR} controllers.c)
-target_include_directories(
-    ${POLY_CONTROL_NAME}-linux
-    PRIVATE ${RUNTIME_INCLUDE_DIR}
-)
 target_compile_definitions(${POLY_CONTROL_NAME}-linux PRIVATE ${DESIGN_DEFS})
 target_link_libraries(${POLY_CONTROL_NAME}-linux PRIVATE pthread)
 add_dependencies(poly-ctests-build ${POLY_CONTROL_NAME}-linux-build)

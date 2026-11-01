@@ -1,11 +1,11 @@
-#include <bbhw/isa/isa.h>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <rvv/launch.h>
 
-extern "C" void mxfp8_quant(const uint32_t *input, uint8_t *output,
-                            uint32_t count);
-
+alignas(16) static const uint8_t image[] = {
+#embed "mxfp8_quant.image"
+};
 alignas(16) static float input[128];
 alignas(16) static uint8_t output[144];
 static double candidates[127];
@@ -45,7 +45,28 @@ int main() {
   input[3] = -0x1p-9f;
   input[31] = -448.0f;
   input[63] = 31.0f;
-  mxfp8_quant(reinterpret_cast<const uint32_t *>(input), output, 128);
+  // One read group (input) and two write groups: the descriptor at 1 << 32,
+  // codes and scales at 2 << 32.
+  for (unsigned bank = 0; bank < 3; ++bank)
+    bb_mem_alloc(bank, 1, 1);
+  bb_mem_transfer(2, RVV_READ_BANK);
+  bb_mem_transfer(0, RVV_WRITE_BANK);
+  bb_mem_transfer(1, RVV_WRITE_BANK);
+  mvin_kernel(image, sizeof(image), RVV_PROGRAM_BANK);
+  bb_mvin_group((uintptr_t)input, RVV_READ_BANK, 0, 32, 1);
+  alignas(16) kernel_launch call{
+      rvv_image_word(image, 2),
+      rvv_image_word(image, 1),
+      RVV_STACK,
+      {UINT64_C(2) << 32, (UINT64_C(2) << 32) + 128, 0, 128,
+       (UINT64_C(1) << 32) + offsetof(kernel_launch, reserved)},
+      0};
+  rvv_run(&call, sizeof(call));
+  bb_mvout_group((uintptr_t)&call, RVV_WRITE_BANK, 0, sizeof(call) / 16, 1);
+  bb_mvout_group((uintptr_t)output, RVV_WRITE_BANK, 1, 9, 1);
+  rvv_release();
+  if (call.reserved)
+    return 1;
   for (unsigned block = 0; block < 4; ++block) {
     float maximum = 0;
     for (unsigned i = 0; i < 32; ++i)

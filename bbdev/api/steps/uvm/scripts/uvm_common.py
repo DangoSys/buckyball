@@ -722,7 +722,7 @@ def build_ball(
     bbdir: str, design_name: str, selection: str, mill_cfg: str, domain, mapping, ctx
 ) -> None:
     ball = mapping.component
-    verify_dir = Path(bbdir) / "examples" / "prefab" / "balls" / ball / "verify"
+    verify_dir = Path(bbdir) / mapping.source_path / "verify"
     casegen = verify_dir / "casegen" / "Cargo.toml"
     rtl_dir = Path(design_arch_root(bbdir, design_name, selection=selection)) / (
         f"verilog/{mill_cfg}"
@@ -797,7 +797,7 @@ def run_ball(
     cov_dir: str,
 ) -> None:
     ball = mapping.component
-    verify_dir = Path(bbdir) / "examples" / "prefab" / "balls" / ball / "verify"
+    verify_dir = Path(bbdir) / mapping.source_path / "verify"
     simv = verify_dir.parent / "output" / "uvm" / design_name / selection / "simv"
     build_ball(bbdir, design_name, selection, mill_cfg, domain, mapping, ctx)
     crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())[

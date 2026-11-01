@@ -1,8 +1,7 @@
 #ifndef _BB_GEMMINI_COMPUTE_ACCUMULATED_H_
 #define _BB_GEMMINI_COMPUTE_ACCUMULATED_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 #define BB_GEMMINI_COMPUTE_ACCUMULATED_RS2 3ULL
 

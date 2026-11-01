@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -77,6 +78,36 @@ def bank_params(thread: dict, pkg: str) -> tuple[int, int, int]:
     if not isinstance(entries, int) or entries <= 0:
         _die(f"{pkg}: bank.entries must be a positive int")
     return num, width, entries
+
+
+def component_root(config_file: str | Path) -> tuple[Path, Path]:
+    """A component's own config lives at <root>/configs/<sub>/<file>.toml:
+    (root, sub). A design TOML that includes the config keeps its `_file`."""
+    path = Path(config_file).resolve()
+    configs = [parent for parent in path.parents if parent.name == "configs"]
+    if not configs:
+        _die(f"{path}: a component config lives under a configs directory")
+    return configs[0].parent, path.parent.relative_to(configs[0])
+
+
+def ball_root(ball: dict[str, Any]) -> Path:
+    return component_root(ball["param"]["_file"])[0]
+
+
+def ball_class(root: Path) -> tuple[str, str]:
+    """(package, class) of the one Ball implementation under <root>/arch."""
+    classes = []
+    for source in sorted((root / "arch").rglob("*Ball.scala")):
+        text = source.read_text()
+        names = re.findall(
+            r"class (\w+)\([^{}]*?\)\s+extends Module\s+with HasBlink\b", text, re.S
+        )
+        if names:
+            package = re.search(r"(?m)^package ([\w.]+)", text).group(1)
+            classes.extend((package, name) for name in names)
+    if len(classes) != 1:
+        _die(f"{root}: expected one Ball implementation, found {classes}")
+    return classes[0]
 
 
 def _balldomain_base_dir(repo: Path, thread: dict, pkg: str) -> str:
@@ -240,27 +271,18 @@ def _bemu_balls(repo: Path, profiles: list[dict[str, Any]]) -> list[dict[str, st
                 entry["funct7"] not in {1, 16, 32, 33, 34, 35} for entry in instructions
             ):
                 continue
-            ball_dir = ball["component"]
-            ball_class = f"examples.balls.{ball_dir}.{ball['name']}"
-            if ball_class in seen:
+            root = ball_root(ball)
+            emu_class = f"{ball_class(root)[0]}.{ball['name']}"
+            if emu_class in seen:
                 continue
-            seen.add(ball_class)
-            emu_lib = (
-                repo
-                / "examples"
-                / "prefab"
-                / "balls"
-                / ball_dir
-                / "emu"
-                / "src"
-                / "lib.rs"
-            )
+            seen.add(emu_class)
+            emu_lib = root / "emu" / "src" / "lib.rs"
             if not emu_lib.is_file():
-                _die(f"missing BEMU ball source for {ball_class}: {emu_lib}")
+                _die(f"missing BEMU ball source for {emu_class}: {emu_lib}")
             balls.append(
                 {
-                    "emu_class": ball_class,
-                    "component": ball_dir,
+                    "emu_class": emu_class,
+                    "component": ball["component"],
                     "emu_lib": _repo_rel(repo, emu_lib),
                 }
             )
@@ -273,15 +295,7 @@ def _ball_ctest_dirs(repo: Path, thread: dict[str, Any]) -> list[str]:
         _die("thread missing balldomain for ctest dirs")
     dirs: list[str] = []
     for ball in bd["balls"]:
-        path = (
-            repo
-            / "examples"
-            / "prefab"
-            / "balls"
-            / ball["component"]
-            / "workloads"
-            / "ctests"
-        )
+        path = ball_root(ball) / "workloads" / "ctests"
         if not path.is_dir():
             _die(f"missing {path}")
         dirs.append(_repo_rel(repo, path))
@@ -311,6 +325,19 @@ def compiler_profiles(device: dict[str, Any]) -> list[dict[str, Any]]:
                 }
             )
     return profiles
+
+
+def ball_protos(device: dict[str, Any]) -> list[Path]:
+    """The parameter schemas of the Balls a device instantiates."""
+    roots = {
+        ball_root(ball)
+        for profile in compiler_profiles(device)
+        if (domain := normalize_ball_domain(profile["config"])) is not None
+        for ball in domain["balls"]
+    }
+    return sorted(
+        proto for root in roots for proto in (root / "configs").glob("*_params.proto")
+    )
 
 
 def _derive_targets(

@@ -1,4 +1,4 @@
-component = "rocket"
+include = "../../../../../prefab/cores/rocket/configs/default.toml"
 implementation = "rocket.toml"
 threads = []
 resetVector = 0x10000
@@ -7,7 +7,7 @@ memory = "memory/core.toml"
 fetch = "default"
 fpu = "default"
 interconnect = "interconnect/core.toml"
-c2c = "c2c/core.toml"
+service = false
 controller = "default"
 
 [param]

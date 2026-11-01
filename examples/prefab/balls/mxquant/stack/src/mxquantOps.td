@@ -17,7 +17,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def MxquantBall_Dialect : Dialect {
   let name = "mxquant_ball";

@@ -3,8 +3,6 @@
 
 #include "isa.h"
 
-#define BB_MVIN_2D_FUNC7 34
-
 // rs1: write bank in BANK2 and core height; [19:0] reserved.
 // rs2: [35:0] address / 8, [42:36] physical pixel bytes / 8,
 //      [52:43] source width, [58:53] destination row base,

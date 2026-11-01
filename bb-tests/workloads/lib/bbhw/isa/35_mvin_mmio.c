@@ -3,8 +3,6 @@
 
 #include "isa.h"
 
-#define BB_MVIN_MMIO_FUNC7 35
-
 // mvin_mmio: DMA-load metadata from DRAM into MMIO SRAM.
 // DMA transfers full 128-bit rows (16 bytes each); `col` controls the per-row
 // byte mask written into MMIO (first `col` bytes written, rest zero-masked).

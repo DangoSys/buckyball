@@ -3,7 +3,7 @@
 #ifndef GEMMINI_OPS_H
 #define GEMMINI_OPS_H
 
-#include "Interfaces/BankInterfaces.h"
+#include "Acc/BankInterfaces.h"
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"

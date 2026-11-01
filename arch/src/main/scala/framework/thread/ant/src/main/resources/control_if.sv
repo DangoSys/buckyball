@@ -21,6 +21,11 @@ interface ant_control_if (
     do @(posedge clock); while (!ready);
     @(negedge clock);
     valid = 0;
+    // The payload is meaningless while no request is valid.
+    operation = $urandom;
+    context_id = $urandom;
+    field = $urandom;
+    data = {$urandom, $urandom};
     wait (reply_valid);
     held = reply;
     repeat (3) begin
@@ -34,5 +39,6 @@ interface ant_control_if (
     @(negedge clock);
     reply_ready = 0;
     checked++;
+    verification_pkg::evidence::checks++;
   endtask
 endinterface

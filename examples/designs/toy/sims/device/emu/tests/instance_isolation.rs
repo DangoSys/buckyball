@@ -23,7 +23,14 @@ fn independent_devices_keep_gemmini_configuration_and_memory_private() {
         .trim_end_matches(')').split_whitespace()
         .map(|def| format!("-D{}", def.trim_matches('"')))
         .collect();
-    let bare = repo.join("stack/os/baremetal");
+    // The workloads of the toy target's Gemmini Ball, as design.cmake lists them.
+    let gemmini = repo
+        .join(cmake.lines()
+            .find_map(|line| line.strip_prefix("set(DESIGN_PROFILES_toy_THREAD_BALLDOMAIN_BALLS_gemmini_SOURCE_PATH "))
+            .expect("gemmini Ball of the toy target in design.cmake")
+            .trim_end_matches(')').trim_matches('"'))
+        .join("workloads");
+    let bare = repo.join("bb-tests/workloads/lib/bbsw/device/baremetal");
     bebop_bemu::configs::load(simulation::SIMULATION.design);
     let mut cpus = Vec::new();
     for name in ["gemmini_loop_subrob", "gemmini_loop_mmio"] {
@@ -34,14 +41,15 @@ fn independent_devices_keep_gemmini_configuration_and_memory_private() {
             .arg("-T").arg(bare.join("bbsim.ld"))
             .args(&defs)
             .arg("-I").arg(repo.join("bb-tests/workloads/lib"))
-            .arg("-I").arg(repo.join("examples/prefab/balls/gemmini/workloads"))
+            .arg("-I").arg(repo.join("bb-tests/workloads/lib/bbhw/isa"))
+            .arg("-I").arg(&gemmini)
             .arg(bare.join("crt0.S"))
-            .arg(repo.join(format!("examples/prefab/balls/gemmini/workloads/ctests/{name}.c")))
+            .arg(gemmini.join(format!("ctests/{name}.c")))
             .arg("-o").arg(&elf));
         let log = output.join(name);
         let args = Args::try_parse_from([Path::new("test"), Path::new("--elf"), &elf,
                                        Path::new("--log-dir"), &log]).unwrap();
-        let device = DeviceModel::new(512 * 1024 * 1024, bebop_bemu::hart_capacity());
+        let device = DeviceModel::new(512 * 1024 * 1024, bebop_bemu::hart_capacity(), &log);
         let mut instances = cbus::instantiate(&device, &args).unwrap();
         assert_eq!(instances.len(), 1);
         let mut cpu = instances.pop().unwrap();

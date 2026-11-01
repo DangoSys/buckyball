@@ -4,8 +4,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* QUANT_I32_TO_I8 over two channel groups: group g of the input, scale, and
- * output banks is channel block g; every group uses the same output core. */
+/* QUANT_I32_TO_I8 over two channel groups: group g of the input and output
+ * banks is channel block g, its scales are rows 4g..4g+3 of the one scale
+ * group; every group uses the same output core. */
 enum { GROUPS = 2, PIXELS = 4, ROWS = PIXELS * 4, OUT_ROWS = 6 };
 
 static int32_t input[GROUPS][PIXELS * 16] __attribute__((aligned(64)));
@@ -21,12 +22,12 @@ int main(void) {
   }
 
   bb_mem_alloc(0, 1, GROUPS);
-  bb_mem_alloc(1, 1, GROUPS);
+  bb_mem_alloc(1, 1, 1);
   bb_mem_alloc(2, 1, GROUPS);
-  for (int group = 0; group < GROUPS; ++group) {
+  for (int group = 0; group < GROUPS; ++group)
     bb_mvin_group((uintptr_t)input[group], 0, group, ROWS, 1);
-    bb_mvin_group((uintptr_t)scales[group], 1, group, 4, 1);
-  }
+  // One scale group: rows 4g..4g+3 hold the scales of channel block g.
+  bb_mvin((uintptr_t)scales, 1, GROUPS * 4, 1);
   // Output core: base 1, width 2, height 2, stride 3 -> rows 1, 2, 4, 5.
   bb_quant_i32_to_i8(0, 1, 2, ROWS, 0, 1, 2, 2, 3, 0);
   for (int group = 0; group < GROUPS; ++group)

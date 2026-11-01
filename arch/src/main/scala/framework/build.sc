@@ -39,6 +39,7 @@ import $file.core.memory.home.{build => core_memory_home_build}
 import $file.core.tbus.{build => core_tbus_build}
 import $file.core.tbus.src.main.scala.router.{build => core_tbus_router_build}
 import $file.core.tss.{build => core_tss_build}
+import $file.core.shm.{build => core_shm_build}
 import $file.device.ddr.{build => device_ddr_build}
 import $file.ip.axi4.{build => ip_axi4_build}
 import $file.ip.axis.{build => ip_axis_build}
@@ -47,7 +48,6 @@ import $file.ip.cache.{build => ip_cache_build}
 import $file.ip.chi.{build => ip_chi_build}
 import $file.ip.coherence.{build => ip_coherence_build}
 import $file.ip.interlock.{build => ip_interlock_build}
-import $file.ip.mesh_shm.{build => ip_mesh_shm_build}
 import $file.ip.spm.{build => ip_spm_build}
 import $file.thread.ant.{build => thread_ant_build}
 import $file.^.^.^.^.thirdparty.{build => thirdparty_build}
@@ -194,6 +194,9 @@ object core extends Module {
   object tss extends core_tss_build.Emitter {
     override def framework = library
   }
+  object shm extends core_shm_build.Emitter {
+    override def framework = library
+  }
 }
 object device extends Module {
   object ddr extends device_ddr_build.Emitter {
@@ -220,9 +223,6 @@ object ip extends Module {
     override def framework = library
   }
   object interlock extends ip_interlock_build.Emitter {
-    override def framework = library
-  }
-  object mesh_shm extends ip_mesh_shm_build.Emitter {
     override def framework = library
   }
   object spm extends ip_spm_build.Emitter {

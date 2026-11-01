@@ -32,7 +32,8 @@ class ReadDma(val b: ModuleParam) extends Module {
 
     val mapping = Input(new MapResult(b.mapping))
 
-    val axi = new axi4.Port(axiParams)
+    val virtualAddress = Output(UInt(64.W))
+    val axi            = new axi4.Port(axiParams)
 
   })
 
@@ -56,6 +57,7 @@ class ReadDma(val b: ModuleParam) extends Module {
   val fault                                                = RegInit(0.U.asTypeOf(new DmaStatus))
   val mapped                                               = Reg(new MapResult(b.mapping))
 
+  io.virtualAddress        := queryVA
   io.req.ready             := state === idle && io.decisionValid
   io.busy                  := state =/= idle
   io.resp.valid            := state === respond || state === failed

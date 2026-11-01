@@ -28,7 +28,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def GemminiBall_Dialect : Dialect {
   let name = "gemmini_ball";

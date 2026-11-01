@@ -1,4 +1,3 @@
-source = "../../../.."
 balldomain = "balldomain/default.toml"
 memdomain = "memdomain/toy.toml"
 frontend = "frontend/toy.toml"

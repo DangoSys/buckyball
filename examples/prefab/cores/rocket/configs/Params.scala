@@ -36,7 +36,7 @@ case class Params(
   resetVector:  BigInt,
   mtimeAddress: BigInt,
   acc:          Option[AccParam]) {
-  require(clink.harts == 1 && !clink.shared)
+  require(clink.harts == 1 && !clink.service)
   require(clink.requesters == (if (clink.backing) 0 else 2))
   require(cpu.core.xLen == 64 && !cpu.core.useHypervisor && cpu.core.useCompressed)
   require(cpu.core.nPMPs == permission.entries && cpu.physicalAddressBits == permission.addressBits)
@@ -94,7 +94,7 @@ object Params {
         bus,
         axi,
         acc.map(_.transport.axi).getOrElse(axi4.Params.fromProto(core.getInterconnect.getAxi)),
-        None
+        false
       ),
       PmpParams(r.getPhysicalAddressBits, r.getPmpEntries),
       core.getHartId,

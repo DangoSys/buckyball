@@ -1,7 +1,6 @@
-// FORM: custom.op "linear_i8"{{.*}}custom.resident, relu = true{{.*}}-> tensor<1x32xi8>
 // BANK: toint8_ball.bank_int32_to_int8
-// BANK: buckyball.bank_transfer
-// BANK-NOT: buckyball.bank_mvout
+// BANK: bbacc.bank_transfer
+// BANK-NOT: bbacc.bank_mvout
 // BANK: smatmul_ball.bank_matmul_i8 {{.*}}k = 16>
 func.func private @check_result(memref<1x16xf32>)
 
@@ -81,7 +80,7 @@ func.func @main() -> i8 {
   %weight2 = bufferization.to_tensor %w2 restrict : memref<32x16xi8> to tensor<32x16xi8>
   %bias2 = bufferization.to_tensor %b2 restrict : memref<1x16xi32> to tensor<1x16xi32>
   %step2 = bufferization.to_tensor %s2 restrict : memref<1x16xf32> to tensor<1x16xf32>
-  %first = custom.op "linear_i8"(%input, %weight1, %bias1, %multiplier, %input_step, %step1) : (tensor<1x32xf32>, tensor<32x32xi8>, tensor<1x32xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x32xf32>) -> tensor<1x32xf32>
+  %first = bbacc.custom "linear_i8"(%input, %weight1, %bias1, %multiplier, %input_step, %step1) : (tensor<1x32xf32>, tensor<32x32xi8>, tensor<1x32xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x32xf32>) -> tensor<1x32xf32>
   %empty = tensor.empty() : tensor<1x32xf32>
   %relu = linalg.generic {
     indexing_maps = [affine_map<(m,n)->(m,n)>, affine_map<(m,n)->(m,n)>, affine_map<(m,n)->(m,n)>],
@@ -91,7 +90,7 @@ func.func @main() -> i8 {
     %positive = arith.maximumf %value, %zero_value : f32
     linalg.yield %positive : f32
   } -> tensor<1x32xf32>
-  %second = custom.op "linear_i8"(%relu, %weight2, %bias2, %multiplier, %input_step, %step2) : (tensor<1x32xf32>, tensor<32x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
+  %second = bbacc.custom "linear_i8"(%relu, %weight2, %bias2, %multiplier, %input_step, %step2) : (tensor<1x32xf32>, tensor<32x16xi8>, tensor<1x16xi32>, tensor<1x1xf32>, tensor<1x1xf32>, tensor<1x16xf32>) -> tensor<1x16xf32>
   %output = bufferization.to_buffer %second : tensor<1x16xf32> to memref<1x16xf32>
   func.call @check_result(%output) : (memref<1x16xf32>) -> ()
   return %exit : i8

@@ -146,7 +146,15 @@ def run_profile(repo, design, profile, directory, do_run, ctx):
         ):
             # Runtime databases belong to this run, never the reusable build directory.
             record["coverage"] = collect(
-                repo, test, record_dir / "simulation.vdb", record_dir / "coverage", ctx
+                repo,
+                test,
+                record_dir / "simulation.vdb",
+                record_dir / "coverage",
+                ctx,
+                Path(repo)
+                / profile["root"]
+                / profile["resources"]
+                / f"{test['name']}.el",
             )
         (record_dir / "result.json").write_text(json.dumps(record, indent=2) + "\n")
         records.append(record)

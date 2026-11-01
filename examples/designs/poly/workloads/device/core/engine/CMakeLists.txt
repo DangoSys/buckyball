@@ -60,17 +60,13 @@ foreach(
             ${POLY_ANT_HOST_NAME}-linux
             PRIVATE ${POLY_ANT_EMBED} ${POLY_ANT_CONTROL_SOURCES}
         )
-        target_include_directories(
-            ${POLY_ANT_HOST_NAME}-linux
-            PRIVATE ${RUNTIME_INCLUDE_DIR}
-        )
         target_compile_definitions(
             ${POLY_ANT_HOST_NAME}-linux
             PRIVATE ${DESIGN_DEFS}
         )
         target_link_libraries(
             ${POLY_ANT_HOST_NAME}-linux
-            PRIVATE engine runtime-linux pthread
+            PRIVATE runtime-linux
         )
         add_dependencies(${POLY_ANT_HOST_NAME}-linux ${POLY_ANT_NAME}-ant-build)
         add_dependencies(poly-ctests-build ${POLY_ANT_HOST_NAME}-linux-build)
@@ -87,35 +83,34 @@ foreach(
         COMMAND
             ${ELF_CC} -O2 -g -march=rv64gc -mcmodel=medany -msmall-data-limit=0
             -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax
-            -Wl,-T,${BBSIM_LD} ${POLY_ANT_HOST_DEFINITIONS}
+            $<TARGET_PROPERTY:bbsw-start-baremetal,INTERFACE_LINK_OPTIONS> ${POLY_ANT_HOST_DEFINITIONS}
             -I${POLY_ANT_SOURCE_DIR}
             ${POLY_ANT_HOST_DEFINES}
-            ${DESIGN_DEFINES} -I${RUNTIME_INCLUDE_DIR} -I${WORKLOAD_LIB_DIR}
-            -I${BUCKYBALL_REPO_ROOT}/examples/prefab/balls/f32add/workloads
+            ${DESIGN_DEFINES} "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-thread-${POLY_ANT_HOST_THREAD}-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            -I${BUCKYBALL_REPO_ROOT}/${DESIGN_PROFILES_main_THREAD_BALLDOMAIN_BALLS_f32add_SOURCE_PATH}/workloads
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/scheduler
             -I${BUCKYBALL_REPO_ROOT}/stack/runtime/services
-            -I${BUCKYBALL_REPO_ROOT}/stack/engine/include -I${BAREMETAL_DIR}
+            -I${BUCKYBALL_REPO_ROOT}/stack/engine/include
             ${POLY_BOOT_SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/${POLY_ANT_MAIN}
             ${POLY_ANT_CONTROL_SOURCES} ${POLY_ANT_CONTROL_OBJECTS}
             ${POLY_ANT_EMBED} ${BUCKYBALL_REPO_ROOT}/stack/engine/src/thread.c
-            ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.c -lgcc -o
+            $<TARGET_FILE:bbsw-core-baremetal> -lgcc -o
             ${POLY_ANT_HOST_ELF}
         DEPENDS
             ${POLY_ANT_MAIN}
             ${POLY_ANT_SOURCE_DIR}/${POLY_ANT_HEADER}
             ${POLY_BOOT_SOURCE}
             ${POLY_ANT_EMBED}
-            ${BAREMETAL_DIR}/start.S
-            ${BBSIM_LD}
+            $<TARGET_OBJECTS:bbsw-start-baremetal>
             ${POLY_ANT_CONTROL_SOURCES}
             ${POLY_ANT_CONTROL_OBJECTS}
             ${POLY_ANT_IMAGE}.bin
             ${BUCKYBALL_REPO_ROOT}/stack/engine/src/thread.c
             ${BUCKYBALL_REPO_ROOT}/stack/engine/include/thread.h
-            ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.c
-            ${BUCKYBALL_REPO_ROOT}/stack/runtime/services/corelink.h
-            ${RUNTIME_INCLUDE_DIR}/bb_cores.h
+            $<TARGET_FILE:bbsw-core-baremetal>
+            ${BUCKYBALL_BBSW_HEADERS}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
         VERBATIM
     )
     add_custom_target(
@@ -125,3 +120,49 @@ foreach(
     add_dependencies(poly-ctests-build ${POLY_ANT_HOST_NAME}-ctest-build)
 endforeach()
 add_subdirectory(mlir)
+add_subdirectory(balls)
+
+set(ENGINE_DIR ${BUCKYBALL_REPO_ROOT}/stack/engine)
+set(DATAFLOW_DEFINES ${DESIGN_TARGET_DEFS_attention})
+list(TRANSFORM DATAFLOW_DEFINES PREPEND "-D")
+set(DATAFLOW_FFN_DEFINES ${DESIGN_TARGET_DEFS_ffn})
+list(TRANSFORM DATAFLOW_FFN_DEFINES PREPEND "-D")
+add_custom_command(
+    OUTPUT copy.elf copy.bin
+    COMMAND ${ELF_CC} -O2 -march=rv64im -mabi=lp64 -mcmodel=medany
+        -ffreestanding -fno-builtin -fno-pic -fno-stack-protector
+        -fno-asynchronous-unwind-tables -msmall-data-limit=0 -mno-relax
+        -nostdlib -nostartfiles -Wl,--no-relax -Wl,-T,${ENGINE_DIR}/program/code.ld
+        "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-thread-attention-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" ${DATAFLOW_DEFINES}
+        ${ENGINE_DIR}/program/start.S ${CMAKE_CURRENT_SOURCE_DIR}/copy.c -o copy.elf
+    COMMAND ${ELF_OBJCOPY} -O binary --only-section=.text copy.elf copy.bin
+    DEPENDS copy.c copy.h ${ENGINE_DIR}/program/start.S ${ENGINE_DIR}/program/code.ld
+        ${BUCKYBALL_BALL_ISA_DEPS}
+    COMMAND_EXPAND_LISTS
+    VERBATIM)
+add_custom_command(
+    OUTPUT copy_attention.o copy_ffn.o
+    COMMAND ${ELF_CC} -O2 -march=rv64gc -mcmodel=medany -msmall-data-limit=0
+        -I${ENGINE_DIR}/include --embed-dir=${CMAKE_CURRENT_BINARY_DIR}
+        ${DATAFLOW_DEFINES}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/copy_binding.c -o copy_attention.o
+    COMMAND ${ELF_CC} -O2 -march=rv64gc -mcmodel=medany -msmall-data-limit=0
+        -I${ENGINE_DIR}/include --embed-dir=${CMAKE_CURRENT_BINARY_DIR}
+        ${DATAFLOW_FFN_DEFINES}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/copy_binding.c -o copy_ffn.o
+    DEPENDS copy_binding.c copy.h copy.bin
+    VERBATIM)
+set(DATAFLOW_NAME "${DESIGN_NAME}-main-ctest-design-dataflow-multicore-baremetal")
+add_custom_command(
+    OUTPUT ${DATAFLOW_NAME}
+    COMMAND ${ELF_CC} -O2 -march=rv64gc -mcmodel=medany -msmall-data-limit=0
+        -fno-builtin -nostdlib -nostartfiles -Wl,--no-relax $<TARGET_PROPERTY:bbsw-start-baremetal,INTERFACE_LINK_OPTIONS>
+        ${DESIGN_DEFINES} "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>" -I${ENGINE_DIR}/include
+        ${POLY_BOOT_SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/dataflow.c
+        copy_attention.o copy_ffn.o $<TARGET_FILE:engine> -lgcc -o ${DATAFLOW_NAME}
+    DEPENDS dataflow.c copy.h copy_attention.o copy_ffn.o engine
+        ${POLY_BOOT_SOURCE} $<TARGET_OBJECTS:bbsw-start-baremetal>
+    COMMAND_EXPAND_LISTS
+    VERBATIM)
+add_custom_target(poly-dataflow-build DEPENDS ${DATAFLOW_NAME})
+add_dependencies(poly-ctests-build poly-dataflow-build)

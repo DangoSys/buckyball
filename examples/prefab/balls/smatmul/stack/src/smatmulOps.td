@@ -18,7 +18,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def SMatMulBall_Dialect : Dialect {
   let name = "smatmul_ball";

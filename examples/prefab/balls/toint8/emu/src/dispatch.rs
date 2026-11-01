@@ -21,13 +21,19 @@ pub fn execute_known(
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
     match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("QUANT_F32_TO_I8") => Some(quant::f32_to_i8_latency(xs1, xs2)),
-        Some("QUANT_I32_TO_I8") => Some(quant::i32_to_i8_latency(xs1, xs2)),
+        Some("QUANT_F32_TO_I8") => Some(quant::f32_to_i8_latency(xs1, xs2, ctx)),
+        Some("QUANT_I32_TO_I8") => Some(quant::i32_to_i8_latency(xs1, xs2, ctx)),
         Some(_) | None => None,
     }
 }

@@ -35,7 +35,8 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
 
     val mapping = Input(new MapResult(b.mapping))
 
-    val axi = new axi4.Port(axiParams)
+    val virtualAddress = Output(UInt(64.W))
+    val axi            = new axi4.Port(axiParams)
 
   })
 
@@ -71,6 +72,7 @@ class WriteDma(val b: ModuleParam, permission: PmpParams) extends Module {
   val outputIndex                                                                                         = beatIndex + io.axi.w.fire.asUInt
   val outputHead                                                                                          = firstBeat && !io.axi.w.fire
 
+  io.virtualAddress    := queryVA - headOffset
   io.req.ready         := state === idle && io.decisionValid
   io.busy              := state =/= idle
   io.data.ready        := (state === stream && !wDone && outputRoom && fault.error === DmaError.None.U && consumed < inputTotal) ||

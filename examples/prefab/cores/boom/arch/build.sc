@@ -39,8 +39,22 @@ def nativeRtl = T {
     "examples.core.boom.native.Emit", "--target-dir", T.dest / "boom").call(cwd = root)
   PathRef(T.dest)
 }
+
+// The parameter message of this core.
+object parameters extends JavaModule {
+
+  def protoSource = T.source(root / "configs" / "boom_params.proto")
+
+  def generatedSources = T {
+    val proto = protoSource().path
+    os.proc("protoc", s"--java_out=${T.dest}", s"-I${proto / os.up}", proto).call()
+    Seq(PathRef(T.dest))
+  }
+
+  override def ivyDeps = Agg(ivy"com.google.protobuf:protobuf-java:4.35.1")
+}
 object library extends ScalaBuild {
-  override def moduleDeps = Seq(framework.library)
+  override def moduleDeps = Seq(parameters, framework.library)
   override def sources = T.sources {
     os.walk(root / "arch").filter(p => p.ext == "scala" && !p.startsWith(root / "arch" / "native")).map(PathRef(_)) ++
       Seq(PathRef(root / "configs"))

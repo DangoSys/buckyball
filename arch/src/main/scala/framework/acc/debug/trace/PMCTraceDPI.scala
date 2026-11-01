@@ -41,16 +41,16 @@ class PMCTraceDPI extends BlackBox with HasBlackBoxInline {
         |  reg [31:0] ball_id_reg;
         |  reg [31:0] rob_id_reg;
         |  reg [63:0] elapsed_reg;
-        |  reg        valid_reg;
+        |  reg        valid_reg = 1'b0;
         |
         |  always @(posedge clock) begin
+        |    if (valid_reg) begin
+        |      dpi_pmctrace(ball_id_reg, rob_id_reg, elapsed_reg[31:0], elapsed_reg[63:32]);
+        |    end
+        |
         |    if (reset) begin
         |      valid_reg <= 1'b0;
         |    end else begin
-        |      if (valid_reg) begin
-        |        dpi_pmctrace(ball_id_reg, rob_id_reg, elapsed_reg[31:0], elapsed_reg[63:32]);
-        |      end
-        |
         |      valid_reg <= enable;
         |      if (enable) begin
         |        ball_id_reg <= ball_id;

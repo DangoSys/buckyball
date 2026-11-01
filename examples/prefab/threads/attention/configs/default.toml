@@ -1,4 +1,3 @@
-source = ".."
 # Attention Thread Configuration (default)
 
 balldomain = "balldomains/default.toml"

@@ -1,5 +1,6 @@
 [workloads]
 tests = [
+  "pebble-core0-soctest-trace_events-baremetal",
   "pebble-pebble-mlirtest-core_mega_matmul_m17_k65_n17-baremetal",
   "pebble-pebble-mlirtest-core_mega_matmul-baremetal",
   "pebble-pebble-mlirtest-core_mega_conv2d_k5_tail-baremetal",
@@ -74,6 +75,7 @@ tests = [
   "pebble-pebble-ctest-toint8_i8_signed_test-baremetal",
   "pebble-pebble-ctest-quant_i32_groups_test-baremetal",
   "pebble-pebble-ctest-quant_f32_groups_test-baremetal",
+  "pebble-pebble-ctest-quant_f32_channels_test-baremetal",
   "pebble-pebble-mlirtest-ball_quant_f32_to_i8-baremetal",
   "pebble-pebble-mlirtest-ball_quant_i32_to_i8-baremetal",
   "pebble-pebble-ctest-im2col_window_test-baremetal",

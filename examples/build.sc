@@ -17,7 +17,8 @@ object library extends SbtModule {
     framework_build.library,
     thirdparty_build.hardfloat,
     thirdparty_build.midas_target_utils,
-    thirdparty_build.gemmini
+    thirdparty_build.gemmini,
+    ball_components.parameters
   )
 
   override def ivyDeps = Agg(

@@ -1,4 +1,4 @@
-// RUN: buddy-opt %s -lower-buckyball -canonicalize | FileCheck %s
+// RUN: buddy-opt %s -lower-acc -canonicalize | FileCheck %s
 // CHECK-LABEL: func.func @reduce_groups
 // CHECK-DAG: %[[F76:.*]] = llvm.mlir.constant(76 : i32) : i32
 // CHECK-DAG: %[[AB:[^ ]+]] = arith.constant 2183169056 : i64

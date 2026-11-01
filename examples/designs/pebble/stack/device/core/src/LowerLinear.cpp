@@ -6,8 +6,7 @@
 // of matmul_i8, so a whole-bank DMA fills all groups of a bank at once.
 //
 //===----------------------------------------------------------------------===//
-#include "Buckyball/BuckyballOps.h"
-#include "Custom/CustomOps.h"
+#include "Acc/AccOps.h"
 #include "Lowering.h"
 #include "Target/BuckyballTargetRegistry.h"
 #include "int2fpOps.h"
@@ -22,7 +21,7 @@
 #include "toint8Ops.h"
 
 using namespace mlir;
-using namespace ::buddy::buckyball;
+using namespace ::buddy::acc;
 
 pebble::LinearSplit pebble::linearSplit(int64_t k, int64_t rows,
                                         bool floating) {
@@ -47,9 +46,11 @@ namespace {
 // output (M x N) = bias + input (M x K) @ weight (K x N), converted with the
 // per-column `scales` and `relu` to the element type of `output`: INT32 as
 // is, FP32 by int32_to_fp32, INT8 by int32_to_int8. An FP32 input is
-// quantized with `multiplier`. A resident input bank of one input row holds
-// K in groups of `residentBlock` columns and replaces the input of a single
-// call. `bias` has one row, or one row per row of the input. Without
+// quantized with `multiplier`, one for the whole input: a group of A holds
+// several sixteen-column slices of K, and fp32_to_int8 scales every row of a
+// group with the same sixteen multipliers. A resident input bank of one input
+// row holds K in groups of `residentBlock` columns and replaces the input of a
+// single call. `bias` has one row, or one row per row of the input. Without
 // `output`, the INT8 row stays in the returned bank, one group per sixteen
 // columns.
 Value linearTiles(OpBuilder &builder, Location loc, Value input, Value resident,
@@ -146,6 +147,14 @@ Value linearTiles(OpBuilder &builder, Location loc, Value input, Value resident,
         builder, loc, MemRefType::get({16}, builder.getF32Type()));
   Value outPack = memref::AllocOp::create(
       builder, loc, MemRefType::get({rows, 16}, outElement));
+  // The fp32_to_int8 multipliers: rows 4g..4g+3 of one group for group g of
+  // A.
+  Value multiplierPack;
+  if (floating) {
+    multiplierPack = memref::AllocOp::create(
+        builder, loc, MemRefType::get({groups * 4, 4}, builder.getF32Type()));
+    linalg::FillOp::create(builder, loc, multiplier, multiplierPack);
+  }
   Value izero = arith::ConstantIntOp::create(builder, loc, 0, 32);
   linalg::FillOp::create(builder, loc, izero, zeroPack);
 
@@ -162,9 +171,13 @@ Value linearTiles(OpBuilder &builder, Location loc, Value input, Value resident,
       return BankMvinOp::create(b, loc, i64, slice, a, aLines, 1);
     Value values = BankAllocOp::create(b, loc, i64, 1, groups);
     values = BankMvinOp::create(b, loc, i64, slice, values, aLines, 1);
-    a = ::buddy::toint8_ball::BankFp32ToInt8Op::create(b, loc, i64, values, a,
-                                                       multiplier, aLines);
+    Value multipliers = BankAllocOp::create(b, loc, i64, 1, 1);
+    multipliers = BankMvinOp::create(b, loc, i64, multiplierPack, multipliers,
+                                     groups * 4, 1);
+    a = ::buddy::toint8_ball::BankFp32ToInt8Op::create(b, loc, i64, values,
+                                                       multipliers, a, aLines);
     BankReleaseOp::create(b, loc, values);
+    BankReleaseOp::create(b, loc, multipliers);
     return a;
   };
   // Reduction call `call` of output slice `slice` into `destination`, read
@@ -361,7 +374,7 @@ Value linearTiles(OpBuilder &builder, Location loc, Value input, Value resident,
 }
 } // namespace
 
-LogicalResult pebble::lowerLinear(::buddy::custom::CustomOp op,
+LogicalResult pebble::lowerLinear(::buddy::acc::CustomOp op,
                                   Value residentInput, Value &result,
                                   Value &resident) {
   StringRef kind = op.getKind();
@@ -400,9 +413,13 @@ LogicalResult pebble::lowerLinear(::buddy::custom::CustomOp op,
   Value input, multiplier, scales;
   if (!residentInput)
     input = tensorBuffer(b, loc, args[0]);
-  if (!integer && !requant && a.getElementType().isF32())
+  if (!integer && !requant && a.getElementType().isF32()) {
+    if (cast<RankedTensorType>(args[3].getType()).getNumElements() != 1)
+      return op.emitOpError("requires one input multiplier for the whole "
+                            "input");
     multiplier =
         tensor::ExtractOp::create(b, loc, args[3], ValueRange{zero, zero});
+  }
   if (requant) {
     scales = tensorBuffer(b, loc, args[3]);
   } else if (!integer) {
@@ -410,10 +427,14 @@ LogicalResult pebble::lowerLinear(::buddy::custom::CustomOp op,
     // Linear scales them to the codes of its consumer.
     Value step =
         tensor::ExtractOp::create(b, loc, args[4], ValueRange{zero, zero});
-    if (fused)
+    if (fused) {
+      if (cast<RankedTensorType>(args[6].getType()).getNumElements() != 1)
+        return op.emitOpError("requires one output multiplier for the whole "
+                              "result");
       step = arith::MulFOp::create(
           b, loc, step,
           tensor::ExtractOp::create(b, loc, args[6], ValueRange{zero, zero}));
+    }
     Value weightSteps = tensorBuffer(b, loc, args[5]);
     scales = memref::AllocOp::create(b, loc,
                                      MemRefType::get({1, n}, b.getF32Type()));
@@ -430,13 +451,13 @@ LogicalResult pebble::lowerLinear(::buddy::custom::CustomOp op,
   }
   // A flattened map is one block of K; a resident Linear row has a group per
   // sixteen columns.
-  auto producer = args[0].getDefiningOp<::buddy::custom::CustomOp>();
+  auto producer = args[0].getDefiningOp<::buddy::acc::CustomOp>();
   int64_t residentBlock =
       producer && producer.getKind() == "flatten_nchw" ? a.getDimSize(1) : 16;
   bool relu =
       (requant || fused) && cast<BoolAttr>(op->getAttr("relu")).getValue();
   Value output;
-  if (!op->hasAttr("custom.resident"))
+  if (!op->hasAttr("bbacc.resident"))
     output = memref::AllocOp::create(
         b, loc, MemRefType::get({m, n}, resultType.getElementType()));
   resident = linearTiles(b, loc, input, residentInput, residentBlock,
@@ -450,7 +471,7 @@ LogicalResult pebble::lowerLinear(::buddy::custom::CustomOp op,
 
 // The mean of every channel: ones (1 x pixels) @ input (pixels x channels),
 // requantized with input_scale / (pixels * output_scale).
-LogicalResult pebble::lowerGlobalAverage(::buddy::custom::CustomOp op,
+LogicalResult pebble::lowerGlobalAverage(::buddy::acc::CustomOp op,
                                          Value &result) {
   auto type = cast<RankedTensorType>(op.getInputs()[0].getType());
   auto resultType = cast<RankedTensorType>(op.getResult(0).getType());

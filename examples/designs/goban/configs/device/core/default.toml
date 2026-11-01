@@ -8,7 +8,7 @@ tbus = "tbus/default.toml"
 fetch = "default"
 fpu = "default"
 interconnect = "interconnect/goban.toml"
-c2c = "c2c/goban.toml"
+service = false
 controller = "controller/goban.toml"
 
 [param]

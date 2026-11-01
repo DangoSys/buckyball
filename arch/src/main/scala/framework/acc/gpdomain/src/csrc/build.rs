@@ -2,7 +2,7 @@ use std::{env, fs, path::PathBuf, process::Command};
 fn main() {
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap())
         .ancestors()
-        .nth(12)
+        .nth(9)
         .unwrap()
         .to_path_buf();
     let ip = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).parent().unwrap().parent().unwrap().to_path_buf();
@@ -32,20 +32,15 @@ fn main() {
     }
     connections.truncate(connections.trim_end().len() - 1);
     fs::write(rtl.join("rvv_ports.svh"), connections).unwrap();
-    let source = root.join("stack/kernels/rvv");
+    let source = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("kernels");
     for name in [
         "CMakeLists.txt",
         "kernel.ld",
-        "kernels.h",
         "silu.cpp",
         "snake.cpp",
         "quant.cpp",
         "math/exp.cpp",
         "math/sin.cpp",
-        "math/cos.cpp",
-        "math/erf.cpp",
-        "rope.cpp",
-        "trig.cpp",
         "math/math.h",
         "math/constants.h",
     ] {
@@ -57,6 +52,7 @@ fn main() {
         .arg(&source)
         .arg("-B")
         .arg(&output)
+        .arg(format!("-DREPO={}", root.display()))
         .status()
         .unwrap()
         .success());

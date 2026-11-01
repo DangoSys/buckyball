@@ -1,0 +1,41 @@
+# A dense core: one hart running its dense thread; 128 KiB SharedMem.
+component = "dense"
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "../../memory/core.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "../../interconnect.toml"
+service = false
+controller = "controller.toml"
+tbus = "tbus.toml"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+enable = true
+entries = 8192
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 40
+latency = 10
+bankEntries = 1024
+bankWidth = 128
+
+[tss]
+base = 0x20000
+bytes = 0x4000
+dataBits = 128
+
+[[threads]]
+id = 0
+name = "dense0"
+component = "dense"
+include = "../../../../threads/dense/configs/default.toml"

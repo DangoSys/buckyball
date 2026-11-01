@@ -23,9 +23,9 @@ func.func @main() -> i8 {
   %bias_tensor1 = tensor.expand_shape %b1_raw [[0,1]] output_shape [1,24] : tensor<24xi32> into tensor<1x24xi32>
   %s1_raw = bufferization.to_tensor %scale restrict : memref<24xf32> to tensor<24xf32>
   %scale_tensor1 = tensor.expand_shape %s1_raw [[0,1]] output_shape [1,24] : tensor<24xf32> into tensor<1x24xf32>
-  %average = custom.op "global_avg_i8"(%source_tensor) {input_scale = 0.043821115 : f32, output_scale = 0.023039883 : f32} : (tensor<1x14x14x96xi8>) -> tensor<1x1x1x96xi8>
+  %average = bbacc.custom "global_avg_i8"(%source_tensor) {input_scale = 0.043821115 : f32, output_scale = 0.023039883 : f32} : (tensor<1x14x14x96xi8>) -> tensor<1x1x1x96xi8>
   %a1 = tensor.collapse_shape %average [[0,1,2],[3]] : tensor<1x1x1x96xi8> into tensor<1x96xi8>
-  %v1 = custom.op "linear_i8_requant"(%a1, %weights1, %bias_tensor1, %scale_tensor1) {relu = true} : (tensor<1x96xi8>, tensor<96x24xi8>, tensor<1x24xi32>, tensor<1x24xf32>) -> tensor<1x24xi8>
+  %v1 = bbacc.custom "linear_i8_requant"(%a1, %weights1, %bias_tensor1, %scale_tensor1) {relu = true} : (tensor<1x96xi8>, tensor<96x24xi8>, tensor<1x24xi32>, tensor<1x24xf32>) -> tensor<1x24xi8>
   %final = tensor.expand_shape %v1 [[0,1,2],[3]] output_shape [1,1,1,24] : tensor<1x24xi8> into tensor<1x1x1x24xi8>
   %memory = bufferization.to_buffer %final : tensor<1x1x1x24xi8> to memref<1x1x1x24xi8>
   func.call @check_result(%memory) : (memref<1x1x1x24xi8>) -> ()

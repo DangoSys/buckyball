@@ -73,14 +73,14 @@ func.func @main() -> i8 {
   %bt = bufferization.to_tensor %bias0 restrict : memref<16xi32> to tensor<16xi32>
   %dt = bufferization.to_tensor %weight1 restrict : memref<16x1x3x3xi8> to tensor<16x1x3x3xi8>
   %dbt = bufferization.to_tensor %bias1 restrict : memref<16xi32> to tensor<16xi32>
-  %first = custom.op "conv2d_i8"(%input_float, %wt, %bt, %unit, %unit, %weight_step) {strides = array<i64: 2, 2>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x16x16x3xf32>, tensor<16x3x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x8x8x16xf32>
+  %first = bbacc.custom "conv2d_i8"(%input_float, %wt, %bt, %unit, %unit, %weight_step) {strides = array<i64: 2, 2>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x16x16x3xf32>, tensor<16x3x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x8x8x16xf32>
   %zero = arith.constant dense<0.0> : tensor<1x8x8x16xf32>
   %relu = linalg.generic {indexing_maps = [affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%first, %zero: tensor<1x8x8x16xf32>, tensor<1x8x8x16xf32>) outs(%zero: tensor<1x8x8x16xf32>) {
   ^bb0(%a: f32, %b: f32, %out: f32):
     %r = arith.maximumf %a, %b : f32
     linalg.yield %r : f32
   } -> tensor<1x8x8x16xf32>
-  %second = custom.op "depthwise_conv2d_i8"(%relu, %dt, %dbt, %unit, %unit, %weight_step) {strides = array<i64: 2, 2>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x8x8x16xf32>, tensor<16x1x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
+  %second = bbacc.custom "depthwise_conv2d_i8"(%relu, %dt, %dbt, %unit, %unit, %weight_step) {strides = array<i64: 2, 2>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x8x8x16xf32>, tensor<16x1x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
   %q = "frontend.fp32_to_int8"(%second, %unit) : (tensor<1x4x4x16xf32>, tensor<1x1x1x1xf32>) -> tensor<1x4x4x16xi8>
   %memory = bufferization.to_buffer %q : tensor<1x4x4x16xi8> to memref<1x4x4x16xi8>
   func.call @check_result(%memory) : (memref<1x4x4x16xi8>) -> ()

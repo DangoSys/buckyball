@@ -17,7 +17,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def ToInt8Ball_Dialect : Dialect {
   let name = "toint8_ball";
@@ -32,19 +32,17 @@ class ToInt8Ball_Op<string mnemonic, list<Trait> traits = []>
 def BankFp32ToInt8Op : ToInt8Ball_Op<"bank_fp32_to_int8",
     [DeclareOpInterfaceMethods<BankSSALowering>]> {
   let summary = "fp32_to_int8 on virtual banks";
-  let arguments = (ins I64:$input, I64:$output, F32:$multiplier,
-                       I64Attr:$rows);
+  let arguments = (ins I64:$input, I64:$scales, I64:$output, I64Attr:$rows);
   let results = (outs I64:$outputOut);
-  let assemblyFormat = "$input `->` $output `multiplier` `(` $multiplier `)` "
-                       "prop-dict attr-dict";
+  let assemblyFormat = "$input `,` $scales `->` $output prop-dict attr-dict";
 }
 
 def Fp32ToInt8Op : ToInt8Ball_Op<"fp32_to_int8",
     [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
   let summary = "fp32_to_int8 on physical banks";
-  let arguments = (ins F32:$multiplier, I64Attr:$input, I64Attr:$output,
+  let arguments = (ins I64Attr:$input, I64Attr:$scales, I64Attr:$output,
                        I64Attr:$rows);
-  let assemblyFormat = "`multiplier` `(` $multiplier `)` prop-dict attr-dict";
+  let assemblyFormat = "prop-dict attr-dict";
 }
 
 def BankInt32ToInt8Op : ToInt8Ball_Op<"bank_int32_to_int8",

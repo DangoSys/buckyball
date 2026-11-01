@@ -23,7 +23,7 @@ class Memory(b: MemoryParam, externalHome: Boolean) extends Module {
 
     val threads = Option.when(core.threadPorts > 0)(Vec(
       core.threadPorts,
-      Flipped(new MemoryPort(b.dcache.tracking, b.memoryAccess.walker))
+      Flipped(new MemCtrl(b.dcache.tracking, b.memoryAccess.walker))
     ))
 
     val commandAllowed = Input(Bool())

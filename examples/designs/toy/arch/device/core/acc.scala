@@ -5,7 +5,7 @@ import sims.configs.SimParam
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import examples.core.rocket.configs.Params
-import framework.core.memory.MemoryPort
+import framework.core.memory.MemCtrl
 import framework.acc.frontend.RoCCIO
 import framework.ip.bus.axi4
 import framework.acc.balldomain.bbus.BBus
@@ -25,7 +25,7 @@ class Acc(config: Params, simp: SimParam) extends Module {
   @public
   val io = IO(new Bundle {
     val rocc   = new RoCCIO(corep.cpu.core.xLen, corep.permission)
-    val memory = new MemoryPort(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)
+    val memory = new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)
     val ddr    = new axi4.Port(acc.transport.axi)
   })
 

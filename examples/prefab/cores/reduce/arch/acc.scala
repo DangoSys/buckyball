@@ -16,8 +16,8 @@ import framework.acc.memdomain.{MemDomain, PhysicalBankHash}
 import framework.acc.gpdomain.GpDomain
 import framework.acc.balldomain.BallDomain
 import framework.acc.balldomain.bbus.BBus
-import framework.core.memory.MemoryPort
-import framework.thread.tlink.SharedLink
+import framework.core.memory.MemCtrl
+import framework.core.shm.SharedLink
 import framework.ip.bus.axi4
 
 @instantiable
@@ -46,7 +46,7 @@ class Acc(
 
     val rocc   = new RoCCIO(commandDataBits, permissionp)
     val ddr    = new axi4.Port(transportp.axi)
-    val memory = new MemoryPort(trackingp, walkerp)
+    val memory = new MemCtrl(trackingp, walkerp)
     val shm    = new SharedLink(frontp, memp)
 
     val shared_bank_hashes = Option.when(diffTest && memp.sharedEnable)(

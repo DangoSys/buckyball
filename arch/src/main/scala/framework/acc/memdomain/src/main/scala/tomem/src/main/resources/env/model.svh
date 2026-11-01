@@ -6,7 +6,7 @@ class model extends uvm_subscriber #(cycle_item);
   typedef struct {
     int tag, bank_id, rows, groups, group_base, start_row, width, pixel, source_width;
     longint unsigned base, special;
-    bit writing, is_2d, is_image, is_mmio, is_config;
+    bit writing, is_2d, is_image, is_mmio, is_config, rejected;
     int words, index, fault;
     longint unsigned fault_address;
   } operation;
@@ -76,6 +76,9 @@ class model extends uvm_subscriber #(cycle_item);
     op.is_image = `MI(t, REQUEST_BITS_CMD_IS_IMAGE);
     op.is_mmio = `MI(t, REQUEST_BITS_CMD_IS_MMIO);
     op.is_config = `MI(t, REQUEST_BITS_CMD_IS_CONFIG);
+    op.rejected =
+    `MI(t, REQUEST_BITS_CMD_IS_SHARED)
+    && !op.is_image && !op.is_mmio && !op.is_config;
     op.width = ((op.special >> 59) & 7) + 1;
     op.pixel = ((op.special >> 36) & 127) * 8;
     op.source_width = (op.special >> 43) & 1023;
@@ -87,7 +90,10 @@ class model extends uvm_subscriber #(cycle_item);
     op.fault = 0;
     op.fault_address = 0;
     if (!op.is_config) begin
-      if (image.admission_error != 0) begin
+      if (op.rejected) begin
+        op.fault = 5;
+        op.fault_address = op.base;
+      end else if (image.admission_error != 0) begin
         op.fault = image.admission_error;
         op.fault_address = 'hdead;
       end else if (op.rows == 0) begin
@@ -136,7 +142,7 @@ class model extends uvm_subscriber #(cycle_item);
       load_serial++;
       image_words = 0;
       read_addresses.delete();
-      if (!op.is_config && image.admission_error == 0 && op.rows > 0)
+      if (!op.rejected && !op.is_config && image.admission_error == 0 && op.rows > 0)
         for (int i = 0; i < op.words; i++) begin
           longint unsigned address = load_address(op, i);
           for (int b = 0; b < 16; b++) read_addresses[(address+b)&~64'd15] = 1;
@@ -206,6 +212,15 @@ class model extends uvm_subscriber #(cycle_item);
       return;
     end
     if (`MI(t, REQUEST_VALID) && `MO(t, REQUEST_READY)) predict(t);
+    if (load_active && load_op.rejected)
+      verify(!`MO(t, MEMORY_AXI_AR_VALID) && !`MO(t, BANKWRITE_WRITE_REQ_VALID) && !
+             `MO(t, MEMORY_CONTROL_READ_VALID) && !`MO(t, MEMORY_CONTROL_FINISHED_0_VALID),
+             "Rejected shared load reached DDR, bank, or memory control");
+    if (store_active && store_op.rejected)
+      verify(!`MO(t, MEMORY_AXI_AW_VALID) && !`MO(t, MEMORY_AXI_W_VALID) && !
+             `MO(t, BANKREAD_READ_REQ_VALID) && !`MO(t, MEMORY_CONTROL_WRITE_VALID) && !
+             `MO(t, MEMORY_CONTROL_FINISHED_1_VALID),
+             "Rejected shared store reached DDR, bank, or memory control");
     if (`MO(t, MEMORY_AXI_AR_VALID) && `MI(t, MEMORY_AXI_AR_READY)) begin
       verify(load_active, "AXI read without a load owner");
       verify(`MO(t, MEMORY_AXI_AR_BITS_SIZE) == 4 && `MO(t, MEMORY_AXI_AR_BITS_BURST) == 1 &&

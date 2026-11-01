@@ -196,6 +196,8 @@ name = "bebop-design-poly"
 version = "0.1.0"
 dependencies = [
  "bebop-bemu",
+ "buckyball-core-shm",
+ "buckyball-device-shm",
 ]
 
 [[package]]
@@ -286,6 +288,7 @@ dependencies = [
  "clap",
  "libtest-mimic",
  "predicates",
+ "prost",
  "serde",
  "toml",
  "walkdir",
@@ -378,6 +381,14 @@ dependencies = [
  "regex-automata",
  "serde_core",
 ]
+
+[[package]]
+name = "buckyball-core-shm"
+version = "0.1.0"
+
+[[package]]
+name = "buckyball-device-shm"
+version = "0.1.0"
 
 [[package]]
 name = "bumpalo"

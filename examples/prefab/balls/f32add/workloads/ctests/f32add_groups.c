@@ -24,8 +24,8 @@ static uint32_t add(uint32_t a, uint32_t b) {
   return result.bits;
 }
 int main(void) {
-  unsigned source = THREAD_FRONTEND_SHARED_VBANK_BASE, accumulator = source + 1,
-           target = source + 2;
+  unsigned source = 0, accumulator = 1,
+           target = THREAD_FRONTEND_SHARED_VBANK_BASE;
   bb_mem_alloc(source, 1, 3);
   bb_mem_alloc(accumulator, 1, 1);
   bb_mem_alloc(target, 1, 1);
@@ -38,7 +38,10 @@ int main(void) {
     accumulator = target;
     target = previous;
   }
-  bb_mvout((uintptr_t)output, accumulator, 2, 1);
+  bb_mem_release(source);
+  bb_mem_alloc(source, 1, 1);
+  bb_f32add(accumulator, target, source, 2, 0, 1);
+  bb_mvout((uintptr_t)output, source, 2, 1);
   for (unsigned i = 0; i < 8; ++i) {
     uint32_t expected = 0;
     for (unsigned group = 0; group < 3; ++group)

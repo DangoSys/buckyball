@@ -8,6 +8,7 @@ import chisel3.experimental.hierarchy.{instantiable, Instance, Instantiate}
 import framework.core.configs.CoreParam
 import framework.device.configs.DeviceParam
 import framework.device.cbus.CBus
+import framework.device.shm.{Params => CommunicationParams, Node}
 import framework.device.cbus.generated.CoreComponents
 import buckyball.config.Design
 import _root_.configs.GlobalConfig
@@ -34,9 +35,20 @@ class DeviceTop(b: GlobalConfig, design: Design) extends BaseDevice(b.device.ddr
   )
   require(cores.forall(_.memory.home == sharedHome) && sharedHome.memory.agents == cores.size * 3)
 
-  val bus:         Instance[CBus]       =
+  val bus: Instance[CBus] =
     Instantiate(new CBus(b.device, CBus.generators(design, b.device, b.sim, CoreComponents.factories)))
-  val home:        Instance[Home]       = Instantiate(new Home(sharedHome))
+  val communication = CommunicationParams(256 * 1024, cores.size, device.ddr.axi)
+  val links         = Instantiate(new CoreLinks(communication))
+  require(cores.forall(_.clink.service))
+  for (core <- cores.indices) {
+    val endpoint = Instantiate(new Node(communication))
+    endpoint.io.coreId      := cores(core).hartId.U
+    endpoint.io.request <> bus.services(core).request
+    bus.services(core).reply <> endpoint.io.reply
+    bus.services(core).busy := endpoint.io.busy
+    links.io.cores(core) <> endpoint.io.link
+  }
+  val home: Instance[Home] = Instantiate(new Home(sharedHome))
   val peripherals: Instance[Controller] =
     Instantiate(new Controller(device, device.ddr.axi, cores.head.memory.memoryAccess.memory))
 
@@ -44,7 +56,8 @@ class DeviceTop(b: GlobalConfig, design: Design) extends BaseDevice(b.device.ddr
     Seq(
       (device.clint.base, device.clint.bytes),
       (device.plic.base, device.plic.bytes),
-      (device.scu.baseAddress, device.scu.totalSizeBytes)
+      (device.scu.baseAddress, device.scu.totalSizeBytes),
+      (device.trace.base, device.trace.bytes)
     ),
     device.ddr.axi
   ))

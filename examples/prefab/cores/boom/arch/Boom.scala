@@ -28,7 +28,7 @@ class Boom(
     with HasCLink {
   val diffTest = simp.diffTest
   @public
-  val clink    = IO(new CLinkIO(CLinkParam(1, false, Seq.empty, p.chi, p.axi, p.axi, None)))
+  val clink    = IO(new CLinkIO(CLinkParam(1, false, Seq.empty, p.chi, p.axi, p.axi, false)))
   val native   = Instantiate(new Native)
   native.io.clock            := clock
   native.io.reset            := reset.asBool

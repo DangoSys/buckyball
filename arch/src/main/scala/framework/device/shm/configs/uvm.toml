@@ -1,0 +1,9 @@
+[parameters]
+capacity = "8192"
+cores = 2
+clients = 2
+addressBits = 44
+dataBits = 128
+idBits = 4
+
+[defines]

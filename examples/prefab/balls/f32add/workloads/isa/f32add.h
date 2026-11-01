@@ -1,7 +1,6 @@
 #ifndef F32ADD_H
 #define F32ADD_H
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Four IEEE FP32 elements per 128-bit row, RNE, canonical NaN.
 // rs2[4:0] selects the input group; bit 5 starts with +0 instead of reading b.

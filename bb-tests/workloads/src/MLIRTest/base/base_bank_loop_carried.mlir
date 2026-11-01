@@ -20,19 +20,19 @@ func.func @main() -> i8 {
     }
   }
 
-  %bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %bank = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
   %last = scf.for %row = %c0 to %c64 step %c16 iter_args(%carried = %bank) -> (i64) {
     %in = memref.subview %input[%row, 0] [16, 16] [1, 1]
         : memref<64x16xi8> to memref<16x16xi8, strided<[16, 1], offset: ?>>
     %out = memref.subview %output[%row, 0] [16, 16] [1, 1]
         : memref<64x16xi8> to memref<16x16xi8, strided<[16, 1], offset: ?>>
-    %loaded = buckyball.bank_mvin %in, %carried <{depth = 16 : i64, stride = 1 : i64}>
+    %loaded = bbacc.bank_mvin %in, %carried <{depth = 16 : i64, stride = 1 : i64}>
         : memref<16x16xi8, strided<[16, 1], offset: ?>>
-    %stored = buckyball.bank_mvout %out, %loaded <{depth = 16 : i64, stride = 1 : i64}>
+    %stored = bbacc.bank_mvout %out, %loaded <{depth = 16 : i64, stride = 1 : i64}>
         : memref<16x16xi8, strided<[16, 1], offset: ?>>
     scf.yield %stored : i64
   }
-  buckyball.bank_release %last
+  bbacc.bank_release %last
 
   func.call @check_result(%output) : (memref<64x16xi8>) -> ()
   memref.dealloc %input : memref<64x16xi8>

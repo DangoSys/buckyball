@@ -9,18 +9,25 @@
 enum { GROUPS = 3, PIXELS = 2, ROWS = PIXELS * 4 };
 
 static float input[GROUPS][PIXELS * 16] __attribute__((aligned(64)));
+static float scales[GROUPS][16] __attribute__((aligned(64)));
 static int8_t actual[GROUPS][PIXELS * 16] __attribute__((aligned(64)));
 
 int main(void) {
-  for (int group = 0; group < GROUPS; ++group)
+  for (int group = 0; group < GROUPS; ++group) {
     for (int i = 0; i < PIXELS * 16; ++i)
       input[group][i] = (float)((group * 29 + i * 7) % 100 - 50);
+    for (int i = 0; i < 16; ++i)
+      scales[group][i] = 2.0f;
+  }
 
   bb_mem_alloc(0, 1, GROUPS);
   bb_mem_alloc(1, 1, GROUPS);
+  bb_mem_alloc(2, 1, 1);
   for (int group = 0; group < GROUPS; ++group)
     bb_mvin_group((uintptr_t)input[group], 0, group, ROWS, 1);
-  bb_quant_f32_to_i8(0, 1, ROWS, 2.0f);
+  // One scale group: rows 4g..4g+3 hold the scales of channel block g.
+  bb_mvin((uintptr_t)scales, 2, GROUPS * 4, 1);
+  bb_quant_f32_to_i8(0, 2, 1, ROWS);
   for (int group = 0; group < GROUPS; ++group)
     bb_mvout_group((uintptr_t)actual[group], 1, group, PIXELS, 1);
 

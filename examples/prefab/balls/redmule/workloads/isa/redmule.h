@@ -1,7 +1,6 @@
 #ifndef REDMULE_H
 #define REDMULE_H
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // FP16 A[M,K], B[K,8], C[M,8]; ordered FP16 FMA, RNE, canonical NaN.
 // Bases are bank rows. First starts with positive zero; otherwise rs1 marks

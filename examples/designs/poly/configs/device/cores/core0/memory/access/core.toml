@@ -50,3 +50,13 @@ readable = true
 writable = true
 atomic = false
 normal = false
+
+[[regions]]
+base = 0x70000000
+bytes = 0x100000
+cacheable = false
+executable = false
+readable = false
+writable = true
+atomic = false
+normal = false

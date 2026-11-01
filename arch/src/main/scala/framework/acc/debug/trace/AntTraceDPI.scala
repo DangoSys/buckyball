@@ -36,10 +36,27 @@ class AntTraceDPI extends BlackBox with HasBlackBoxInline {
         |    input int unsigned instruction, input int unsigned rd,
         |    input int unsigned data_lo, input int unsigned data_hi
         |  );
+        |  reg [63:0] thread_id_reg;
+        |  reg [63:0] pc_reg;
+        |  reg [31:0] instruction_reg;
+        |  reg [4:0]  rd_reg;
+        |  reg [63:0] data_reg;
+        |  reg        valid_reg = 1'b0;
+        |
         |  always @(posedge clock) begin
-        |    if (!reset && enable)
-        |      dpi_ant_trace(thread_id[31:0], thread_id[63:32], pc[31:0], pc[63:32],
-        |                    instruction, {27'b0, rd}, data[31:0], data[63:32]);
+        |    if (valid_reg) begin
+        |      dpi_ant_trace(thread_id_reg[31:0], thread_id_reg[63:32], pc_reg[31:0], pc_reg[63:32],
+        |                    instruction_reg, {27'b0, rd_reg}, data_reg[31:0], data_reg[63:32]);
+        |    end
+        |
+        |    valid_reg <= !reset && enable;
+        |    if (!reset && enable) begin
+        |      thread_id_reg   <= thread_id;
+        |      pc_reg          <= pc;
+        |      instruction_reg <= instruction;
+        |      rd_reg          <= rd;
+        |      data_reg        <= data;
+        |    end
         |  end
         |""".stripMargin
     ) + "endmodule\n"

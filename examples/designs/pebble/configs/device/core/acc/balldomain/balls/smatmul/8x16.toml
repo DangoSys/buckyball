@@ -1,4 +1,5 @@
 # Pebble SMatMul Ball Configuration
+include = "../../../../../../../../../prefab/balls/smatmul/configs/default.toml"
 
 tileRows = 8
 tileCols = 16

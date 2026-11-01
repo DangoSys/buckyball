@@ -1,8 +1,7 @@
 #ifndef _BB_GEMMINI_LOOP_WS_H
 #define _BB_GEMMINI_LOOP_WS_H
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 #define bb_gemmini_loop_ws_config_bounds(max_i, max_j, max_k)                  \
   BUCKYBALL_INSTRUCTION_R_R(                                                   \

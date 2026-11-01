@@ -1,8 +1,7 @@
 #ifndef _BB_GEMMINI_FLUSH_H_
 #define _BB_GEMMINI_FLUSH_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 #define BB_GEMMINI_FLUSH_RS2 4ULL
 

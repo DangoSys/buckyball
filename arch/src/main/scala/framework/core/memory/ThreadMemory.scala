@@ -9,7 +9,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 /** Thread-side cache services; requests retain their original admission tag. */
-class MemoryPort(tracking: TrackingParam, walker: WalkerParam) extends Bundle {
+class MemCtrl(tracking: TrackingParam, walker: WalkerParam) extends Bundle {
 
   val cpuQuery    = Input(new CpuQuery(tracking))
   val cpuAllow    = Output(Bool())
@@ -26,8 +26,8 @@ class ThreadMemory(ports: Int, tracking: TrackingParam, walker: WalkerParam) ext
 
   @public
   val io = IO(new Bundle {
-    val clients = Vec(ports, Flipped(new MemoryPort(tracking, walker)))
-    val system  = new MemoryPort(tracking, walker)
+    val clients = Vec(ports, Flipped(new MemCtrl(tracking, walker)))
+    val system  = new MemCtrl(tracking, walker)
   })
 
   io.system.cpuAllow            := io.clients.map(_.cpuAllow).reduce(_ && _)

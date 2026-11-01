@@ -31,9 +31,8 @@ int main(void) {
   for (unsigned core = 0; core < POLY_THREAD_CORES; ++core)
     if (pthread_join(threads[core], NULL))
       abort();
-  printf("Ant bank boundary PASS cores=%u private=%u shared=%u\n",
-         (unsigned)POLY_THREAD_CORES, THREAD_MEM_BANK_ENTRIES,
-         CORE_SHARED_MEM_BANK_ENTRIES);
+  printf("Ant bank boundary PASS cores=%u private=%u\n",
+         (unsigned)POLY_THREAD_CORES, THREAD_MEM_BANK_ENTRIES);
 #else
   uintptr_t hart;
   __asm__ volatile("csrr %0, mhartid" : "=r"(hart));

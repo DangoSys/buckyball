@@ -1,7 +1,6 @@
 #ifndef _BB_MXMM_H_
 #define _BB_MXMM_H_
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 static inline uint64_t bb_mxmm_cfg(uint32_t m, uint32_t n, uint32_t first,
                                    uint32_t last, uint32_t base) {

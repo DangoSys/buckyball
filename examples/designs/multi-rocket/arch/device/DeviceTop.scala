@@ -44,7 +44,8 @@ class DeviceTop(b: GlobalConfig, design: Design) extends BaseDevice(b.device.ddr
     Seq(
       (device.clint.base, device.clint.bytes),
       (device.plic.base, device.plic.bytes),
-      (device.scu.baseAddress, device.scu.totalSizeBytes)
+      (device.scu.baseAddress, device.scu.totalSizeBytes),
+      (device.trace.base, device.trace.bytes)
     ),
     device.ddr.axi
   ))

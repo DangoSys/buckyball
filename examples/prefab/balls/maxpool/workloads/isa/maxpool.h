@@ -1,8 +1,7 @@
 #ifndef _BB_MAXPOOL_H_
 #define _BB_MAXPOOL_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Group g of the input and output banks is channel block g (16 INT8 channels
 // per row). Both banks have the same number of groups; every group is pooled

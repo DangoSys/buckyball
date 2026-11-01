@@ -41,7 +41,7 @@ class ToInt8Ball(
   )
   require(ball.inBW == 1, "ToInt8Ball requires inBW=1")
   require(ball.outBW == 1, "ToInt8Ball requires outBW=1")
-  require((f32Funct >> 4) == 3, "QUANT_F32_TO_I8 must encode one read and one write")
+  require((f32Funct >> 4) == 4, "QUANT_F32_TO_I8 must encode two reads and one write")
   require((i32Funct >> 4) == 4, "QUANT_I32_TO_I8 must encode two reads and one write")
 
   @public
@@ -71,7 +71,6 @@ class ToInt8Ball(
   val scaleRow     = RegInit(0.U(2.W))
   val i32Mode      = RegInit(false.B)
   val reluReg      = RegInit(false.B)
-  val tensorScale  = RegInit(0.U(32.W))
   val scales       = Reg(Vec(16, UInt(32.W)))
   val inputData    = Reg(UInt(128.W))
   val outputData   = RegInit(0.U(128.W))
@@ -91,7 +90,7 @@ class ToInt8Ball(
 
   val floatToInt = Module(new RecFNToIN(8, 24, 8))
   val input      = (inputData >> (lane << 5))(31, 0)
-  val scale      = Mux(i32Mode, scales(Cat(relativeRow(1, 0), lane)), tensorScale)
+  val scale      = scales(Cat(relativeRow(1, 0), lane))
   val packIssue  = state === pack
 
   val inputStage0  = RegEnable(input, packIssue)
@@ -146,7 +145,8 @@ class ToInt8Ball(
 
   blink.bankRead(0).rob_id           := robIdReg
   blink.bankRead(0).bank_id          := Mux(state === scaleReq || state === scaleResp, scaleBank, inputBank)
-  blink.bankRead(0).group_id         := Mux(state === scaleReq || state === scaleResp, bases(1), bases(0)) + group
+  // The one scale group holds the scales of channel block g in rows 4g..4g+3.
+  blink.bankRead(0).group_id         := Mux(state === scaleReq || state === scaleResp, bases(1), bases(0) + group)
   blink.bankRead(0).io.req.valid     := false.B
   blink.bankRead(0).io.req.bits.addr := 0.U
   blink.bankRead(0).io.resp.ready    := false.B
@@ -180,22 +180,16 @@ class ToInt8Ball(
           "ToInt8Ball input and output must have the same channel groups"
         )
         assert(
-          cmd.op1_bank =/= cmd.wr_bank,
-          "ToInt8Ball input and output banks must differ"
+          cmd.op1_bank =/= cmd.wr_bank && cmd.op1_bank =/= cmd.op2_bank && cmd.op2_bank =/= cmd.wr_bank,
+          "ToInt8Ball input, scale, and output banks must differ"
+        )
+        assert(
+          cmd.op2_col === 1.U && (cmd.op1_col << 2) <= mp.bankEntries.U,
+          "ToInt8Ball scales must be one group of four rows per channel group"
         )
         when(isF32) {
-          assert(cmd.rs2(63, 32) === 0.U, "QUANT_F32_TO_I8 reserves rs2[63:32]")
-          assert(positiveFinite(cmd.rs2(31, 0)), "QUANT_F32_TO_I8 scale must be finite and positive")
+          assert(cmd.rs2 === 0.U, "QUANT_F32_TO_I8 reserves rs2")
         }.otherwise {
-          assert(cmd.op2_col === cmd.op1_col, "QUANT_I32_TO_I8 scale must have one group per channel group")
-          assert(
-            cmd.op1_bank =/= cmd.op2_bank,
-            "QUANT_I32_TO_I8 input and scale banks must differ"
-          )
-          assert(
-            cmd.op2_bank =/= cmd.wr_bank,
-            "QUANT_I32_TO_I8 scale and output banks must differ"
-          )
           val outputBase = cmd.rs2(7, 1)
           val width      = cmd.rs2(14, 8)
           val height     = cmd.rs2(21, 15)
@@ -234,16 +228,15 @@ class ToInt8Ball(
         scaleRow     := 0.U
         i32Mode      := isI32
         reluReg      := isI32 && cmd.rs2(0)
-        tensorScale  := cmd.rs2(31, 0)
         outputData   := 0.U
         lane         := 0.U
-        state        := Mux(isI32, scaleReq, inputReq)
+        state        := scaleReq
       }
     }
 
     is(scaleReq) {
       blink.bankRead(0).io.req.valid     := true.B
-      blink.bankRead(0).io.req.bits.addr := scaleRow
+      blink.bankRead(0).io.req.bits.addr := (group << 2) + scaleRow
       when(blink.bankRead(0).io.req.fire) {
         state := scaleResp
       }
@@ -254,7 +247,7 @@ class ToInt8Ball(
       when(blink.bankRead(0).io.resp.fire) {
         for (lane <- 0 until 4) {
           val value = blink.bankRead(0).io.resp.bits.data(32 * lane + 31, 32 * lane)
-          assert(positiveFinite(value), "QUANT_I32_TO_I8 scales must be finite and positive")
+          assert(positiveFinite(value), "ToInt8Ball scales must be finite and positive")
           scales(Cat(scaleRow, lane.U(2.W))) := value
         }
         when(scaleRow === 3.U) {
@@ -315,7 +308,7 @@ class ToInt8Ball(
             outputRow    := outputBase
             outputColumn := 0.U
             scaleRow     := 0.U
-            state        := Mux(i32Mode, scaleReq, inputReq)
+            state        := scaleReq
           }
         }.otherwise {
           relativeRow := relativeRow + 1.U

@@ -4,6 +4,7 @@
 @VERIFY@/uvm/src/core/scenario_if.sv
 @VERIFY@/uvm/src/core/scenario_package.sv
 +incdir+@RTL@
++incdir+@RESOURCES@
 -F @RTL@/Service/filelist.f
-@RESOURCES@/scenario_if.sv
+@RESOURCES@/control_if.sv
 @RESOURCES@/service_tb.sv

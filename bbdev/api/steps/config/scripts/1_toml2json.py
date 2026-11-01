@@ -38,6 +38,7 @@ IP_DEFAULTS = {
     "clint": "arch/src/main/scala/framework/device/peripherals/clint/configs/default.toml",
     "plic": "arch/src/main/scala/framework/device/peripherals/plic/configs/default.toml",
     "scu": "arch/src/main/scala/framework/device/peripherals/scu/configs/default.toml",
+    "trace": "arch/src/main/scala/framework/device/peripherals/trace/configs/default.toml",
     "frontend": "arch/src/main/scala/framework/acc/frontend/configs/default.toml",
     "memdomain": "arch/src/main/scala/framework/acc/memdomain/configs/default.toml",
     "gpdomain": "arch/src/main/scala/framework/acc/gpdomain/configs/default.toml",
@@ -95,6 +96,10 @@ def _walk_file(
     stack.pop()
     if not isinstance(out, dict):
         _die(f"{path}: root must be a table")
+    # A file built on an include keeps the included file's `_file`: the
+    # component config at the bottom of the chain locates the component.
+    if "include" in data:
+        return out
     if "_file" in out:
         _die(f"{path}: reserved key '_file'")
     out["_file"] = key
@@ -131,17 +136,14 @@ def _walk(
                 catalog = _load(repo / "arch/uvm.toml")
                 path = repo / catalog["paths"][obj["ip"]] / "configs/uvm.toml"
                 result[key] = _walk_file(path, includes, stack)
-            elif key == "param" and value == "default":
-                component = obj["component"]
-                if not isinstance(component, str) or not component.isidentifier():
-                    _die(f"{base}: invalid Ball component {component!r}")
-                path = (
-                    Path(__file__).resolve().parents[5]
-                    / "examples/prefab/balls"
-                    / component
-                    / "configs/default.toml"
+            elif key == "param" and "instructions" in obj:
+                # A Ball's parameters: its own config, or a design TOML that
+                # includes it and replaces some of its values.
+                if not isinstance(value, str) or not value.endswith(".toml"):
+                    _die(f"{base}: Ball param must name a TOML file, got {value!r}")
+                result[key] = _walk_file(
+                    (base / value).resolve(), includes, stack, True
                 )
-                result[key] = _walk_file(path, includes, stack)
             else:
                 # A device config holds overrides of the design config.
                 result[key] = _walk(

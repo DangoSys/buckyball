@@ -34,4 +34,4 @@ set(RUNTIME_DEFS ${DESIGN_TARGET_DEFS_${PARAMS_TARGET}})
 add_subdirectory("${DESIGN_REPO}/stack/engine" engine)
 add_subdirectory("${DESIGN_REPO}/stack/runtime" runtime)
 export(TARGETS bindings runtime runtime-baremetal runtime-linux engine
-  runtime-shared runtime-linux-shared engine-shared FILE device.cmake)
+  runtime-linux-shared engine-linux engine-shared FILE device.cmake)

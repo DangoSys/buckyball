@@ -4,8 +4,9 @@
 # Built by the stack top of each simulation entry, configured with DESIGN_CMAKE
 # and CORE. Products:
 #   execute.o           how the core runs jobs (direct execution)
-#   libtoy-compiler.so  buddy-opt plugin: the core's fusion (form-custom-ops)
-#                       and lower-buckyball around the framework bank layer
+#   libtoy-compiler.so  buddy-opt plugin: the core's recognition and fusion
+#                       (convert-linalg-to-acc) on the framework midend (bank
+#                       layer, lower-acc)
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
 project(toy-core-stack LANGUAGES C CXX)

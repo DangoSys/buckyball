@@ -10,6 +10,8 @@ def sources = T.sources(
     PathRef(millSourcePath / os.RelPath("plic/Plic.scala")),
     PathRef(millSourcePath / os.RelPath("plic/configs/Parameters.scala")),
     PathRef(millSourcePath / os.RelPath("scu/SCU.scala")),
+    PathRef(millSourcePath / os.RelPath("trace/Trace.scala")),
+    PathRef(millSourcePath / os.RelPath("trace/configs/Parameters.scala")),
     PathRef(millSourcePath / os.RelPath("scu/SystemControl.scala")),
     PathRef(millSourcePath / os.RelPath("scu/configs/Parameters.scala"))
   )

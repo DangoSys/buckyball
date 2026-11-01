@@ -18,7 +18,7 @@ component = "toint8"
 param = "../../../../balls/toint8/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
-  { mnemonic = "QUANT_F32_TO_I8", funct7 = 51 },
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 74 },
   { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
 ]
 
@@ -50,4 +50,24 @@ param = "../../../../balls/mxquant/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MXQUANT", funct7 = 54 },
+]
+
+[[balls]]
+id = 5
+name = "Mxint8quantizeBall"
+component = "mxint8quantize"
+param = "../../../../balls/mxint8quantize/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8QUANT", funct7 = 48 },
+]
+
+[[balls]]
+id = 6
+name = "Mxint8matmulBall"
+component = "mxint8matmul"
+param = "../../../../balls/mxint8matmul/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8MM", funct7 = 64 },
 ]

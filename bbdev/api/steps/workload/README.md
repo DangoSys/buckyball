@@ -20,7 +20,9 @@ bbdev workload --clean "--design toy"
 ### `build`
 **Endpoint**: `POST /workload/build`
 
-**Function**: Build workload
+**Function**: Build workload. Builds the stack of the simulation (design.cmake),
+then the C API `bb-tests/workloads/lib` (bbsw, its own CMake build in
+`output/sims/<selection>/bbsw`), then the workloads with both.
 
 **Parameters**:
 - **`design`** - Required design name. Selects design-specific workloads.

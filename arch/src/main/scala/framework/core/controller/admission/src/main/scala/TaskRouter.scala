@@ -4,12 +4,12 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 import framework.core.controller.configs.CommandsParam
-import framework.device.cbus.ControlRequest
+import framework.core.controller.admission.Management
 import framework.core.controller.task.TaskRequest
 import framework.acc.frontend.Response
 
 class TaskEndpoint extends Bundle {
-  val request = Decoupled(new ControlRequest)
+  val request = Decoupled(new Management)
   val reply   = Flipped(Decoupled(UInt(64.W)))
   val busy    = Input(Bool())
 }
@@ -46,7 +46,7 @@ class TaskRouter(b: CommandsParam) extends Module {
   val command     = io.command.bits
   val instruction = command.instruction
   val remote      = instruction.raw_inst(31, 25) >= 13.U
-  val request     = Wire(new ControlRequest)
+  val request     = Wire(new Management)
   request.operation                                := instruction.raw_inst(31, 25)
   request.context                                  := instruction.rs1Data(63, 32)
   request.field                                    := instruction.rs1Data(31, 0)

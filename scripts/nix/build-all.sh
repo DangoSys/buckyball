@@ -5,7 +5,7 @@ set -euo pipefail
 BBDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 
 usage() {
-  echo "Usage: ${0} [OPTIONS] "
+  echo "Usage: ${0} [OPTIONS]"
   echo ""
   echo "Helper script to fully initialize repository that wraps other scripts."
   echo "By default it initializes/installs things in the following order:"
@@ -13,14 +13,15 @@ usage() {
   echo "   1. bbdev install"
   echo "   2. Compiler installation"
   echo "   3. RTL pre-compile sources"
-  echo "   4. bb-tests pre-compile sources"
+  echo "   4. Workload pre-compile sources"
   echo "   5. waveform-mcp build"
   echo "   6. bebop environment"
-  echo "   7. verify build"
+  echo "   7. verify environment"
   echo "   8. pre-commit hooks installation"
   echo "   9. register project MCP"
   echo ""
   echo "Selected steps require earlier steps to have completed already."
+  echo "Steps 2, 3 and 4 build toy with ToyVerilatorConfig to verify the base setup."
   echo ""
   echo "Options"
   echo "  -h     : Display this message"
@@ -28,6 +29,7 @@ usage() {
   echo "  -s N   : Skip step N. Repeat to skip multiple steps; cannot combine with -o."
 }
 
+ORIGINAL_ARGS=("$@")
 ONLY_LIST=()
 SKIP_LIST=()
 
@@ -92,24 +94,13 @@ function begin_step
 }
 
 cd "$BBDIR"
-if run_step 0 && [ "${BUCKYBALL_SETUP_NIX_BUILT:-0}" != "1" ]; then
-  begin_step "0" "Nix environment setup"
-  nix build
-fi
-
 if [ -z "${IN_NIX_SHELL:-}" ]; then
-  REEXEC_ARGS=()
-  for only in "${ONLY_LIST[@]}"; do
-    REEXEC_ARGS+=(-o "$only")
-  done
-  for skip in "${SKIP_LIST[@]}"; do
-    REEXEC_ARGS+=(-s "$skip")
-  done
-  export BUCKYBALL_SETUP_NIX_BUILT=1
-  exec nix develop --command bash "$BBDIR/scripts/nix/build-all.sh" "${REEXEC_ARGS[@]}"
+  exec nix develop --command bash "$BBDIR/scripts/nix/build-all.sh" "${ORIGINAL_ARGS[@]}"
 fi
 
 if run_step 0; then
+  begin_step "0" "Nix environment setup"
+  nix build
   begin_step "0" "Git submodules"
   "$BBDIR/scripts/nix/download.sh"
 fi
@@ -117,10 +108,8 @@ fi
 if run_step "1"; then
   begin_step "1" "bbdev install"
 
-  echo "Installing bbdev Python dependencies..."
-  cd "$BBDIR/bbdev/api"
-  uv venv .venv --python python3 --seed
-  uv pip install --python .venv/bin/python -r pyproject.toml
+  cd "$BBDIR/bbdev"
+  nix develop -c true
 
   cd "$BBDIR"
   bbdev config --install
@@ -129,17 +118,19 @@ fi
 if run_step "2"; then
   begin_step "2" "Compiler installation"
   cd "$BBDIR"
-  bbdev stack --build '--design toy'
+  bbdev stack --build '--design toy --device ToyVerilatorConfig'
 fi
 
 if run_step "3"; then
   begin_step "3" "RTL source pre-compile"
-  bbdev verilator --verilog '--design toy'
+  cd "$BBDIR"
+  bbdev verilator --verilog '--design toy --device ToyVerilatorConfig'
 fi
 
 if run_step "4"; then
-  begin_step "4" "bb-tests pre-compile sources"
-  bbdev workload --build '--design toy'
+  begin_step "4" "Workload pre-compile sources"
+  cd "$BBDIR"
+  bbdev workload --build '--design toy --device ToyVerilatorConfig'
 fi
 
 if run_step "5"; then
@@ -152,14 +143,12 @@ if run_step "6"; then
   begin_step "6" "bebop environment"
   cd "$BBDIR/bebop"
   nix develop -c echo "bebop environment ready"
-
-
 fi
 
 if run_step "7"; then
-  begin_step "7" "verify build"
+  begin_step "7" "verify environment"
   cd "$BBDIR/verify"
-  nix develop -c echo "verify built successfully"
+  nix develop -c echo "verify environment ready"
 fi
 
 if run_step "8"; then
@@ -167,7 +156,7 @@ if run_step "8"; then
   cd "$BBDIR"
   pre-commit install --overwrite --hook-type pre-commit
   # Replace with wrapper so git commit gets nix env (result/bin in PATH)
-  cp "${BBDIR}/scripts/pre-commit-hook.sh" "${BBDIR}/.git/hooks/pre-commit"
+  cp "${BBDIR}/scripts/pre-commit-hook.sh" "$(git rev-parse --git-path hooks/pre-commit)"
 fi
 
 if run_step "9"; then

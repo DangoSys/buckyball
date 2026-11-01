@@ -1,3 +1,4 @@
+#include <bbhw/isa/isa.h>
 #include <isa/redmule.h>
 #include <stdio.h>
 

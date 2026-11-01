@@ -1,12 +1,11 @@
 //! The poly device simulation.
 //! Its Core models register in `bebop_bemu::CORES`; the Balls its design.pb
 //! names are compiled here and register in `bebop_bemu::BALLS`.
-extern crate bebop_design_poly;
 extern crate bebop_core_reduce;
+extern crate bebop_design_poly;
 
 include!(concat!(env!("OUT_DIR"), "/balls.rs"));
 
-pub const SIMULATION: bebop_bemu::Simulation = bebop_bemu::Simulation {
-    design: include_bytes!(concat!(env!("OUT_DIR"), "/design.pb")),
-    instantiate: bebop_bemu::device::cbus::instantiate,
-};
+mod simulation;
+
+pub use simulation::SIMULATION;

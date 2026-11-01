@@ -245,11 +245,16 @@ class Preflight(b: ModuleParam) extends Module {
         pas(worker)(previous) +& (currentVA - previousVA) === currentPA,
         "Preflight same-page ranges disagree on PA"
       )
-      when(currentEnd > previousEnd)(sizes(worker)(previous) := currentEnd - previousVA)
-    }.otherwise {
-      val index = counts(worker)(2, 0)
-      vas(worker)(index) := currentVA; pas(worker)(index) := currentPA; sizes(worker)(index) := currentBytes
-      counts(worker)     := counts(worker) + 1.U
+    }.otherwise(counts(worker) := counts(worker) + 1.U)
+    for (i <- 0 until p.contexts) {
+      when(worker === i.U) {
+        when(merge) {
+          when(currentEnd > previousEnd)(sizes(i)(previous) := currentEnd - previousVA)
+        }.otherwise {
+          val index = counts(i)(2, 0)
+          vas(i)(index) := currentVA; pas(i)(index) := currentPA; sizes(i)(index) := currentBytes
+        }
+      }
     }
     when(segmentLast && spanLast)(finish(Error.Ok.U, currentVA))
       .elsewhen(segmentLast) {
@@ -261,20 +266,30 @@ class Preflight(b: ModuleParam) extends Module {
       }.otherwise(state := segment)
   }
   val offer        = RegInit(false.B); val outputSlot = Reg(UInt(contextBits.W)); val outputIndex = Reg(UInt(3.W))
+  val outputSelect = Reg(UInt(p.contexts.W))
   val outputCursor = RegInit(0.U(contextBits.W))
   val prepared     = VecInit(phase.map(_ === ready))
   when(!offer && prepared.asUInt.orR) {
-    offer := true.B; outputSlot := select(prepared, outputCursor); outputIndex := 0.U
+    val slot = select(prepared, outputCursor)
+    offer := true.B; outputSlot := slot; outputSelect := UIntToOH(slot, p.contexts); outputIndex := 0.U
   }
+  // Decode contexts and ranges separately instead of broadcasting binary slot bits across every field.
+  val outputVA     = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> vas(i)))
+  val outputPA     = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> pas(i)))
+  val outputBytes  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> sizes(i)))
+  val outputError  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> errors(i)))
+  val outputFault  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> faultVA(i)))
+  val outputCount  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> counts(i)))
+  val rangeSelect  = UIntToOH(outputIndex, p.maxRanges)
   io.prepared.valid := offer && !reset.asBool
-  val failed       = errors(outputSlot) =/= Error.Ok.U
-  io.prepared.bits.id    := commands(outputSlot).id
-  io.prepared.bits.va    := Mux(failed, faultVA(outputSlot), vas(outputSlot)(outputIndex))
-  io.prepared.bits.pa    := Mux(failed, 0.U, pas(outputSlot)(outputIndex))
-  io.prepared.bits.bytes := Mux(failed, 0.U, sizes(outputSlot)(outputIndex))
-  io.prepared.bits.write := commands(outputSlot).write
-  io.prepared.bits.error := errors(outputSlot)
-  io.prepared.bits.last  := failed || outputIndex === counts(outputSlot) - 1.U
+  val failed = outputError =/= Error.Ok.U
+  io.prepared.bits.id    := Mux1H((0 until p.contexts).map(i => outputSelect(i) -> commands(i).id))
+  io.prepared.bits.va    := Mux(failed, outputFault, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputVA(i))))
+  io.prepared.bits.pa    := Mux(failed, 0.U, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputPA(i))))
+  io.prepared.bits.bytes := Mux(failed, 0.U, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputBytes(i))))
+  io.prepared.bits.write := Mux1H((0 until p.contexts).map(i => outputSelect(i) -> commands(i).write))
+  io.prepared.bits.error := outputError
+  io.prepared.bits.last  := failed || outputIndex === outputCount - 1.U
   when(io.prepared.fire) {
     when(io.prepared.bits.last) { phase(outputSlot) := free; offer := false.B; outputCursor := outputSlot + 1.U }
       .otherwise(outputIndex := outputIndex + 1.U)

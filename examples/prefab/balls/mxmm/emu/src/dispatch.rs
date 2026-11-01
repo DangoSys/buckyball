@@ -1,4 +1,4 @@
-use super::{fp32, mxfp8};
+use super::{accumulator::Format, fp32, mxfp8, timing};
 use bebop_bemu::ball::ExecContext;
 
 const BALL_CLASS: &str = "examples.balls.mxmm.MxmmBall";
@@ -22,12 +22,21 @@ pub fn execute_known(
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, _xs1: u64, _xs2: u64) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    _ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
     match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("MXMM_MXFP8" | "MXMM_MXFP8_WINDOW" | "MXMM_FMA32" | "MXMM_F32") => Some(1),
+        Some("MXMM_MXFP8") => Some(timing::latency(xs1, xs2, Format::Mxfp8)),
+        Some("MXMM_MXFP8_WINDOW") => Some(timing::latency(xs1, xs2, Format::Mxfp8Window)),
+        Some("MXMM_FMA32") => Some(timing::latency(xs1, xs2, Format::Fma32)),
+        Some("MXMM_F32") => Some(timing::latency(xs1, xs2, Format::F32)),
         _ => None,
     }
 }

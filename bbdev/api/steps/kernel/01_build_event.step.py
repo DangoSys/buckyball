@@ -51,6 +51,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     guest_memory_mib = (ddr.bytes - ddr.model) // (1024 * 1024)
     # A DDR without a model region leaves the base empty: init runs no model.
     model_base = f"{ddr.base + ddr.bytes - ddr.model:#x}" if ddr.model else ""
+    trace_base = f"{design_config.device.trace.base:#x}"
     interactive = input_data.get("interactive", False)
     output_root = design_output_root(bbdir, design, selection=input_data["target"])
     output_dir = os.path.join(output_root, "workloads/kernel")
@@ -72,6 +73,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         f"-DBUCKYBALL_KERNEL_OUTPUT={output_root} "
         f"-DBUCKYBALL_KERNEL_INTERACTIVE={interactive_arg} "
         f"-DBUCKYBALL_MODEL_BASE={model_base} "
+        f"-DBUCKYBALL_TRACE_BASE={trace_base} "
         f"-DBUCKYBALL_KERNEL_WORKLOADS={programs}"
     )
 

@@ -32,7 +32,7 @@ class MemorySystem(b: MemoryParam, externalHome: Boolean) extends Module {
     val memory         = new VirtualPort(b.memoryAccess)
     val timeRequest    = Flipped(Decoupled(new UncachedRequest(b.memoryAccess.memory)))
     val timeResponse   = Decoupled(new UncachedResponse(b.memoryAccess.memory))
-    val services       = Flipped(new MemoryPort(b.dcache.tracking, b.memoryAccess.walker))
+    val services       = Flipped(new MemCtrl(b.dcache.tracking, b.memoryAccess.walker))
     val commandAllowed = Input(Bool())
     val uncached       = new axi4.Port(b.uncached.axi)
 

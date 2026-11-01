@@ -3,8 +3,18 @@
 #
 # Built by the stack top of each simulation entry after the core's threads,
 # configured with DESIGN_CMAKE and CORE. Products:
-#   execute.o              how the core runs jobs (through the engine)
-#   libengine-compiler.so  buddy-opt pass plugin of the framework engine
+#   execute.o            how the core runs jobs (through the engine)
+#   libcore-compiler.so  buddy-opt plugin of the core level: the framework
+#                        midend (the dialects, lower-frontend-fake-op,
+#                        lower-core: launches to engine jobs) and the goban
+#                        pass in compiler/
+#                          convert-linalg-to-core  INT8 quantization,
+#                                                  decoding and products on
+#                                                  the matmul threads, as
+#                                                  subgraphs launched as early
+#                                                  as their inputs allow, in
+#                                                  turn on the threads;
+#                                                  transfers to and from them
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
 project(goban-core-stack LANGUAGES C CXX)
@@ -25,8 +35,27 @@ add_custom_command(
   VERBATIM)
 add_custom_target(execute ALL DEPENDS "${CMAKE_BINARY_DIR}/execute.o")
 
-# The engine's compiler plugin, for the threads this core runs.
-add_subdirectory("${ENGINE}/compiler" engine-compiler)
-add_library(engine-compiler-plugin MODULE $<TARGET_OBJECTS:engine-compiler>)
-set_target_properties(engine-compiler-plugin PROPERTIES OUTPUT_NAME engine-compiler
+# The compiler of the graphs on this core, including the matmul thread's
+# Ball dialects and the design's acc lowering.
+set(BUCKYBALL_BALLS ${DESIGN_TARGET_BALL_STACKS_matmul})
+file(GLOB BUCKYBALL_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/compiler/*.cpp")
+add_subdirectory("${DESIGN_REPO}/stack/compiler/midend" midend)
+add_library(core-compiler MODULE)
+target_link_libraries(core-compiler PRIVATE buckyball-compiler)
+set_target_properties(core-compiler PROPERTIES
   LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+set(LIFETIME_TEST "${DESIGN_REPO}/stack/compiler/tests/core-buffer-lifetime.mlir")
+add_custom_command(
+  OUTPUT core-buffer-lifetime.checked
+  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+    --load-dialect-plugin=$<TARGET_FILE:core-compiler>
+    --load-pass-plugin=$<TARGET_FILE:core-compiler>
+    ${LIFETIME_TEST} "-lower-core=design=${DESIGN_PB} core=goban"
+    -o core-buffer-lifetime.mlir
+  COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck ${LIFETIME_TEST}
+    --input-file=core-buffer-lifetime.mlir
+  COMMAND ${CMAKE_COMMAND} -E touch core-buffer-lifetime.checked
+  DEPENDS core-compiler ${LIFETIME_TEST} ${DESIGN_PB}
+  VERBATIM)
+add_custom_target(core-buffer-lifetime-check ALL DEPENDS core-buffer-lifetime.checked)

@@ -1,8 +1,7 @@
 #ifndef _BB_TRANSPOSE_H_
 #define _BB_TRANSPOSE_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // bb_transpose(op1_bank_id, wr_bank_id, iter, elem_bits)
 // rs1 = banks | iter

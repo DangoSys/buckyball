@@ -19,12 +19,20 @@ pub fn execute_known(
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, _xs1: u64, _xs2: u64) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    _xs2: u64,
+    _ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
     match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("MXQUANT") => Some(1),
+        Some("MXQUANT") => {
+            Some(8 + 85 * bebop_bemu::thread::instructions::decode::rs1_iter(xs1) / 32)
+        }
         _ => None,
     }
 }

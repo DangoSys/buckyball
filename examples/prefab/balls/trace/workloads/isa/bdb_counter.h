@@ -1,8 +1,7 @@
 #ifndef _BDB_COUNTER_H_
 #define _BDB_COUNTER_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // subcmd values; 3..15 are illegal. STOP and READ need a started counter.
 #define BDB_CTR_START 0

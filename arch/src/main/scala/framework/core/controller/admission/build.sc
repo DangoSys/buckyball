@@ -11,6 +11,7 @@ def sources = T.sources(
   Seq(
     PathRef(millSourcePath / os.RelPath("src/main/scala/CommandAdmission.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/DirectAdmission.scala")),
+    PathRef(millSourcePath / os.RelPath("src/main/scala/Management.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/TaskRouter.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/configs/Params.scala"))
   )

@@ -1,4 +1,4 @@
-// The base workload pipeline explicitly runs lower-buckyball before MemRefToLLVM.
+// The base workload pipeline explicitly runs lower-acc before MemRefToLLVM.
 // Static strides remain visible to Buckyball's own export patterns.
 func.func @copy_unit(%input: memref<?xi8, strided<[1], offset: ?>>,
                      %output: memref<?xi8, strided<[1], offset: ?>>)

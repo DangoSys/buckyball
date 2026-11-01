@@ -66,6 +66,8 @@ message BallInstance {
   google.protobuf.Any parameters = 9;
   string rtl_class = 10;
   reserved 11;
+  // The Ball component's directory: arch, configs, emu, stack, workloads.
+  string source_path = 12;
 }
 
 message BallInstruction {
@@ -206,13 +208,15 @@ message CorePlacement {
   FetchConfig fetch = 22;
   FpuConfig fpu = 23;
   InterconnectConfig interconnect = 24;
-  C2CConfig c2c = 25;
+  bool service = 25;
   TBusConfig tbus = 26;
   ControllerConfig controller = 27;
   RnfHardware dma_cache = 28;
   string component = 29;
   // Identity of the core hardware and its threads; runtime jobs select cores by it.
   uint64 signature = 30;
+  // The core's software stack project, relative to the repository.
+  string stack_path = 31;
 
 }
 
@@ -269,6 +273,7 @@ message DeviceConfig {
   PlicHardware plic = 5;
   ScuHardware scu = 6;
   SharedBankFabricConfig shared_bank_fabric = 7;
+  TraceHardware trace = 8;
 }
 
 message MillTarget {

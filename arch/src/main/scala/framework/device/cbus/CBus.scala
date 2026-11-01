@@ -15,7 +15,7 @@ import framework.ip.bus.chi.RequesterPort
 import framework.ip.bus.chi.snf.LineSramIO
 import framework.device.dlink.BaseDevice
 
-/** Routes core memory requests, shared-storage transfers and hardware interrupts. */
+/** Routes core memory requests, management services and hardware interrupts. */
 @instantiable
 class CBus(b: DeviceParam, generators: Seq[() => CLinkIO]) extends BaseDevice(b.ddr.axi) {
   require(generators.size == b.cores.size)
@@ -44,10 +44,6 @@ class CBus(b: DeviceParam, generators: Seq[() => CLinkIO]) extends BaseDevice(b.
     "CHI Home requires one connection for every requester node ID"
   )
   val coherentPorts = coherentNodes.sortBy(_._1).map(_._2)
-  val bankPorts     = corePorts.flatMap(_.banks.toSeq)
-  @public
-  val banks         = IO(MixedVec(ports.flatMap(_.banks.toSeq).map(_.cloneType)))
-  bankPorts.zip(banks).foreach { case (core, fabric) => fabric <> core }
   val hartCounts    = corePorts.map(_.interrupts.size)
   val hartBase      = hartCounts.scanLeft(0)(_ + _)
 
@@ -76,16 +72,12 @@ class CBus(b: DeviceParam, generators: Seq[() => CLinkIO]) extends BaseDevice(b.
     core.interrupts(hart) := interrupts(hartBase(index) + hart)
   }
 
-  val linked = corePorts.indices.filter(i => corePorts(i).c2c.isDefined)
-  if (linked.nonEmpty) {
-    val fabric = Instantiate(new Fabric(b))
-    for ((core, index) <- linked.zipWithIndex) {
-      fabric.io.source(index) <> corePorts(core).c2c.get.tx
-      corePorts(core).c2c.get.rx <> fabric.io.target(index)
-    }
-  }
+  val serviceEndpoints = corePorts.flatMap(_.service.toSeq)
+  @public
+  val services         = IO(MixedVec(serviceEndpoints.map(_.cloneType)))
+  serviceEndpoints.zip(services).foreach { case (core, service) => service <> core }
 
-  val bridgeMasters = if (backingPorts.nonEmpty) 1 else 0
+  val bridgeMasters    = if (backingPorts.nonEmpty) 1 else 0
 
   val memoryBus =
     Instantiate(new axi4.Interconnect(axi4.InterconnectParam(b.ddr.axi, corePorts.size + bridgeMasters + 1, None)))

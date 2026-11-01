@@ -1,7 +1,8 @@
 add_custom_target(poly-ctests-build)
 set(BUCKYBALL_CTEST_GROUP_TARGET poly-ctests-build)
 set(BUCKYBALL_CTEST_TARGET attention)
-set(POLY_BOOT_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/device/common/controllers_start.S)
+# Every hart boots through start.S of the C API.
+set(POLY_BOOT_SOURCE "$<TARGET_OBJECTS:bbsw-start-baremetal>")
 set(BUCKYBALL_DESIGN_COMMON_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/device/core/thread/ctests)
 # The cores that run Ant threads: the programs here keep state per such core.
 set(POLY_THREAD_CORES 0)

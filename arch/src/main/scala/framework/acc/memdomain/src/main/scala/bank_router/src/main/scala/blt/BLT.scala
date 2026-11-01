@@ -19,7 +19,6 @@ import framework.acc.memdomain.PhysicalBankHash
 class BankRequest(memp: MemDomainParam) extends Bundle {
   val write = Bool()
   val addr  = UInt(16.W)
-  val data  = UInt(memp.bankWidth.W)
   val mask  = Vec(memp.bankMaskLen, Bool())
 }
 
@@ -572,7 +571,6 @@ class BankLayoutTable(
         pipe.io.sramWrite.req.bits.addr,
         pipe.io.sramRead.req.bits.addr
       )
-      arb.io.in(i).bits.data  := pipe.io.sramWrite.req.bits.data
       arb.io.in(i).bits.mask  := pipe.io.sramWrite.req.bits.mask
       when(activeRouteOHs(i)(j)) {
         pipe.io.sramRead.req.ready  := arb.io.in(i).ready && !arb.io.in(i).bits.write
@@ -586,7 +584,10 @@ class BankLayoutTable(
     bank.sramRead.req.bits.addr  := arb.io.out.bits.addr
     bank.sramWrite.req.valid     := arb.io.out.valid && arb.io.out.bits.write
     bank.sramWrite.req.bits.addr := arb.io.out.bits.addr
-    bank.sramWrite.req.bits.data := arb.io.out.bits.data
+    // Select the wide payload directly with the winning channel's one-hot decode.
+    bank.sramWrite.req.bits.data := Mux1H((0 until requestCount).map { i =>
+      (arb.io.chosen === i.U) -> accPipes(i).io.sramWrite.req.bits.data
+    })
     bank.sramWrite.req.bits.mask := arb.io.out.bits.mask
     arb.io.out.ready             := Mux(arb.io.out.bits.write, bank.sramWrite.req.ready, bank.sramRead.req.ready)
 

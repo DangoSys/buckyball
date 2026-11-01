@@ -8,9 +8,8 @@ import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.core.configs.CoreParam
 import framework.core.clink.{CLinkIO, HasCLink}
-import framework.device.cbus.{C2CTransfer, Control, SharedAxiEndpoint}
 import framework.core.controller.admission.DirectAdmission
-import framework.core.tbus.SharedNetwork
+import framework.core.tbus.{Barrier, SharedNetwork}
 import framework.core.tbus.configs.Layout
 import framework.core.shm.SHM
 import framework.acc.debug.Debug
@@ -22,8 +21,8 @@ class ReduceCore(corep: CoreParam, simp: SimParam) extends Module with HasCLink 
   val diffTest = simp.diffTest
   val accp     = corep.acc.get
   require(corep.threads.isEmpty && !corep.clink.backing && corep.clink.requesters == 3)
-  require(corep.clink.shared && accp.memDomain.sharedEnable && !accp.gpDomain.enable)
-  require(corep.transferLocalAccess && corep.transferLeaseAccess && corep.tbus.get.router.physicalPorts == 4)
+  require(corep.clink.service && accp.memDomain.sharedEnable && !accp.gpDomain.enable)
+  require(corep.tbus.get.router.physicalPorts == 0)
   @public
   val clink    = IO(new CLinkIO(corep.clink))
 
@@ -67,33 +66,20 @@ class ReduceCore(corep: CoreParam, simp: SimParam) extends Module with HasCLink 
       corep.tbus.get,
       Seq(corep.hartId),
       Seq(corep.hartId),
-      simp
+      simp,
+      0
     ))
 
-  val shm = Instantiate(new SHM(accp.frontend, accp.memDomain, corep.tbus.get))
+  val shm     = Instantiate(new SHM(accp.frontend, accp.memDomain, corep.tbus.get))
+  val barrier = Instantiate(new Barrier(corep.tbus.get))
   shm.io <> banks.io.shm
-  banks.io.threads(0).bank <> acc.io.shm.bank
-  banks.io.threads(0).move <> acc.io.shm.move
-  banks.io.threads(0).barrierArrive := acc.io.shm.barrierArrive
-  acc.io.shm.barrierRelease         := banks.io.threads(0).barrierRelease
+  banks.io.banks(0) <> acc.io.shm.bank
+  banks.io.moves(0) <> acc.io.shm.move
+  barrier.io.arrive(0)      := acc.io.shm.barrierArrive
+  acc.io.shm.barrierRelease := barrier.io.release(0)
   acc.io.shared_bank_hashes.zip(banks.io.bankHashes).foreach { case (sink, source) => sink := source }
 
-  val control = Instantiate(new Control(accp.memDomain, corep.c2c, corep.transferLeaseAccess, corep.transferLocalAccess))
-  val transfer = Instantiate(new C2CTransfer(corep.c2c))
-  val endpoint = Instantiate(new SharedAxiEndpoint(corep.c2c))
-  control.io.coreId        := corep.hartId.U
-  control.io.request <> admission.io.remote.request
-  admission.io.remote.reply <> control.io.reply
-  admission.io.remote.busy := !control.io.idle || endpoint.io.busy
-  transfer.io.command <> control.io.command
-  control.io.completion <> transfer.io.completion
-  banks.io.external.get.memory(0) <> transfer.io.source
-  banks.io.external.get.memory(1) <> endpoint.io.read
-  banks.io.external.get.memory(2) <> endpoint.io.write
-  banks.io.external.get.memory(3) <> control.io.local.get
-  banks.io.external.get.lease.get <> control.io.lease.get
-  clink.c2c.get.tx <> transfer.io.mem
-  endpoint.io.mem <> clink.c2c.get.rx
+  clink.service.get <> admission.io.remote
 
   val debug = Instantiate(new Debug(
     accp.frontend,

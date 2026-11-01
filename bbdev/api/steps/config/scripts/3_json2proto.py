@@ -69,26 +69,16 @@ def _fill_mem(msg: pb.MemDomainConfig, d: dict[str, Any], bbdir: Path) -> None:
 
 
 def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
+    # A declared BallDomain is present in design.pb even before it has Balls.
+    msg.SetInParent()
     for ball in d["balls"]:
         instance = msg.balls.add()
         instance.id = ball["id"]
         instance.name = ball["name"]
         instance.component = ball["component"]
-        classes = []
-        root = bbdir / "examples/prefab/balls" / ball["component"] / "arch"
-        for source in sorted(root.rglob("*Ball.scala")):
-            text = source.read_text()
-            names = re.findall(
-                r"class (\w+)\([^{}]*?\)\s+extends Module\s+with HasBlink\b", text, re.S
-            )
-            if names:
-                package = re.search(r"(?m)^package ([\w.]+)", text).group(1)
-                classes.extend(f"{package}.{name}" for name in names)
-        if len(classes) != 1:
-            raise ValueError(
-                f"{ball['component']}: expected one Ball implementation, found {classes}"
-            )
-        instance.rtl_class = classes[0]
+        root = _derive.ball_root(ball)
+        instance.source_path = _rel(bbdir, root)
+        instance.rtl_class = ".".join(_derive.ball_class(root))
         port = ball["port"]
         instance.in_bw = port["inBW"]
         instance.out_bw = port["outBW"]
@@ -183,6 +173,7 @@ def _thread_signature(thread: pb.ThreadInstance) -> int:
     hardware.CopyFrom(thread)
     for ball in hardware.balldomain.balls:
         ball.ClearField("rtl_class")
+        ball.ClearField("source_path")
     for field in (
         "index",
         "role",
@@ -216,9 +207,7 @@ def _fill_thread(
     ci.pkg = meta["pkg"]
     ci.profile = raw["compiler"]["name"] if "compiler" in raw else meta["role"]
     ci.config_path = meta["config_path"]
-    source = (Path(raw["_file"]).parent / raw["source"]).resolve()
-    if not source.is_dir():
-        raise FileNotFoundError(f"missing component source directory: {source}")
+    source = _derive.component_root(raw["_file"])[0]
     ci.source_path = _rel(bbdir, source)
     if hardware:
         classes = []
@@ -262,7 +251,7 @@ def fill_design(
     b.n_cores = derived["n_cores"]
     b.includes.extend(derived["includes"])
 
-    for key in ("ddr", "clint", "plic", "scu"):
+    for key in ("ddr", "clint", "plic", "scu", "trace"):
         ParseDict(_hardware_fields(config["device"][key]), getattr(b.device, key))
     bootrom = config["device"]["bootrom"]
     image_path = bbdir / bootrom["image"]
@@ -443,7 +432,15 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
     core.hart_id = raw["hartId"]
     core.reset_vector = raw["resetVector"]
     core.mtime_address = raw["mtimeAddress"]
-    for key in ("memory", "fetch", "fpu", "interconnect", "c2c", "controller"):
+    core.service = raw["service"]
+    # The core's stack mirrors where its config lives: <root>/configs/<sub>
+    # has its stack at <root>/stack/<sub>.
+    root, sub = _derive.component_root(raw["_file"])
+    stack = root / "stack" / sub
+    if not (stack / "CMakeLists.txt").is_file():
+        raise FileNotFoundError(f"missing core stack project: {stack}")
+    core.stack_path = _rel(bbdir, stack)
+    for key in ("memory", "fetch", "fpu", "interconnect", "controller"):
         ParseDict(_hardware_fields(raw[key]), getattr(core, key))
     if "tbus" in raw:
         ParseDict(_hardware_fields(raw["tbus"]), core.tbus)
@@ -514,8 +511,10 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
     # sits (hart, config file, NoC nodes) is not part of it.
     hardware = pb.CorePlacement()
     hardware.CopyFrom(core)
-    for field in ("hart_id", "path", "thread_indices"):
+    for field in ("hart_id", "path", "thread_indices", "stack_path"):
         hardware.ClearField(field)
+    for ball in hardware.accelerator.balldomain.balls:
+        ball.ClearField("source_path")
 
     def clear_nodes(message):
         for field, value in message.ListFields():

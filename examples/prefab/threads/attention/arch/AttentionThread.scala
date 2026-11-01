@@ -45,15 +45,18 @@ class AttentionThread(
   debug.io.acc <> acc.io.debug
 
   @public
-  val tlink = IO(new TLinkIO(threadp, permissionp, trackingp, walkerp, simp))
+  val tlink = IO(new TLinkIO(threadp, permissionp, trackingp, walkerp))
 
   ant.io.task <> tlink.task
   tlink.tss <> ant.io.shared
   ant.io.rocc <> acc.io.rocc
-  tlink.memory <> acc.io.memory
-  tlink.ddr <> acc.io.ddr
-  tlink.shm <> acc.io.shm
-  acc.io.shared_bank_hashes.zip(tlink.sharedHashes).foreach { case (port, hashes) => port := hashes }
+  tlink.memCtrl <> acc.io.memory
+  val transport = Instantiate(new framework.thread.tlink.Stream(accp.transport.axi))
+  transport.io.acc <> acc.io.ddr
+  transport.io.readAddress  := acc.io.readAddress
+  transport.io.writeAddress := acc.io.writeAddress
+  tlink.dma <> transport.io.dma
+
 }
 
 object AttentionThread extends ThreadFactory {

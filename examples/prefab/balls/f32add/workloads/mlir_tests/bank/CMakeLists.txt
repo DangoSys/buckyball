@@ -1,2 +1,2 @@
-set(BUCKYBALL_MLIR_TEST_PREFIX bank)
-add_buckyball_mlir_test(f32add_groups TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+set(MLIR_TEST_PREFIX bank)
+add_mlir_test(f32add_groups TARGET ${MLIR_TEST_TARGET})

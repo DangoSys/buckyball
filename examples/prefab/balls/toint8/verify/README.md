@@ -23,10 +23,10 @@ The test names are:
 - `toint8_signed_test`: signed values across all four source groups
 - `toint8_zero_test`: all-zero activation (`Da=1.0`)
 - `toint8_rounding_test`: ties-to-even quantization boundaries
-- `toint8_rows_test`: two-row scan and packed output traversal
+- `toint8_rows_test`: two-row scan and packed output traversal with per-channel scales
 - `toint8_scale_rows_test`: maximum value is in the second row
-- case 8: QUANT_F32_TO_I8 over two channel groups (group g of input/output = channel block g)
-- case 9: QUANT_I32_TO_I8 over three channel groups with per-group scales, input_base 3, and a 2x2 output core
+- case 8: QUANT_F32_TO_I8 over two channel groups (group g of input/output = channel block g, its scales in rows 4g..4g+3 of the one scale group)
+- case 9: QUANT_I32_TO_I8 over three channel groups with per-channel scales in one scale group, input_base 3, and a 2x2 output core
 
 Each case: reset, preload src words into `mem_model` (INT8 uses `group_id` 0..3),
 drive one command, wait for `scb.done()` or timeout at 400 cycles. Scoreboard

@@ -1,8 +1,8 @@
 #pragma once
 #include <stdint.h>
 
-// Arguments of the thread programs that run the MxmmBall and MxquantBall MLIR
-// tests: the DRAM addresses of their buffers.
+// Arguments of the thread programs that run the MLIR tests of the Balls of
+// poly's threads: the DRAM addresses of their buffers.
 struct mlir_mxmm_args {
   uint64_t a, b, c;
 };

@@ -16,7 +16,7 @@ component = "toint8"
 param = "../../../../balls/toint8/configs/default.toml"
 port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
-  { mnemonic = "QUANT_F32_TO_I8", funct7 = 51 },
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 74 },
   { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
 ]
 

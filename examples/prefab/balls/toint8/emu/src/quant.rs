@@ -3,37 +3,53 @@ use super::instruction::ExecContext;
 use bebop_bemu::thread::banks::bank_lines;
 
 pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "quant_f32_to_i8: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "quant_f32_to_i8: reads no old destination; rs1[29] must be clear"
+    );
     let src = rs1_b0(xs1);
-    let unused = rs1_b1(xs1);
+    let scale_bank = rs1_b1(xs1);
     let dst = rs1_b2(xs1);
     let iter = rs1_iter(xs1) as usize;
-    if unused != 0 {
-        panic!("quant_f32_to_i8: input bank 1 must be zero");
+    if src == scale_bank || src == dst || scale_bank == dst {
+        panic!("quant_f32_to_i8: input, scale, and output banks must differ");
     }
-    if src == dst {
-        panic!("quant_f32_to_i8: input and output banks must differ");
-    }
-    if !ctx.config(src).allocated || !ctx.config(dst).allocated {
+    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated
+    {
         panic!("quant_f32_to_i8: bank not allocated");
     }
     let groups = ctx.config(src).cols;
     if groups == 0 || ctx.config(dst).cols != groups {
         panic!("quant_f32_to_i8: input and output must have the same channel groups");
     }
+    if ctx.config(scale_bank).cols != 1 || groups as usize * 4 > bank_lines() {
+        panic!("quant_f32_to_i8: the scales must be one group of four rows per channel group");
+    }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
         panic!("quant_f32_to_i8: iter must be a positive multiple of four within bank depth");
     }
-    if xs2 >> 32 != 0 {
-        panic!("quant_f32_to_i8: rs2[63:32] must be zero");
-    }
-    let scale = f32::from_bits(xs2 as u32);
-    if !scale.is_finite() || scale <= 0.0 {
-        panic!("quant_f32_to_i8: scale must be finite and positive");
+    if xs2 != 0 {
+        panic!("quant_f32_to_i8: rs2 must be zero");
     }
 
-    // Group g of every operand is channel block g; each block uses the same rows.
+    // Group g of the input and output is channel block g; each block uses the
+    // same rows. Rows 4g..4g+3 of the one scale group hold the scales of block g.
+    let pscale = pbank_group(ctx, scale_bank, 0);
     for channel_group in 0..groups {
+        let mut scales = [0.0f32; 16];
+        for group in 0..4 {
+            let base = (channel_group as usize * 4 + group) * 16;
+            for lane in 0..4 {
+                let offset = base + lane * 4;
+                scales[group * 4 + lane] = f32::from_bits(u32::from_le_bytes(
+                    ctx.banks[pscale][offset..offset + 4].try_into().unwrap(),
+                ));
+                if !scales[group * 4 + lane].is_finite() || scales[group * 4 + lane] <= 0.0 {
+                    panic!("quant_f32_to_i8: scales must be finite and positive");
+                }
+            }
+        }
+
         let ps = pbank_group(ctx, src, channel_group);
         let pd = pbank_group(ctx, dst, channel_group);
         let (input, output) = ctx.banks.read_write(ps, pd);
@@ -45,8 +61,10 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                 for lane in 0..4 {
                     let offset = base + lane * 4;
                     let bits = u32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
-                    packed[group * 4 + lane] =
-                        super::model::quantize_f32(f32::from_bits(bits), scale, false) as u8;
+                    let channel = group * 4 + lane;
+                    packed[channel] =
+                        super::model::quantize_f32(f32::from_bits(bits), scales[channel], false)
+                            as u8;
                 }
             }
             let base = output_row * 16;
@@ -57,7 +75,10 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 }
 
 pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "quant_i32_to_i8: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "quant_i32_to_i8: reads no old destination; rs1[29] must be clear"
+    );
     let src = rs1_b0(xs1);
     let scale_bank = rs1_b1(xs1);
     let dst = rs1_b2(xs1);
@@ -70,8 +91,11 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         panic!("quant_i32_to_i8: bank not allocated");
     }
     let groups = ctx.config(src).cols;
-    if groups == 0 || ctx.config(scale_bank).cols != groups || ctx.config(dst).cols != groups {
-        panic!("quant_i32_to_i8: input, scale, and output must have the same channel groups");
+    if groups == 0 || ctx.config(dst).cols != groups {
+        panic!("quant_i32_to_i8: input and output must have the same channel groups");
+    }
+    if ctx.config(scale_bank).cols != 1 || groups as usize * 4 > bank_lines() {
+        panic!("quant_i32_to_i8: the scales must be one group of four rows per channel group");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
         panic!("quant_i32_to_i8: iter must be a positive multiple of four within bank depth");
@@ -98,12 +122,13 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     }
     let relu = xs2 & 1 != 0;
 
-    // Group g of every operand is channel block g; each block uses the same rows.
+    // Group g of the input and output is channel block g; each block uses the
+    // same rows. Rows 4g..4g+3 of the one scale group hold the scales of block g.
+    let pscale = pbank_group(ctx, scale_bank, 0);
     for channel_group in 0..groups {
-        let pscale = pbank_group(ctx, scale_bank, channel_group);
         let mut scales = [0.0f32; 16];
         for group in 0..4 {
-            let base = group * 16;
+            let base = (channel_group as usize * 4 + group) * 16;
             for lane in 0..4 {
                 let offset = base + lane * 4;
                 scales[group * 4 + lane] = f32::from_bits(u32::from_le_bytes(
@@ -141,19 +166,15 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     0
 }
 
-pub(crate) fn f32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
+pub(crate) fn f32_to_i8_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
     let iter = rs1_iter(xs1);
-    if iter == 0 || iter % 4 != 0 || xs2 >> 32 != 0 {
+    if iter == 0 || iter % 4 != 0 || xs2 != 0 {
         panic!("quant_f32_to_i8: illegal encoding");
     }
-    let scale = f32::from_bits(xs2 as u32);
-    if !scale.is_finite() || scale <= 0.0 {
-        panic!("quant_f32_to_i8: scale must be finite and positive");
-    }
-    iter
+    8 + ctx.config(rs1_b0(xs1)).cols * (20 + 17 * iter)
 }
 
-pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
+pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
     let iter = rs1_iter(xs1);
     let input_base = (xs2 >> 29) & 0x3f;
     if xs2 >> 35 != 0 {
@@ -174,5 +195,5 @@ pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64) -> u64 {
     {
         panic!("quant_i32_to_i8: illegal encoding");
     }
-    iter + 4
+    8 + ctx.config(rs1_b0(xs1)).cols * (20 + 17 * iter)
 }

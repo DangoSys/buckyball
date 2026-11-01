@@ -6,7 +6,7 @@
 # builds it for each design that uses it, configured with DESIGN_CMAKE
 # (generated from design.pb) and CORE. Products:
 #   execute.o                runs jobs on the core itself; links into the device runtime
-#   lib<target>-compiler.so  buddy-opt plugin: Buckyball dialect + the Balls of
+#   lib<target>-compiler.so  buddy-opt plugin: acc dialect + the Balls of
 #                            this core's accelerator
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
@@ -30,7 +30,7 @@ add_custom_command(
 add_custom_target(execute ALL DEPENDS execute.o)
 
 # ===----------------------------------------------------------------------===
-# Compiler: the Buckyball dialect and passes with the Balls of the accelerator.
+# Compiler: the acc dialect and the framework passes with the Balls of the accelerator.
 # ===----------------------------------------------------------------------===
 set(BUCKYBALL_BALLS ${DESIGN_TARGET_BALL_STACKS_${TARGET}})
 

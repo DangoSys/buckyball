@@ -91,13 +91,25 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         derived_outs.append(derived_path)
         ctx.logger.info(f"Wrote derived config: {derived_path}")
 
-    # step 3.1: generate design_pb2.py from design.proto
+    # step 3.1: generate the Python modules of design.proto, hardware.proto and
+    # model.proto, and the parameter schemas of the Balls the simulations
+    # instantiate
     scripts = Path(scripts_dir)
+    ball_protos = sorted(
+        {
+            proto
+            for json_path in json_outs
+            for proto in derive.ball_protos(
+                json.loads(json_path.read_text(encoding="utf-8"))["device"]
+            )
+        }
+    )
     with tempfile.TemporaryDirectory(prefix="bbdev-proto-") as generated:
         schemas = [
             scripts / "proto" / "design.proto",
             scripts / "proto" / "hardware.proto",
-            *sorted(Path(bbdir).glob("examples/prefab/balls/*/configs/*_params.proto")),
+            scripts / "proto" / "model.proto",
+            *ball_protos,
             *sorted(Path(bbdir).glob("examples/prefab/cores/*/configs/*_params.proto")),
         ]
         includes = sorted({schema.parent for schema in schemas})

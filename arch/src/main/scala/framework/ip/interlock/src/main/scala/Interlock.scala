@@ -38,10 +38,10 @@ class Interlock(p: Params) extends Module {
   val rangeCursor                                                                                              = RegInit(VecInit(Seq.fill(p.entries)(0.U(p.rangeIndexBits.W))))
   val rangeFirst                                                                                               = RegInit(VecInit(Seq.fill(p.entries)(VecInit(Seq.fill(p.maxRanges)(0.U(p.addressBits.W))))))
   val rangeLast                                                                                                = RegInit(VecInit(Seq.fill(p.entries)(VecInit(Seq.fill(p.maxRanges)(0.U(p.addressBits.W))))))
+  val overlaps                                                                                                 = Seq.tabulate(p.entries)(i => Seq.fill(i)(RegInit(false.B)))
   val older                                                                                                    = RegInit(VecInit(Seq.fill(p.entries)(0.U(p.entries.W))))
   val protocolError                                                                                            = RegInit(false.B)
   val lineMask                                                                                                 = (~(BigInt(p.lineBytes) - 1) & ((BigInt(1) << p.addressBits) - 1)).U(p.addressBits.W)
-  def overlap(a: Int, b: Int): Bool = first(a) <= last(b) && first(b) <= last(a)
 
   def select(candidates: Vec[Bool], cursor: UInt): UInt = {
     MuxCase(
@@ -115,16 +115,26 @@ class Interlock(p: Params) extends Module {
         phase(infoIndex) := failed
         protocolError    := true.B
       }.otherwise {
-        val index  = if (p.maxRanges == 1) 0.U else count(p.rangeIndexBits - 1, 0)
-        val begin  = io.accessInfo.bits.base & lineMask
-        val finish = end(p.addressBits - 1, 0) & lineMask
+        val index      = if (p.maxRanges == 1) 0.U else count(p.rangeIndexBits - 1, 0)
+        val begin      = io.accessInfo.bits.base & lineMask
+        val finish     = end(p.addressBits - 1, 0) & lineMask
+        val newFirst   = Mux(count === 0.U || begin < first(infoIndex), begin, first(infoIndex))
+        val newLast    = Mux(count === 0.U || finish > last(infoIndex), finish, last(infoIndex))
+        val intersects = VecInit((0 until p.entries).map(i => newFirst <= last(i) && first(i) <= newLast))
+        for {
+          i <- 0 until p.entries
+          j <- 0 until i
+        } {
+          when(infoIndex === i.U)(overlaps(i)(j) := intersects(j))
+            .elsewhen(infoIndex === j.U)(overlaps(i)(j) := intersects(i))
+        }
         rangeFirst(infoIndex)(index) := begin
-        rangeLast(infoIndex)(index)  := finish
-        rangeCount(infoIndex)        := count + 1.U
-        memory(infoIndex)            := true.B
-        writes(infoIndex)            := io.accessInfo.bits.write
-        first(infoIndex)             := Mux(count === 0.U || begin < first(infoIndex), begin, first(infoIndex))
-        last(infoIndex)              := Mux(count === 0.U || finish > last(infoIndex), finish, last(infoIndex))
+        rangeLast(infoIndex)(index) := finish
+        rangeCount(infoIndex)       := count + 1.U
+        memory(infoIndex)           := true.B
+        writes(infoIndex)           := io.accessInfo.bits.write
+        first(infoIndex)            := newFirst
+        last(infoIndex)             := newLast
         when(io.accessInfo.bits.last) { phase(infoIndex) := ready; rangeCursor(infoIndex) := 0.U }
       }
     }.otherwise {
@@ -269,7 +279,8 @@ class Interlock(p: Params) extends Module {
       older(i)(j) && live(j) && !(io.complete.fire && completeIndex === j.U) &&
       !(io.cancel.fire && cancelIndex === j.U) &&
       (phase(i) === unknown || phase(j) === unknown ||
-        memory(i) && memory(j) && overlap(i, j) && (writes(i) || writes(j) || phase(j) === failed))
+        memory(i) && memory(j) && (if (i > j) overlaps(i)(j) else if (j > i) overlaps(j)(i) else false.B) &&
+        (writes(i) || writes(j) || phase(j) === failed))
     }).asUInt
     older(i) := retained
   }

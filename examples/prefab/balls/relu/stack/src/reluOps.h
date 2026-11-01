@@ -3,7 +3,7 @@
 #ifndef RELU_OPS_H
 #define RELU_OPS_H
 
-#include "Interfaces/BankInterfaces.h"
+#include "Acc/BankInterfaces.h"
 
 #include "mlir/Bytecode/BytecodeOpInterface.h"
 #include "mlir/IR/BuiltinTypes.h"

@@ -11,15 +11,22 @@ func.func @main() -> i8 {
   %zero_i8 = arith.constant 0 : i8
   %scale = arith.constant 5.000000e-01 : f32
   %input = memref.get_global @input : memref<4x4xf32>
+  // The same multiplier for all sixteen channels.
+  %scales = memref.alloc() alignment = 64 : memref<4x4xf32>
+  linalg.fill ins(%scale : f32) outs(%scales : memref<4x4xf32>)
   %output = memref.alloc() alignment = 64 : memref<1x16xi8>
-  buckyball.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
-  buckyball.mvin %input <{bank = 1 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
-  toint8_ball.fp32_to_int8 multiplier(%scale) <{input = 1 : i64, output = 2 : i64, rows = 4 : i64}>
-  buckyball.mvout %output <{bank = 2 : i64, depth = 1 : i64, stride = 1 : i64}> : memref<1x16xi8>
+  bbacc.mset <{bank = 1 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = true, row = 1 : i64, col = 1 : i64}>
+  bbacc.mvin %input <{bank = 1 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
+  bbacc.mvin %scales <{bank = 3 : i64, depth = 4 : i64, stride = 1 : i64}> : memref<4x4xf32>
+  toint8_ball.fp32_to_int8 <{input = 1 : i64, scales = 3 : i64, output = 2 : i64, rows = 4 : i64}>
+  bbacc.mvout %output <{bank = 2 : i64, depth = 1 : i64, stride = 1 : i64}> : memref<1x16xi8>
   func.call @check_result(%output) : (memref<1x16xi8>) -> ()
-  buckyball.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
-  buckyball.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 1 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 2 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  bbacc.mset <{bank = 3 : i64, alloc = false, row = 0 : i64, col = 0 : i64}>
+  memref.dealloc %scales : memref<4x4xf32>
   memref.dealloc %output : memref<1x16xi8>
   return %zero_i8 : i8
 }

@@ -1,6 +1,6 @@
-if(NOT DEFINED BUCKYBALL_MLIR_GROUP_TARGET)
-  set(BUCKYBALL_MLIR_GROUP_TARGET balls-mlir-tests-build)
+if(NOT DEFINED MLIR_TEST_GROUP)
+  set(MLIR_TEST_GROUP balls-mlir-tests-build)
 endif()
-set(BUCKYBALL_MLIR_TEST_PREFIX bank)
+set(MLIR_TEST_PREFIX bank)
 
-add_buckyball_mlir_test(transpose_i8_packed_matrix TARGET ${BUCKYBALL_MLIR_ACTIVE_TARGET})
+add_mlir_test(transpose_i8_packed_matrix TARGET ${MLIR_TEST_TARGET})

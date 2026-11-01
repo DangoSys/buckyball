@@ -1,8 +1,7 @@
 #ifndef _BB_GEMMINI_LOOP_CONV_WS_H
 #define _BB_GEMMINI_LOOP_CONV_WS_H
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 #define bb_gemmini_loop_conv_ws_config_1(batch_size, in_dim, in_channels)      \
   BUCKYBALL_INSTRUCTION_R_R(0,                                                 \

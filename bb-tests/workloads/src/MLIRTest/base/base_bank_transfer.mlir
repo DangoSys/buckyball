@@ -34,13 +34,13 @@ func.func @main() -> i8 {
     }
   }
 
-  %a = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %b = buckyball.bank_alloc <{row = 1 : i64, col = 2 : i64}>
-  %la = buckyball.bank_mvin %first, %a <{depth = 2 : i64, stride = 1 : i64}> : memref<2x16xi8>
-  %lb = buckyball.bank_mvin %second, %b <{depth = 2 : i64, stride = 1 : i64}> : memref<2x32xi8>
-  %merged = buckyball.bank_transfer %lb, %la
-  %stored = buckyball.bank_mvout %result, %merged <{depth = 2 : i64, stride = 1 : i64}> : memref<2x48xi8>
-  buckyball.bank_release %stored
+  %a = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %b = bbacc.bank_alloc <{row = 1 : i64, col = 2 : i64}>
+  %la = bbacc.bank_mvin %first, %a <{depth = 2 : i64, stride = 1 : i64}> : memref<2x16xi8>
+  %lb = bbacc.bank_mvin %second, %b <{depth = 2 : i64, stride = 1 : i64}> : memref<2x32xi8>
+  %merged = bbacc.bank_transfer %lb, %la
+  %stored = bbacc.bank_mvout %result, %merged <{depth = 2 : i64, stride = 1 : i64}> : memref<2x48xi8>
+  bbacc.bank_release %stored
 
   func.call @check_result(%result) : (memref<2x48xi8>) -> ()
   memref.dealloc %first : memref<2x16xi8>

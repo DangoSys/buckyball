@@ -2,7 +2,7 @@
 #ifndef PEBBLE_LOWERING_H
 #define PEBBLE_LOWERING_H
 
-#include "Custom/CustomOps.h"
+#include "Acc/AccOps.h"
 #include "mlir/Dialect/Func/IR/FuncOps.h"
 #include "mlir/IR/Builders.h"
 #include "llvm/ADT/DenseMap.h"
@@ -35,6 +35,10 @@ int64_t tileRows();
 // Moves the cycle markers of `op`, whose result stays in `bank`, to the bank.
 void observeResident(mlir::Operation *op, mlir::Value bank);
 
+// Fused logical regions share the producer's execution interval.
+void moveTraceStarts(mlir::Operation *producer,
+                     llvm::ArrayRef<mlir::Operation *> ends);
+
 // The groups of the im2col_i8 output (and of the matching weights) for
 // `windows` windows of a `kernel` x `kernel` convolution over `blocks`
 // channel blocks: the fewest that divide the K tiles and fit a group each.
@@ -59,17 +63,18 @@ struct LinearSplit {
 };
 LinearSplit linearSplit(int64_t k, int64_t rows, bool floating);
 
-// The result of a Linear with custom.resident stays in `resident`, one
+// The result of a Linear with bbacc.resident stays in `resident`, one
 // group per sixteen columns; the others give `result`.
-mlir::LogicalResult lowerLinear(::buddy::custom::CustomOp op,
+mlir::LogicalResult lowerLinear(::buddy::acc::CustomOp op,
                                 mlir::Value residentInput, mlir::Value &result,
                                 mlir::Value &resident);
-mlir::LogicalResult lowerGlobalAverage(::buddy::custom::CustomOp op,
+mlir::LogicalResult lowerGlobalAverage(::buddy::acc::CustomOp op,
                                        mlir::Value &result);
-mlir::LogicalResult lowerChannelOp(::buddy::custom::CustomOp op,
+mlir::LogicalResult lowerChannelOp(::buddy::acc::CustomOp op,
                                    mlir::Value &result);
-mlir::LogicalResult lowerTranspose(::buddy::custom::CustomOp op,
+mlir::LogicalResult lowerTranspose(::buddy::acc::CustomOp op,
                                    mlir::Value &result);
+void formCustomOps(mlir::func::FuncOp function);
 void formSpatialOps(mlir::func::FuncOp function);
 // Lowers the convolutions; the ones whose results stay in banks remain in
 // `consumed` until their consumers are lowered.

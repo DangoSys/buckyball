@@ -20,10 +20,10 @@ func.func @main() -> i8 {
     }
   }
 
-  %bank = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %loaded = buckyball.bank_mvin %input, %bank <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  %stored = buckyball.bank_mvout %output, %loaded <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
-  buckyball.bank_release %stored
+  %bank = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %loaded = bbacc.bank_mvin %input, %bank <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  %stored = bbacc.bank_mvout %output, %loaded <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi8>
+  bbacc.bank_release %stored
 
   func.call @check_result(%output) : (memref<16x16xi8>) -> ()
   memref.dealloc %input : memref<16x16xi8>

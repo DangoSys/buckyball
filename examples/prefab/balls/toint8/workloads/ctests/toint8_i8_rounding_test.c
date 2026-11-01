@@ -9,6 +9,7 @@ static float input[16] __attribute__((aligned(64))) = {
     0.5f, -0.5f, 1.5f, -1.5f, 2.5f,   -2.5f,   3.5f,   -3.5f,
     4.5f, -4.5f, 5.5f, -5.5f, 126.5f, -126.5f, 127.0f, -127.0f,
 };
+static float scales[16] __attribute__((aligned(64)));
 static int8_t output[16] __attribute__((aligned(64)));
 static const int8_t expected[16] = {
     0, 0, 2, -2, 2, -2, 4, -4, 4, -4, 6, -6, 126, -126, 127, -127,
@@ -21,7 +22,12 @@ int main(void) {
   bb_mem_alloc(0, 1, 1);
   bb_mem_alloc(1, 1, 1);
   bb_mvin((uintptr_t)input, 0, 4, 1);
-  bb_quant_f32_to_i8(0, 1, 4, 1.0f);
+  // The same multiplier for all sixteen channels.
+  for (int i = 0; i < 16; ++i)
+    scales[i] = 1.0f;
+  bb_mem_alloc(2, 1, 1);
+  bb_mvin((uintptr_t)scales, 2, 4, 1);
+  bb_quant_f32_to_i8(0, 2, 1, 4);
   bb_mvout((uintptr_t)output, 1, 1, 1);
   for (int i = 0; i < 16; ++i) {
     if (output[i] != expected[i]) {
@@ -32,6 +38,7 @@ int main(void) {
   }
   bb_mem_release(0);
   bb_mem_release(1);
+  bb_mem_release(2);
   printf("toint8_i8_rounding PASS\n");
   return 0;
 }

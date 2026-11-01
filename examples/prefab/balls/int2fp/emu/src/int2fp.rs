@@ -3,7 +3,10 @@ use super::instruction::ExecContext;
 use bebop_bemu::thread::banks::bank_lines;
 
 pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "int2fp: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "int2fp: reads no old destination; rs1[29] must be clear"
+    );
     let input_bank = rs1_b0(xs1);
     let scale_bank = rs1_b1(xs1);
     let output_bank = rs1_b2(xs1);
@@ -60,10 +63,19 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     0
 }
 
-pub(crate) fn latency(xs1: u64, xs2: u64) -> u64 {
-    let iter = rs1_iter(xs1);
-    if iter == 0 || iter % 4 != 0 || xs2 >> 1 != 0 {
-        panic!("int32_to_fp32: illegal encoding");
+pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+    let rows = rs1_iter(xs1);
+    let input = rs1_b0(xs1);
+    let groups = ctx.config(input).cols;
+    let mut zeros = 0;
+    for group in 0..groups {
+        let bank = pbank_group(ctx, input, group);
+        for value in ctx.banks[bank][..rows as usize * 16].chunks_exact(4) {
+            let value = i32::from_le_bytes(value.try_into().unwrap());
+            zeros += u64::from(value == 0 || (xs2 & 1 != 0 && value < 0));
+        }
     }
-    iter
+    // Two parallel reads, conversion, four serial multipliers, and a write.
+    // Fp32Mul bypasses its 24-step multiplier for zero inputs.
+    8 + rows * groups * (10 + 4 * 31) - zeros * 29
 }

@@ -51,9 +51,9 @@ class toint8_scoreboard extends uvm_scoreboard;
       mem_model.load_word_g(int'(clone.op1_bank), int'(clone.op1_group) + i / int'(clone.iter),
                             int'(clone.input_base) + i % int'(clone.iter), clone.src_words[i]);
     end
+    // The scales of channel group g are rows 4g..4g+3 of the one scale group.
     for (i = 0; i < clone.num_scale_words; i++) begin
-      mem_model.load_word_g(int'(clone.op2_bank), int'(clone.op2_group) + i / 4, i % 4,
-                            clone.scale_words[i]);
+      mem_model.load_word_g(int'(clone.op2_bank), int'(clone.op2_group), i, clone.scale_words[i]);
     end
     mem_model.arm();
 
@@ -93,15 +93,15 @@ class toint8_scoreboard extends uvm_scoreboard;
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
 
-    // Each group reads its scale rows (I32 only), then its input rows.
+    // Each channel group reads its four scale rows, then its input rows.
     scale_reads = stim.num_scale_words / stim.op1_col;
     group_reads = scale_reads + stim.iter;
     group       = read_count / group_reads;
     index       = read_count % group_reads;
     if (index < scale_reads) begin
       expect_bank  = stim.op2_bank;
-      expect_group = stim.op2_group + group;
-      expect_addr  = index;
+      expect_group = stim.op2_group;
+      expect_addr  = group * scale_reads + index;
     end else begin
       expect_bank  = stim.op1_bank;
       expect_group = stim.op1_group + group;

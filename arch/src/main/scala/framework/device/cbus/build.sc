@@ -33,11 +33,7 @@ object CoreComponents {
 
 def sources = T.sources(
   Seq(
-    PathRef(millSourcePath / os.RelPath("C2C.scala")),
-    PathRef(millSourcePath / os.RelPath("CBus.scala")),
-    PathRef(millSourcePath / os.RelPath("Control.scala")),
-    PathRef(millSourcePath / os.RelPath("Fabric.scala")),
-    PathRef(millSourcePath / os.RelPath("SharedAxiEndpoint.scala"))
+    PathRef(millSourcePath / os.RelPath("CBus.scala"))
   )
 )
 

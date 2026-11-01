@@ -1,8 +1,7 @@
 #ifndef _BB_INT8MUL_H_
 #define _BB_INT8MUL_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 #include <stdint.h>
 
 static inline uint64_t bb_int8mul_rs2(float ratio, uint32_t gate_row) {

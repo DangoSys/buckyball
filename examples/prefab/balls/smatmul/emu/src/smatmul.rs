@@ -4,18 +4,14 @@ use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use std::collections::HashMap;
 
 fn tile_rows(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<
-        bebop_bemu::configs::ball_domain::parameters::smatmul::Params,
-    >("smatmul", instance)
-    .tile_rows
-    .expect("tileRows") as usize
+    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("smatmul", instance)
+        .tile_rows
+        .expect("tileRows") as usize
 }
 fn tile_cols(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<
-        bebop_bemu::configs::ball_domain::parameters::smatmul::Params,
-    >("smatmul", instance)
-    .tile_cols
-    .expect("tileCols") as usize
+    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("smatmul", instance)
+        .tile_cols
+        .expect("tileCols") as usize
 }
 
 #[derive(Default)]
@@ -38,7 +34,10 @@ fn read_i32(bank: &[u8], row: usize, lane: usize) -> i32 {
 }
 
 pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "smatmul_bias: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "smatmul_bias: reads no old destination; rs1[29] must be clear"
+    );
     let ball_state = ctx.state::<HashMap<usize, State>>();
     let bank = rs1_b0(xs1);
     let input_base = (xs2 & 0x3f) as usize;
@@ -70,7 +69,10 @@ pub(crate) fn exec_bias(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
 }
 
 pub(crate) fn exec_smatmul(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "smatmul: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "smatmul: reads no old destination; rs1[29] must be clear"
+    );
     let ball_state = ctx.state::<HashMap<usize, State>>();
     let m_tile = tile_rows(ctx.ball_id.expect("Ball instance"));
     let k_tile = tile_cols(ctx.ball_id.expect("Ball instance"));
@@ -233,7 +235,24 @@ pub(crate) fn bias_latency(xs1: u64, xs2: u64) -> u64 {
     {
         panic!("smatmul_bias: illegal inputBase or reserved fields");
     }
-    4
+    // Ball dispatch/layout plus four serialized BankRouter read round trips.
+    8 + 4 * 5
+}
+
+pub(crate) fn os_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+    let instance = ctx.ball_id.expect("Ball instance");
+    let tile_m = tile_rows(instance) as u64;
+    let tile_n = tile_cols(instance) as u64;
+    let rows = xs2 & 0xfff;
+    let active_rows = if rows == 1 { 1 } else { tile_m };
+    let tiles = rows.div_ceil(tile_m);
+    let reductions = rs1_iter(xs1) / tile_n * ctx.config(rs1_b0(xs1)).cols;
+    // BankRouter reads, systolic fill/drain, and accumulator SRAM read/write.
+    let reduction = 4 * active_rows.max(tile_n) + 7 + tile_m + tile_n + 16 + 2 * active_rows;
+    // Each output row needs two SRAM-read states and four acknowledged writes.
+    12 + if xs2 & (1 << 24) != 0 { rows } else { 0 }
+        + tiles * reductions * reduction
+        + if xs2 & (1 << 25) != 0 { 18 * rows } else { 0 }
 }
 
 pub(crate) fn latency(xs1: u64, xs2: u64, instance: u32) -> u64 {

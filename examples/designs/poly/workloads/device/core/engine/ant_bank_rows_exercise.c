@@ -1,15 +1,10 @@
 #include "ant_bank_rows.h"
 #include <thread.h>
 extern const unsigned char ant_image[], ant_image_end[];
-enum {
-  WORDS = ANT_BANK_ROWS * THREAD_MEM_BANK_WIDTH / 64,
-  SHARED_WORDS = ANT_BANK_ROWS * THREAD_MEM_BANK_WIDTH / 64
-};
+enum { WORDS = ANT_BANK_ROWS * THREAD_MEM_BANK_WIDTH / 64 };
 static uint64_t input[POLY_THREAD_CORES][WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
 static uint64_t private_out[POLY_THREAD_CORES][WORDS]
-    __attribute__((section(".data"), aligned(4096))) = {0};
-static uint64_t shared_out[POLY_THREAD_CORES][SHARED_WORDS]
     __attribute__((section(".data"), aligned(4096))) = {0};
 static uint64_t tail_out[POLY_THREAD_CORES][8]
     __attribute__((section(".data"), aligned(4096))) = {0};
@@ -20,17 +15,15 @@ void bank_rows_exercise(unsigned core) {
     input[core][i] = (uint64_t)(core + 1) << 32 | (i + 1);
   for (unsigned i = 0; i < WORDS; ++i)
     private_out[core][i] = 0;
-  for (unsigned i = 0; i < SHARED_WORDS; ++i)
-    shared_out[core][i] = 0;
   for (unsigned i = 0; i < 8; ++i)
     tail_out[core][i] = ~0ULL;
   size_t bytes = ant_image_end - ant_image;
   if (bytes > thread_query(context, THREAD_FIELD_CODE_BYTES) ||
       thread_query(context, THREAD_FIELD_SIGNATURE) != THREAD_SIGNATURE)
     __builtin_trap();
-  struct ant_bank_rows_args args = {
-      (uintptr_t)input[core], (uintptr_t)private_out[core],
-      (uintptr_t)shared_out[core], (uintptr_t)tail_out[core], ANT_BANK_ROWS};
+  struct ant_bank_rows_args args = {(uintptr_t)input[core],
+                                    (uintptr_t)private_out[core],
+                                    (uintptr_t)tail_out[core]};
   thread_tss_write(0, ant_image, bytes);
   thread_load(context, THREAD_CODE, 0, 0, (bytes + 7) & ~7u);
   thread_tss_write(0, &args, sizeof(args));
@@ -51,9 +44,6 @@ void bank_rows_exercise(unsigned core) {
   thread_release();
   for (unsigned i = 0; i < WORDS; ++i)
     if (private_out[core][i] != (((uint64_t)(core + 1) << 32) | (i + 1)))
-      __builtin_trap();
-  for (unsigned i = 0; i < SHARED_WORDS; ++i)
-    if (shared_out[core][i] != (((uint64_t)(core + 1) << 32) | (i + 1)))
       __builtin_trap();
   for (unsigned i = 0; i < 8; ++i)
     if (tail_out[core][i] !=

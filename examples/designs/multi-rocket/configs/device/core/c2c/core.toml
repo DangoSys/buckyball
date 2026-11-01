@@ -1,3 +1,0 @@
-enabled = false
-peerCores = 32
-axi = "default"

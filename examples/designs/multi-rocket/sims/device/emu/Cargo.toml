@@ -68,6 +68,8 @@ bebop-verilator = { path = "../../../../../../bebop/src/nodes/verilator", option
 bebop-bemu = { path = "../../../../../../bebop/src/nodes/bemu" }
 bebop-core-rocket = { path = "../../../../../prefab/cores/rocket/emu" }
 clap = { version = "4", features = ["derive"] }
+# The parameter messages of the Balls, compiled by bebop-sim-build.
+prost = "0.13"
 
 [build-dependencies]
 bebop-sim-build = { path = "../../../../../../bebop/src/nodes/lib/sim-build" }

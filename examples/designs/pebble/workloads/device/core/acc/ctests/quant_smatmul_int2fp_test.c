@@ -34,12 +34,13 @@ int main(void) {
   for (int bank = 0; bank < 7; ++bank)
     bb_mem_alloc(bank, 1, 1);
   bb_mvin((uintptr_t)input, 0, F32_ROWS, 1);
-  bb_quant_f32_to_i8(0, 1, F32_ROWS, 1.0f);
+  // The unit scales serve both conversions.
+  bb_mvin((uintptr_t)scale, 5, CHANNEL_ROWS, 1);
+  bb_quant_f32_to_i8(0, 5, 1, F32_ROWS);
   bb_mvin((uintptr_t)weight, 2, K, 1);
   bb_mvin((uintptr_t)bias, 3, CHANNEL_ROWS, 1);
   bb_smatmul_bias(3, 0);
   bb_smatmul_os(1, 2, 4, M, N, K, 1, 1, 0);
-  bb_mvin((uintptr_t)scale, 5, CHANNEL_ROWS, 1);
   bb_int32_to_fp32(4, 5, 6, F32_ROWS, 0);
   bb_mvout((uintptr_t)output, 6, F32_ROWS, 1);
   for (int row = 0; row < M; ++row)

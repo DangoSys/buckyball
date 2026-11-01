@@ -1,0 +1,7 @@
+[package]
+name = "buckyball-core-shm"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]

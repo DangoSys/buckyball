@@ -3,11 +3,10 @@
 #
 # Built by the stack top of each simulation entry after the core's threads,
 # configured with DESIGN_CMAKE and CORE. Products:
-#   execute.o              how the core runs jobs (execute.c, through the engine)
-#   libengine-compiler.so  buddy-opt pass plugin of the framework engine
+#   execute.o  how the core runs jobs (execute.c, through the engine)
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
-project(poly-core-stack LANGUAGES C CXX)
+project(poly-core-stack LANGUAGES NONE)
 include("${DESIGN_CMAKE}")
 
 set(RUNTIME "${DESIGN_REPO}/stack/runtime")
@@ -24,9 +23,3 @@ add_custom_command(
     "${ENGINE}/include/engine.h"
   VERBATIM)
 add_custom_target(execute ALL DEPENDS "${CMAKE_BINARY_DIR}/execute.o")
-
-# The engine's compiler plugin, for the threads this core runs.
-add_subdirectory("${ENGINE}/compiler" engine-compiler)
-add_library(engine-compiler-plugin MODULE $<TARGET_OBJECTS:engine-compiler>)
-set_target_properties(engine-compiler-plugin PROPERTIES OUTPUT_NAME engine-compiler
-  LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

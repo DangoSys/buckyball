@@ -1,0 +1,7 @@
+# The instruction and data caches of every core; the device assigns nodeId.
+lines = 64
+homeId = 64
+homeCount = 1
+banks = 2
+lineResult = false
+probe = false

@@ -11,7 +11,7 @@ import framework.core.memory.access.preflight.configs.PmpParams
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.core.memory.MemoryPort
+import framework.core.memory.MemCtrl
 import framework.core.memory.access.preflight.{Command, Error, PmpEntry, PreparationPort}
 import framework.acc.memdomain.toddr.{DmaError, DmaStatus}
 import framework.acc.memdomain.tomem.ControlPort
@@ -41,7 +41,7 @@ class MemoryControl(
 
   @public
   val io = IO(new Bundle {
-    val service     = new MemoryPort(trackingParam, walkerParam)
+    val service     = new MemCtrl(trackingParam, walkerParam)
     val preparation = new PreparationPort(transportParam.mapping, permissionParam, walkerParam)
     val memory      = Flipped(new ControlPort(transportParam, permissionParam))
   })

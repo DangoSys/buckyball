@@ -1,0 +1,12 @@
+# The action thread: an Ant hart and an accelerator with the MXINT8 matrix product (4x16 array, for ~50-row steps) and online MXINT8 quantization Balls;
+# the memory, frontend and GP domains are the framework defaults.
+balldomain = "balldomain.toml"
+memdomain = "default"
+frontend = "default"
+gpdomain = "default"
+transport = "default"
+cpu = "cpu.toml"
+
+[compiler]
+name = "action"
+component = "action"

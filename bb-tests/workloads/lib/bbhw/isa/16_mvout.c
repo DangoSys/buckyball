@@ -6,8 +6,6 @@
 #include <dma.h>
 #endif
 
-#define BB_MVOUT_FUNC7 16
-
 /* Linux needs private destination pages before a DMA store. */
 #if defined(__linux__)
 #define BB_MVOUT_TOUCH(addr, depth, stride, bank)                              \

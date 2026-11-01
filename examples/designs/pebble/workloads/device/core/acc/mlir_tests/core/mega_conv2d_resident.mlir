@@ -1,6 +1,5 @@
-// FORM: %[[FIRST:.*]] = custom.op "conv2d_i8"{{.*}}custom.resident{{.*}}relu = true{{.*}}-> tensor<1x4x4x16xi8>
 // BANK: %[[CODES:.*]] = toint8_ball.bank_int32_to_int8 {{.*}}relu>
-// BANK-NOT: buckyball.bank_mvout
+// BANK-NOT: bbacc.bank_mvout
 // BANK: im2col_ball.bank_im2col_i8 %[[CODES]] ->{{.*}}padding = 1,
 // BANK: maxpool_ball.bank_maxpool_i8
 // BANK: return
@@ -80,14 +79,14 @@ func.func @main() -> i8 {
   %bt = bufferization.to_tensor %conv_bias restrict : memref<16xi32> to tensor<16xi32>
   %dt = bufferization.to_tensor %second_weight restrict : memref<16x16x3x3xi8> to tensor<16x16x3x3xi8>
   %dbt = bufferization.to_tensor %second_bias restrict : memref<16xi32> to tensor<16xi32>
-  %first = custom.op "conv2d_i8"(%input_float, %wt, %bt, %unit, %unit, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x4x4x2xf32>, tensor<16x2x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
+  %first = bbacc.custom "conv2d_i8"(%input_float, %wt, %bt, %unit, %unit, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x4x4x2xf32>, tensor<16x2x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
   %zero = arith.constant dense<0.0> : tensor<1x4x4x16xf32>
   %relu = linalg.generic {indexing_maps = [affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>, affine_map<(n,h,w,c)->(n,h,w,c)>], iterator_types = ["parallel", "parallel", "parallel", "parallel"]} ins(%first, %zero: tensor<1x4x4x16xf32>, tensor<1x4x4x16xf32>) outs(%zero: tensor<1x4x4x16xf32>) {
   ^bb0(%a: f32, %b: f32, %out: f32):
     %r = arith.maximumf %a, %b : f32
     linalg.yield %r : f32
   } -> tensor<1x4x4x16xf32>
-  %second = custom.op "conv2d_i8"(%relu, %dt, %dbt, %unit, %unit, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x4x4x16xf32>, tensor<16x16x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
+  %second = bbacc.custom "conv2d_i8"(%relu, %dt, %dbt, %unit, %unit, %weight_step) {strides = array<i64: 1, 1>, dilations = array<i64: 1, 1>, padding = array<i64: 1, 1, 1, 1>} : (tensor<1x4x4x16xf32>, tensor<16x16x3x3xi8>, tensor<16xi32>, tensor<1x1x1x1xf32>, tensor<1x1x1x1xf32>, tensor<16x1x1x1xf32>) -> tensor<1x4x4x16xf32>
   %filter = tensor.empty() : tensor<2x2xf32>
   %minimum = arith.constant dense<-3.40282347E+38> : tensor<1x2x2x16xf32>
   %pooled = linalg.pooling_nhwc_max {strides = dense<2> : vector<2xi64>, dilations = dense<1> : vector<2xi64>} ins(%second, %filter: tensor<1x4x4x16xf32>, tensor<2x2xf32>) outs(%minimum: tensor<1x2x2x16xf32>) -> tensor<1x2x2x16xf32>

@@ -70,24 +70,24 @@ func.func @main() -> i8 {
   func.call @fill_a(%a1, %lines) : (memref<1024x16xi8>, index) -> ()
   func.call @fill_b(%b0, %c0) : (memref<1024x16xi8>, index) -> ()
   func.call @fill_b(%b1, %lines) : (memref<1024x16xi8>, index) -> ()
-  %ab0 = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %bb0 = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %ab1 = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %bb1 = buckyball.bank_alloc <{row = 1 : i64, col = 1 : i64}>
-  %cb = buckyball.bank_alloc <{row = 1 : i64, col = 4 : i64}>
-  %al0 = buckyball.bank_mvin %a0, %ab0 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
-  %bl0 = buckyball.bank_mvin %b0, %bb0 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
-  %al1 = buckyball.bank_mvin %a1, %ab1 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
-  %bl1 = buckyball.bank_mvin %b1, %bb1 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
-  %cl = buckyball.bank_mvin %c, %cb <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
-  %al = buckyball.bank_transfer %al1, %al0
-  %bl = buckyball.bank_transfer %bl1, %bl0
+  %ab0 = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %bb0 = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %ab1 = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %bb1 = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>
+  %cb = bbacc.bank_alloc <{row = 1 : i64, col = 4 : i64}>
+  %al0 = bbacc.bank_mvin %a0, %ab0 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
+  %bl0 = bbacc.bank_mvin %b0, %bb0 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
+  %al1 = bbacc.bank_mvin %a1, %ab1 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
+  %bl1 = bbacc.bank_mvin %b1, %bb1 <{depth = 1024 : i64, stride = 1 : i64}> : memref<1024x16xi8>
+  %cl = bbacc.bank_mvin %c, %cb <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
+  %al = bbacc.bank_transfer %al1, %al0
+  %bl = bbacc.bank_transfer %bl1, %bl0
   %r = gemmini_ball.bank_matmul_i8_tile %al, %bl -> %cl <{k = 2048 : i64, shift = 2 : i64, read_destination}>
-  %stored = buckyball.bank_mvout %c, %r <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
+  %stored = bbacc.bank_mvout %c, %r <{depth = 16 : i64, stride = 1 : i64}> : memref<16x16xi32>
   func.call @check_result(%c) : (memref<16x16xi32>) -> ()
-  buckyball.bank_release %al
-  buckyball.bank_release %bl
-  buckyball.bank_release %stored
+  bbacc.bank_release %al
+  bbacc.bank_release %bl
+  bbacc.bank_release %stored
   memref.dealloc %a0 : memref<1024x16xi8>
   memref.dealloc %a1 : memref<1024x16xi8>
   memref.dealloc %b0 : memref<1024x16xi8>

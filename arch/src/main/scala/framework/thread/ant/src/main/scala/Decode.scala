@@ -5,8 +5,8 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
 object Kind extends ChiselEnum {
-  val illegal, lui, auipc, jal, jalr, branch, load, store, alu, multiply, divide, custom, fence, exit, breakpoint =
-    Value
+  val illegal, lui, auipc, jal, jalr, branch, load, store, alu, multiply, divide, custom, fence, exit, breakpoint,
+    cycle = Value
 }
 
 class Decoded extends Bundle {
@@ -86,8 +86,11 @@ class Decode extends Module {
     is("h7b".U)(d.kind := Kind.custom)
     is("h0f".U)(when(f3 === 0.U)(d.kind := Kind.fence))
     is("h73".U) {
-      when(i === "h00000073".U)(d.kind := Kind.exit)
-      when(i === "h00100073".U)(d.kind := Kind.breakpoint)
+      when(i === "h00000073".U)(d.kind                                       := Kind.exit)
+      when(i === "h00100073".U)(d.kind                                       := Kind.breakpoint)
+      // Zicsr: only `csrrs rd, mcycle, x0` (csrr rd, mcycle). The thread runs in
+      // machine mode; every other CSR access is illegal.
+      when(f3 === 2.U && i(31, 20) === "hb00".U && i(19, 15) === 0.U)(d.kind := Kind.cycle)
     }
   }
   io.decoded        := d

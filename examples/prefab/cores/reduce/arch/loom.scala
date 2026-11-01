@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import framework.core.configs.CoreParam
 import framework.core.execution.Execution
-import framework.core.memory.{MemoryPort, MemorySystem}
+import framework.core.memory.{MemCtrl, MemorySystem}
 import framework.core.controller.admission.Commands
 import framework.core.clink.CoreInterrupts
 import framework.ip.bus.{axi4, chi}
@@ -17,7 +17,7 @@ class Loom(corep: CoreParam) extends Module {
     val interrupts = Input(new CoreInterrupts)
     val commands   = new Commands(corep.memory.dcache.tracking, corep.integer.xLen, corep.privileged.permission)
     val drained    = Input(Bool())
-    val memory     = Flipped(new MemoryPort(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
+    val memory     = Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
     val coherent   = Vec(2, new chi.RequesterPort(corep.memory.home.memory.chi))
     val uncached   = new axi4.Port(corep.memory.uncached.axi)
   })

@@ -12,7 +12,7 @@
 
 include "mlir/IR/OpBase.td"
 include "mlir/Interfaces/SideEffectInterfaces.td"
-include "Interfaces/BankInterfaces.td"
+include "Acc/BankInterfaces.td"
 
 def Int2FpBall_Dialect : Dialect {
   let name = "int2fp_ball";

@@ -21,7 +21,7 @@ import framework.acc.memdomain.configs.MemDomainParam
 import framework.core.clink.configs.{Params => CLinkParams}
 import framework.core.tbus.configs.{Params => TBusParams}
 import framework.core.tss.configs.{Params => TaskStorageParams}
-import framework.device.cbus.C2CParams
+import framework.core.shm.configs.Geometry
 import framework.ip.bus.chi.rnf.RnfParams
 import framework.ip.bus.axi4.{InterconnectParam, Params => AxiParam}
 import framework.core.execution.configs.ExecutionParam
@@ -29,28 +29,26 @@ import framework.core.memory.configs.MemoryParam
 import framework.core.controller.configs.{CommandsParam, ControllerParam, TasksParam}
 
 case class CoreParam(
-  hartId:              Int,
-  resetVector:         BigInt,
-  mtimeAddress:        BigInt,
-  clink:               CLinkParams,
-  tbus:                Option[TBusParams],
-  tss:                 Option[TaskStorageParams],
-  c2c:                 C2CParams,
-  transferLocalAccess: Boolean,
-  transferLeaseAccess: Boolean,
-  dmaCache:            Option[RnfParams],
-  interconnect:        InterconnectParam,
-  threads:             Seq[ThreadParam],
-  acc:                 Option[AccParam],
-  memory:              MemoryParam,
-  fetch:               FetchParams,
-  instruction:         InstructionParams,
-  integer:             IntegerParams,
-  muldiv:              MulDivParams,
-  fpu:                 FpuParams,
-  privileged:          PrivilegedParams,
-  registerFile:        RegisterFileParams,
-  admission:           AdmissionParams) {
+  hartId:       Int,
+  resetVector:  BigInt,
+  mtimeAddress: BigInt,
+  clink:        CLinkParams,
+  tbus:         Option[TBusParams],
+  tss:          Option[TaskStorageParams],
+  shm:          Option[Geometry],
+  dmaCache:     Option[RnfParams],
+  interconnect: InterconnectParam,
+  threads:      Seq[ThreadParam],
+  acc:          Option[AccParam],
+  memory:       MemoryParam,
+  fetch:        FetchParams,
+  instruction:  InstructionParams,
+  integer:      IntegerParams,
+  muldiv:       MulDivParams,
+  fpu:          FpuParams,
+  privileged:   PrivilegedParams,
+  registerFile: RegisterFileParams,
+  admission:    AdmissionParams) {
 
   // TBus uses the bank/tag widths, not a thread's private scheduling policy.
   def sharedFrontend: FrontendParam = threads.map(_.acc.get.frontend).reduce { (left, right) =>
@@ -92,7 +90,7 @@ case class CoreParam(
         privileged.permission,
         admission.moves,
         threads.nonEmpty,
-        clink.shared
+        clink.service
       ),
       taskParams
     )
@@ -101,7 +99,7 @@ case class CoreParam(
   def execution(directAccelerator: Boolean): ExecutionParam = ExecutionParam(
     hartId,
     resetVector,
-    threads.nonEmpty || clink.shared || directAccelerator,
+    threads.nonEmpty || clink.service || directAccelerator,
     directAccelerator,
     admission.moves,
     memory.dcache.tracking,
@@ -157,8 +155,6 @@ object CoreParam {
     val directShared = threads.isEmpty && accp.exists(_.memDomain.sharedEnable)
     val participants = if (directShared) Seq(0) else ids
     val crossbar     = AxiParam.fromProto(p.getInterconnect.getAxi)
-    val c2c          = p.getC2C
-    val c2cAxi       = AxiParam.fromProto(c2c.getAxi)
     require(ids == ids.indices, "TBus thread IDs must be ordered and contiguous")
     CoreParam(
       hartId = p.getHartId,
@@ -171,10 +167,10 @@ object CoreParam {
         memp.memoryAccess.memory.chi,
         memp.uncached.axi,
         accp.map(_.transport.axi).getOrElse(crossbar),
-        Option.when(c2c.getEnabled)(c2cAxi)
+        p.getService
       ),
       tbus = Option.when(p.hasTbus)(TBusParams(
-        RouterParam(if (c2c.getEnabled) 3 + (if (directShared) 1 else 0) else 0),
+        RouterParam(0),
         participants,
         participants.size,
         p.getTbus.getBankNodesList.asScala.map(_.intValue).toSeq,
@@ -184,14 +180,11 @@ object CoreParam {
         spm.Params(BigInt(java.lang.Long.toUnsignedString(tss.getBase)), tss.getBytes, tss.getDataBits),
         ids.size
       )),
-      c2c = C2CParams(
-        BigInt(shared.getEntries) * (shared.getBankWidth / 8),
-        shared.getBankEntries * (shared.getBankWidth / 8),
-        c2c.getPeerCores,
-        c2cAxi
-      ),
-      transferLocalAccess = directShared && c2c.getEnabled,
-      transferLeaseAccess = c2c.getEnabled,
+      shm = Option.when(shared.getEnable)(Geometry(
+        shared.getBankWidth,
+        shared.getBankEntries,
+        shared.getEntries / shared.getBankEntries
+      )),
       dmaCache = Option.when(p.hasDmaCache)(RnfParams.fromProto(p.getDmaCache, memp.home.memory.chi)),
       interconnect = InterconnectParam(crossbar, ids.size, Some(p.getInterconnect.getSlots)),
       threads = threads,
@@ -204,7 +197,7 @@ object CoreParam {
       fpu = FpuParams(cp.getXLen, p.getFpu.getFLen),
       privileged = PrivilegedParams(permission),
       registerFile = RegisterFileParams(cp.getXLen),
-      admission = AdmissionParams(permission, p.getController.getMoves)
+      admission = AdmissionParams(permission, p.getController.getMoves && threads.isEmpty)
     )
   }
 

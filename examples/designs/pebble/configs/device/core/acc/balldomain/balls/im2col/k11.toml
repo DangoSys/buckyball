@@ -1,0 +1,5 @@
+# Pebble Im2col Ball Configuration
+include = "../../../../../../../../../prefab/balls/im2col/configs/default.toml"
+
+# The first convolution of AlexNet is 11x11.
+maxKSize = 11

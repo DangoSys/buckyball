@@ -1,0 +1,12 @@
+syntax = "proto3";
+package buckyball.balls.mxint8matmul;
+option java_package = "buckyball.balls.mxint8matmul";
+option java_multiple_files = true;
+
+// The PE array: rows x cols processing elements, each multiplying `lanes`
+// INT8 code pairs per cycle (lanes divides 32, cols is a multiple of 4).
+message Params {
+  optional int32 rows = 1;
+  optional int32 cols = 2;
+  optional int32 lanes = 3;
+}

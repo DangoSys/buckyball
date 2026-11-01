@@ -8,7 +8,7 @@ memory = "memory/pebble.toml"
 fetch = "default"
 fpu = "default"
 interconnect = "interconnect/pebble.toml"
-c2c = "c2c/pebble.toml"
+service = false
 controller = "default"
 
 [param]

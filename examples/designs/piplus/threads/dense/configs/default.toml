@@ -1,0 +1,12 @@
+# The dense thread: an Ant hart and an accelerator with the MXINT8 matrix product (16x16 array) and online MXINT8 quantization Balls;
+# the memory, frontend and GP domains are the framework defaults.
+balldomain = "balldomain.toml"
+memdomain = "default"
+frontend = "default"
+gpdomain = "default"
+transport = "default"
+cpu = "cpu.toml"
+
+[compiler]
+name = "dense"
+component = "dense"

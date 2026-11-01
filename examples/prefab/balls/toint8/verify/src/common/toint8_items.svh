@@ -32,7 +32,7 @@ class toint8_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", $sformatf("unknown toint8 kind %0d", cmd.kind))
     end
 
-    // Banks and iter come from rs1; rs2 carries the f32 scale or the i32 output geometry.
+    // Banks and iter come from rs1; rs2 carries the i32 output geometry.
     kind = cmd.kind;
     rob_id = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
     funct           = kind == TOINT8_KIND_F32 ? QUANT_F32_TO_I8_THREAD_FUNCT7[6:0] :
@@ -55,21 +55,17 @@ class toint8_cmd_item extends bb_blink_cmd_item;
     num_scale_words = cmd.num_scale_words;
     num_dst_words = cmd.num_dst_words;
 
+    // One scale group: rows 4g..4g+3 hold the scales of channel group g.
+    if (op2_col != 1) `uvm_fatal("CASE", "ToInt8Ball scales must be one group")
+    if (op1_bank == op2_bank || op2_bank == wr_bank)
+      `uvm_fatal("CASE", "ToInt8Ball input, scale, and output banks must differ")
+    if (num_scale_words != 4 * op1_col)
+      `uvm_fatal("CASE", "ToInt8Ball must emit four scale rows per channel group")
     if (kind == TOINT8_KIND_F32) begin
-      if (op2_bank != 0 || op2_col != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves input bank 1")
-      if (rs2[63:32] != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves rs2[63:32]")
-      if (num_scale_words != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 must not emit scale rows")
+      if (rs2 != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 reserves rs2")
       if (input_base != 0) `uvm_fatal("CASE", "QUANT_F32_TO_I8 input_base must be 0")
     end else begin
-      if (op2_col != op1_col)
-        `uvm_fatal("CASE", "QUANT_I32_TO_I8 scale must have one group per channel group")
-      if (op1_bank == op2_bank)
-        `uvm_fatal("CASE", "QUANT_I32_TO_I8 input and scale banks must differ")
-      if (op2_bank == wr_bank)
-        `uvm_fatal("CASE", "QUANT_I32_TO_I8 scale and output banks must differ")
       if (rs2[63:35] != 0) `uvm_fatal("CASE", "QUANT_I32_TO_I8 reserves rs2[63:35]")
-      if (num_scale_words != 4 * op1_col)
-        `uvm_fatal("CASE", "QUANT_I32_TO_I8 must emit four scale rows per group")
     end
 
     if (iter == 0 || iter[1:0] != 2'b00)

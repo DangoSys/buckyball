@@ -62,7 +62,7 @@ class PreparedMap(b: ModuleParam) extends Module {
   val direction  = Reg(Vec(p.contexts, Bool()))
   val vas        = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(64.W))))
   val pas        = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(p.bus.addressBits.W))))
-  val sizes      = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(13.W))))
+  val ends       = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(13.W))))
 
   def matches(id: UInt): Vec[Bool] = VecInit((0 until p.contexts).map(i => live(i) && tags(i) === id))
   val free         = VecInit(live.map(!_))
@@ -108,8 +108,9 @@ class PreparedMap(b: ModuleParam) extends Module {
         counts(preparedSlot)  := 0.U
       }.otherwise {
         val index = counts(preparedSlot)(log2Ceil(p.maxRanges) - 1, 0)
-        vas(preparedSlot)(index)                   := record.va; pas(preparedSlot)(index)   := record.pa
-        sizes(preparedSlot)(index)                 := record.bytes; direction(preparedSlot) := record.write
+        vas(preparedSlot)(index)                   := record.va; pas(preparedSlot)(index) := record.pa
+        direction(preparedSlot)                    := record.write
+        ends(preparedSlot)(index)                  := record.va(11, 0) + record.bytes
         counts(preparedSlot)                       := counts(preparedSlot) + 1.U
         when(record.last)(sealedList(preparedSlot) := true.B)
       }
@@ -141,23 +142,34 @@ class PreparedMap(b: ModuleParam) extends Module {
   // registered, then the first covering range, and the third cycle answers. The owning context
   // must not change while it is queried.
   for (port <- 0 until 2) {
-    val query = io.queries(port)
-    val owner = matches(query.id)
-    val owned = RegNext(owner.asUInt.orR)
-    val slot  = RegNext(PriorityEncoder(owner))
-    val last  = query.va +& (query.bytes - 1.U)
-    def covers(context: UInt, index: Int): Bool =
-      index.U < counts(context) && query.va >= vas(context)(index) &&
-        last < (vas(context)(index) +& sizes(context)(index)) && direction(context) === query.write
-    val hits       = VecInit((0 until p.maxRanges).map(covers(slot, _)))
+    val query     = io.queries(port)
+    val owner     = matches(query.id)
+    val owned     = RegNext(owner.asUInt.orR)
+    // Keep each registered select local to one context's mapping data.
+    val selected  = RegNext(UIntToOH(PriorityEncoder(owner), p.contexts))
+    val mappedVA  = Mux1H((0 until p.contexts).map(i => selected(i) -> vas(i)))
+    val mappedPA  = Mux1H((0 until p.contexts).map(i => selected(i) -> pas(i)))
+    val mappedEnd = Mux1H((0 until p.contexts).map(i => selected(i) -> ends(i)))
+    val count     = Mux1H((0 until p.contexts).map(i => selected(i) -> counts(i)))
+    val write     = Mux1H((0 until p.contexts).map(i => selected(i) -> direction(i)))
+    val endOffset = query.va(11, 0) +& query.bytes
+    def covers(
+      va:     UInt,
+      end:    UInt,
+      active: Bool,
+      write:  Bool
+    ): Bool =
+      active && query.va(63, 12) === va(63, 12) && query.va(11, 0) >= va(11, 0) &&
+        endOffset <= end && write === query.write
+    val hits       = VecInit((0 until p.maxRanges).map(i => covers(mappedVA(i), mappedEnd(i), i.U < count, write)))
     val covered    = RegNext(hits.asUInt.orR)
     val index      = RegNext(PriorityEncoder(hits))
     val retiring   = io.release.fire && io.release.bits.id === query.id
-    val shapeOK    = query.bytes =/= 0.U && !last(64) &&
-      (query.va(11, 0) +& query.bytes) <= 4096.U
-    val authorized = owned && sealedList(slot) && notified(slot) &&
-      errors(slot) === Error.Ok.U && !retiring && !reset.asBool
-    val translated = pas(slot)(index) +& (query.va - vas(slot)(index))
+    val shapeOK    = query.bytes =/= 0.U && endOffset <= 4096.U
+    val allowed    =
+      Mux1H((0 until p.contexts).map(i => selected(i) -> (sealedList(i) && notified(i) && errors(i) === Error.Ok.U)))
+    val authorized = owned && allowed && !retiring && !reset.asBool
+    val translated = mappedPA(index) +& (query.va - mappedVA(index))
     val hit        = query.valid && shapeOK && authorized && covered
     io.results(port).hit   := hit
     io.results(port).pa    := Mux(hit, translated(p.bus.addressBits - 1, 0), 0.U)
@@ -165,7 +177,9 @@ class PreparedMap(b: ModuleParam) extends Module {
 
     // Map invariants, checked on the query of this cycle against its current owner.
     val present        = PriorityEncoder(owner)
-    val presentHits    = VecInit((0 until p.maxRanges).map(covers(present, _)))
+    val presentHits    = VecInit((0 until p.maxRanges).map(i =>
+      covers(vas(present)(i), ends(present)(i), i.U < counts(present), direction(present))
+    ))
     val presentAllowed = owner.asUInt.orR && sealedList(present) && notified(present) &&
       errors(present) === Error.Ok.U && !retiring && !reset.asBool
     val presentPA      = pas(present)(PriorityEncoder(presentHits)) +&

@@ -39,6 +39,13 @@ class BankCheckDPI extends BlackBox with HasBlackBoxInline {
       |);
       |""".stripMargin + DpiGuard.wrapBTrace(
       """
+        |  reg [63:0] inst_id_reg;
+        |  reg [63:0] thread_id_reg;
+        |  reg [63:0] owner_thread_id_reg;
+        |  reg [31:0] w0_vbank_reg;
+        |  reg [31:0] w0_hash_reg;
+        |  reg        valid_reg = 1'b0;
+        |
         |  export "DPI-C" function btrace_snapshot;
         |  function void btrace_snapshot(
         |    output int unsigned thread_lo,
@@ -51,7 +58,7 @@ class BankCheckDPI extends BlackBox with HasBlackBoxInline {
         |    thread_hi = threadId[63:32];
         |    produced_lo = produced[31:0];
         |    produced_hi = produced[63:32];
-        |    is_idle = {31'b0, idle};
+        |    is_idle = {31'b0, idle && !valid_reg};
         |  endfunction
         |  import "DPI-C" context function void dpi_btrace(
         |    input int unsigned inst_id_lo,
@@ -64,8 +71,18 @@ class BankCheckDPI extends BlackBox with HasBlackBoxInline {
         |    input int unsigned w0_hash
         |  );
         |  always @(posedge clock) begin
+        |    // Drain the sampled event even when reset starts on this edge.
+        |    if (valid_reg) begin
+        |      dpi_btrace(inst_id_reg[31:0], inst_id_reg[63:32], thread_id_reg[31:0], thread_id_reg[63:32], owner_thread_id_reg[31:0], owner_thread_id_reg[63:32], w0_vbank_reg, w0_hash_reg);
+        |    end
+        |
+        |    valid_reg <= !reset && fire;
         |    if (!reset && fire) begin
-        |      dpi_btrace(instId[31:0], instId[63:32], threadId[31:0], threadId[63:32], ownerThreadId[31:0], ownerThreadId[63:32], w0Vbank, w0Hash);
+        |      inst_id_reg         <= instId;
+        |      thread_id_reg       <= threadId;
+        |      owner_thread_id_reg <= ownerThreadId;
+        |      w0_vbank_reg        <= w0Vbank;
+        |      w0_hash_reg         <= w0Hash;
         |    end
         |  end
         |""".stripMargin

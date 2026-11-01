@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import examples.core.rocket.configs.{Params => RocketParam}
 import examples.core.rocket.Execution
-import framework.core.memory.{MemoryPort, MemorySystem}
+import framework.core.memory.{MemCtrl, MemorySystem}
 import framework.acc.frontend.RoCCIO
 import framework.core.clink.CoreInterrupts
 import framework.ip.bus.axi4
@@ -20,7 +20,7 @@ class Loom(corep: RocketParam) extends Module {
   val io = IO(new Bundle {
     val interrupts = Input(new CoreInterrupts)
     val rocc       = Flipped(new RoCCIO(corep.cpu.core.xLen, corep.permission))
-    val memory     = Flipped(new MemoryPort(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
+    val memory     = Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
     val uncached   = new axi4.Port(corep.memory.uncached.axi)
 
     val backing = new Bundle {

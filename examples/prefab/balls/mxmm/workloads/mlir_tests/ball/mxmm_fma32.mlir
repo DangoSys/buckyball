@@ -1,4 +1,4 @@
-// RUN: buddy-opt %s -lower-buckyball -canonicalize | FileCheck %s
+// RUN: buddy-opt %s -lower-acc -canonicalize | FileCheck %s
 // CHECK-LABEL: func.func @single
 // CHECK-DAG: arith.constant 4298115073 : i64
 // CHECK-DAG: arith.constant 50397200 : i64

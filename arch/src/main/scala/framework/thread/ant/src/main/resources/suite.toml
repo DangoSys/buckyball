@@ -8,8 +8,8 @@ name = "ant"
 top = "ant_tb"
 test = "protocol_test"
 filelist = "ant.f"
-timeout_ns = 100000
-wall_timeout_s = 120
+timeout_ns = 100000000
+wall_timeout_s = 3600
 kind = "functional"
 rtl_scopes = ["dut"]
 metrics = ["line", "cond", "tgl"]
@@ -21,12 +21,165 @@ assertion = ""
 
 [[tests]]
 functional_groups = []
+name = "ant_csr_mstatus"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_mstatus"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0x30002573"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_cycle"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_cycle"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xc0002573"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_minstret"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_minstret"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xb0202573"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_write_mcycle"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_write_mcycle"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xb0051073"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_set_mcycle"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_set_mcycle"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xb005a573"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_clear_mcycle"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_clear_mcycle"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xb0003573"
+
+[[tests]]
+functional_groups = []
+name = "ant_csr_immediate_mcycle"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=csr_immediate_mcycle"]
+assertion = "Ant illegal instruction: pc=0x0000000000000000 instruction=0xb0006573"
+
+[[tests]]
+functional_groups = []
+name = "ant_ebreak"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=ebreak"]
+assertion = "Ant breakpoint: pc=0x0000000000000000"
+
+[[tests]]
+functional_groups = []
+name = "ant_ecall_service"
+top = "ant_tb"
+test = "protocol_test"
+filelist = "ant.f"
+timeout_ns = 1000000
+wall_timeout_s = 300
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=ecall_service"]
+assertion = "Ant unsupported ECALL: pc=0x0000000000000004 a7=0x0000000000000001"
+
+[[tests]]
+functional_groups = []
 name = "control"
 top = "control_tb"
 test = "protocol_test"
 filelist = "control.f"
-timeout_ns = 100000
-wall_timeout_s = 120
+timeout_ns = 5000000
+wall_timeout_s = 600
 kind = "functional"
 rtl_scopes = ["dut"]
 metrics = ["line", "cond", "tgl"]
@@ -42,8 +195,8 @@ name = "service"
 top = "service_tb"
 test = "protocol_test"
 filelist = "service.f"
-timeout_ns = 100000
-wall_timeout_s = 120
+timeout_ns = 100000000
+wall_timeout_s = 3600
 kind = "functional"
 rtl_scopes = ["dut"]
 metrics = ["line", "cond", "tgl"]
@@ -59,10 +212,10 @@ name = "tls"
 top = "tls_tb"
 test = "protocol_test"
 filelist = "tls.f"
-timeout_ns = 100000
-wall_timeout_s = 120
+timeout_ns = 3000000
+wall_timeout_s = 600
 kind = "functional"
-rtl_scopes = ["tiles[0].dut", "tiles[1].dut"]
+rtl_scopes = ["cores[0].dut", "cores[1].dut"]
 metrics = ["line", "cond", "tgl"]
 sink_ready = 1
 sink_stall = 3

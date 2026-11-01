@@ -7,7 +7,7 @@ import framework.core.tbus.configs.{Params => TBusParam}
 import chisel3.util.log2Ceil
 import framework.core.tbus.configs.Layout
 import framework.acc.memdomain.MvoverISA
-import framework.ip.memory.mesh_shm.{MeshSharedMemParams, MeshThreadAttachment}
+import framework.core.shm.{MeshSharedMemParams, MeshThreadAttachment}
 import upickle.default.{macroRW, ReadWriter}
 
 case class Params(physicalPorts: Int) {

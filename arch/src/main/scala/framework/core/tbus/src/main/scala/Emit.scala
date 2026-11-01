@@ -26,7 +26,8 @@ object Emit {
         core.tbus.get,
         core.threads.map(_.id),
         core.threads.map(_.id),
-        b.sim
+        b.sim,
+        0
       ),
       firtoolOpts = firtoolOpts,
       args = Array("--target-dir", directory, "--split-verilog")

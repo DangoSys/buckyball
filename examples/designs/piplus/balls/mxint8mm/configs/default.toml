@@ -1,0 +1,5 @@
+# MXINT8 matrix product Ball: a rows x cols array of processing elements, each
+# multiplying `lanes` INT8 code pairs per cycle (lanes divides 32).
+rows = 8
+cols = 8
+lanes = 8

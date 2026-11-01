@@ -8,7 +8,7 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-from utils.path import get_buckyball_path, workload_build_dir
+from utils.path import design_output_root, get_buckyball_path, workload_build_dir
 from utils.event_common import check_result, get_origin_trace_id
 
 _stack_build_path = os.path.join(
@@ -106,13 +106,41 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     try:
-        # Workloads link the device runtime; MLIR tests compile with its plugins.
+        # The tests of the stack link the device runtime; MLIR tests compile
+        # with its plugins.
         design_cmake = stack_build.build_design(
             bbdir,
             design=design,
             selection=input_data["target"],
             logger=ctx.logger,
             task_scope=origin_tid,
+        )
+        # The C API (bbsw) of the simulation, a build of its own.
+        bbsw = os.path.join(
+            design_output_root(bbdir, design, selection=input_data["target"]), "bbsw"
+        )
+        stack_build.run(
+            [
+                "cmake",
+                "-G",
+                "Ninja",
+                "-S",
+                os.path.join(bbdir, "bb-tests", "workloads", "lib"),
+                "-B",
+                bbsw,
+                f"-DDESIGN_CMAKE={design_cmake}",
+            ],
+            repo=Path(bbdir),
+            logger=ctx.logger,
+            task_scope=origin_tid,
+            output_prefix="bbsw configure",
+        )
+        stack_build.run(
+            ["ninja", "-C", bbsw],
+            repo=Path(bbdir),
+            logger=ctx.logger,
+            task_scope=origin_tid,
+            output_prefix="bbsw build",
         )
         build = workload_build_dir(bbdir, design, selection=input_data["target"])
         stack_build.run(
@@ -125,6 +153,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "-B",
                 build,
                 f"-DDESIGN_CMAKE={design_cmake}",
+                f"-DBBSW_CMAKE={os.path.join(bbsw, 'bbsw.cmake')}",
             ],
             repo=Path(bbdir),
             logger=ctx.logger,

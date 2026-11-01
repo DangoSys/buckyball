@@ -1,8 +1,7 @@
 #ifndef _BB_GEMMINI_CONFIG_H_
 #define _BB_GEMMINI_CONFIG_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // Configure Gemmini matrix array
 // All config parameters go in rs2 (special), starting from bit 4.

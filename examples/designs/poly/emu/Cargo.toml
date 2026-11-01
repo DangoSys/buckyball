@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 bebop-bemu = { path = "../../../../bebop/src/nodes/bemu" }
+buckyball-device-shm = { path = "../../../../arch/src/main/scala/framework/device/shm/src/csrc" }
+buckyball-core-shm = { path = "../../../../arch/src/main/scala/framework/core/shm/src/csrc" }

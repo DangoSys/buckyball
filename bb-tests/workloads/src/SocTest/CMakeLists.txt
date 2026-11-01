@@ -14,7 +14,6 @@ set(BUCKYBALL_SOCTEST_C_FLAGS
     -specs=nano.specs
     -specs=nosys.specs
     -nostartfiles
-    -Wl,-T,${BBSIM_LD}
 )
 
 set(BUCKYBALL_SOCTEST_TARGET ${BUCKYBALL_CONTROL_TARGET})
@@ -40,18 +39,24 @@ function(add_buckyball_soctest SOURCE_FILE)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
-            ${ELF_CC} ${BUCKYBALL_SOCTEST_C_FLAGS} -o ${EXECUTABLE}
-            ${BAREMETAL_DIR}/crt0.S ${BAREMETAL_DIR}/syscalls.c ${SOURCE}
+            ${ELF_CC} ${BUCKYBALL_SOCTEST_C_FLAGS}
+            $<TARGET_PROPERTY:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal,INTERFACE_LINK_OPTIONS>
+            -o ${EXECUTABLE} $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+            $<TARGET_OBJECTS:bbsw-syscalls-baremetal> ${SOURCE}
             -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART} ${DESIGN_DEFINES}
+            -DTRACE_BASE=${DESIGN_DEVICE_TRACE_BASE}ULL
+            -DTRACE_STRIDE=${DESIGN_DEVICE_TRACE_STRIDE}ULL
             -I${CMAKE_CURRENT_SOURCE_DIR}
+            -I${BUCKYBALL_REPO_ROOT}/stack/runtime/trace
         DEPENDS
             ${SOURCE}
-            ${BAREMETAL_DIR}/crt0.S
-            ${BBSIM_LD}
-            ${BAREMETAL_DIR}/syscalls.c
+            $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+            $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
             ${CMAKE_CURRENT_SOURCE_DIR}/soc.h
+            ${BUCKYBALL_REPO_ROOT}/stack/runtime/trace/event.h
         COMMENT "Building SoC test: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND_EXPAND_LISTS
         VERBATIM
     )
     add_custom_target(
@@ -69,6 +74,7 @@ add_buckyball_soctest(time_csr_permissions.c)
 add_buckyball_soctest(lrsc_word.c)
 add_buckyball_soctest(lrsc_translated.c)
 add_buckyball_soctest(plic_register_access.c)
+add_buckyball_soctest(trace_events.c)
 
 add_custom_target(
     sync-soctest-bin

@@ -3,6 +3,7 @@ bootrom = "default"
 clint = "clint.toml"
 plic = "plic.toml"
 scu = "default"
+trace = "default"
 
 [[cores]]
 include = "cores/core0/default.toml"

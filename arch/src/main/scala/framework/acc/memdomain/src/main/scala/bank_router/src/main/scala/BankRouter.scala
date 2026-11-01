@@ -14,7 +14,7 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.acc.memdomain._
 import framework.acc.memdomain.bank_router.blt.BankLayoutTable
 import framework.acc.memdomain.prm.PhysicalBankPort
-import framework.thread.tlink.BankAccess
+import framework.core.shm.BankAccess
 
 /** Allocate a renamed binding, or commit a new binding and retire its previous one. */
 class BankMapping(frontendParam: FrontendParam) extends Bundle {
@@ -205,7 +205,7 @@ class BankRouter(
   }
 
   if (memParam.sharedEnable && memParam.bankWidth == 128) {
-    // Reserve channel 0 for Mesh-initiated private-Bank access only when its
+    // Reserve channel 0 for Mesh-initiated logical-bank access only when its
     // ordinary request/response pair has drained. This preserves the normal
     // AccPipe route and prevents one-cycle SRAM responses from being lost.
     val normal             = io.requests(0)
@@ -225,7 +225,7 @@ class BankRouter(
 
     routed.bank_id             := Mux(localRequest, committed(local.request.bits.bank), normal.bank_id)
     routed.group_id            := Mux(localRequest, 0.U, normal.group_id)
-    routed.is_shared           := Mux(localRequest, false.B, normal.is_shared)
+    routed.is_shared           := Mux(localRequest, local.request.bits.bank >= frontendParam.shared_vbank_base.U, normal.is_shared)
     routed.thread_id           := Mux(localRequest, ownerId.U(64.W), normal.thread_id)
     routed.rob_id              := Mux(localRequest, 0.U, normal.rob_id)
     routed.inst_id             := Mux(localRequest, 0.U, normal.inst_id)
@@ -256,8 +256,10 @@ class BankRouter(
     when(normal.write.req.fire)(normalWritePending  := true.B)
     when(normal.write.resp.fire)(normalWritePending := false.B)
     when(local.request.fire) {
-      assert(local.request.bits.bank <= frontendParam.max_private_vbank.U)
-      assert(local.request.bits.addr < memParam.bankEntries.U)
+      val shared = local.request.bits.bank >= frontendParam.shared_vbank_base.U &&
+        local.request.bits.bank < memParam.virtualBankCount.U
+      assert(local.request.bits.bank <= frontendParam.max_private_vbank.U || shared)
+      assert(local.request.bits.addr < Mux(shared, memParam.sharedBankEntries.U, memParam.bankEntries.U))
       assert(!local.request.bits.write || local.request.bits.mask.andR)
       localPending := true.B
       localIsWrite := local.request.bits.write
@@ -271,9 +273,10 @@ class BankRouter(
   }
 
   val routedRequests  = logical.toSeq ++ io.directRequest.toSeq
+  val sharedRequests  = routedRequests.size - 2
   require(
-    !memParam.sharedEnable || io.shared.requests.size >= routedRequests.size,
-    "Shared-bank channels must cover Ball, GP and DMA request ports"
+    !memParam.sharedEnable || io.shared.requests.size >= sharedRequests,
+    "Shared-bank channels must cover Ball and GP request ports"
   )
   val privateRequests = blt.io.mem_req.toSeq ++ blt.io.kernel_req.toSeq
   for (i <- routedRequests.indices) {
@@ -285,7 +288,7 @@ class BankRouter(
         owner < memParam.virtualBankCount.U
     memory <> request
     memory.is_shared := false.B
-    if (i < io.shared.requests.size) {
+    if (i < sharedRequests && i < io.shared.requests.size) {
       val remote      = io.shared.requests(i)
       // Private and shared responses may have different latency. Keep one route per accepted transfer.
       val readOwners  = Instantiate(new Queue(Bool(), 8))
@@ -335,7 +338,7 @@ class BankRouter(
     }
   }
 
-  for (i <- routedRequests.size until io.shared.requests.size) {
+  for (i <- sharedRequests until io.shared.requests.size) {
     val remote = io.shared.requests(i)
     remote.bank_id          := 0.U
     remote.group_id         := 0.U

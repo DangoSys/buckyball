@@ -3,3 +3,5 @@ add_subdirectory(engine)
 add_subdirectory(ball)
 set(POLY_ANT_IMAGE_DIR "${POLY_ANT_IMAGE_DIR}" PARENT_SCOPE)
 set(POLY_ANT_SOURCE_DIR "${POLY_ANT_SOURCE_DIR}" PARENT_SCOPE)
+
+add_subdirectory(compiler)

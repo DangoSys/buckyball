@@ -1,8 +1,7 @@
 #ifndef _BB_SMATMUL_H_
 #define _BB_SMATMUL_H_
 
-#include <bbhw/isa/bb_func7.h>
-#include <bbhw/isa/isa.h>
+#include <bb_isa.h>
 
 // SMATMUL_OS: A and B have the same number of groups; group g holds reduction
 // block g, so the instruction accumulates over K = k * groups with k per group

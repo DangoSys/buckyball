@@ -20,15 +20,15 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantia
 import framework.acc.frontend.scheduler.MemoryIssue
 import framework.acc.balldomain.DomainMemory
 import framework.acc.memdomain.tomem.ToMem
-import framework.core.memory.MemoryPort
+import framework.core.memory.MemCtrl
 import framework.core.memory.access.preflight.Preparation
 import framework.ip.bus.axi4
 import framework.acc.memdomain.bank_router.{BankMappingIO, BankRouter}
 import framework.acc.memdomain.prm.PRM
 import framework.acc.memdomain.{MvoverISA, MvoverPort}
-import framework.ip.memory.mesh_shm.MeshLocalBankPort
+import framework.core.shm.LocalBank
 import framework.acc.gpdomain.ImagePort
-import framework.thread.tlink.BankAccess
+import framework.core.shm.BankAccess
 
 class PhysicalBankHash(val frontendParam: FrontendParam) extends Bundle {
   val valid      = Bool()
@@ -120,8 +120,10 @@ class MemDomain(
     val image              = Option.when(gpParam.enable)(new ImagePort)
 // Outside Channel
     val ball               = Flipped(new DomainMemory(frontendParam, memParam, permissionParam))
-    val memory             = new MemoryPort(trackingParam, walkerParam)
+    val memory             = new MemCtrl(trackingParam, walkerParam)
     val ddr                = new axi4.Port(transportParam.axi)
+    val readAddress        = Output(UInt(64.W))
+    val writeAddress       = Output(UInt(64.W))
 
     val shared = new Bundle {
       val bank = new BankAccess(frontendParam, memParam)
@@ -209,6 +211,8 @@ class MemDomain(
   control.io.preparation <> preparation.io
   io.memory <> control.io.service
   io.ddr <> toMem.io.memory.axi
+  io.readAddress  := toMem.io.memory.readAddress
+  io.writeAddress := toMem.io.memory.writeAddress
 
   bankRouter.io.requests <> io.banks
   bankRouter.io.ballLayoutRequest <> io.ballLayoutRequest

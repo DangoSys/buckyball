@@ -1,4 +1,5 @@
-use super::{Input, Output};
+type Input = (u32, u64, u64, u64, u64, u32);
+type Output = (u64, u32, bool, bool);
 
 // instruction, integer, a, rhs, c, rounding -> data, flags, integer, illegal
 pub const CASES: &[(Input, Output)] = &[

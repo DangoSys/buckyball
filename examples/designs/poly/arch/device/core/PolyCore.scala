@@ -13,7 +13,7 @@ import framework.ip.bus.chi.rnf.AxiCache
 import framework.core.execution.Execution
 import framework.core.memory.Memory
 import framework.core.tss.Store
-import framework.core.shm.SHM
+import framework.core.shm.{Exchange, MeshSharedMemParams, MeshThreadAttachment}
 import framework.core.controller.Controller
 import framework.core.clink.{CLinkIO, HasCLink}
 
@@ -34,8 +34,6 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     )
   }
   if (cp.threads.nonEmpty) {
-    if (cp.clink.shared)
-      require(cp.clink.c2c.contains(cp.c2c.axi), "C2C protocol must match its CLink channel")
     val tracking = cp.memory.dcache.tracking
     cp.threads.foreach { thread =>
       val transport = thread.acc.get.transport
@@ -86,9 +84,33 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
         threadTraceIds,
         TBus.generators(cp, simp, threadTraceIds, ThreadComponents.factories)
       ))
-    tbus.io.shm.foreach { port =>
-      val shm: Instance[SHM] = Instantiate(new SHM(cp.sharedFrontend, cp.sharedMemory, cp.tbus.get))
-      shm.io <> port
+    require(cp.threads.size == 5)
+    val storage = cp.shm.get
+    val shm     = Instantiate(new Exchange(
+      MeshSharedMemParams(
+        rows = 2,
+        cols = 2,
+        entriesPerBank = storage.entriesPerBank,
+        dataBits = storage.dataBits,
+        tagBits = 2,
+        banksPerNode = storage.banks / 4,
+        threads = Seq(
+          MeshThreadAttachment(0, 2),
+          MeshThreadAttachment(1, 2),
+          MeshThreadAttachment(2, 2),
+          MeshThreadAttachment(3, 2),
+          MeshThreadAttachment(3, 2)
+        )
+      ),
+      cp.interconnect
+    ))
+    shm.io.command <> controller.io.dataflow.get.request
+    controller.io.dataflow.get.reply <> shm.io.reply
+    controller.io.dataflow.get.busy := shm.io.busy
+    for (thread <- cp.threads.indices) {
+      shm.io.threads(thread) <> tbus.io.dma(thread)
+      shm.io.task(thread).valid := controller.io.threads.get(thread).start.fire
+      shm.io.task(thread).bits  := controller.io.threads.get(thread).start.bits.descriptor.task
     }
     tbus.io.tss.foreach { port =>
       val tss: Instance[Store] = Instantiate(new Store(cp.tss.get))
@@ -101,10 +123,10 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     }
     if (cp.clink.backing) {
       require(cp.interconnect.bus == cp.clink.ddr, "Thread DDR interconnect must match CLink")
-      clink.memory.ddr <> tbus.io.ddr
+      clink.memory.ddr <> shm.io.ddr
     } else {
       val dma = Instantiate(new AxiCache(cp.interconnect.bus, cp.dmaCache.get))
-      dma.io.axi <> tbus.io.ddr
+      dma.io.axi <> shm.io.ddr
       dma.io.axi.ar.bits.cache  := 15.U
       dma.io.axi.aw.bits.cache  := 15.U
       clink.memory.coherent(2) <> dma.io.chi
@@ -117,13 +139,14 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
       clink.memory.ddr.b.ready  := false.B
       clink.memory.ddr.r.ready  := false.B
     }
-    clink.c2c.zip(tbus.io.c2c).foreach { case (link, port) => link <> port }
+    clink.service.zip(controller.io.remote).foreach { case (link, service) => link <> service }
     tbus.io.control.zip(controller.io.threads).foreach { case (port, control) => port <> control }
-    tbus.io.remote.zip(controller.io.remote).foreach { case (port, remote) => port <> remote }
-    tbus.io.move <> controller.io.move
+    controller.io.move.command.ready := false.B
+    controller.io.move.completion.valid := false.B
+    controller.io.move.completion.bits  := false.B
     tbus.io.memory.zip(memory.io.threads).foreach { case (port, service) => port <> service }
   } else {
-    require(!cp.clink.shared, "A core without a shared bank network must not advertise a C2C endpoint")
+    clink.service.zip(controller.io.remote).foreach { case (link, service) => link <> service }
     clink.memory.ddr.aw.valid           := false.B
     clink.memory.ddr.aw.bits            := 0.U.asTypeOf(clink.memory.ddr.aw.bits)
     clink.memory.ddr.w.valid            := false.B
