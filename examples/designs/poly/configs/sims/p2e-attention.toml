@@ -1,0 +1,5 @@
+include = "../../../../prefab/threads/attention/configs/default.toml"
+id = 0
+name = "attention0"
+component = "attention"
+transport = "../device/core/transport.toml"

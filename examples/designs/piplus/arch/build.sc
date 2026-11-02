@@ -46,6 +46,7 @@ object design extends SbtModule {
   override def scalacPluginIvyDeps = Agg(ivy"org.chipsalliance:::chisel-plugin:6.7.0")
   override def scalacOptions       = Seq("-deprecation", "-feature", "-language:reflectiveCalls", "-Ymacro-annotations")
   override def sources             = T.sources(
-    (designRoot / "arch" +: (os.list(threadRoot) ++ os.list(ballRoot)).map(_ / "arch")).map(PathRef(_))
+    (designRoot / "arch" +: (os.list(threadRoot) ++ os.list(ballRoot)).map(_ / "arch").filter(os.isDir(_)))
+      .map(PathRef(_))
   )
 }

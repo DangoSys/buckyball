@@ -58,7 +58,7 @@ function(add_mlir_test NAME)
   # buddy-opt with this target's compiler plugins.
   string(JOIN " " OPT ${DESIGN_TARGET_OPT_${ARG_TARGET}})
   # The banks and Ball ISA of the target, as compiler flags.
-  set(TARGET_DEFINES ${DESIGN_TARGET_DEFS_${ARG_TARGET}})
+  set(TARGET_DEFINES ${DESIGN_TARGET_DEFS_${ARG_TARGET}} ${DESIGN_DEFS})
   list(TRANSFORM TARGET_DEFINES PREPEND "-D")
   set(MLIR_SRC ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir)
   set(MLIR_TEMPLATE ${CMAKE_CURRENT_SOURCE_DIR}/${NAME}.mlir.in)

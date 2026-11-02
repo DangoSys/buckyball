@@ -27,6 +27,7 @@ class ComputeCore(corep: CoreParam, simp: SimParam, traceIds: Seq[Int]) extends 
   val loom:       Instance[Loom]       = Instantiate(new Loom(corep))
   val controller: Instance[Controller] = Instantiate(new Controller(corep.controller))
 
+  val transport = Instantiate(new framework.core.memory.DmaMemory(corep))
   val tbus: Instance[TBus] =
     Instantiate(new TBus(corep, simp, traceIds, TBus.generators(corep, simp, traceIds, ThreadComponents.factories)))
 
@@ -54,7 +55,7 @@ class ComputeCore(corep: CoreParam, simp: SimParam, traceIds: Seq[Int]) extends 
   loom.io.drained                     := controller.io.drained
   loom.io.memoryAllowed               := controller.io.memoryAllowed
   tbus.io.control.get <> controller.io.threads.get
-  tbus.io.memory.get <> loom.io.threads.get
+  loom.io.dma.get <> transport.io.services
   controller.io.move.command.ready    := false.B
   controller.io.move.completion.valid := false.B
   controller.io.move.completion.bits  := false.B
@@ -62,6 +63,9 @@ class ComputeCore(corep: CoreParam, simp: SimParam, traceIds: Seq[Int]) extends 
   controller.io.dataflow.get.reply <> shm.io.reply
   controller.io.dataflow.get.busy     := shm.io.busy
   shm.io.threads(0) <> tbus.io.dma(0)
+  transport.io.clients(0) <> shm.io.external(0)
+  transport.io.launch(0).valid        := controller.io.threads.get(0).start.fire
+  transport.io.launch(0).bits         := controller.io.threads.get(0).start.bits.context
   shm.io.task(0).valid                := controller.io.threads.get(0).start.fire
   shm.io.task(0).bits                 := controller.io.threads.get(0).start.bits.descriptor.task
   tss.io.clients <> tbus.io.tss.get
@@ -73,7 +77,7 @@ class ComputeCore(corep: CoreParam, simp: SimParam, traceIds: Seq[Int]) extends 
 
   clink.memory.uncached <> loom.io.uncached
   clink.memory.coherent.take(2).zip(loom.io.coherent).foreach { case (port, cache) => port <> cache }
-  dma.io.axi <> shm.io.ddr
+  dma.io.axi <> transport.io.axi
   dma.io.axi.ar.bits.cache  := 15.U
   dma.io.axi.aw.bits.cache  := 15.U
   clink.memory.coherent(2) <> dma.io.chi

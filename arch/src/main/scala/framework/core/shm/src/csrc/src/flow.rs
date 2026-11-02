@@ -46,6 +46,21 @@ impl Storage {
         self.tasks[thread] = task;
     }
 
+    pub fn contains(&self, thread: usize, address: u64, bytes: usize, write: bool) -> bool {
+        self.edges.iter().flatten().any(|edge| {
+            let (owner, task, base) = if write {
+                (edge.source, edge.source_task, edge.source_address)
+            } else {
+                (edge.target, edge.target_task, edge.target_address)
+            };
+            owner == thread
+                && task == self.tasks[thread]
+                && address >= base
+                && address - base < edge.bytes as u64
+                && bytes as u64 <= edge.bytes as u64 - (address - base)
+        })
+    }
+
     pub fn transfer_cycles(
         &self,
         thread: usize,

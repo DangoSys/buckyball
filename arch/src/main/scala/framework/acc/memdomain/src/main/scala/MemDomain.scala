@@ -158,6 +158,8 @@ class MemDomain(
     walkerParam
   ))
 
+  val transport = Instantiate(new framework.acc.memdomain.toddr.ToDDR(transportParam, permissionParam))
+
   val ctrl:       Instance[Ctrl]       = Instantiate(new Ctrl(frontendParam, memParam, permissionParam))
   val toMem:      Instance[ToMem]      =
     Instantiate(new ToMem(frontendParam, memParam, gpParam, transportParam, permissionParam))
@@ -210,9 +212,13 @@ class MemDomain(
   control.io.memory <> toMem.io.memory.control
   control.io.preparation <> preparation.io
   io.memory <> control.io.service
-  io.ddr <> toMem.io.memory.axi
-  io.readAddress  := toMem.io.memory.readAddress
-  io.writeAddress := toMem.io.memory.writeAddress
+  transport.io.dma <> toMem.io.dma
+  transport.io.decisions := control.io.decisions
+  control.io.queries     := transport.io.queries
+  transport.io.mappings  := control.io.mappings
+  io.ddr <> transport.io.axi
+  io.readAddress         := transport.io.readAddress
+  io.writeAddress        := transport.io.writeAddress
 
   bankRouter.io.requests <> io.banks
   bankRouter.io.ballLayoutRequest <> io.ballLayoutRequest

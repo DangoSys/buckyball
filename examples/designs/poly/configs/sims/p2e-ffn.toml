@@ -1,0 +1,5 @@
+include = "../../../../prefab/threads/ffn/configs/default.toml"
+id = 2
+name = "ffn0"
+component = "ffn"
+transport = "../device/core/transport.toml"

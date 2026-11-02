@@ -522,3 +522,18 @@ add_custom_command(
   COMMAND_EXPAND_LISTS VERBATIM)
 add_custom_target(${TEST}-build DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${TEST}-baremetal)
 add_dependencies(poly-ctests-build ${TEST}-build)
+
+set(MLIR_TEST_PREFIX compiler)
+set(MLIR_TEST_GROUP design-mlirtests-build)
+add_mlir_test(reduce_sum
+  TARGET ${DESIGN_DEVICE_CORES_${DESIGN_CORE_HART_reduce}_PROFILE}
+  PASSES
+    -convert-linalg-to-acc -canonicalize
+    -one-shot-bufferize=bufferize-function-boundaries
+    -drop-equivalent-buffer-results=modify-public-functions
+    -ownership-based-buffer-deallocation -buffer-deallocation-simplification
+    -bufferization-lower-deallocations -canonicalize
+    -assign-physical-banks -lower-acc -convert-linalg-to-loops
+    -expand-strided-metadata -lower-affine -convert-scf-to-cf
+    -finalize-memref-to-llvm -convert-cf-to-llvm -convert-arith-to-llvm
+    -convert-func-to-llvm -reconcile-unrealized-casts)

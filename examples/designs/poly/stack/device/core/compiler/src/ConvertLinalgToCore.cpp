@@ -315,6 +315,22 @@ public:
         SmallVector<Operation *> lhs = decoding(op.getOperand(0)),
                                  rhs = decoding(op.getOperand(1));
         if (lhs.empty() || rhs.empty()) {
+          for (Value value : op.getOperands().take_front(2)) {
+            Operation *consumer = &op;
+            while (Operation *view = value.getDefiningOp()) {
+              if (!llvm::all_of(value.getUsers(),
+                                [&](Operation *user) {
+                                  return user == consumer ||
+                                         isa<tensor::DimOp>(user);
+                                }) ||
+                  !isa<linalg::TransposeOp, tensor::CollapseShapeOp,
+                       tensor::ExpandShapeOp>(view))
+                break;
+              placed.insert(view);
+              consumer = view;
+              value = view->getOperand(0);
+            }
+          }
           continue;
         }
         placed.insert(lhs.begin(), lhs.end());

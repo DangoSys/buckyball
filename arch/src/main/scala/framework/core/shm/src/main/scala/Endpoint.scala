@@ -11,13 +11,13 @@ import framework.thread.tlink.{Address, Dma, Receive, Send}
 class Endpoint(p: MeshSharedMemParams, bus: axi4.Params, thread: Int) extends Module {
 
   @public val io = IO(new Bundle {
-    val thread = Flipped(new Dma(bus))
-    val task   = Input(UInt(64.W))
-    val flows  = Input(Vec(p.bankCount, new Flow(p)))
-    val read   = Flipped(new MeshChannel(p))
-    val write  = Flipped(new MeshChannel(p))
-    val ddr    = new axi4.Port(bus)
-    val busy   = Output(Vec(p.bankCount, Bool()))
+    val thread   = Flipped(new Dma(bus))
+    val task     = Input(UInt(64.W))
+    val flows    = Input(Vec(p.bankCount, new Flow(p)))
+    val read     = Flipped(new MeshChannel(p))
+    val write    = Flipped(new MeshChannel(p))
+    val external = new Dma(bus)
+    val busy     = Output(Vec(p.bankCount, Bool()))
   })
 
   val rIdle :: rSelect :: rExternal :: rLocal :: Nil              = Enum(4)
@@ -37,6 +37,10 @@ class Endpoint(p: MeshSharedMemParams, bus: axi4.Params, thread: Int) extends Mo
   val writeError                                                  = RegInit(false.B)
   val readData                                                    = Instantiate(new Send(new axi.Beat(bus.dataBits, bus.idBits, 0, 2)))
   val writeData                                                   = Instantiate(new Receive(new axi.Beat(bus.dataBits)))
+  val externalRead                                                = Instantiate(new Receive(new axi.Beat(bus.dataBits, bus.idBits, 0, 2)))
+  val externalWrite                                               = Instantiate(new Send(new axi.Beat(bus.dataBits)))
+  externalRead.io.input <> io.external.readData
+  io.external.writeData <> externalWrite.io.output
   io.thread.readData <> readData.io.output
   writeData.io.input <> io.thread.writeData
   io.thread.read.ready  := readState === rIdle && !reset.asBool
@@ -83,30 +87,18 @@ class Endpoint(p: MeshSharedMemParams, bus: axi4.Params, thread: Int) extends Mo
     writeState := wLocal
   }
 
-  io.ddr.ar.valid                           := readState === rSelect && !readMatches.asUInt.orR
-  io.ddr.ar.bits                            := 0.U.asTypeOf(io.ddr.ar.bits)
-  io.ddr.ar.bits.addr                       := read.physical
-  io.ddr.ar.bits.id                         := read.id
-  io.ddr.ar.bits.len                        := read.beats - 1.U
-  io.ddr.ar.bits.size                       := log2Ceil(bus.bytes).U
-  io.ddr.ar.bits.burst                      := 1.U
-  when(io.ddr.ar.fire)(readState            := rExternal)
-  io.ddr.aw.valid                           := writeState === wSelect && !writeMatches.asUInt.orR
-  io.ddr.aw.bits                            := 0.U.asTypeOf(io.ddr.aw.bits)
-  io.ddr.aw.bits.addr                       := write.physical
-  io.ddr.aw.bits.id                         := write.id
-  io.ddr.aw.bits.len                        := write.beats - 1.U
-  io.ddr.aw.bits.size                       := log2Ceil(bus.bytes).U
-  io.ddr.aw.bits.burst                      := 1.U
-  when(io.ddr.aw.fire)(writeState           := wExternal)
-  io.ddr.w.valid                            := writeState === wExternal && writeData.io.output.valid
-  io.ddr.w.bits.data                        := writeData.io.output.bits.data
-  io.ddr.w.bits.strb                        := writeData.io.output.bits.keep
-  io.ddr.w.bits.last                        := writeData.io.output.bits.last
-  io.ddr.b.ready                            := writeState === wExternal && io.thread.completed.ready
-  io.thread.completed.valid                 := writeState === wComplete || (writeState === wExternal && io.ddr.b.valid)
+  io.external.read.valid                    := readState === rSelect && !readMatches.asUInt.orR
+  io.external.read.bits                     := read
+  when(io.external.read.fire)(readState     := rExternal)
+  io.external.write.valid                   := writeState === wSelect && !writeMatches.asUInt.orR
+  io.external.write.bits                    := write
+  when(io.external.write.fire)(writeState   := wExternal)
+  externalWrite.io.input.valid              := writeState === wExternal && writeData.io.output.valid
+  externalWrite.io.input.bits               := writeData.io.output.bits
+  io.external.completed.ready               := writeState === wExternal && io.thread.completed.ready
+  io.thread.completed.valid                 := writeState === wComplete || (writeState === wExternal && io.external.completed.valid)
   io.thread.completed.bits.id               := write.id
-  io.thread.completed.bits.error            := Mux(writeState === wExternal, io.ddr.b.bits.resp(1), writeError)
+  io.thread.completed.bits.error            := Mux(writeState === wExternal, io.external.completed.bits.error, writeError)
   when(io.thread.completed.fire)(writeState := wIdle)
 
   val load = io.read.request
@@ -119,14 +111,26 @@ class Endpoint(p: MeshSharedMemParams, bus: axi4.Params, thread: Int) extends Mo
   when(load.fire)(reads := reads + 1.U)
   val received = io.read.response
   received.ready                                                        := readState === rLocal && readData.io.input.ready
-  io.ddr.r.ready                                                        := readState === rExternal && readData.io.input.ready
-  readData.io.input.valid                                               := Mux(readState === rLocal, received.valid, readState === rExternal && io.ddr.r.valid)
+  externalRead.io.output.ready                                          := readState === rExternal && readData.io.input.ready
+  readData.io.input.valid                                               := Mux(
+    readState === rLocal,
+    received.valid,
+    readState === rExternal && externalRead.io.output.valid
+  )
   readData.io.input.bits                                                := 0.U.asTypeOf(readData.io.input.bits)
   readData.io.input.bits.id                                             := read.id
   readData.io.input.bits.keep                                           := Fill(bus.bytes, 1.U(1.W))
-  readData.io.input.bits.data                                           := Mux(readState === rLocal, received.bits.data, io.ddr.r.bits.data)
-  readData.io.input.bits.last                                           := Mux(readState === rLocal, returned +& 1.U === read.beats, io.ddr.r.bits.last)
-  readData.io.input.bits.user                                           := Mux(readState === rLocal, Mux(received.bits.error, 2.U, 0.U), io.ddr.r.bits.resp)
+  readData.io.input.bits.data                                           := Mux(readState === rLocal, received.bits.data, externalRead.io.output.bits.data)
+  readData.io.input.bits.last                                           := Mux(
+    readState === rLocal,
+    returned +& 1.U === read.beats,
+    externalRead.io.output.bits.last
+  )
+  readData.io.input.bits.user                                           := Mux(
+    readState === rLocal,
+    Mux(received.bits.error, 2.U, 0.U),
+    externalRead.io.output.bits.user
+  )
   when(received.fire) {
     assert(received.bits.tag === returned(1, 0), "Core memory reordered a stream")
     returned := returned + 1.U
@@ -145,7 +149,7 @@ class Endpoint(p: MeshSharedMemParams, bus: axi4.Params, thread: Int) extends Mo
   writeData.io.output.ready := Mux(
     writeState === wLocal,
     writes < write.beats && store.ready,
-    writeState === wExternal && io.ddr.w.ready
+    writeState === wExternal && externalWrite.io.input.ready
   )
   when(store.fire) {
     assert(writeData.io.output.bits.last === (writes +& 1.U === write.beats), "Core memory write length mismatch")

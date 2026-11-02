@@ -34,24 +34,9 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     )
   }
   if (cp.threads.nonEmpty) {
-    val tracking = cp.memory.dcache.tracking
     cp.threads.foreach { thread =>
       val transport = thread.acc.get.transport
       require(transport.axi == cp.interconnect.bus, "Thread DMA protocol must match the core DDR interconnect")
-      require(
-        transport.prepared.bus.addressBits == cp.memory.memoryAccess.memory.chi.addressBits,
-        "Thread page-table address width must match the core memory service"
-      )
-      require(
-        (
-          transport.interlock.addressBits,
-          transport.interlock.idBits,
-          transport.interlock.lineBytes,
-          transport.interlock.maxRanges
-        ) ==
-          (tracking.addressBits, tracking.idBits, tracking.lineBytes, tracking.maxRanges),
-        "Thread cache-maintenance interface must match the core memory service"
-      )
     }
   }
 
@@ -77,6 +62,7 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
   memory.io.commandAllowed := controller.io.memoryAllowed
 
   if (cp.threads.nonEmpty) {
+    val transport = Instantiate(new framework.core.memory.DmaMemory(cp))
     val tbus: Instance[TBus] =
       Instantiate(new TBus(
         cp,
@@ -109,8 +95,11 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     controller.io.dataflow.get.busy := shm.io.busy
     for (thread <- cp.threads.indices) {
       shm.io.threads(thread) <> tbus.io.dma(thread)
-      shm.io.task(thread).valid := controller.io.threads.get(thread).start.fire
-      shm.io.task(thread).bits  := controller.io.threads.get(thread).start.bits.descriptor.task
+      transport.io.clients(thread) <> shm.io.external(thread)
+      transport.io.launch(thread).valid := controller.io.threads.get(thread).start.fire
+      transport.io.launch(thread).bits  := controller.io.threads.get(thread).start.bits.context
+      shm.io.task(thread).valid         := controller.io.threads.get(thread).start.fire
+      shm.io.task(thread).bits          := controller.io.threads.get(thread).start.bits.descriptor.task
     }
     tbus.io.tss.foreach { port =>
       val tss: Instance[Store] = Instantiate(new Store(cp.tss.get))
@@ -123,10 +112,10 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     }
     if (cp.clink.backing) {
       require(cp.interconnect.bus == cp.clink.ddr, "Thread DDR interconnect must match CLink")
-      clink.memory.ddr <> shm.io.ddr
+      clink.memory.ddr <> transport.io.axi
     } else {
       val dma = Instantiate(new AxiCache(cp.interconnect.bus, cp.dmaCache.get))
-      dma.io.axi <> shm.io.ddr
+      dma.io.axi <> transport.io.axi
       dma.io.axi.ar.bits.cache  := 15.U
       dma.io.axi.aw.bits.cache  := 15.U
       clink.memory.coherent(2) <> dma.io.chi
@@ -144,7 +133,7 @@ class PolyCore(cp: CoreParam, simp: SimParam, threadTraceIds: Seq[Int]) extends 
     controller.io.move.command.ready := false.B
     controller.io.move.completion.valid := false.B
     controller.io.move.completion.bits  := false.B
-    tbus.io.memory.zip(memory.io.threads).foreach { case (port, service) => port <> service }
+    memory.io.dma.get <> transport.io.services
   } else {
     clink.service.zip(controller.io.remote).foreach { case (link, service) => link <> service }
     clink.memory.ddr.aw.valid           := false.B

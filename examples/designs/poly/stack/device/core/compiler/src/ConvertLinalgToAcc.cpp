@@ -228,10 +228,9 @@ public:
       auto fill = op->getOperand(2).getDefiningOp<linalg::FillOp>();
       bool zero = matchPattern(fill ? fill.getInputs()[0] : op->getOperand(2),
                                m_PosZeroFloat());
-      if (batch < 0 || k == 0 || (k >= 0 && k % (mx ? 32 : 4)) || !zero ||
-          (!mx && k < 0)) {
+      if (batch < 0 || k == 0 || (k >= 0 && k % (mx ? 32 : 4)) || !zero) {
         op->emitError("poly product needs a static batch, aligned positive K "
-                      "(static for FP32) and zero initialization");
+                      "and zero initialization");
         return signalPassFailure();
       }
       auto users = op->getResult(0).getUsers();
@@ -418,7 +417,10 @@ public:
       // quantized by the Ball into [batch][block][row][width].
       auto stage = [&](Operand input, bool rhs) -> Value {
         bool online = mx && input.quant;
-        Value source = !mx ? input.value : input.quant.getInput();
+        Value source = mx ? input.quant.getInput()
+                       : input.views.empty()
+                           ? input.value
+                           : input.views.back()->getOperand(0);
         auto sourceType = cast<RankedTensorType>(source.getType());
         Type element = sourceType.getElementType();
         int64_t rowCount = rhs ? n : outputType.getDimSize(batched ? 1 : 0);
@@ -431,21 +433,68 @@ public:
         if (storedRows < 0)
           dynamic.push_back(storedExtent);
         Value storage;
-        bool direct =
-            k >= 0 && chunks == 1 && !(rhs && padded) &&
-            (online ? int64_t(input.quant.getAxis()) == sourceType.getRank() - 1
-                    : (!rhs || transposedRhs)) &&
-            sourceType.getShape().back() == k &&
-            sourceType.getRank() == (batched ? 3 : 2);
-        if (direct) {
-          // DMA reads the rows in place: no host copy.
+        // Reshaping non-K dimensions and moving K past them preserves the
+        // flattened row order. Such views need no physical transpose.
+        int64_t axis = cast<RankedTensorType>(input.value.getType()).getRank() -
+                       (rhs && !transposedRhs ? 2 : 1);
+        bool ordered = true;
+        for (Operation *view : input.views) {
+          if (auto transpose = dyn_cast<linalg::TransposeOp>(view)) {
+            axis = transpose.getPermutation()[axis];
+            int64_t previous = -1;
+            for (int64_t dim : transpose.getPermutation())
+              if (dim != axis) {
+                ordered &= dim > previous;
+                previous = dim;
+              }
+          } else {
+            auto groups = isa<tensor::CollapseShapeOp>(view)
+                              ? cast<tensor::CollapseShapeOp>(view)
+                                    .getReassociationIndices()
+                              : cast<tensor::ExpandShapeOp>(view)
+                                    .getReassociationIndices();
+            if (isa<tensor::CollapseShapeOp>(view)) {
+              auto original =
+                  cast<RankedTensorType>(view->getOperand(0).getType());
+              SmallVector<int64_t> dimensions;
+              for (int64_t dim : groups[axis])
+                if (original.getDimSize(dim) != 1)
+                  dimensions.push_back(dim);
+              if (dimensions.size() != 1) {
+                ordered = false;
+                break;
+              }
+              axis = dimensions[0];
+            } else {
+              auto group = llvm::find_if(groups, [&](const auto &indices) {
+                return llvm::is_contained(indices, axis);
+              });
+              auto expanded =
+                  cast<RankedTensorType>(view->getResult(0).getType());
+              if (llvm::any_of(*group, [&](int64_t dim) {
+                    return dim != axis && expanded.getDimSize(dim) != 1;
+                  })) {
+                ordered = false;
+                break;
+              }
+              axis = group - groups.begin();
+            }
+          }
+        }
+        bool contiguous = k >= 0 && chunks == 1 && ordered &&
+                          axis == sourceType.getRank() - 1 &&
+                          (!online || int64_t(input.quant.getAxis()) == axis) &&
+                          sourceType.getShape().back() == k;
+        Value sourceRows;
+        if (contiguous) {
+          // View the original rows without materializing their layout chain.
           Value sourceBuffer = buffer(b, loc, source);
           sourceBuffer.getDefiningOp()->setAttr("read_only", b.getUnitAttr());
           auto layout = StridedLayoutAttr::get(
               b.getContext(), 0,
               {rowCount < 0 ? ShapedType::kDynamic : rowCount * k, chunk, k,
                1});
-          storage = memref::ReinterpretCastOp::create(
+          sourceRows = memref::ReinterpretCastOp::create(
               b, loc,
               MemRefType::get({batch, chunks, rowCount, chunk}, element,
                               layout),
@@ -462,6 +511,9 @@ public:
                                          .getResult())
                       : OpFoldResult(b.getIndexAttr(rowCount * k)),
                   b.getIndexAttr(chunk), b.getIndexAttr(k), b.getIndexAttr(1)});
+        }
+        if (contiguous && !(rhs && padded)) {
+          storage = sourceRows;
         } else {
           // The host gathers a transposed or padded operand once before
           // recording; padding rows and K are zeros.
@@ -473,82 +525,97 @@ public:
                                  ValueRange{arith::ConstantOp::create(
                                      b, loc, b.getZeroAttr(element))},
                                  storage);
-          Value sourceK = tensor::DimOp::create(
-              b, loc, source,
-              online ? int64_t(input.quant.getAxis())
-                     : (rhs && !transposedRhs ? sourceType.getRank() - 2
-                                              : sourceType.getRank() - 1));
-          loops(
-              b, loc,
-              {index(b, loc, batch), chunkCount, extent, index(b, loc, chunk)},
-              false, [&](ValueRange at) {
-                Value coordinate = arith::AddIOp::create(
-                    b, loc,
-                    arith::MulIOp::create(b, loc, at[1], index(b, loc, chunk)),
-                    at[3]);
-                SmallVector<Value> coords;
-                if (batched)
-                  coords.push_back(at[0]);
-                coords.push_back(rhs && !transposedRhs ? coordinate : at[2]);
-                coords.push_back(rhs && !transposedRhs ? at[2] : coordinate);
-                for (Operation *view :
-                     (mx ? input.views : SmallVector<Operation *>{})) {
-                  if (auto transpose = dyn_cast<linalg::TransposeOp>(view)) {
-                    SmallVector<Value> reordered(coords.size());
-                    for (auto [i, axis] :
-                         llvm::enumerate(transpose.getPermutation()))
-                      reordered[axis] = coords[i];
-                    coords = reordered;
-                  } else {
-                    auto original =
-                        cast<RankedTensorType>(view->getOperand(0).getType());
-                    Value flat = index(b, loc, 0);
-                    for (auto [axis, coord] : llvm::enumerate(coords))
-                      flat = arith::AddIOp::create(
-                          b, loc,
-                          arith::MulIOp::create(
-                              b, loc, flat,
-                              tensor::DimOp::create(b, loc, view->getResult(0),
-                                                    axis)),
-                          coord);
-                    coords.resize(original.getRank());
-                    for (int64_t axis = original.getRank() - 1; axis >= 0;
-                         --axis) {
-                      coords[axis] = arith::RemUIOp::create(
-                          b, loc, flat,
-                          tensor::DimOp::create(b, loc, view->getOperand(0),
-                                                axis)
-                              .getResult());
-                      flat = arith::DivUIOp::create(
-                          b, loc, flat,
-                          tensor::DimOp::create(b, loc, view->getOperand(0),
-                                                axis)
-                              .getResult());
+          if (contiguous) {
+            Value valid = memref::SubViewOp::create(
+                b, loc, storage,
+                ArrayRef<OpFoldResult>{b.getIndexAttr(0), b.getIndexAttr(0),
+                                       b.getIndexAttr(0), b.getIndexAttr(0)},
+                ArrayRef<OpFoldResult>{b.getIndexAttr(batch), b.getIndexAttr(1),
+                                       extent, b.getIndexAttr(chunk)},
+                ArrayRef<OpFoldResult>{b.getIndexAttr(1), b.getIndexAttr(1),
+                                       b.getIndexAttr(1), b.getIndexAttr(1)});
+            memref::CopyOp::create(b, loc, sourceRows, valid);
+          } else {
+            Value sourceK = online ? tensor::DimOp::create(
+                                         b, loc, source, input.quant.getAxis())
+                                         .getResult()
+                                   : kSize;
+            loops(
+                b, loc,
+                {index(b, loc, batch), chunkCount, extent,
+                 index(b, loc, chunk)},
+                false, [&](ValueRange at) {
+                  Value coordinate = arith::AddIOp::create(
+                      b, loc,
+                      arith::MulIOp::create(b, loc, at[1],
+                                            index(b, loc, chunk)),
+                      at[3]);
+                  SmallVector<Value> coords;
+                  if (batched)
+                    coords.push_back(at[0]);
+                  coords.push_back(rhs && !transposedRhs ? coordinate : at[2]);
+                  coords.push_back(rhs && !transposedRhs ? at[2] : coordinate);
+                  for (Operation *view : input.views) {
+                    if (auto transpose = dyn_cast<linalg::TransposeOp>(view)) {
+                      SmallVector<Value> reordered(coords.size());
+                      for (auto [i, axis] :
+                           llvm::enumerate(transpose.getPermutation()))
+                        reordered[axis] = coords[i];
+                      coords = reordered;
+                    } else {
+                      auto original =
+                          cast<RankedTensorType>(view->getOperand(0).getType());
+                      Value flat = index(b, loc, 0);
+                      for (auto [axis, coord] : llvm::enumerate(coords))
+                        flat = arith::AddIOp::create(
+                            b, loc,
+                            arith::MulIOp::create(
+                                b, loc, flat,
+                                tensor::DimOp::create(
+                                    b, loc, view->getResult(0), axis)),
+                            coord);
+                      coords.resize(original.getRank());
+                      for (int64_t axis = original.getRank() - 1; axis >= 0;
+                           --axis) {
+                        coords[axis] = arith::RemUIOp::create(
+                            b, loc, flat,
+                            tensor::DimOp::create(b, loc, view->getOperand(0),
+                                                  axis)
+                                .getResult());
+                        flat = arith::DivUIOp::create(
+                            b, loc, flat,
+                            tensor::DimOp::create(b, loc, view->getOperand(0),
+                                                  axis)
+                                .getResult());
+                      }
                     }
                   }
-                }
-                Value value;
-                if (k < 0) {
-                  Value valid = arith::CmpIOp::create(
-                      b, loc, arith::CmpIPredicate::ult, coordinate, sourceK);
-                  auto choose = scf::IfOp::create(b, loc, TypeRange{element},
-                                                  valid, true);
-                  {
-                    OpBuilder::InsertionGuard guard(b);
-                    b.setInsertionPointToStart(&choose.getThenRegion().front());
-                    scf::YieldOp::create(b, loc,
-                                         ValueRange{tensor::ExtractOp::create(
-                                             b, loc, source, coords)});
-                    b.setInsertionPointToStart(&choose.getElseRegion().front());
-                    scf::YieldOp::create(b, loc,
-                                         ValueRange{arith::ConstantOp::create(
-                                             b, loc, b.getZeroAttr(element))});
-                  }
-                  value = choose.getResult(0);
-                } else
-                  value = tensor::ExtractOp::create(b, loc, source, coords);
-                memref::StoreOp::create(b, loc, value, storage, at);
-              });
+                  Value value;
+                  if (k < 0) {
+                    Value valid = arith::CmpIOp::create(
+                        b, loc, arith::CmpIPredicate::ult, coordinate, sourceK);
+                    auto choose = scf::IfOp::create(b, loc, TypeRange{element},
+                                                    valid, true);
+                    {
+                      OpBuilder::InsertionGuard guard(b);
+                      b.setInsertionPointToStart(
+                          &choose.getThenRegion().front());
+                      scf::YieldOp::create(b, loc,
+                                           ValueRange{tensor::ExtractOp::create(
+                                               b, loc, source, coords)});
+                      b.setInsertionPointToStart(
+                          &choose.getElseRegion().front());
+                      scf::YieldOp::create(
+                          b, loc,
+                          ValueRange{arith::ConstantOp::create(
+                              b, loc, b.getZeroAttr(element))});
+                    }
+                    value = choose.getResult(0);
+                  } else
+                    value = tensor::ExtractOp::create(b, loc, source, coords);
+                  memref::StoreOp::create(b, loc, value, storage, at);
+                });
+          }
         }
         if (!online)
           return storage;
@@ -744,14 +811,26 @@ public:
             if (resident) {
               product(zeroIndex, false, true);
             } else if (!mx) {
+              Value singleBlock =
+                  arith::CmpIOp::create(b, loc, arith::CmpIPredicate::eq,
+                                        chunkCount, index(b, loc, 1));
+              auto choose = scf::IfOp::create(b, loc, singleBlock, true);
+              OpBuilder::InsertionGuard guard(b);
+              b.setInsertionPointToStart(&choose.getThenRegion().front());
+              product(zeroIndex, false, true);
+              b.setInsertionPointToStart(&choose.getElseRegion().front());
               product(zeroIndex, false, false);
-              loops(b, loc, {index(b, loc, chunks - 2)}, true,
-                    [&](ValueRange part) {
+              loops(b, loc,
+                    {b.createOrFold<arith::SubIOp>(loc, chunkCount,
+                                                   index(b, loc, 2))},
+                    true, [&](ValueRange part) {
                       product(arith::AddIOp::create(b, loc, part[0],
                                                     index(b, loc, 1)),
                               true, false);
                     });
-              product(index(b, loc, chunks - 1), true, true);
+              product(b.createOrFold<arith::SubIOp>(loc, chunkCount,
+                                                    index(b, loc, 1)),
+                      true, true);
             } else {
               product(zeroIndex, false, false);
               loops(

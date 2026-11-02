@@ -34,12 +34,12 @@ class Exchange(p: MeshSharedMemParams, bus: axi4.InterconnectParam) extends Modu
   require(p.externalChannels == 0 && p.dataBits == bus.bus.dataBits && p.tagBits >= 2)
 
   @public val io = IO(new Bundle {
-    val command = Flipped(Decoupled(new Command))
-    val reply   = Decoupled(UInt(64.W))
-    val task    = Input(Vec(p.threads.size, Valid(UInt(64.W))))
-    val threads = Vec(p.threads.size, Flipped(new Dma(bus.bus)))
-    val ddr     = new axi4.Port(bus.bus)
-    val busy    = Output(Bool())
+    val command  = Flipped(Decoupled(new Command))
+    val reply    = Decoupled(UInt(64.W))
+    val task     = Input(Vec(p.threads.size, Valid(UInt(64.W))))
+    val threads  = Vec(p.threads.size, Flipped(new Dma(bus.bus)))
+    val external = Vec(p.threads.size, new Dma(bus.bus))
+    val busy     = Output(Bool())
   })
 
   val memory = Instantiate(new MeshStorage(p, transfers = false))
@@ -52,15 +52,13 @@ class Exchange(p: MeshSharedMemParams, bus: axi4.InterconnectParam) extends Modu
     local.response.bits  := 0.U.asTypeOf(local.response.bits)
   }
   memory.io.bankWrites.foreach(_.ready := true.B)
-  val ddr     = Instantiate(new axi4.Interconnect(bus))
-  io.ddr <> ddr.io.out
   val flows   = RegInit(VecInit(Seq.fill(p.bankCount)(0.U.asTypeOf(new Flow(p)))))
   val current = RegInit(VecInit(Seq.fill(p.threads.size)(0.U(64.W))))
 
   val endpoints = p.threads.indices.map { thread =>
     val endpoint = Instantiate(new Endpoint(p, bus.bus, thread))
     endpoint.io.thread <> io.threads(thread)
-    endpoint.io.ddr <> ddr.io.in(thread)
+    io.external(thread) <> endpoint.io.external
     endpoint.io.flows                           := flows
     endpoint.io.task                            := current(thread)
     endpoint.io.read <> memory.io.channels(2 * thread)

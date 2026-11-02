@@ -39,11 +39,6 @@ class TBus(
       new Task(thread.ant.get, core.privileged.permission)
     )))
 
-    val memory = Option.when(core.threads.nonEmpty)(Vec(
-      core.threads.size,
-      new MemCtrl(core.memory.dcache.tracking, core.memory.memoryAccess.walker)
-    ))
-
     val dma = MixedVec(core.threads.map(thread => new Dma(thread.acc.get.transport.axi)))
 
     val tss = Option.when(core.threads.nonEmpty)(Vec(core.threads.size, new spm.Port(core.tss.get.memory)))
@@ -59,7 +54,6 @@ class TBus(
   for ((link, index) <- endpoints.zipWithIndex) {
     io.control.get(index) <> link.task
     io.tss.get(index) <> link.tss
-    io.memory.get(index) <> link.memCtrl
     io.dma(index) <> link.dma
   }
 }

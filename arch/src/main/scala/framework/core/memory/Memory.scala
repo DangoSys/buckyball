@@ -21,10 +21,7 @@ class Memory(b: MemoryParam, externalHome: Boolean) extends Module {
     val timeRequest  = Flipped(Decoupled(new UncachedRequest(b.memoryAccess.memory)))
     val timeResponse = Decoupled(new UncachedResponse(b.memoryAccess.memory))
 
-    val threads = Option.when(core.threadPorts > 0)(Vec(
-      core.threadPorts,
-      Flipped(new MemCtrl(b.dcache.tracking, b.memoryAccess.walker))
-    ))
+    val dma = Option.when(core.threadPorts > 0)(Flipped(new MemCtrl(b.dcache.tracking, b.memoryAccess.walker)))
 
     val commandAllowed = Input(Bool())
     val uncached       = new axi4.Port(b.uncached.axi)
@@ -49,10 +46,7 @@ class Memory(b: MemoryParam, externalHome: Boolean) extends Module {
   io.coherent <> system.io.coherent
 
   if (core.threadPorts > 0) {
-    val threads: Instance[ThreadMemory] =
-      Instantiate(new ThreadMemory(b.threadPorts, b.dcache.tracking, b.memoryAccess.walker))
-    threads.io.clients <> io.threads.get
-    system.io.services <> threads.io.system
+    system.io.services <> io.dma.get
   } else {
     system.io.services.cpuAllow          := true.B
     system.io.services.maintenance.valid := false.B

@@ -62,3 +62,19 @@ add_custom_command(
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/loop_dim.mlir
   VERBATIM)
 add_custom_target(loop-dim-check ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/loop-dim.checked)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/device-cleanup.checked
+  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+          --load-dialect-plugin=$<TARGET_FILE:core-compiler>
+          --load-pass-plugin=$<TARGET_FILE:core-compiler>
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/device_cleanup.mlir
+          "-buffer-results-to-out-params=modify-public-functions hoist-dynamic-allocs"
+          -lower-device -o ${CMAKE_CURRENT_BINARY_DIR}/device-cleanup.mlir
+  COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck
+          ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/device_cleanup.mlir
+          --input-file=${CMAKE_CURRENT_BINARY_DIR}/device-cleanup.mlir
+  COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/device-cleanup.checked
+  DEPENDS core-compiler ${CMAKE_CURRENT_SOURCE_DIR}/../../../../workloads/device/core/compiler/device_cleanup.mlir
+  VERBATIM)
+add_custom_target(device-cleanup-check ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/device-cleanup.checked)

@@ -8,7 +8,6 @@ import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import framework.lib.arith.{DivRem, Multiply}
 import framework.ip.memory.spm
-import framework.thread.ant.{Launch, TaskContext}
 import framework.acc.frontend.RoCCIO
 
 class Start(b: AntParam) extends Bundle {
@@ -81,7 +80,6 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
   val codeEnd                                                                     = Reg(UInt(64.W))
 
   val completion = Reg(new Completion(b))
-  val context    = Reg(new TaskContext(permission))
   io.storageBusy    := io.localBusy.asUInt.orR
   io.storageClaimed := state =/= idle || (io.inUse && io.start.valid)
   val drained = !io.storageBusy && !io.rocc.busy
@@ -142,7 +140,6 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
   def word(value: UInt): UInt = Mux(d.word, value(31, 0).asSInt.pad(64).asUInt, value)
 
   when(io.start.fire) {
-    context := io.start.bits.context
     for (r <- registers) r := 0.U
     registers(2)  := io.start.bits.descriptor.stack
     registers(4)  := p.data.base.U
@@ -314,11 +311,11 @@ class Executor(val b: AntParam, permission: PmpParams) extends Module {
   io.rocc.cmd.bits.instruction.pc             := pc
   io.rocc.cmd.bits.instruction.rs1Data        := Mux(instruction(13), a, 0.U)
   io.rocc.cmd.bits.instruction.rs2Data        := Mux(instruction(12), rhs, 0.U)
-  io.rocc.cmd.bits.satp                       := context.satp
-  io.rocc.cmd.bits.effectivePrivilege         := context.effectivePrivilege
-  io.rocc.cmd.bits.sum                        := context.sum
-  io.rocc.cmd.bits.mxr                        := context.mxr
-  io.rocc.cmd.bits.pmp                        := context.pmp
+  io.rocc.cmd.bits.satp                       := 0.U
+  io.rocc.cmd.bits.effectivePrivilege         := 3.U
+  io.rocc.cmd.bits.sum                        := false.B
+  io.rocc.cmd.bits.mxr                        := false.B
+  io.rocc.cmd.bits.pmp                        := 0.U.asTypeOf(io.rocc.cmd.bits.pmp)
   io.rocc.resp.ready                          := false.B
   when(io.rocc.cmd.valid) {
     assert(!instruction(14), "Ant accelerator commands do not write integer registers")

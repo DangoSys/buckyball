@@ -14,6 +14,7 @@ trait Emitter extends settings.IpModule {
 def sources = T.sources(
   Seq(
     PathRef(millSourcePath / os.RelPath("src/main/scala/MemDomain.scala")),
+    PathRef(millSourcePath / os.RelPath("src/main/scala/ThreadMemDomain.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/MemoryControl.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/configs/MemDomainParam.scala")),
     PathRef(millSourcePath / os.RelPath("src/main/scala/ctrl/Ctrl.scala")),

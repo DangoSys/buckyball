@@ -20,8 +20,8 @@ class Loom(corep: CoreParam) extends Module {
     val drained       = Input(Bool())
     val memoryAllowed = Input(Bool())
 
-    val threads = Option.when(corep.threads.nonEmpty)(
-      Vec(corep.threads.size, Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)))
+    val dma = Option.when(corep.threads.nonEmpty)(
+      Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
     )
 
     val coherent = Vec(2, new chi.RequesterPort(corep.memory.memoryAccess.memory.chi))
@@ -40,7 +40,7 @@ class Loom(corep: CoreParam) extends Module {
   memory.io.timeRequest <> execution.io.timeRequest
   execution.io.timeResponse <> memory.io.timeResponse
   memory.io.commandAllowed := io.memoryAllowed
-  io.threads.zip(memory.io.threads).foreach { case (port, service) => port <> service }
+  io.dma.zip(memory.io.dma).foreach { case (port, service) => port <> service }
   io.coherent <> memory.io.coherent
   io.uncached <> memory.io.uncached
 }

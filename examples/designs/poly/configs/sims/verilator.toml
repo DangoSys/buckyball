@@ -1,9 +1,22 @@
-# PolyVerilatorConfig: functional simulation (BEMU / Verilator) with the reduce
-# core and one poly core.
-[device]
-cores = [
-  { include = "../device/cores/core0/default.toml", memory = { home = { agents = 6 } } },
-  { include = "../device/cores/core1/default.toml", memory = { home = { agents = 6 } } },
+# Two-core RTL configuration with the P2E bank geometry.
+[[device.cores]]
+include = "../device/cores/core0/default.toml"
+memory = { home = { agents = 6 } }
+
+[[device.cores]]
+include = "../device/cores/core1/default.toml"
+memory = { home = { agents = 6 } }
+threads = [
+  { include = "p2e-attention.toml", id = 0, name = "attention0", memdomain = { bank = { num = 4, entries = 4096 } } },
+  { include = "p2e-attention.toml", id = 1, name = "attention1", memdomain = { bank = { num = 4, entries = 4096 } } },
+  { include = "p2e-ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 4, entries = 4096 } } },
+  { include = "p2e-ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 4, entries = 4096 } } },
+  { include = "p2e-ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 4, entries = 4096 } } },
 ]
-clint = { hartIds = [0, 1] }
-plic = { hartIds = [0, 1] }
+
+
+[device.clint]
+hartIds = [0, 1]
+
+[device.plic]
+hartIds = [0, 1]

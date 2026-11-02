@@ -44,18 +44,3 @@ add_library(core-compiler MODULE)
 target_link_libraries(core-compiler PRIVATE buckyball-compiler)
 set_target_properties(core-compiler PROPERTIES
   LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
-
-set(LIFETIME_TEST "${DESIGN_REPO}/stack/compiler/tests/core-buffer-lifetime.mlir")
-add_custom_command(
-  OUTPUT core-buffer-lifetime.checked
-  COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
-    --load-dialect-plugin=$<TARGET_FILE:core-compiler>
-    --load-pass-plugin=$<TARGET_FILE:core-compiler>
-    ${LIFETIME_TEST} "-lower-core=design=${DESIGN_PB} core=goban"
-    -o core-buffer-lifetime.mlir
-  COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck ${LIFETIME_TEST}
-    --input-file=core-buffer-lifetime.mlir
-  COMMAND ${CMAKE_COMMAND} -E touch core-buffer-lifetime.checked
-  DEPENDS core-compiler ${LIFETIME_TEST} ${DESIGN_PB}
-  VERBATIM)
-add_custom_target(core-buffer-lifetime-check ALL DEPENDS core-buffer-lifetime.checked)

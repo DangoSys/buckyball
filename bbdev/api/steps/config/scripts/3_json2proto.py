@@ -550,7 +550,8 @@ def write_design_pb(
     derived = json.loads(derived_path.read_text(encoding="utf-8"))
     design = fill_design(config, derived, bbdir)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(design.SerializeToString())
+    if not out_path.exists() or pb.Design.FromString(out_path.read_bytes()) != design:
+        out_path.write_bytes(design.SerializeToString(deterministic=True))
     return out_path
 
 

@@ -6,6 +6,9 @@ use bebop_bemu::{
 use std::sync::{Arc, Mutex};
 struct LocalMemory(Mutex<buckyball_core_shm::Storage>);
 impl bebop_bemu::core::ThreadMemory for LocalMemory {
+    fn contains(&self, thread: usize, address: u64, bytes: usize, write: bool) -> bool {
+        self.0.lock().unwrap().contains(thread, address, bytes, write)
+    }
     fn transfer_cycles(&self, thread: usize, address: u64, rows: u64, write: bool) -> Option<u64> {
         self.0
             .lock()

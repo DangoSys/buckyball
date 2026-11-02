@@ -2,6 +2,9 @@
 pub struct SharedMem(pub std::sync::Mutex<buckyball_core_shm::Storage>);
 
 impl bebop_bemu::core::ThreadMemory for SharedMem {
+    fn contains(&self, thread: usize, address: u64, bytes: usize, write: bool) -> bool {
+        self.0.lock().unwrap().contains(thread, address, bytes, write)
+    }
     fn transfer_cycles(&self, thread: usize, address: u64, rows: u64, write: bool) -> Option<u64> {
         self.0
             .lock()

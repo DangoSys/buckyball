@@ -65,7 +65,7 @@ module ant_tb;
   logic [63:0] value[2];
   logic [63:0] entry[2] = '{0, 0}, code_end[2] = '{16, 16};
   logic [63:0] argument[2] = '{`TLS_BASE, `TLS_BASE}, stack[2] = '{`TLS_END, `TLS_END};
-  // Task context bound at launch and carried by every accelerator command.
+  // Thread commands are independent of the core's address-space context.
   logic [63:0] start_satp[2] = '{0, 0};
   logic [1:0] start_privilege[2] = '{0, 0};
   logic [1:0] start_sum = 0, start_mxr = 0;
@@ -240,10 +240,10 @@ module ant_tb;
                 command_a[c] !== (instruction[13] ? a : 0) ||
                 command_b[c] !== (instruction[12] ? b : 0))
               `uvm_fatal("COMMAND", $sformatf("context %0d: command %h differs", c, instruction))
-            if (command_satp[c] !== start_satp[c] || command_privilege[c] !== start_privilege[c] ||
-                command_sum[c] !== start_sum[c] || command_mxr[c] !== start_mxr[c] ||
-                command_pmp[c] !== start_pmp[c])
-              `uvm_fatal("CONTEXT", $sformatf("context %0d: command left its task context", c))
+            if (command_satp[c] !== 0 || command_privilege[c] !== 3 ||
+                command_sum[c] !== 0 || command_mxr[c] !== 0 || command_pmp[c] !== 0)
+              `uvm_fatal("CONTEXT", $sformatf(
+                         "context %0d: thread command carries address-space state", c))
             commands++;
           end
           retirements++;

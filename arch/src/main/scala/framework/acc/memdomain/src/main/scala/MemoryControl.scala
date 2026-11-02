@@ -6,8 +6,6 @@ import framework.ip.memory.interlock.{Params => TrackingParam}
 import framework.acc.memdomain.tomem.configs.{Params => TransportParam}
 import framework.core.memory.access.mmu.configs.{Params => WalkerParam}
 
-import framework.core.memory.access.preflight.configs.PmpParams
-
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
@@ -44,7 +42,14 @@ class MemoryControl(
     val service     = new MemCtrl(trackingParam, walkerParam)
     val preparation = new PreparationPort(transportParam.mapping, permissionParam, walkerParam)
     val memory      = Flipped(new ControlPort(transportParam, permissionParam))
+    val decisions   = Output(Vec(3, new framework.acc.memdomain.toddr.DmaDecision(transportParam)))
+    val queries     = Input(Vec(2, new framework.core.memory.access.preflight.MapQuery(transportParam.mapping)))
+    val mappings    = Output(Vec(2, new framework.core.memory.access.preflight.MapResult(transportParam.mapping)))
   })
+
+  val coherence = chisel3.experimental.hierarchy.Instantiate(
+    new framework.acc.memdomain.tol1.ToL1(transportParam.interlock)
+  )
 
   val active            = RegInit(VecInit(Seq.fill(3)(false.B)))
   val dispatchPending   = RegInit(VecInit(Seq.fill(3)(false.B)))
@@ -114,9 +119,9 @@ class MemoryControl(
         stop(DmaError.Shape.U, access.baseVA)
       }
     }
-    io.memory.decisions(i).parentId := i.U
-    io.memory.decisions(i).valid := active(i) && ((mapReady(i) && granted(i)) || halted)
-    io.memory.decisions(i).fault := firstFault
+    io.decisions(i).parentId := i.U
+    io.decisions(i).valid := active(i) && ((mapReady(i) && granted(i)) || halted)
+    io.decisions(i).fault := firstFault
     val finished     = io.memory.finished(i)
     when(finished.valid && finished.bits.error =/= DmaError.None.U) {
       stop(finished.bits.error, finished.bits.address)
@@ -141,9 +146,9 @@ class MemoryControl(
     dispatchOffer := true.B
     dispatchSlot  := PriorityEncoder(dispatchPending)
   }
-  io.memory.coherence.dispatch.valid := dispatchOffer && !halted
-  io.memory.coherence.dispatch.bits.id := dispatchSlot
-  when(io.memory.coherence.dispatch.fire) {
+  coherence.io.dispatch.valid := dispatchOffer && !halted
+  coherence.io.dispatch.bits.id := dispatchSlot
+  when(coherence.io.dispatch.fire) {
     dispatchOffer                 := false.B
     dispatchPending(dispatchSlot) := false.B
     preparePending(dispatchSlot)  := true.B
@@ -167,33 +172,33 @@ class MemoryControl(
   io.preparation.contextPmp   := contexts(contextId).pmp
 
   val range = io.preparation.ranges
-  val info  = io.memory.coherence.accessInfo
-  info.valid                      := range.valid && range.bits.error === Error.Ok.U && !halted
-  info.bits.id                    := range.bits.id
-  info.bits.hasMemory             := true.B
-  info.bits.base                  := range.bits.pa
-  info.bits.bytes                 := range.bits.bytes
-  info.bits.write                 := range.bits.write
-  info.bits.last                  := range.bits.last
-  range.ready                     := range.bits.error =/= Error.Ok.U || (info.ready && !halted)
+  val info  = coherence.io.accessInfo
+  info.valid                 := range.valid && range.bits.error === Error.Ok.U && !halted
+  info.bits.id               := range.bits.id
+  info.bits.hasMemory        := true.B
+  info.bits.base             := range.bits.pa
+  info.bits.bytes            := range.bits.bytes
+  info.bits.write            := range.bits.write
+  info.bits.last             := range.bits.last
+  range.ready                := range.bits.error =/= Error.Ok.U || (info.ready && !halted)
   when(range.fire && range.bits.error =/= Error.Ok.U) {
     stop(dmaError(range.bits.error), range.bits.va)
   }
-  io.preparation.ready.ready      := true.B
+  io.preparation.ready.ready := true.B
   when(io.preparation.ready.fire) {
     val result = io.preparation.ready.bits
     assert(result.id < 3.U && active(result.id), "Prepared result has no DMA owner")
     mapReady(result.id) := true.B
     when(result.error =/= Error.Ok.U)(stop(dmaError(result.error), result.va))
   }
-  io.memory.coherence.grant.ready := true.B
-  when(io.memory.coherence.grant.fire) {
-    val id = io.memory.coherence.grant.bits.tag
+  coherence.io.grant.ready   := true.B
+  when(coherence.io.grant.fire) {
+    val id = coherence.io.grant.bits.tag
     assert(id < 3.U && active(id), "Coherence grant has no DMA owner")
     granted(id) := true.B
   }
-  io.preparation.queries          := io.memory.queries
-  io.memory.mappings              := io.preparation.results
+  io.preparation.queries     := io.queries
+  io.mappings                := io.preparation.results
 
   // Finishing the bank stream precedes post-DMA cache maintenance and map release.
   val doneCandidates =
@@ -204,16 +209,16 @@ class MemoryControl(
     doneOffer := true.B
     doneSlot  := PriorityEncoder(doneCandidates)
   }
-  io.memory.coherence.done.valid := doneOffer && !halted
-  io.memory.coherence.done.bits.tag  := doneSlot
-  io.memory.coherence.done.bits.ok   := true.B
-  when(io.memory.coherence.done.fire) {
+  coherence.io.done.valid := doneOffer && !halted
+  coherence.io.done.bits.tag  := doneSlot
+  coherence.io.done.bits.ok   := true.B
+  when(coherence.io.done.fire) {
     doneOffer            := false.B
     doneIssued(doneSlot) := true.B
   }
-  io.memory.coherence.complete.ready := true.B
-  when(io.memory.coherence.complete.fire) {
-    val id = io.memory.coherence.complete.bits.tag
+  coherence.io.complete.ready := true.B
+  when(coherence.io.complete.fire) {
+    val id = coherence.io.complete.bits.tag
     assert(id < 3.U && active(id), "Coherence completion has no DMA owner")
     coherent(id) := true.B
   }
@@ -231,12 +236,12 @@ class MemoryControl(
     released(releaseSlot) := true.B
   }
 
-  io.memory.coherence.cpuQuery     := io.service.cpuQuery
-  io.service.cpuAllow              := io.memory.coherence.cpuAllow && !halted
-  io.service.maintenance <> io.memory.coherence.maintenance
-  io.memory.coherence.maintained <> io.service.maintained
+  coherence.io.cpuQuery     := io.service.cpuQuery
+  io.service.cpuAllow       := coherence.io.cpuAllow && !halted
+  io.service.maintenance <> coherence.io.maintenance
+  coherence.io.maintained <> io.service.maintained
   io.service.pteRequest <> io.preparation.pteRequest
   io.preparation.pteResponse <> io.service.pteResponse
-  io.memory.coherence.cancel.valid := false.B
-  io.memory.coherence.cancel.bits  := 0.U.asTypeOf(io.memory.coherence.cancel.bits)
+  coherence.io.cancel.valid := false.B
+  coherence.io.cancel.bits  := 0.U.asTypeOf(coherence.io.cancel.bits)
 }

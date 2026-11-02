@@ -7,9 +7,10 @@ import framework.ip.bus.{axi, axi4}
 import framework.lib.queue.Queue
 
 class Address(p: axi4.Params) extends Bundle {
-  val physical       = UInt(p.addressBits.W)
   val virtualAddress = UInt(64.W)
   val beats          = UInt(9.W)
+  val offset         = UInt(4.W)
+  val bytes          = UInt(13.W)
   val id             = UInt(p.idBits.W)
 }
 
@@ -77,23 +78,25 @@ class Receive[T <: Data](payload: T) extends Module {
 class Stream(p: axi4.Params) extends Module {
 
   @public val io = IO(new Bundle {
-    val acc          = Flipped(new axi4.Port(p))
-    val readAddress  = Input(UInt(64.W))
-    val writeAddress = Input(UInt(64.W))
-    val dma          = new Dma(p)
+    val acc         = Flipped(new axi4.Port(p.copy(addressBits = 64)))
+    val dma         = new Dma(p)
+    val writeOffset = Input(UInt(4.W))
+    val writeBytes  = Input(UInt(13.W))
   })
 
   io.dma.read.valid                := io.acc.ar.valid
-  io.dma.read.bits.physical        := io.acc.ar.bits.addr
-  io.dma.read.bits.virtualAddress  := io.readAddress
+  io.dma.read.bits.virtualAddress  := io.acc.ar.bits.addr
   io.dma.read.bits.beats           := io.acc.ar.bits.len +& 1.U
   io.dma.read.bits.id              := io.acc.ar.bits.id
+  io.dma.read.bits.offset          := 0.U
+  io.dma.read.bits.bytes           := (io.acc.ar.bits.len +& 1.U) << 4
   io.acc.ar.ready                  := io.dma.read.ready
   io.dma.write.valid               := io.acc.aw.valid
-  io.dma.write.bits.physical       := io.acc.aw.bits.addr
-  io.dma.write.bits.virtualAddress := io.writeAddress
+  io.dma.write.bits.virtualAddress := io.acc.aw.bits.addr
   io.dma.write.bits.beats          := io.acc.aw.bits.len +& 1.U
   io.dma.write.bits.id             := io.acc.aw.bits.id
+  io.dma.write.bits.offset         := io.writeOffset
+  io.dma.write.bits.bytes          := io.writeBytes
   io.acc.aw.ready                  := io.dma.write.ready
   for (address <- Seq(io.acc.ar, io.acc.aw)) {
     when(address.fire) {

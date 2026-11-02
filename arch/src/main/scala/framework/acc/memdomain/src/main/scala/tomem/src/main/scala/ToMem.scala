@@ -34,32 +34,10 @@ class ControlPort(transportParam: TransportParam, permissionParam: PmpParams) ex
   val finished = Output(Vec(3, Valid(new DmaStatus)))
   val complete = Flipped(Vec(3, Decoupled(new DmaStatus)))
 
-  val decisions = Input(Vec(
-    3,
-    new DmaDecision(transportParam)
-  ))
-
-  val queries = Output(Vec(
-    2,
-    new MapQuery(transportParam.mapping)
-  ))
-
-  val mappings = Input(Vec(
-    2,
-    new MapResult(transportParam.mapping)
-  ))
-
-  val coherence =
-    new framework.acc.memdomain.tol1.Port(transportParam.interlock)
-
 }
 
 class Port(transportParam: TransportParam, permissionParam: PmpParams) extends Bundle {
   val control = new ControlPort(transportParam, permissionParam)
-
-  val readAddress  = Output(UInt(64.W))
-  val writeAddress = Output(UInt(64.W))
-  val axi          = new axi4.Port(transportParam.axi)
 
 }
 
@@ -84,6 +62,7 @@ class ToMem(
     val bankRead    = new BankPort(frontendParam, memParam)
     val bankWrite   = new BankPort(frontendParam, memParam)
     val memory      = new framework.acc.memdomain.tomem.Port(transportParam, permissionParam)
+    val dma         = new DmaPort(transportParam, permissionParam)
     val metadata    = Flipped(new MetadataWrite(memParam))
     val image       = if (gpParam.enable) Some(new ImagePort) else None
     val queryVbank  = Output(UInt(frontendParam.bank_id_len.W))
@@ -100,24 +79,7 @@ class ToMem(
   io.bankWrite.read.req.bits   := 0.U.asTypeOf(io.bankWrite.read.req.bits)
   io.bankWrite.read.resp.ready := true.B
 
-  val toDDR: Instance[ToDDR] =
-    Instantiate(new ToDDR(transportParam, permissionParam))
-
-  val toL1: Instance[framework.acc.memdomain.tol1.ToL1] =
-    Instantiate(
-      new framework.acc.memdomain.tol1.ToL1(transportParam.interlock)
-    )
-
-  val dma =
-    Wire(new DmaPort(transportParam, permissionParam))
-  toDDR.io.dma <> dma
-  toDDR.io.decisions            := io.memory.control.decisions
-  io.memory.control.queries     := toDDR.io.queries
-  toDDR.io.mappings             := io.memory.control.mappings
-  io.memory.axi <> toDDR.io.axi
-  io.memory.readAddress         := toDDR.io.readAddress
-  io.memory.writeAddress        := toDDR.io.writeAddress
-  io.memory.control.coherence <> toL1.io
+  val dma = io.dma
   io.memory.control.read.bits   := dma.read.bits
   io.memory.control.write.valid := dma.write.valid
   io.memory.control.write.bits  := dma.write.bits

@@ -21,7 +21,7 @@ class Loom(corep: CoreParam, rocketp: RocketParam) extends Module {
     val commands      = new Commands(corep.memory.dcache.tracking, corep.integer.xLen, corep.privileged.permission)
     val memoryAllowed = Input(Bool())
     val memory        =
-      Vec(corep.threads.size, Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker)))
+      Flipped(new MemCtrl(corep.memory.dcache.tracking, corep.memory.memoryAccess.walker))
     val coherent      = Vec(2, new chi.RequesterPort(corep.memory.home.memory.chi))
     val uncached      = new axi4.Port(corep.memory.uncached.axi)
   })
@@ -34,7 +34,7 @@ class Loom(corep: CoreParam, rocketp: RocketParam) extends Module {
   memory.io.timeRequest <> execution.io.timeRequest
   execution.io.timeResponse <> memory.io.timeResponse
   memory.io.commandAllowed := io.memoryAllowed
-  memory.io.threads.get <> io.memory
+  memory.io.dma.get <> io.memory
   io.coherent <> memory.io.coherent
   io.uncached <> memory.io.uncached
 

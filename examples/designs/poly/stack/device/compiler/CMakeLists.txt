@@ -9,8 +9,7 @@
 #
 # Built by the stack top of the device simulation for the host, configured
 # with DESIGN_CMAKE. Passes (src/):
-#   convert-linalg-to-device  launches on the cores of their class, transfers
-#                             over the core links
+#   convert-linalg-to-device  launches on cores sharing coherent DDR
 # ===----------------------------------------------------------------------===
 cmake_minimum_required(VERSION 3.20)
 project(poly-device-compiler LANGUAGES C CXX)
@@ -23,3 +22,34 @@ add_library(device-compiler MODULE)
 target_link_libraries(device-compiler PRIVATE buckyball-compiler)
 set_target_properties(device-compiler PROPERTIES
   LINKER_LANGUAGE CXX LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+# The placement regression needs two compute ranks.
+if(DESIGN_DEVICE_CORES_2_COMPONENT STREQUAL "poly")
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.checked
+    COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+            --load-dialect-plugin=$<TARGET_FILE:device-compiler>
+            --load-pass-plugin=$<TARGET_FILE:device-compiler>
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../workloads/device/core/compiler/coherent_placement.mlir
+            -convert-linalg-to-device=design=${DESIGN_PB}
+            -o ${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.mlir
+    COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../workloads/device/core/compiler/coherent_placement.mlir
+            --check-prefix=PLACE --implicit-check-not=device.transfer
+            --input-file=${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.mlir
+    COMMAND ${DESIGN_COMPILER}/bin/buddy-opt
+            --load-dialect-plugin=$<TARGET_FILE:device-compiler>
+            --load-pass-plugin=$<TARGET_FILE:device-compiler>
+            ${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.mlir
+            "-one-shot-bufferize=bufferize-function-boundaries function-boundary-type-conversion=identity-layout-map"
+            "-buffer-results-to-out-params=modify-public-functions hoist-static-allocs"
+            -lower-device -o ${CMAKE_CURRENT_BINARY_DIR}/coherent-lowered.mlir
+    COMMAND ${DESIGN_MLIR}/../../../bin/FileCheck
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../workloads/device/core/compiler/coherent_placement.mlir
+            --check-prefix=LOWER --input-file=${CMAKE_CURRENT_BINARY_DIR}/coherent-lowered.mlir
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.checked
+    DEPENDS device-compiler ${DESIGN_PB}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../../workloads/device/core/compiler/coherent_placement.mlir
+    VERBATIM)
+  add_custom_target(coherent-placement-check ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/coherent-placement.checked)
+endif()

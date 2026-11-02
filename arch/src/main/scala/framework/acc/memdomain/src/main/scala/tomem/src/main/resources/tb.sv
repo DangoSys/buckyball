@@ -3,7 +3,7 @@ module tomem_tb;
   logic clock = 0;
   always #5 clock = ~clock;
   tomem_if bus (clock);
-  ToMem dut (
+  ToMemVerification dut (
       .clock(clock),
       .reset(bus.reset),
       `include "ports.svh"

@@ -33,6 +33,7 @@ add_custom_target(execute ALL DEPENDS execute.o)
 # Compiler: the acc dialect and the framework passes with the Balls of the accelerator.
 # ===----------------------------------------------------------------------===
 set(BUCKYBALL_BALLS ${DESIGN_TARGET_BALL_STACKS_${TARGET}})
+set(BUCKYBALL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/compiler/ConvertLinalgToAcc.cpp")
 
 add_subdirectory("${DESIGN_REPO}/stack/compiler/midend" compiler)
 add_library(${TARGET}-compiler MODULE)

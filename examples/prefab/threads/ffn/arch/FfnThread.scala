@@ -6,8 +6,6 @@ import framework.core.configs.CoreParam
 import sims.configs.SimParam
 import framework.core.memory.access.preflight.configs.PmpParams
 import framework.thread.configs.ThreadParam
-import framework.ip.memory.interlock.{Params => TrackingParam}
-import framework.core.memory.access.mmu.configs.{Params => WalkerParam}
 
 import framework.acc.debug.Debug
 
@@ -21,8 +19,6 @@ import framework.thread.tlink.{HasTLink, TLinkIO}
 class FfnThread(
   threadp:       ThreadParam,
   permissionp:   PmpParams,
-  trackingp:     TrackingParam,
-  walkerp:       WalkerParam,
   simp:          SimParam,
   traceId:       Int,
   sharedOwnerId: Int)
@@ -36,7 +32,7 @@ class FfnThread(
   val ant: Instance[Ant] =
     Instantiate(new Ant(antp, permissionp))
 
-  val acc: Instance[Acc] = Instantiate(new Acc(accp, permissionp, trackingp, walkerp, simp))
+  val acc: Instance[Acc] = Instantiate(new Acc(accp, permissionp, simp))
 
   val debug: Instance[Debug] =
     Instantiate(new Debug(accp.frontend, accp.memDomain, accp.gpDomain, accp.ballDomain, simp, traceId, sharedOwnerId))
@@ -45,17 +41,12 @@ class FfnThread(
   debug.io.acc <> acc.io.debug
 
   @public
-  val tlink = IO(new TLinkIO(threadp, permissionp, trackingp, walkerp))
+  val tlink = IO(new TLinkIO(threadp, permissionp))
 
   ant.io.task <> tlink.task
   tlink.tss <> ant.io.shared
   ant.io.rocc <> acc.io.rocc
-  tlink.memCtrl <> acc.io.memory
-  val transport = Instantiate(new framework.thread.tlink.Stream(accp.transport.axi))
-  transport.io.acc <> acc.io.ddr
-  transport.io.readAddress  := acc.io.readAddress
-  transport.io.writeAddress := acc.io.writeAddress
-  tlink.dma <> transport.io.dma
+  tlink.dma <> acc.io.dma
 
 }
 
@@ -70,8 +61,6 @@ object FfnThread extends ThreadFactory {
     Instantiate(new FfnThread(
       threadp,
       corep.privileged.permission,
-      corep.memory.dcache.tracking,
-      corep.memory.memoryAccess.walker,
       simp,
       traceId,
       corep.hartId

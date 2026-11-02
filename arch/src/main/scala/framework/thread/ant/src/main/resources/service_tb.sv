@@ -61,7 +61,7 @@ module service_tb;
   logic [4:0] retired_rd[2];
   logic [4:0] response_rd[2] = '{0, 0};
   logic [63:0] response_data[2] = '{0, 0};
-  // The submitter's context accompanies every request; a launch binds the Start request's.
+  // Random submitter contexts must not become thread accelerator address-space state.
   logic [63:0] request_satp = 0, task_satp[2];
   logic [1:0] request_privilege = 0, task_privilege[2];
   logic request_sum = 0, request_mxr = 0;
@@ -166,10 +166,10 @@ module service_tb;
                 command_a[c] !== (instruction[13] ? a : 0) ||
                 command_b[c] !== (instruction[12] ? b : 0))
               `uvm_fatal("COMMAND", $sformatf("context %0d: command %h differs", c, instruction))
-            if (command_satp[c] !== task_satp[c] || command_privilege[c] !== task_privilege[c] ||
-                command_sum[c] !== task_sum[c] || command_mxr[c] !== task_mxr[c] ||
-                command_pmp[c] !== task_pmp[c])
-              `uvm_fatal("CONTEXT", $sformatf("context %0d: command left its Start context", c))
+            if (command_satp[c] !== 0 || command_privilege[c] !== 3 ||
+                command_sum[c] !== 0 || command_mxr[c] !== 0 || command_pmp[c] !== 0)
+              `uvm_fatal("CONTEXT", $sformatf(
+                         "context %0d: thread command carries address-space state", c))
             commands++;
           end
           retirements++;

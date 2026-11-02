@@ -37,9 +37,10 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
     auto outType = op.getResult().getType();
     int64_t axis = op.getAxis(), rank = type.getRank(),
             k = type.getDimSize(axis);
-    if (k < 0 || k % 32)
-      return op.emitError("poly quantization needs a static K multiple of 32");
-    int64_t chunk = std::gcd(k, int64_t(256)), chunks = k / chunk;
+    if (k == 0 || (k > 0 && k % 32))
+      return op.emitError("poly quantization needs positive K aligned to 32");
+    int64_t chunk = k < 0 ? 32 : std::gcd(k, int64_t(256));
+    int64_t chunks = k < 0 ? ShapedType::kDynamic : k / chunk;
     int64_t packed = ((chunk + chunk / 32 + 15) / 16) * 16;
     if (chunk / 4 > target.bankDepth)
       return op.emitError("poly quantization exceeds the input bank");
@@ -59,12 +60,27 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
                        ? ShapedType::kDynamic
                        : staticRows * type.getDimSize(dim);
     }
+    Value chunkCount = b.createOrFold<arith::DivUIOp>(
+        loc, b.createOrFold<arith::AddIOp>(loc, dims[axis], c(chunk - 1)),
+        c(chunk));
+    Value paddedK = b.createOrFold<arith::MulIOp>(loc, chunkCount, c(chunk));
+    Value packedK = b.createOrFold<arith::AddIOp>(
+        loc, paddedK, b.createOrFold<arith::DivUIOp>(loc, paddedK, c(32)));
     SmallVector<Value> dynamic;
+    if (chunks < 0)
+      dynamic.push_back(chunkCount);
     if (staticRows < 0)
       dynamic.push_back(rows);
-    Value storage = memref::AllocOp::create(
-        b, loc, MemRefType::get({chunks, staticRows, chunk}, b.getF32Type()),
-        dynamic);
+    bool direct = axis == rank - 1 && chunks == 1;
+    Value storage;
+    if (direct)
+      storage = bufferization::ToBufferOp::create(
+          b, loc, MemRefType::get(type.getShape(), b.getF32Type()), input,
+          true);
+    else
+      storage = memref::AllocOp::create(
+          b, loc, MemRefType::get({chunks, staticRows, chunk}, b.getF32Type()),
+          dynamic);
     Value quantized = memref::AllocOp::create(
         b, loc, MemRefType::get({chunks, staticRows, packed}, b.getI8Type()),
         dynamic);
@@ -81,22 +97,41 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
       }
       body(ivs);
     };
-    // The host transposes only when the quantization axis is not contiguous.
-    nest({c(chunks), rows, c(chunk)}, false, [&](ValueRange at) {
-      SmallVector<Value> coords(rank);
-      Value flat = at[1];
-      for (int64_t dim = rank - 1; dim >= 0; --dim) {
-        if (dim == axis)
-          continue;
-        coords[dim] = b.createOrFold<arith::RemUIOp>(loc, flat, dims[dim]);
-        flat = b.createOrFold<arith::DivUIOp>(loc, flat, dims[dim]);
-      }
-      coords[axis] = arith::AddIOp::create(
-          b, loc, arith::MulIOp::create(b, loc, at[0], c(chunk)), at[2]);
-      memref::StoreOp::create(b, loc,
-                              tensor::ExtractOp::create(b, loc, input, coords),
-                              storage, at);
-    });
+    // Contiguous rows already have the input layout the Ball consumes.
+    if (!direct) {
+      nest({chunkCount, rows, c(chunk)}, false, [&](ValueRange at) {
+        SmallVector<Value> coords(rank);
+        Value flat = at[1];
+        for (int64_t dim = rank - 1; dim >= 0; --dim) {
+          if (dim == axis)
+            continue;
+          coords[dim] = b.createOrFold<arith::RemUIOp>(loc, flat, dims[dim]);
+          flat = b.createOrFold<arith::DivUIOp>(loc, flat, dims[dim]);
+        }
+        coords[axis] = arith::AddIOp::create(
+            b, loc, arith::MulIOp::create(b, loc, at[0], c(chunk)), at[2]);
+        Value value;
+        if (k < 0) {
+          Value valid = arith::CmpIOp::create(b, loc, arith::CmpIPredicate::ult,
+                                              coords[axis], dims[axis]);
+          auto choose =
+              scf::IfOp::create(b, loc, TypeRange{b.getF32Type()}, valid, true);
+          OpBuilder::InsertionGuard guard(b);
+          b.setInsertionPointToStart(&choose.getThenRegion().front());
+          scf::YieldOp::create(
+              b, loc,
+              ValueRange{tensor::ExtractOp::create(b, loc, input, coords)});
+          b.setInsertionPointToStart(&choose.getElseRegion().front());
+          scf::YieldOp::create(b, loc,
+                               ValueRange{arith::ConstantOp::create(
+                                   b, loc, b.getF32FloatAttr(0))});
+          value = choose.getResult(0);
+        } else {
+          value = tensor::ExtractOp::create(b, loc, input, coords);
+        }
+        memref::StoreOp::create(b, loc, value, storage, at);
+      });
+    }
     auto matrix = [&](Value memory, Value offset, int64_t height, Value extent,
                       int64_t width, Value stride) -> Value {
       Type element = cast<MemRefType>(memory.getType()).getElementType();
@@ -118,23 +153,42 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
                                  b.getIndexAttr(width)},
           ArrayRef<OpFoldResult>{step, b.getIndexAttr(1)});
     };
-    nest({c(chunks), rows}, true, [&](ValueRange at) {
-      Value line = arith::AddIOp::create(
-          b, loc, arith::MulIOp::create(b, loc, at[0], rows), at[1]);
-      Value source =
-          matrix(storage, arith::MulIOp::create(b, loc, line, c(chunk)), 1,
-                 c(1), chunk, c(chunk));
-      Value result =
-          matrix(quantized, arith::MulIOp::create(b, loc, line, c(packed)), 1,
-                 c(1), packed, c(packed));
-      Value a = BankAllocOp::create(b, loc, b.getI64Type(), 1, 1);
-      Value q = BankAllocOp::create(b, loc, b.getI64Type(), 1, 1);
-      a = BankMvinOp::create(b, loc, b.getI64Type(), source, a, chunk / 4, 1);
-      q = ::buddy::mxint8quantize_ball::BankQuantMxint8Op::create(
-          b, loc, b.getI64Type(), a, q, 1, chunk);
-      BankMvoutOp::create(b, loc, b.getI64Type(), result, q, packed / 16, 1);
-      BankReleaseOp::create(b, loc, a);
-      BankReleaseOp::create(b, loc, q);
+    int64_t limit =
+        std::min<int64_t>(1023, std::min(target.bankDepth / (chunk / 4),
+                                         target.bankDepth / (packed / 16)));
+    int64_t tile = 1;
+    while (tile * 2 <= limit)
+      tile *= 2;
+    nest({chunkCount}, true, [&](ValueRange block) {
+      Value remaining = rows, done = c(0);
+      for (int64_t height = tile; height; height /= 2) {
+        Value trips = b.createOrFold<arith::DivUIOp>(loc, remaining, c(height));
+        nest({trips}, true, [&](ValueRange at) {
+          Value first = arith::AddIOp::create(
+              b, loc, done, arith::MulIOp::create(b, loc, at[0], c(height)));
+          Value line = arith::AddIOp::create(
+              b, loc, arith::MulIOp::create(b, loc, block[0], rows), first);
+          Value source =
+              matrix(storage, arith::MulIOp::create(b, loc, line, c(chunk)),
+                     height, c(height), chunk, c(chunk));
+          Value result =
+              matrix(quantized, arith::MulIOp::create(b, loc, line, c(packed)),
+                     height, c(height), packed, c(packed));
+          Value a = BankAllocOp::create(b, loc, b.getI64Type(), 1, 1);
+          Value q = BankAllocOp::create(b, loc, b.getI64Type(), 1, 1);
+          a = BankMvinOp::create(b, loc, b.getI64Type(), source, a,
+                                 height * chunk / 4, 1);
+          q = ::buddy::mxint8quantize_ball::BankQuantMxint8Op::create(
+              b, loc, b.getI64Type(), a, q, height, chunk);
+          BankMvoutOp::create(b, loc, b.getI64Type(), result, q,
+                              height * packed / 16, 1);
+          BankReleaseOp::create(b, loc, a);
+          BankReleaseOp::create(b, loc, q);
+        });
+        done = b.createOrFold<arith::AddIOp>(
+            loc, done, b.createOrFold<arith::MulIOp>(loc, trips, c(height)));
+        remaining = b.createOrFold<arith::RemUIOp>(loc, remaining, c(height));
+      }
     });
     auto destination = cast<bufferization::MaterializeInDestinationOp>(
         *op.getResult().getUsers().begin());
@@ -147,7 +201,7 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
           b.createOrFold<arith::MulIOp>(loc, outputStride, dims[dim]);
     }
     if (axis == rank - 1) {
-      nest({c(chunks)}, false, [&](ValueRange at) {
+      nest({chunkCount}, false, [&](ValueRange at) {
         Value start = arith::MulIOp::create(
             b, loc, arith::MulIOp::create(b, loc, at[0], rows), c(packed));
         for (int part = 0; part < 2; ++part) {
@@ -155,17 +209,17 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
           Value from =
               arith::AddIOp::create(b, loc, start, c(part ? chunk : 0));
           Value to = arith::AddIOp::create(
-              b, loc, c(part ? k : 0),
+              b, loc, (part ? paddedK : c(0)),
               arith::MulIOp::create(b, loc, at[0], c(width)));
           auto copy = memref::CopyOp::create(
               b, loc,
               matrix(quantized, from, staticRows, rows, width, c(packed)),
-              matrix(output, to, staticRows, rows, width, c(k + k / 32)));
+              matrix(output, to, staticRows, rows, width, packedK));
           copy->setAttr("core.after", b.getUnitAttr());
         }
       });
     } else {
-      nest({rows, c(chunks)}, false, [&](ValueRange at) {
+      nest({rows, chunkCount}, false, [&](ValueRange at) {
         Value flat = at[0], base = c(0), stride = c(1);
         for (int64_t dim = rank - 1; dim >= 0; --dim) {
           if (dim != axis) {
@@ -174,8 +228,8 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
             base = arith::AddIOp::create(
                 b, loc, base, arith::MulIOp::create(b, loc, coord, stride));
           }
-          stride = arith::MulIOp::create(
-              b, loc, stride, dim == axis ? c(k + k / 32) : dims[dim]);
+          stride = arith::MulIOp::create(b, loc, stride,
+                                         dim == axis ? packedK : dims[dim]);
         }
         Value start = arith::MulIOp::create(
             b, loc, c(packed),
@@ -190,7 +244,7 @@ LogicalResult lowerPolyQuantizedOutputs(ModuleOp module) {
               arith::MulIOp::create(
                   b, loc, outputStride,
                   arith::AddIOp::create(
-                      b, loc, c(part ? k : 0),
+                      b, loc, (part ? paddedK : c(0)),
                       arith::MulIOp::create(b, loc, at[1], c(count)))));
           auto copy = memref::CopyOp::create(
               b, loc, matrix(quantized, from, count, c(count), 1, c(1)),

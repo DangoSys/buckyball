@@ -1,5 +1,6 @@
 # Linux programs installed into the poly rootfs, each with the hart it runs on.
 set(BUCKYBALL_KERNEL_PROGRAMS
+  0 poly-main-mlirtest-compiler_reduce_sum-linux
   0 poly-main-ctest-program-linux
   0 poly-main-ctest-program_transfer-linux
   0 poly-main-ctest-design-controllers-linux
