@@ -4,6 +4,12 @@ set -euo pipefail
 
 BBDIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 
+# Everything below runs in the Nix shell's bash: a host bash may be too old for it.
+cd "$BBDIR"
+if [ -z "${IN_NIX_SHELL:-}" ]; then
+  exec nix develop --command bash "$BBDIR/scripts/nix/build-all.sh" "$@"
+fi
+
 usage() {
   echo "Usage: ${0} [OPTIONS]"
   echo ""
@@ -29,7 +35,6 @@ usage() {
   echo "  -s N   : Skip step N. Repeat to skip multiple steps; cannot combine with -o."
 }
 
-ORIGINAL_ARGS=("$@")
 ONLY_LIST=()
 SKIP_LIST=()
 
@@ -92,11 +97,6 @@ function begin_step
   echo -e "${BLUE} ========================================================================="
   echo -e "${NC}"
 }
-
-cd "$BBDIR"
-if [ -z "${IN_NIX_SHELL:-}" ]; then
-  exec nix develop --command bash "$BBDIR/scripts/nix/build-all.sh" "${ORIGINAL_ARGS[@]}"
-fi
 
 if run_step 0; then
   begin_step "0" "Nix environment setup"
