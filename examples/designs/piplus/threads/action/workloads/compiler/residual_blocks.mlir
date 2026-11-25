@@ -1,0 +1,52 @@
+// A residual block output, R + the linear layer of two MXINT8 weight terms, as the recipe stores every
+// Linear: C = A . W1^T + bias + A . W2^T, both weights in the mxint8mm layout
+// (2 block(s) of 384). convert-linalg-to-hart starts the first product at the
+// bias and the second at the first, and the thread accumulates both terms
+// onto each C tile, each tile loaded from R first (R + C, the residual
+// read through an expand_shape as in the model); M = 161 ends in a part of a
+// tile.
+func.func @compute(%a: memref<161x768xf32>, %w1: memref<2x120x400xi8>, %w2: memref<2x120x400xi8>, %bias: memref<1x120xf32>, %r: memref<1x161x120xf32>, %out: memref<1x161x120xf32>) attributes {llvm.emit_c_interface} {
+  %at = bufferization.to_tensor %a restrict : memref<161x768xf32> to tensor<161x768xf32>
+  %rt = bufferization.to_tensor %r restrict : memref<1x161x120xf32> to tensor<1x161x120xf32>
+  %aq = "frontend.fp32_to_mxint8"(%at) {axis = 1 : i64} : (tensor<161x768xf32>) -> tensor<161x792xi8>
+  %ad = "frontend.mxint8_to_fp32"(%aq) {axis = 1 : i64} : (tensor<161x792xi8>) -> tensor<161x768xf32>
+  %zero = arith.constant 0.0 : f32
+  %ce = tensor.empty() : tensor<161x120xf32>
+  %c = linalg.fill ins(%zero : f32) outs(%ce : tensor<161x120xf32>) -> tensor<161x120xf32>
+  %we = tensor.empty() : tensor<2x384x120xf32>
+  %w1t = bufferization.to_tensor %w1 restrict : memref<2x120x400xi8> to tensor<2x120x400xi8>
+  %w1s = tensor.extract_slice %w1t[0, 0, 0] [2, 120, 396] [1, 1, 1] : tensor<2x120x400xi8> to tensor<2x120x396xi8>
+  %w1d = "frontend.mxint8_to_fp32"(%w1s) {axis = 2 : i64} : (tensor<2x120x396xi8>) -> tensor<2x120x384xf32>
+  %w1p = linalg.transpose ins(%w1d : tensor<2x120x384xf32>) outs(%we : tensor<2x384x120xf32>) permutation = [0, 2, 1]
+  %b1 = tensor.collapse_shape %w1p [[0, 1], [2]] : tensor<2x384x120xf32> into tensor<768x120xf32>
+  %p1 = linalg.matmul ins(%ad, %b1 : tensor<161x768xf32>, tensor<768x120xf32>) outs(%c : tensor<161x120xf32>) -> tensor<161x120xf32>
+  %bt = bufferization.to_tensor %bias restrict : memref<1x120xf32> to tensor<1x120xf32>
+  %biased = linalg.generic {indexing_maps = [affine_map<(d0, d1) -> (0, d1)>, affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d0, d1)>], iterator_types = ["parallel", "parallel"]}
+      ins(%bt, %p1 : tensor<1x120xf32>, tensor<161x120xf32>) outs(%ce : tensor<161x120xf32>) {
+    ^bb0(%x: f32, %y: f32, %o: f32):
+      %v = arith.addf %x, %y : f32
+      linalg.yield %v : f32
+  } -> tensor<161x120xf32>
+  %w2t = bufferization.to_tensor %w2 restrict : memref<2x120x400xi8> to tensor<2x120x400xi8>
+  %w2s = tensor.extract_slice %w2t[0, 0, 0] [2, 120, 396] [1, 1, 1] : tensor<2x120x400xi8> to tensor<2x120x396xi8>
+  %w2d = "frontend.mxint8_to_fp32"(%w2s) {axis = 2 : i64} : (tensor<2x120x396xi8>) -> tensor<2x120x384xf32>
+  %w2p = linalg.transpose ins(%w2d : tensor<2x120x384xf32>) outs(%we : tensor<2x384x120xf32>) permutation = [0, 2, 1]
+  %b2 = tensor.collapse_shape %w2p [[0, 1], [2]] : tensor<2x384x120xf32> into tensor<768x120xf32>
+  %p2 = linalg.matmul ins(%ad, %b2 : tensor<161x768xf32>, tensor<768x120xf32>) outs(%c : tensor<161x120xf32>) -> tensor<161x120xf32>
+  %sum = linalg.generic {indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d0, d1)>], iterator_types = ["parallel", "parallel"]}
+      ins(%biased, %p2 : tensor<161x120xf32>, tensor<161x120xf32>) outs(%ce : tensor<161x120xf32>) {
+    ^bb0(%x: f32, %y: f32, %o: f32):
+      %v = arith.addf %x, %y : f32
+      linalg.yield %v : f32
+  } -> tensor<161x120xf32>
+  %se = tensor.expand_shape %sum [[0, 1], [2]] output_shape [1, 161, 120] : tensor<161x120xf32> into tensor<1x161x120xf32>
+  %oe = tensor.empty() : tensor<1x161x120xf32>
+  %res = linalg.generic {indexing_maps = [affine_map<(d0, d1, d2) -> (d0, d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1, d2)>, affine_map<(d0, d1, d2) -> (d0, d1, d2)>], iterator_types = ["parallel", "parallel", "parallel"]}
+      ins(%rt, %se : tensor<1x161x120xf32>, tensor<1x161x120xf32>) outs(%oe : tensor<1x161x120xf32>) {
+    ^bb0(%x: f32, %y: f32, %o: f32):
+      %v = arith.addf %x, %y : f32
+      linalg.yield %v : f32
+  } -> tensor<1x161x120xf32>
+  bufferization.materialize_in_destination %res in writable %out : (tensor<1x161x120xf32>, memref<1x161x120xf32>) -> ()
+  return
+}

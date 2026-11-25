@@ -7,7 +7,10 @@ package mxmm_pkg;
   `include "common/mxmm_items.svh"
   `include "seq/mxmm_sequences.svh"
   `include "cov/mxmm_cov.svh"
+  `include "env/mxmm_cycles.svh"
   `include "env/mxmm_scoreboard.svh"
   `include "env/mxmm_env.svh"
   `include "tests/mxmm_test.svh"
+  `include "tests/mxmm_throughput_test.svh"
+  `include "tests/mxmm_latency_test.svh"
 endpackage

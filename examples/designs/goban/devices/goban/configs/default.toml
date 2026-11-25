@@ -1,0 +1,10 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+trace = "default"
+
+[[harts]]
+include = "../../../harts/goban/configs/default.toml"
+hartId = 0

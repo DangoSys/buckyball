@@ -8,6 +8,9 @@ package maxpool_pkg;
   `include "seq/maxpool_sequences.svh"
   `include "cov/maxpool_cov.svh"
   `include "env/maxpool_scoreboard.svh"
+  `include "env/maxpool_cycles.svh"
   `include "env/maxpool_env.svh"
   `include "tests/maxpool_test.svh"
+  `include "tests/maxpool_throughput_test.svh"
+  `include "tests/maxpool_latency_test.svh"
 endpackage

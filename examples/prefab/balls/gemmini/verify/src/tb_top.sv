@@ -3,7 +3,10 @@ module tb_top;
   import gemmini_pkg::*;
 
   bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) intf ();
-  gemmini_expansion_if expansion ();
+  gemmini_expansion_if expansion (
+      .clock(intf.clock),
+      .reset(intf.reset)
+  );
 
   GemminiBall dut (
       .clock(intf.clock),
@@ -16,12 +19,17 @@ module tb_top;
       .expansion_accepts(expansion.accepts),
       .expansion_starts(expansion.starts),
       .expansion_rows_ready(1'b1),
+      .expansion_rows_valid(expansion.rows_valid),
+      .expansion_rows_bits_last(expansion.rows_bits_last),
       .expansion_complete_ready(expansion.complete_ready),
       .expansion_complete_valid(expansion.complete_valid),
       .expansion_complete_bits_rob_id(expansion.complete_bits_rob_id),
-      .expansion_read_req_ready(1'b0),
-      .expansion_read_resp_valid(1'b0),
-      .expansion_read_resp_bits_data(8'h00),
+      .expansion_read_req_ready(1'b1),
+      .expansion_read_req_valid(expansion.read_req_valid),
+      .expansion_read_req_bits_addr(expansion.read_req_bits_addr),
+      .expansion_read_resp_ready(expansion.read_resp_ready),
+      .expansion_read_resp_valid(expansion.read_resp_valid),
+      .expansion_read_resp_bits_data(expansion.read_resp_bits_data),
       .expansion_write_ready(expansion.write_ready),
       .expansion_write_valid(expansion.write_valid),
       .expansion_write_bits_addr(expansion.write_bits_addr),

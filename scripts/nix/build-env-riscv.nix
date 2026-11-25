@@ -1,11 +1,11 @@
 { pkgs }:
 
 let
-  # Build newlib-nano with size optimization flags
+  # Keep compact I/O and use full malloc bins for model allocations.
   newlib-nano = pkgs.pkgsCross.riscv64-embedded.newlib.overrideAttrs (oldAttrs: {
     pname = "newlib-nano";
     configureFlags = oldAttrs.configureFlags or [] ++ [
-      "--enable-newlib-nano-malloc"
+      "--disable-newlib-nano-malloc"
       "--enable-newlib-nano-formatted-io"
       "--enable-newlib-reent-small"
       "--disable-newlib-fvwrite-in-streamio"
@@ -15,7 +15,7 @@ let
       "--enable-lite-exit"
       "--enable-newlib-global-atexit"
     ];
-    CFLAGS_FOR_TARGET = "-Os -ffunction-sections -fdata-sections -mcmodel=medany";
+    CFLAGS_FOR_TARGET = "-O2 -ffunction-sections -fdata-sections -mcmodel=medany -mstrict-align";
   });
 
   # Create a custom cross system with newlib-nano

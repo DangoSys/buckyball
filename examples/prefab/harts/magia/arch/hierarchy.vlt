@@ -1,0 +1,8 @@
+`verilator_config
+hier_block -module "MagiaTile"
+// The tile is Verilated on one thread, and Verilator then records the cost of its updates as zero: the
+// scheduler of the mesh would pack tiles into one task and evaluate them one after another. The costs are in
+// the instructions the scheduler counts the mesh in. MagiaTile_3 is the name Verilator gives the tile of these
+// parameters.
+profile_data -hier-dpi "MagiaTile_3_protectlib_seq_update" -cost 64'd2500000
+profile_data -hier-dpi "MagiaTile_3_protectlib_combo_update" -cost 64'd240000

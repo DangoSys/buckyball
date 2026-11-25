@@ -16,10 +16,10 @@
 #   bbsw-thread-<profile>-<system>  the instructions of the profile (base ISA,
 #                                   the ISA headers of its Balls), the bank
 #                                   bookkeeping of its DMA, matrix helpers
-#   bbsw-core-<system>              CoreLink between cores
-#   bbsw-device-<system>            the cores of the device, the workspace
+#   bbsw-hart-<system>              HartLink between harts
+#   bbsw-device-<system>            the harts of the device, the workspace
 #                                   heap, harts
-#   bbsw-crt0-hart<hart>-baremetal  boot of one hart of a core
+#   bbsw-crt0-hart<hart>-baremetal  boot of one hart of a hart
 #   bbsw-start-baremetal            boot of every hart
 #   bbsw-syscalls-baremetal         UART and exit of newlib
 #   bbsw-thread-rvv                 RVV kernel images of the GP domain

@@ -1,0 +1,3 @@
+[[ips]]
+ip = "ant"
+config = "configs/ant-code32.toml"

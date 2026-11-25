@@ -8,7 +8,7 @@
 #include "smatmulOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::smatmul_ball;
@@ -56,24 +56,21 @@ int64_t MatmulI8Op::getDestinationBank() { return getC(); }
 LogicalResult MatmulI8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), k = getK(), a = getA(), b = getB(), c = getC();
-  const auto &target = buckyball_target::getBuckyballTarget();
-  int64_t tileRows =
-      buckyball_target::getBuckyballBallParam("SMATMUL_OS", "tileRows");
+  const auto &target = target::getTarget();
+  int64_t tileRows = target::getBallParam("SMATMUL_OS", "tileRows");
   if (target.bankWidthBits != 128 || rows <= 0 || rows * 4 > target.bankDepth ||
       (rows != 1 && rows % tileRows) || k <= 0 || k > target.bankDepth ||
       k % 16 || rows * (k / 16) > target.bankDepth)
     return emitOpError("INT8 matmul shape exceeds the bank or ISA geometry");
   if (a == b || a == c || b == c)
     return emitOpError("INT8 matmul requires distinct A, B and C banks");
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("SMATMUL_BIAS"),
+  emitInstruction(builder, loc, target::getFunct7("SMATMUL_BIAS"),
                   constantI64(builder, loc, bankFields({c}, 0, false, 4)),
                   constantI64(builder, loc, 0));
   // One accumulation over every group: first and last in one instruction.
   uint64_t rs2 = field(rows, 0, 11) | field(16, 12, 23) | field(1, 24, 24) |
                  field(1, 25, 25);
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("SMATMUL_OS"),
+  emitInstruction(builder, loc, target::getFunct7("SMATMUL_OS"),
                   constantI64(builder, loc, bankFields({a, b}, c, false, k)),
                   constantI64(builder, loc, rs2));
   return success();

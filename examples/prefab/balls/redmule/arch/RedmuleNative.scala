@@ -98,14 +98,21 @@ class RedmuleNative extends BlackBox with HasBlackBoxInline {
     "package redmule_pkg;\n  import fpnew_pkg::*;\n  import hci_package::*;\n  import hwpe_stream_package::*;\n"
   )
 
+  val redmuleTopPath  = native / "redmule_top.sv"
+  val redmuleTop      = os.read(redmuleTopPath)
+  val clockGate       = "tc_clk_gating i_acc_clock_gating"
+  require(redmuleTop.contains(clockGate), "Redmule accelerator clock gate changed")
+  val redmuleTopFixed = redmuleTop.replace(clockGate, "RedmuleAccClockGate i_acc_clock_gating")
+
   val wrapper = sourceDir / "RedmuleNative.sv"
-  // Only the external wrapper is authored here.
   setInline(
     "RedmuleNative.sv",
     "/* verilator lint_off ENUMVALUE */\n" +
       (packages ++ primitives ++ streamSources ++ hciSources ++
         controlSources ++ nativeSources).map(p =>
-        if (p == native / "redmule_pkg.sv") redmulePkgFixed else os.read(p)
+        if (p == native / "redmule_pkg.sv") redmulePkgFixed
+        else if (p == redmuleTopPath) redmuleTopFixed
+        else os.read(p)
       ).mkString("\n") +
       "\n/* verilator lint_on ENUMVALUE */\n" + os.read(wrapper)
   )

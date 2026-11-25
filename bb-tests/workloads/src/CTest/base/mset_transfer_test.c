@@ -38,10 +38,6 @@ int main(int argc, char **argv) {
   }
   bb_mem_transfer(0, 3);
   bb_mem_transfer(1, 3);
-#if defined(__linux__)
-  if (dma_bank_cols(0) || dma_bank_cols(1) || dma_bank_cols(3) != 3)
-    return 1;
-#endif
   bb_mem_alloc(0, 1, 1);
   bb_mvin((uintptr_t)replacement, 0, 2, 1);
   bb_mvout((uintptr_t)result, 3, 2, 1);

@@ -114,3 +114,10 @@ pub extern "C" fn toint8_case_dst_addr(word_index: u32) -> u32 {
         case.dst_addr[i]
     })
 }
+
+/// The cycles BEMU models for a QUANT_F32_TO_I8 or QUANT_I32_TO_I8
+/// instruction of `iter` input rows in `cols` channel groups.
+#[no_mangle]
+pub extern "C" fn toint8_bemu_cycles(iter: u64, cols: u64) -> u64 {
+    crate::latency::cycles(iter, cols)
+}

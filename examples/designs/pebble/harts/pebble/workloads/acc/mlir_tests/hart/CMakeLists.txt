@@ -1,0 +1,1243 @@
+set(MLIR_TEST_GROUP pebble-mlir-tests-build)
+set(MLIR_TEST_PREFIX hart)
+
+add_mlir_test(lookup_channel_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(lookup_channel_tail_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(fixed_channel_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(fixed_mean_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(nonlinear_i32
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(row_max_u32
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(scaled_add_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(concat_columns_stream
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(concat_columns_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(fixed_requant_stream_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(gather_rows
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(data_movement_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(linear_dma_span
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(quant_i32_uniform
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(maxpool_i8_border
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(quant_i32_dma_span
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(quant_fp32_periodic
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(matmul_bias_i32
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(pointwise_matrix_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(pointwise_spatial_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(fixed_vector_stream
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(conv_fixed_requant
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(quant_i32_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(linear_chain_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(linear_int8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(generic_matmul_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(linear_weight_dma_span
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_matmul_m17_k65_n17
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_conv2d
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_conv2d_resident
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_conv2d_flatten_linear
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_conv2d_k5_tail
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_conv2d_s2_depthwise_s2
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv_exact_input.i8
+  PEBBLE_GAP_CONV_INPUT_HEX HEX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_7x7_c288_input.i8
+  PEBBLE_GAP_C288_INPUT_HEX HEX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv_exact_weight.i8
+  PEBBLE_GAP_CONV_WEIGHT_HEX HEX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv2_exact_weight2.i8
+  PEBBLE_GAP_CONV_WEIGHT2_HEX HEX)
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/data/mega_global_avg_conv2_exact_weight3.i8
+  PEBBLE_GAP_CONV_WEIGHT3_HEX HEX)
+add_mlir_test(mega_global_avg_conv_exact
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -canonicalize
+    -cse
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -canonicalize
+    -cse
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(mega_global_avg_7x7_c288_exact
+  TARGET pebble
+  LIBRARIES bbsw-thread-pebble-linux
+  BAREMETAL_LIBRARIES bbsw-thread-pebble-baremetal
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(mega_global_avg_conv2_exact
+  TARGET pebble
+  LIBRARIES bbsw-thread-pebble-linux
+  BAREMETAL_LIBRARIES bbsw-thread-pebble-baremetal
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -canonicalize
+    -cse
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -canonicalize
+    -cse
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+unset(PEBBLE_GAP_CONV_INPUT_HEX)
+unset(PEBBLE_GAP_C288_INPUT_HEX)
+unset(PEBBLE_GAP_CONV_WEIGHT_HEX)
+unset(PEBBLE_GAP_CONV_WEIGHT2_HEX)
+unset(PEBBLE_GAP_CONV_WEIGHT3_HEX)
+
+add_mlir_test(mega_se_gate_conv
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -canonicalize
+    -cse
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -canonicalize
+    -cse
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(mega_matmul
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(hart_matmul_16x16_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(hart_transpose_16x16_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(pool_quant_strided
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(conv_k11_groups
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+add_mlir_test(pool_quant_flatten
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(maxpool_i32_border
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(lookup_frontend_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(lookup_frontend_channels
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(batch_matmul_i8
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(quant_f32_channels
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+add_mlir_test(transpose_batch_tiled
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+
+
+
+add_mlir_test(topk_scores
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)
+add_mlir_test(topk_i32_scores
+  TARGET pebble
+  PASSES
+    -convert-linalg-to-acc
+    -lower-frontend-fake-op
+    -eliminate-empty-tensors
+    -one-shot-bufferize=bufferize-function-boundaries
+    -ownership-based-buffer-deallocation
+    -buffer-deallocation-simplification
+    -bufferization-lower-deallocations
+    -assign-physical-banks
+    -lower-acc
+    -convert-linalg-to-loops
+    -expand-strided-metadata
+    -lower-affine
+    -convert-scf-to-cf
+    -convert-cf-to-llvm
+    -convert-math-to-llvm
+    -convert-math-to-libm
+    -convert-arith-to-llvm
+    -finalize-memref-to-llvm
+    -convert-func-to-llvm
+    -reconcile-unrealized-casts)

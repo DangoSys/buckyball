@@ -1,5 +1,7 @@
 enable = true
 laneNumber = 4
+baseInteger = false
+fp64 = true
 vLen = 1024
 eLen = 32
 iBufWords = 1024

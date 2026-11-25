@@ -12,7 +12,7 @@ if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
 from utils.event_common import check_result, get_origin_trace_id
-from utils.event_common import require_design
+from utils.event_common import require_design, require_product
 from utils.path import (
     get_buckyball_path,
     log_dir,
@@ -48,13 +48,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             ctx, 1, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid
         )
         return
-    binary_name = input_data.get("binary")
-    if not isinstance(binary_name, str) or not binary_name:
+    try:
+        binary_name = require_product(input_data)
+    except ValueError as exc:
         await check_result(
-            ctx,
-            1,
-            extra_fields={"task": "sim", "error": "missing binary"},
-            trace_id=origin_tid,
+            ctx, 1, extra_fields={"task": "sim", "error": str(exc)}, trace_id=origin_tid
         )
         return
     bbdir = get_buckyball_path()

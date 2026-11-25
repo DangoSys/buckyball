@@ -1,0 +1,2 @@
+# MultiRocketDefaultConfig: the multi-rocket design as configured, with no overrides.
+include = "design.toml"

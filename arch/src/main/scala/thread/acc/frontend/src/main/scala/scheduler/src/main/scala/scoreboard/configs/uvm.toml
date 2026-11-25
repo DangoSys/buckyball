@@ -1,0 +1,6 @@
+[parameters]
+bankIdBits = 4
+banks = 12
+entries = 4
+
+[defines]

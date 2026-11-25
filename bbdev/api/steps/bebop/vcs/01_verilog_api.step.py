@@ -15,8 +15,8 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         {
             "topic": "vcs.verilog",
             "data": {
-                "design": require_design(req.body or {}),
-                "target": require_target(req.body or {}),
+                "target": require_target(req.body),
+                "design": require_design(req.body),
                 "_trace_id": ctx.trace_id,
             },
         }

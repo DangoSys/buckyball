@@ -1,0 +1,8 @@
+# The magia design's magia hart alone: the one instance of the single-hart
+# system of this entry. Its uncached port has 6-bit AXI IDs and its regions
+# reach 2 GiB of DDR, as the magia device's DDR.
+include = "../../configs/default.toml"
+
+[host.device.ddr]
+idBits = 6
+bytes = 0x80000000

@@ -37,3 +37,4 @@ import "DPI-C" function longint unsigned mxfp2int_case_write_hi(input int unsign
 
 localparam int MXFP2INT_THREAD_FUNCT7 = `MXFP2INT_FUNCT7;
 localparam int MXFP2INT_TIMEOUT_CYCLES = 100000;
+import "DPI-C" function longint unsigned mxfp2int_bemu_cycles(input longint unsigned iter);

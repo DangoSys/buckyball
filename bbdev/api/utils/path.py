@@ -17,16 +17,25 @@ def get_buckyball_path():
 
 
 def _design_name(design):
+    """The owner of a simulation: a design name (examples/designs/<design>),
+    or the path of a component alone relative to examples (prefab/balls/<ball>)."""
     if not isinstance(design, str) or not design or design == "None":
         raise ValueError("missing required parameter: design")
-    if not re.fullmatch("[A-Za-z0-9_.-]+", design):
+    if not re.fullmatch("[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*", design):
         raise ValueError(f"invalid design name: {design}")
     return design
 
 
-def design_output_root(bbdir, design, *, selection):
+def owner_root(bbdir, design):
+    """The directory whose output/ holds the simulation's build products."""
     design = _design_name(design)
-    return os.path.join(bbdir, "examples/designs", design, "output/sims", selection)
+    if "/" in design:
+        return os.path.join(bbdir, "examples", design)
+    return os.path.join(bbdir, "examples/designs", design)
+
+
+def design_output_root(bbdir, design, *, selection):
+    return os.path.join(owner_root(bbdir, design), "output/sims", selection)
 
 
 def workloads_output_root(bbdir):
@@ -51,16 +60,7 @@ def bebop_target_dir(bbdir, design, backend, *, selection):
     if backend not in {"bemu", "verilator", "p2e", "vcs"}:
         raise ValueError(f"unknown Bebop backend: {backend}")
     return os.path.join(
-        bbdir,
-        "examples",
-        "designs",
-        design,
-        "output",
-        "sims",
-        selection,
-        "emu",
-        backend,
-        "target",
+        design_output_root(bbdir, design, selection=selection), "emu", backend, "target"
     )
 
 
@@ -69,27 +69,14 @@ def bebop_bin_path(bbdir, design, backend, *, selection):
     if backend not in {"bemu", "verilator", "p2e", "vcs"}:
         raise ValueError(f"unknown Bebop backend: {backend}")
     return os.path.join(
-        bbdir,
-        "examples",
-        "designs",
-        design,
-        "output",
-        "sims",
-        selection,
+        design_output_root(bbdir, design, selection=selection),
         "bin",
         f"bebop-{backend}",
     )
 
 
 def design_arch_root(bbdir, design, *, selection):
-    return os.path.join(
-        bbdir,
-        "examples/designs",
-        _design_name(design),
-        "output/sims",
-        selection,
-        "arch",
-    )
+    return os.path.join(design_output_root(bbdir, design, selection=selection), "arch")
 
 
 def design_pb_path(bbdir, design, *, selection):
@@ -116,29 +103,31 @@ def runner_manifest(bbdir, design, selection):
     return Path(bbdir) / simulation_target(bbdir, design, selection).emu / "Cargo.toml"
 
 
-def design_resource_dir(bbdir, design, name, *, selection):
-    resources = simulation_target(bbdir, design, selection).resources
-    if name not in resources:
-        raise ValueError(f"{design}/{selection} has no registered {name} directory")
-    return Path(bbdir) / resources[name]
+def simulation_dir(bbdir, design, *, selection):
+    """The entry directory of the simulation: arch, emu, stack, workloads,
+    regression and tapeout under it."""
+    return Path(bbdir) / simulation_target(bbdir, design, selection).directory
 
 
 def sim_name(bbdir, design, product, *, selection):
+    # The Verilator runner (bebop) always builds against BBSimHarness.
     target = simulation_target(bbdir, design, selection)
-    return "P2ETop" if product == "p2e" else target.top
+    if product == "p2e":
+        return "P2ETop"
+    return "BBSimHarness" if product == "bebop" else target.top
 
 
-def rtl_dir(bbdir, design, product, output_dir=None, *, selection):
+def rtl_dir(bbdir, design, product, *, selection):
     # Each product (verilog, tapeout, dc, p2e) elaborates its own RTL.
     name = sim_name(bbdir, design, product, selection=selection)
-    return output_dir or os.path.join(
+    return os.path.join(
         design_arch_root(bbdir, design, selection=selection), product, name
     )
 
 
-def rtl_out(bbdir, design, product, output_dir=None, *, selection):
+def rtl_out(bbdir, design, product, *, selection):
     name = sim_name(bbdir, design, product, selection=selection)
-    return name, rtl_dir(bbdir, design, product, output_dir, selection=selection)
+    return name, rtl_dir(bbdir, design, product, selection=selection)
 
 
 def _log_part(value, what):
@@ -151,10 +140,11 @@ def _log_part(value, what):
     return value
 
 
-def log_dir(
-    bbdir, design, product, stamp, tool, name, output_dir=None, *, selection=None
-):
-    design = _design_name(design)
+def log_dir(bbdir, design, product, stamp, tool, name, *, selection=None):
+    # A component alone (its directory relative to examples) is named by its
+    # design, or "prefab"; the selection names the component.
+    parts = _design_name(design).split("/")
+    design = _log_part(parts[1] if parts[0] == "designs" else parts[0], "design")
     stamp = _log_part(stamp, "timestamp")
     tool = _log_part(tool, "tool")
     name = _log_part(os.path.basename(name), "name")

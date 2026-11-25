@@ -36,7 +36,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 bbdir,
                 input_data["design"],
                 input_data["target"],
-                input_data["ball"],
                 ctx,
                 False,
             )

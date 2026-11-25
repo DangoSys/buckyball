@@ -1,0 +1,24 @@
+# The bare-metal regression of the reduce hart alone: its self-checking programs
+# (exit code 0 = pass) and the SoC tests of the single-hart system.
+[workloads]
+tests = [
+  "reduce-hart0-ctest-f32add_groups-baremetal",
+  "reduce-hart0-ctest-f32add_pipeline-baremetal",
+  "reduce-hart0-ctest-intnorm_extreme-baremetal",
+  "reduce-hart0-ctest-intnorm_round-baremetal",
+  "reduce-hart0-ctest-intnorm_signed-baremetal",
+  "reduce-hart0-ctest-intnorm_wide-baremetal",
+  "reduce-hart0-ctest-intnorm_zero-baremetal",
+  "reduce-hart0-ctest-mxint8act-baremetal",
+  "reduce-hart0-ctest-mxint8act_rows-baremetal",
+  "reduce-hart0-ctest-quant_edges_test-baremetal",
+  "reduce-hart0-ctest-quant_random_test-baremetal",
+  "reduce-hart0-soctest-clint_software_interrupt-baremetal",
+  "reduce-hart0-soctest-clint_supervisor_timer-baremetal",
+  "reduce-hart0-soctest-clint_timer_interrupt-baremetal",
+  "reduce-hart0-soctest-lrsc_word-baremetal",
+  "reduce-hart0-soctest-plic_register_access-baremetal",
+  "reduce-hart0-soctest-time_csr_clock-baremetal",
+  "reduce-hart0-soctest-time_csr_permissions-baremetal",
+  "reduce-hart0-soctest-trace_events-baremetal",
+]

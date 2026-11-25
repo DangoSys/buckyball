@@ -1,5 +1,4 @@
 use crate::casegen;
-use crate::config;
 use std::cell::RefCell;
 
 use crate::casegen::{Case, MxmmCmd, Step};
@@ -14,8 +13,8 @@ pub extern "C" fn mxmm_num_cases() -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn mxmm_case_load(index: u32) -> u32 {
-    let case = casegen::gen_case(index, config::bank_entries());
+pub extern "C" fn mxmm_case_load(index: u32, bank_entries: u32) -> u32 {
+    let case = casegen::gen_case(index, bank_entries);
     let steps = case.steps.len() as u32;
     CURRENT.with(|current| *current.borrow_mut() = Some(case));
     steps
@@ -114,4 +113,11 @@ pub extern "C" fn mxmm_case_write_lo(step: u32, i: u32) -> u64 {
 #[no_mangle]
 pub extern "C" fn mxmm_case_write_hi(step: u32, i: u32) -> u64 {
     current_step(step, |s| (s.writes[idx(i, s.writes.len(), "write")].data >> 64) as u64)
+}
+
+/// The cycles modelled for an MXMM instruction (window = MXMM_MXFP8_WINDOW).
+#[no_mangle]
+pub extern "C" fn mxmm_bemu_cycles(window: u32, iter: u64, rs2: u64) -> u64 {
+    let fields = (window != 0).then(|| ((rs2 >> 32) & 0xffff, rs2 >> 48));
+    crate::latency::cycles(rs2 & 0xfff, (rs2 >> 12) & 0xfff, iter, rs2 & (1 << 24) != 0, rs2 & (1 << 25) != 0, fields)
 }

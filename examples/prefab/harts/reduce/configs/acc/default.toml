@@ -1,0 +1,5 @@
+balldomain = "balldomain/default.toml"
+memdomain = "memdomain/poly.toml"
+frontend = "frontend/poly.toml"
+gpdomain = "gpdomain/poly.toml"
+transport = "transport.toml"

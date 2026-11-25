@@ -151,7 +151,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             f"2>&1 | tee {shlex.quote(dc_log)}"
         ),
         logger=ctx.logger,
-        cwd=os.path.dirname(script_path),
+        cwd=analysis_dir,
         stdout_prefix="dc",
         stderr_prefix="dc",
     )
@@ -184,7 +184,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     await check_result(
         ctx,
         result.returncode,
-        continue_run=False,
+        continue_run=bool(input_data.get("from_power_workflow")),
         extra_fields=extra_fields,
         trace_id=origin_tid,
     )
@@ -195,6 +195,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "data": {
                     **input_data,
                     "area_dir": output_dir,
+                    "report_path": extra_fields["report_path"],
                     "design": contract.design,
                     "_trace_id": origin_tid,
                     "target": input_data["target"],

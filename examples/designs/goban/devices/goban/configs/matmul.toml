@@ -1,0 +1,4 @@
+include = "../../../../../prefab/threads/matmul/configs/default.toml"
+id = 0
+name = "matmul0"
+component = "matmul"

@@ -1,0 +1,12 @@
+# The tests of the dense thread alone
+# (bbdev bebop-* --batch "--thread piplus/threads/dense").
+[workloads]
+tests = [
+  "dense-thread-dma_roundtrip-baremetal",
+  "dense-thread-mxint8mm_small-baremetal",
+  "dense-thread-mxint8mm_bias-baremetal",
+  "dense-thread-mxint8quant_rows-baremetal",
+  "dense-thread-mxint8quant_columns-baremetal",
+  "dense-thread-softmax_exact-baremetal",
+  "dense-thread-layernorm_exact-baremetal",
+]

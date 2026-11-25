@@ -1,55 +1,53 @@
 package examples.balls.int8mul
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import buckyball.balls.int8mul.{Params => ParametersProto}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.ball.bbus.{BallFactory, BallPorts}
+import buckyball.balls.int8mul.{Params => ParametersProto}
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import chisel3.util._
 import hardfloat.{recFNFromFN, INToRecFN, RecFNToIN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
-import framework.lib.arith.Fma
+import framework.generic.arith.Fma
 
-import framework.acc.balldomain.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
 
 @instantiable
 class Int8MulBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
   require(ball.inBW == 2, "Int8MulBall requires inBW=2")
   require(ball.outBW == 1, "Int8MulBall requires outBW=1")
-  require(mp.bankWidth == 128, "Int8MulBall requires 128-bit bank rows")
-  val bankRowBits = log2Ceil(mp.bankEntries)
+  require(link.bankWidth == 128, "Int8MulBall requires 128-bit bank rows")
+  val bankRowBits = log2Ceil(link.bankEntries)
   require(bankRowBits <= 32, "Int8MulBall gate_row must fit rs2[63:32]")
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val idle :: waitForChannels :: gateRequest :: gateResponse :: inputRequest :: inputResponse :: calculate :: calculateDrain :: writeRequest :: writeResponse :: complete :: Nil =
     Enum(11)
   val state                                                                                                                                                                      = RegInit(idle)
-  val robId                                                                                                                                                                      = RegInit(0.U(log2Up(fp.rob_entries).W))
-  val gateBank                                                                                                                                                                   = RegInit(0.U(fp.bank_id_len.W))
-  val inputBank                                                                                                                                                                  = RegInit(0.U(fp.bank_id_len.W))
-  val outputBank                                                                                                                                                                 = RegInit(0.U(fp.bank_id_len.W))
+  val robId                                                                                                                                                                      = RegInit(0.U(link.robIdBits.W))
+  val gateBank                                                                                                                                                                   = RegInit(0.U(link.bankIdBits.W))
+  val inputBank                                                                                                                                                                  = RegInit(0.U(link.bankIdBits.W))
+  val outputBank                                                                                                                                                                 = RegInit(0.U(link.bankIdBits.W))
   val groups                                                                                                                                                                     = RegInit(0.U(5.W))
   val group                                                                                                                                                                      = RegInit(0.U(5.W))
-  val bases                                                                                                                                                                      = Reg(Vec(3, UInt(mp.groupIdWidth.W)))
-  val iter                                                                                                                                                                       = RegInit(0.U(fp.iter_len.W))
+  val bases                                                                                                                                                                      = Reg(Vec(3, UInt(link.groupIdBits.W)))
+  val iter                                                                                                                                                                       = RegInit(0.U(link.iterBits.W))
   val gateRow                                                                                                                                                                    = RegInit(0.U(bankRowBits.W))
-  val inputRow                                                                                                                                                                   = RegInit(0.U(log2Ceil(mp.bankEntries).W))
+  val inputRow                                                                                                                                                                   = RegInit(0.U(log2Ceil(link.bankEntries).W))
   val ratio                                                                                                                                                                      = Reg(UInt(32.W))
   val gateWord                                                                                                                                                                   = Reg(UInt(128.W))
   val inputWord                                                                                                                                                                  = Reg(UInt(128.W))
@@ -129,7 +127,7 @@ class Int8MulBall(
           )
         assert(positiveFinite(cmd.rs2(31, 0)), "Int8MulBall ratio must be finite and positive")
         assert(
-          cmd.rs2(31 + bankRowBits, 32) < mp.bankEntries.U,
+          cmd.rs2(31 + bankRowBits, 32) < link.bankEntries.U,
           "Int8MulBall gate_row must fit one physical bank"
         )
         assert(
@@ -137,7 +135,7 @@ class Int8MulBall(
           "Int8MulBall bank groups must match"
         )
         assert(
-          cmd.op1_col <= mp.bankNum.U,
+          cmd.op1_col <= link.bankNum.U,
           "Int8MulBall bank groups exceed physical banks"
         )
         assert(
@@ -145,7 +143,7 @@ class Int8MulBall(
           "Int8MulBall banks must be distinct"
         )
         assert(
-          cmd.iter =/= 0.U && cmd.iter <= mp.bankEntries.U,
+          cmd.iter =/= 0.U && cmd.iter <= link.bankEntries.U,
           "Int8MulBall iter must fit one physical bank"
         )
         robId      := blink.cmdReq.bits.rob_id
@@ -238,11 +236,10 @@ class Int8MulBall(
 object Int8MulBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new Int8MulBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new Int8MulBall(link, route)).blink, None)
 
 }

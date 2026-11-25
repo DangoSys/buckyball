@@ -1,3 +1,12 @@
 # Mxfp2Int Ball Configuration
 
 mxfpFormat = "MXFP4"
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXFP2INT", funct7 = 65 }]
+
+# The BallDomain that holds this Ball alone (--ball mxfp2int).
+[host]
+include = "default"

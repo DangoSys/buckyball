@@ -1,6 +1,6 @@
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old, rs1_update};
-use super::instruction::{BallModel, ExecContext};
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
+use super::instruction::ExecContext;
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
 
 pub struct MaxPool;
 
@@ -16,12 +16,7 @@ fn legal_geometry(
     start_row: u64,
     start_col: u64,
 ) -> bool {
-    if input_side == 0
-        || output_side == 0
-        || kernel == 0
-        || stride == 0
-        || output_stride < output_side
-    {
+    if input_side == 0 || output_side == 0 || kernel == 0 || stride == 0 || output_stride < output_side {
         return false;
     }
 
@@ -38,10 +33,7 @@ fn legal_geometry(
     }
 
     let input_end = padding + input_side;
-    let reads_input = start_row < input_end
-        && start_col < input_end
-        && last_row >= padding
-        && last_col >= padding;
+    let reads_input = start_row < input_end && start_col < input_end && last_row >= padding && last_col >= padding;
     if !reads_input {
         return true;
     }
@@ -51,8 +43,8 @@ fn legal_geometry(
     input_base + max_row * input_side + max_col < bank_lines() as u64
 }
 
-impl BallModel for MaxPool {
-    fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
+impl MaxPool {
+    pub(crate) fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let input_bank = rs1_b0(xs1);
         let output_bank = rs1_b2(xs1);
         let iter = rs1_iter(xs1) as usize;
@@ -111,15 +103,12 @@ impl BallModel for MaxPool {
             let (input, output) = ctx.banks.read_write(pi, po);
             for output_y in 0..output_side {
                 for output_x in 0..output_side {
-                    let output_offset =
-                        (output_base + output_y * output_stride + output_x) * bank_row_bytes();
+                    let output_offset = (output_base + output_y * output_stride + output_x) * bank_row_bytes();
                     let mut maximum = [-128i8; 16];
                     for kernel_y in 0..kernel {
                         for kernel_x in 0..kernel {
-                            let input_y = (output_y * stride + kernel_y + start_row) as isize
-                                - padding as isize;
-                            let input_x = (output_x * stride + kernel_x + start_col) as isize
-                                - padding as isize;
+                            let input_y = (output_y * stride + kernel_y + start_row) as isize - padding as isize;
+                            let input_x = (output_x * stride + kernel_x + start_col) as isize - padding as isize;
                             if input_y < 0
                                 || input_x < 0
                                 || input_y >= input_side as isize
@@ -128,8 +117,7 @@ impl BallModel for MaxPool {
                                 continue;
                             }
                             let input_offset =
-                                (input_base + input_y as usize * input_side + input_x as usize)
-                                    * bank_row_bytes();
+                                (input_base + input_y as usize * input_side + input_x as usize) * bank_row_bytes();
                             for lane in 0..16 {
                                 maximum[lane] = maximum[lane].max(input[input_offset + lane] as i8);
                             }
@@ -144,7 +132,7 @@ impl BallModel for MaxPool {
         0
     }
 
-    fn latency(xs1: u64, xs2: u64) -> u64 {
+    pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
         let iter = rs1_iter(xs1);
         let input_side = xs2 & 0xf;
         let output_side = (xs2 >> 4) & 0xf;
@@ -174,6 +162,6 @@ impl BallModel for MaxPool {
         {
             panic!("maxpool: illegal encoding");
         }
-        iter * (kernel * kernel * 2 + 2)
+        super::latency::maxpool_cycles(xs2, ctx.config(rs1_b0(xs1)).cols)
     }
 }

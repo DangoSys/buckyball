@@ -8,6 +8,9 @@ package mxfp2int_pkg;
   `include "seq/mxfp2int_sequences.svh"
   `include "cov/mxfp2int_cov.svh"
   `include "env/mxfp2int_scoreboard.svh"
+  `include "env/mxfp2int_cycles.svh"
   `include "env/mxfp2int_env.svh"
   `include "tests/mxfp2int_test.svh"
+  `include "tests/mxfp2int_throughput_test.svh"
+  `include "tests/mxfp2int_latency_test.svh"
 endpackage

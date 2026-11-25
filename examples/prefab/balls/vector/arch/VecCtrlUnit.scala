@@ -1,40 +1,40 @@
 package examples.balls.vector
 
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BlinkParam
+
+import framework.generic.contract.blink.BallResponse
 
 import examples.balls.vector.configs.VectorBallParam
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.generic.contract.blink.BallCommand
 
 @instantiable
-class VecCtrlUnit(val frontendParam: FrontendParam, val memParam: MemDomainParam, val ballParam: VectorBallParam)
-    extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+class VecCtrlUnit(link: BlinkParam, val ballParam: VectorBallParam) extends Module {
+  val commandDataBits = link.dataBits
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp_o = Decoupled(new BallResponse(frontendParam))
+    val cmdResp_o = Decoupled(new BallResponse(link))
 
-    val ctrl_ld_o = Decoupled(new ctrl_ld_req(frontendParam, memParam, ballParam))
-    val ctrl_st_o = Decoupled(new ctrl_st_req(frontendParam, memParam, ballParam))
-    val ctrl_ex_o = Decoupled(new ctrl_ex_req(frontendParam, ballParam))
+    val ctrl_ld_o = Decoupled(new ctrl_ld_req(link, ballParam))
+    val ctrl_st_o = Decoupled(new ctrl_st_req(link, ballParam))
+    val ctrl_ex_o = Decoupled(new ctrl_ex_req(link, ballParam))
 
     val cmdResp_i = Flipped(Valid(new Bundle {
       val commit = Bool()
     })) // from store unit
   })
 
-  val rob_id_reg = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
-  val iter       = RegInit(0.U(frontendParam.iter_len.W))
-  val op1_bank   = RegInit(0.U(frontendParam.bank_id_len.W))
+  val rob_id_reg = RegInit(0.U(link.robIdBits.W))
+  val iter       = RegInit(0.U(link.iterBits.W))
+  val op1_bank   = RegInit(0.U(link.bankIdBits.W))
 
   val op1_bank_addr = RegInit(
     0.U(12.W)
@@ -42,8 +42,8 @@ class VecCtrlUnit(val frontendParam: FrontendParam, val memParam: MemDomainParam
   val op2_bank_addr = RegInit(
     0.U(12.W)
   ) // New ISA: always 0, but keep for compatibility
-  val op2_bank = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wr_bank  = RegInit(0.U(frontendParam.bank_id_len.W))
+  val op2_bank = RegInit(0.U(link.bankIdBits.W))
+  val wr_bank  = RegInit(0.U(link.bankIdBits.W))
 
   val wr_bank_addr = RegInit(
     0.U(12.W)

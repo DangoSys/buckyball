@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the pebble hart's power
+# (bbdev bench --prefab "--hart pebble/harts/pebble --power", as bbdev dc --power --workload).
+[power]
+workload = "pebble-hart0-ctest-smatmul_16x16_test-baremetal"

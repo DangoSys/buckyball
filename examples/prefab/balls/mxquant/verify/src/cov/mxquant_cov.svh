@@ -9,12 +9,15 @@ class mxquant_cov extends uvm_component;
   bit cur_sign;
   int unsigned cmd_count;
 
+  // Input capacity: four FP32 elements per bank row.
+  localparam int unsigned Capacity = 4 << `BB_BANK_ADDR_W;
+
   covergroup cmd_cg;
     coverpoint cur_count {
       bins one_block = {32};
       bins blocks = {[33 : 1024]};
-      bins many = {[1025 : 2047]};
-      bins capacity = {2048};
+      bins many = {[1025 : Capacity - 1]};
+      bins capacity = {Capacity};
     }
   endgroup
 

@@ -1,58 +1,54 @@
 package examples.balls.relu
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class Relu(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam)
+  link:     BlinkParam,
+  instance: BallRouteParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
-  val addressWidth    = log2Up(memParam.bankEntries)
-  val countWidth      = log2Up(memParam.bankEntries + 1)
-  val bankIdWidth     = frontendParam.bank_id_len
-  val groupWidth      = log2Up(memParam.bankNum)
+  val commandDataBits = link.dataBits
+  val addressWidth    = log2Up(link.bankEntries)
+  val countWidth      = log2Up(link.bankEntries + 1)
+  val bankIdWidth     = link.bankIdBits
+  val groupWidth      = log2Up(link.bankNum)
 
   val mapping = instance
 
   require(mapping.inBW == 1, "ReluBall requires one SRAM read port")
   require(mapping.outBW == 1, "ReluBall requires one SRAM write port")
-  require(memParam.bankWidth == 128, "ReluBall requires 128-bit SRAM rows")
-  require(memParam.bankMaskLen == 16, "ReluBall requires sixteen byte enables")
+  require(link.bankWidth == 128, "ReluBall requires 128-bit SRAM rows")
+  require(link.bankMaskLen == 16, "ReluBall requires sixteen byte enables")
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       1,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       1,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -62,7 +58,7 @@ class Relu(
   val Seq(idle, waitForChannels, readRequest, readResponse, writeRequest, writeResponse, complete) = Enum(7)
   val state                                                                                        = RegInit(idle)
 
-  val robId   = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val robId   = RegInit(0.U(link.robIdBits.W))
   val bank    = RegInit(0.U(bankIdWidth.W))
   val group   = RegInit(0.U(groupWidth.W))
   val iter    = RegInit(0.U(countWidth.W))
@@ -113,11 +109,11 @@ class Relu(
         )
         assert(command.iter =/= 0.U && command.iter(3, 0) === 0.U, "ReluBall iter must be a positive multiple of 16")
         assert(
-          command.rs2 =/= 0.U && command.rs2 <= memParam.bankEntries.U,
+          command.rs2 =/= 0.U && command.rs2 <= link.bankEntries.U,
           "ReluBall stride must fit in one physical bank"
         )
         assert(
-          memParam.bankEntries.U % command.rs2 === 0.U,
+          link.bankEntries.U % command.rs2 === 0.U,
           "ReluBall stride must divide the physical bank depth"
         )
         assert(command.iter <= command.rs2, "ReluBall iter must not exceed stride")
@@ -160,7 +156,7 @@ class Relu(
       io.bankWrite(0).io.resp.ready := true.B
       when(io.bankWrite(0).io.resp.fire) {
         when(line +& 1.U === iter) {
-          when(segment +& stride === memParam.bankEntries.U) {
+          when(segment +& stride === link.bankEntries.U) {
             state := complete
           }.otherwise {
             segment := segment + stride

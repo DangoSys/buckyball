@@ -32,7 +32,7 @@ from utils.path import (
 )
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
-from utils.event_common import check_result, get_origin_trace_id
+from utils.event_common import check_result, get_origin_trace_id, require_product
 from build_marker import build_marker_path, read_build_marker
 
 config = {
@@ -69,20 +69,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     ctx.logger.info(f"Using verilog source directory: {vsrc_dir}")
     build_dir = bebop_dir
-    design = input_data.get("design")
-    if diff:
-        if not isinstance(design, str) or not design:
-            ctx.logger.error(
-                "Missing required parameter: --design (required with --diff)"
-            )
-            await check_result(
-                ctx,
-                1,
-                continue_run=False,
-                extra_fields={"error": "missing_design"},
-                trace_id=origin_tid,
-            )
-            return
     bebop_bin = bebop_bin_path(
         bbdir, design, "verilator", selection=input_data["target"]
     )
@@ -132,7 +118,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         marker.get("config") != design
         or marker.get("vsrc_dir") != expect_vsrc
         or marker.get("binary") != expect_bin
-        or (bool(marker.get("diff", False)) != diff)
+        or (diff and not marker["diff"])
     ):
         ctx.logger.error(f"bebop verilator build marker mismatch: {marker}")
         await check_result(
@@ -151,7 +137,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    binary_name = input_data.get("binary", "")
+    binary_name = require_product(input_data)
     try:
         binary_path = search_workload(
             str(
@@ -201,7 +187,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         else ""
     )
     trace_args = ""
-    for trace_name in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace"):
+    for trace_name in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace", "disasm"):
         if input_data.get(trace_name, False):
             trace_args += f" --{trace_name}"
     run_cmd = (

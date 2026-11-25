@@ -1,0 +1,39 @@
+# The default host of a Ball alone: a BallDomain that holds only this Ball
+# (BallHostParam and PmpParams). The values are the hart accelerator
+# defaults, except 1024 bank rows: the depth every instruction must support.
+# Bit widths derive from these counts.
+
+robEntries = 8
+iterBits = 34
+bankIdBits = 10
+# rs2: the XLEN of the host CPU.
+dataBits = 64
+# The DDR addresses an expanding Ball writes into the instructions it expands.
+memAddrBits = 39
+bankAliasEnable = true
+# No GP domain calls the Ball as an operator.
+operators = false
+
+[bank]
+num = 24
+entries = 1024
+width = 128
+maskLen = 16
+requestPorts = 13
+
+[mmio]
+enable = false
+bankNum = 5
+bankEntries = 1024
+bankWidth = 8
+readWidth = 8
+
+# A Ball that expands its instructions needs the SubROB, the MMIO bank and no
+# bank aliasing; it turns them on in its own default config.
+[subRob]
+enable = false
+depth = 64
+
+[pmp]
+addressBits = 36
+entries = 16

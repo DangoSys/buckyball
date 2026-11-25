@@ -14,7 +14,7 @@ config = {
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue(

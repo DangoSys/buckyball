@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the goban hart's power
+# (bbdev dc --power --workload).
+[power]
+workload = "goban-hart0-ctest-rvv_multiply-baremetal"

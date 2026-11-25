@@ -12,6 +12,7 @@ import tempfile
 import threading
 import requests
 import shutil
+import signal
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "api"))
 from utils.port import reserve_port
@@ -30,249 +31,420 @@ workspace_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW_COMMANDS = {
     "verilator": {
         "clean": (
-            'Clean build directory. Args: "--design <design> (--device <config> | --core'
-            ' <entry>)"'
+            'Clean build directory. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>)"'
         ),
         "verilog": (
-            'Generate verilog files. Args: "--design <design> (--device <config> | --core'
-            ' <entry>)"'
+            'Generate verilog files. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>)"'
         ),
         "build": (
-            'Build simulation executable. Args: "--design <design> (--device <config> | --core'
-            ' <entry>) [--jobs <num>]"'
+            'Build simulation executable. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>) [--jobs <num>]"'
         ),
         "sim": (
             "Run a built simulation on a baremetal workload of the entry. Args:"
-            ' "--design <design> (--device <config> | --core <entry>) --binary <workload name>'
+            ' "[--config <config>] (--device <device> | --hart <hart>) ((--model <model> | --bench'
+            " <bench>) --os (baremetal | linux) | --test <name>)"
             " [--batch] [--no-wave] [--coverage] [--itrace] [--mtrace] [--pmctrace]"
             ' [--ctrace] [--banktrace]"'
         ),
         "run": (
-            'Generate RTL, build and run. Args: "--design <design> (--device <config> | --core'
-            " <entry>) --binary <workload name> [--jobs <num>] [--batch] [--no-wave]"
+            'Generate RTL, build and run. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test <name>)"
+            " [--jobs <num>] [--batch] [--no-wave]"
             ' [--coverage] [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
         ),
     },
     "vcs": {
         "clean": (
-            'Clean the entry VCS build. Args: "--design <design> (--device <config> | --core'
-            ' <entry>)"'
+            'Clean the entry VCS build. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>)"'
         ),
         "verilog": (
-            'Generate the entry tapeout RTL for VCS. Args: "--design <design> (--device <config>'
-            ' | --core <entry>)"'
+            'Generate the entry tapeout RTL for VCS. Args: "[--config <config>] (--device <device>'
+            ' | --hart <hart>)"'
         ),
         "build": (
-            'Build the entry VCS simv. Args: "--design <design> (--device <config> | --core'
-            ' <entry>) [--jobs <num>]"'
+            'Build the entry VCS simv. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>) [--jobs <num>]"'
         ),
         "sim": (
-            'Run a built simv on a baremetal workload of the entry. Args: "--design'
-            " <design> (--device <config> | --core <entry>) --binary <workload name> [--batch]"
+            'Run a built simv on a baremetal workload of the entry. Args: "[--config'
+            "  <config>] (--device <device> | --hart <hart>) ((--model <model> | --bench <bench>)"
+            " --os (baremetal | linux) | --test <name>) [--batch]"
             ' [--wave]"'
         ),
         "run": (
-            'Generate RTL, build and run VCS. Args: "--design <design> (--device <config> |'
-            ' --core <entry>) --binary <workload name> [--jobs <num>] [--batch]"'
+            'Generate RTL, build and run VCS. Args: "[--config <config>] (--device <device> |'
+            " --hart <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test"
+            ' <name>) [--jobs <num>] [--batch]"'
         ),
     },
     "workload": {
         "clean": (
-            'Clean workload output directory. Args: "--design <design> (--device <config> |'
-            ' --core <entry>)"'
+            'Clean workload output directory. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>)"'
         ),
         "build": (
-            'Build test workloads. Args: "--design <design> (--device <config> | --core <entry>)'
+            'Build test workloads. Args: "[--config <config>] (--device <device> | --hart <hart>)'
             ' [--ctest|--mlirtest|--soctest]"'
         ),
         "tohex": (
-            'Convert design workload ELF to hex. Args: "--design <design> (--device <config> |'
-            ' --core <entry>)"'
+            'Convert design workload ELF to hex. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>)"'
         ),
     },
     "model": {
         "build": (
-            "Build model recipes on the device of a design (all its models when --model"
-            ' is omitted). Args: "--design <design> --device <config> [--model <name>]"'
+            "Build model recipes on the device of a design (all its models with --model"
+            ' all). Args: "[--config <config>] --device <device> --model (<name> | all)"'
         ),
     },
-    "kernel": {
+    "bench": {
+        "build": (
+            "Build the benchmarks of a simulation (bb-tests/workloads/src/benchmark), each a whole"
+            " suite as one program <design>-<bench>-baremetal that `--bench <bench> --os baremetal`"
+            ' runs. Args: "[--config <config>] (--device <device> | --hart <hart>) --bench (all | <bench>)"'
+        ),
+    },
+    "image": {
         "build": (
             "Build RISC-V kernel + rootfs carrying the Linux programs of a design."
-            ' Args: "--design <design> --device <config> [--model <name>] [--interactive]"'
+            ' Args: "[--config <config>] --device <device> [--model <name> | --bench <bench> | --interactive]"'
         ),
     },
     "firesim": {
         "enumeratefpgas": (
-            'Enumerate FPGAs. Args: "--design <design> (--device <config> | --core <entry>)"'
+            'Enumerate FPGAs. Args: "[--config <config>] (--device <device> | --hart <hart>)"'
         ),
         "buildbitstream": (
-            'Build bitstream. Args: "--design <design> (--device <config> | --core <entry>)"'
+            'Build bitstream. Args: "[--config <config>] (--device <device> | --hart <hart>)"'
         ),
         "infrasetup": (
-            'Infrasetup. Args: "--design <design> (--device <config> | --core <entry>)"'
+            'Infrasetup. Args: "[--config <config>] (--device <device> | --hart <hart>)"'
         ),
         "runworkload": (
-            'Run workload. Args: "--design <design> (--device <config> | --core <entry>)"'
+            'Run workload. Args: "[--config <config>] (--device <device> | --hart <hart>)"'
         ),
     },
     "stack": {
         "build": (
-            'Build a registered simulation stack. Args: "--design <design> (--device <config> |'
-            ' --core <entry>)"'
+            'Build a registered simulation stack. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>)"'
         ),
     },
     "bebop-bemu": {
         "sim": (
-            'Run Bebop emulator simulation. Args: "--design <design> (--device <config> | --core'
-            " <entry>) --binary <file-name> [--disasm] [--tool-profile] [--itrace]"
-            ' [--mtrace] [--ctrace]"; resolves files in the selected design workload/kernel'
-            " outputs"
+            'Run Bebop emulator simulation. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test <name>) [--disasm]"
+            ' [--tool-profile] [--itrace] [--mtrace] [--ctrace]"; a model or a bench'
+            " (embench, spec) runs as <design>-<name>-<os>, a test by its whole name (the Linux regression image is"
+            " <design>-test-linux), found in the selected config's workload outputs"
         ),
         "analysis": (
-            'Analyze itrace/mtrace in an existing log dir. Args: "--design <design>'
-            ' (--device <config> | --core <entry>) --run <name> --itrace|--mtrace"'
+            'Analyze itrace/mtrace in an existing log dir. Args: "[--config <config>] (--device'
+            ' <device> | --hart <hart>) --run <name> --itrace|--mtrace"'
         ),
         "batch": (
-            'Run Bebop BEMU batch regression. Args: "--design <design> --device <config> --test'
-            ' <bare-tests|linux-tests> [--jobs <num>]"'
+            'Run Bebop BEMU batch regression. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>) --test <bare-tests|linux-tests> [--all-trace] [--jobs <num>]"; --all-trace'
+            " turns on every trace (itrace, mtrace, ctrace, banktrace)"
         ),
     },
     "bebop-verilator": {
         "clean": (
-            'Clean the entry RTL. Args: "--design <design> (--device <config> | --core <entry>)"'
+            'Clean the entry RTL. Args: "[--config <config>] (--device <device> | --hart <hart>)"'
         ),
         "verilog": (
-            'Generate the entry RTL. Args: "--design <design> (--device <config> | --core'
-            ' <entry>) [--diff]"'
+            'Generate the entry RTL. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>) [--diff]"'
         ),
         "build": (
-            'Build the entry Verilator runner. Args: "--design <design> (--device <config> |'
-            ' --core <entry>) [--diff] [--jobs <num>]"'
+            'Build the entry Verilator runner. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>) [--diff] [--jobs <num>]"'
         ),
         "sim": (
-            'Run a built runner on a workload of the entry. Args: "--design <design>'
-            " (--device <config> | --core <entry>) --binary <workload name> [--diff] [--no-wave]"
-            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
+            'Run a built runner on a workload of the entry. Args: "[--config'
+            "  <config>] (--device <device> | --hart <hart>) ((--model <model> | --bench <bench>)"
+            " --os (baremetal | linux) | --test <name>) [--diff] [--no-wave]"
+            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace] [--disasm]"'
         ),
         "run": (
-            'Generate RTL, build and run. Args: "--design <design> (--device <config> | --core'
-            " <entry>) --binary <workload name> [--diff] [--jobs <num>] [--no-wave]"
-            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace]"'
+            'Generate RTL, build and run. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test <name>)"
+            " [--diff] [--jobs <num>] [--no-wave]"
+            ' [--itrace] [--mtrace] [--pmctrace] [--ctrace] [--banktrace] [--disasm]"'
         ),
         "batch": (
-            'Run the entry regression. Args: "--design <design> --device <config> --test'
-            ' <bare-tests|linux-tests> [--diff] [--jobs <num>]"'
+            'Run the entry regression. Args: "[--config <config>] (--device <device> |'
+            " --hart <hart>) --test <bare-tests|linux-tests|slice-tests> [--diff] [--all-trace]"
+            ' [--jobs <num>]"; --all-trace turns on every trace (itrace, mtrace, pmctrace, ctrace,'
+            " banktrace)"
         ),
     },
     "bebop-vcs": {
         "sim": (
-            'Run one SoC workload through the Bebop VCS node. Args: "--design <design>'
-            ' (--device <config> | --core <entry>) --binary <name> [--wave]"'
+            'Run one SoC workload through the Bebop VCS node. Args: "[--config <config>] (--device'
+            " <device> | --hart <hart>) ((--model <model> | --bench <bench>) --os (baremetal |"
+            ' linux) | --test <name>) [--wave]"'
         ),
         "verilog": (
-            'Generate Bebop VCS RTL once. Args: "--design <design> (--device <config> | --core'
-            ' <entry>)"'
+            'Generate Bebop VCS RTL once. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>)"'
         ),
         "build": (
-            'Build the reusable Bebop VCS simv. Args: "--design <design> (--device <config> |'
-            ' --core <entry>) [--jobs <num>]"'
+            'Build the reusable Bebop VCS simv. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>) [--jobs <num>]"'
         ),
         "batch": (
-            'Run design-owned VCS regression. Args: "--design <design> --device <config> --test'
+            'Run design-owned VCS regression. Args: "[--config <config>] --device <device> --test'
             ' <bare-tests|linux-tests> [--jobs <num>]"'
         ),
     },
     "bebop-p2e": {
         "clean": (
-            'Clean Bebop P2E build directory. Args: "--design <design> (--device <config> |'
-            ' --core <entry>) [--output-dir <dir>]"'
+            'Clean Bebop P2E build directory. Args: "[--config <config>] (--device <device> |'
+            ' --hart <hart>)"'
         ),
         "verilog": (
-            'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "--design'
-            ' <design> (--device <config> | --core <entry>) [--diff] [--output-dir <dir>]"'
+            'Generate Bebop P2E SystemVerilog for DDR4 backdoor. Args: "[--config'
+            '  <config>] (--device <device> | --hart <hart>) [--diff]"'
         ),
         "buildbitstream": (
-            'Build Bebop P2E runtime case. Args: "--design <design> (--device <config> | --core'
-            " <entry>) [--diff] [--itrace] [--mtrace] [--vsrc-dir <dir>] [--output-dir"
-            ' <dir>]"'
+            'Build Bebop P2E runtime case. Args: "[--config <config>] (--device <device> | --hart'
+            ' <hart>) [--diff] [--itrace] [--mtrace]"'
         ),
         "runworkload": (
-            'Cold-load Bebop P2E workload. Args: "--design <design> (--device <config> | --core'
-            " <entry>) --image <hex-workload-name> --bitstream <path> [--fpga-location"
-            " <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff] [--itrace]"
+            'Cold-load Bebop P2E workload. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test <name>)"
+            " --bitstream <path> [--fpga-location"
+            " <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff [--ddr-image <path>]] [--itrace]"
             ' [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"'
         ),
         "batch": (
-            'Run Bebop P2E batch regression. Args: "--design <design> --device <config>'
+            'Run Bebop P2E batch regression. Args: "[--config <config>] --device <device>'
             " --bitstream <path> --test <bare-tests|linux-tests> [--diff]"
             ' [--fpga-location <N.X>]"'
         ),
     },
     "dc": {
         "verilog": (
-            "Generate top-scoped DC RTL under arch/build/<design>/<config>. Args:"
-            ' "--design <design> (--device <config> | --core <entry>) [--top <module>]"'
+            "Generate top-scoped DC RTL under the selection output. Args:"
+            ' "[--config <config>] (--device <device> | --hart <hart>) [--top <module>]"'
         ),
         "area": (
             "Generate RTL, run DC synthesis, and report area under"
-            ' log/<timestamp>/<design>/<config>/area. Args: "--design <design>'
-            ' (--device <config> | --core <entry>) [--top <module>]".'
+            ' log/<timestamp>/<design>/<selection>/area. Args: "[--config <config>] (--device <device>'
+            ' | --hart <hart>) [--top <module>]"'
+            ' or "--ball <ball>" (a Ball alone from its default config: a prefab name, or <design>/balls/<ball>)'
+            ' or "--thread <thread>" (a prefab thread alone from its default config)'
+            ' or "--hart <hart>" (a hart alone from its default config: a prefab name, or'
+            " <design>/harts/<hart>)."
         ),
         "power": (
             "Generate RTL, run design-owned power simulation, then run PrimeTime PX"
-            ' under log/<timestamp>/<design>/<config>/power. Args: "--design <design>'
-            " (--device <config> | --core <entry>) [--top <module>] [--workload <built ELF"
+            ' under log/<timestamp>/<design>/<selection>/power. Args: "[--config'
+            "  <config>] (--device <device> | --hart <hart>) [--top <module>] [--workload <built ELF"
             " name>] [--start-ns <ns>] [--end-ns <ns>] [--activity <file> --format"
-            ' <saif|vcd|fsdb>]".'
+            ' <saif|vcd|fsdb>]" or "--ball <ball>" (a Ball alone from its default config;'
+            ' the activity is the SAIF of its UVM test) or "--hart <hart> --workload <built'
+            ' ELF name>" (a hart alone; the activity is the SAIF of the workload on its'
+            " single-hart system)."
         ),
     },
     "ip": {
         "generate": (
             "Generate SRAM macros from elaborator mems.conf under"
-            ' arch/build/<design>/<config>. Args: "--design <design> (--device <config> | --core'
-            " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
+            ' the selection output. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) [--consumer <dc|yosys>] [--top <module>]"
             ' [--next-topic <topic>]"'
         ),
         "replace": (
             "Assemble top-scoped synthesis RTL plus SRAM macros under"
-            ' arch/build/<design>/<config>. Args: "--design <design> (--device <config> | --core'
-            " <entry>) [--consumer <dc|yosys>] [--top <module>] [--output-dir <dir>]"
+            ' the selection output. Args: "[--config <config>] (--device <device> | --hart'
+            " <hart>) [--consumer <dc|yosys>] [--top <module>]"
             ' [--next-topic <topic>]"'
         ),
     },
     "yosys": {
         "run": (
-            'Run yosys flow. Args: "[--top <top_module>] [--design <design> (--device <config> |'
-            ' --core <entry>)] [--output-dir <dir>] [--vcd <file>]"'
+            'Run yosys flow. Args: "[--top <top_module>] [[--config <config>] (--device <device> |'
+            ' --hart <hart>) | --ball <ball>] [--vcd <file>]"'
         ),
         "verilog": (
-            'Generate verilog for yosys flow. Args: "[--design <design> (--device <config> |'
-            ' --core <entry>)] [--output-dir <dir>]"'
+            'Generate verilog for yosys flow. Args: "[[--config <config>] (--device <device> |'
+            ' --hart <hart>) | --ball <ball>]"'
         ),
-        "synth": (
-            'Run yosys synthesis. Args: "[--top <top_module>] [--output-dir <dir>]'
-            ' [--vcd <file>]"'
-        ),
+        "synth": ('Run yosys synthesis. Args: "[--top <top_module>] [--vcd <file>]"'),
     },
     "uvm": {
-        "verilog": (
-            'Generate isolated Ball RTL for UVM. Args: "--balltype <type> --output-dir'
-            ' <dir>"'
-        ),
         "build": (
-            'Build a Ball or IP UVM simulation. Args: "[--design <design> --device'
-            ' <config>] [--ball <name> | --ip <name>]"'
+            'Build a UVM simulation. Args: "--ball <ball> | [[--config <config>] --device <device>] --ip <name>"'
         ),
         "run": (
-            'Build and run a Ball or IP UVM simulation. Args: "[--design <design>'
-            ' --device <config>] [--ball <name> | --ip <name>]"'
+            'Build and run a UVM simulation. Args: "--ball <ball> [--performance] | [[--config'
+            ' <config>] --device <device>] --ip <name>"'
+            " (--performance runs only the Ball's throughput and latency tests)"
+        ),
+    },
+    "gvn-bemu": {
+        "debug": (
+            "Cut a model into GVN slices (GPU reference values at the DDR boundaries), build one"
+            " ELF per slice and run one instance of each distinct slice on BEMU, its output captured as"
+            " the slice's reference, with the design's driver gvn/run.py of its simulation entry."
+            ' Args: "[--config <config>] --device <device> --model <model> [driver arguments, e.g.'
+            ' --jobs <n>]"; outputs under gvn/<model> of the config output.'
+        ),
+    },
+    "gvn-verilator": {
+        "perform": (
+            "A model's NPU cycles on Verilator (bebop-verilator --build first): the representative"
+            " slices, the heaviest (BEMU cycles times repeats) until nine tenths of the model's time,"
+            " each once, times its repeats; the rare rest at its BEMU cycles; per slice in verilator.json."
+            ' Args: "[--config <config>] --device <device> --model <model>"'
+        ),
+        "debug": (
+            "Every distinct GVN slice of a model, however rare, on Verilator: its reference ELF, whose"
+            " output must equal BEMU's; per slice in verilator-debug.json."
+            ' Args: "[--config <config>] --device <device> --model <model>"'
+        ),
+    },
+    "gvn-p2e": {
+        "perform": (
+            "A model's NPU cycles on FPGA: the representative GVN slices, as gvn-verilator --perform."
+            ' Args: "[--config <config>] --device <device> --model <model> [--bitstream <path>]'
+            ' [--fpga-location <N.X>]"'
+        ),
+        "debug": (
+            "Every distinct GVN slice of a model on FPGA, its output checked against BEMU's."
+            ' Args: "[--config <config>] --device <device> --model <model> [--bitstream <path>]'
+            ' [--fpga-location <N.X>]"'
+        ),
+    },
+    "bench-prefab": {
+        "area": (
+            "Area of prefab components (DC), as a bbbench snapshot under thirdparty/bbbench/save."
+            ' Args: "(--ball | --thread | --hart) (all | <name>)" (a Ball, thread or hart is a prefab'
+            " name or <design>/balls/<ball>, <design>/threads/<thread>, <design>/harts/<hart>; all is every"
+            " one)"
+        ),
+        "uvm": 'UVM verification of prefab Balls, as a bbbench snapshot. Args: "--ball (all | <ball>)"',
+        "power": (
+            "Power of prefab components on the workload each declares in power.toml beside its"
+            ' regression lists, as a bbbench snapshot. Args: "(--ball | --thread | --hart) (all | <name>)"'
+        ),
+        "performance": (
+            "Performance of prefab Balls (their UVM cycles), as a bbbench snapshot."
+            ' Args: "--ball (all | <ball>)"'
+        ),
+        "test": (
+            "The bare-tests of prefab threads and harts on BEMU and Verilator, as a bbbench snapshot."
+            ' Args: "(--thread | --hart) (all | <name>)"'
+        ),
+    },
+    "bench-device": {
+        "fpga-workload": (
+            "FPGA workload: a device's bare-tests on its FPGA (P2E), on the given bitstream or its latest"
+            " completed build, with DiffTest when the bitstream carries it, as a bbbench snapshot."
+            ' Args: "--device <device> [--bitstream <path>] [--fpga-location <N.X>]"'
+        ),
+        "fpga-gvn": (
+            "Measure model slices on FPGA."
+            ' Args: "--device <device> [--model <name>] [--bitstream <path>] [--fpga-location <N.X>]"'
+        ),
+        "fpga-model": (
+            "Measure whole models on FPGA."
+            ' Args: "--device <device> [--model <name>] [--bitstream <path>] [--fpga-location <N.X>]"'
+        ),
+        "workload": (
+            "Workload build: a device's stack and workloads built on its default config, as a bbbench"
+            ' snapshot under thirdparty/bbbench/save. Args: "--device (all | <device>)"'
+        ),
+        "bemu-workload": (
+            "BEMU workload: a device's bare-tests and, on its Linux image, linux-tests on BEMU, as a"
+            ' bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "model-build": (
+            "Model build: every model recipe of a device's design built (model --build --model all), as"
+            ' a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "bench-build": (
+            "Bench build: the benchmarks a device lists (sims/device/regression/bemu/bench.toml) built,"
+            ' as a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "verilator-workload": (
+            "Verilator workload: a device's bare-tests on Verilator with DiffTest, as a bbbench"
+            ' snapshot. Args: "--device (all | <device>)"'
+        ),
+        "bemu-model": (
+            "BEMU model: every target model of a device (bbmap), as the model build built it, run whole"
+            ' on BEMU bare metal and under Linux, as a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "bemu-bench": (
+            "BEMU bench: the benchmarks a device lists, as the bench build built them, run on BEMU bare"
+            ' metal and under Linux, as a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "bemu-accuracy": (
+            "BEMU accuracy: every target model with a dataset program (<design>-<model>-dataset, built by"
+            " the model build) on its whole dataset, in parallel BEMU shards: task accuracy, sample"
+            " pass rate (the same prediction as the reference) and the reference's accuracy, as a"
+            " bbbench snapshot."
+            ' Args: "--device (all | <device>)"'
+        ),
+        "verilator-gvn": (
+            "Verilator GVN: a rough end-to-end NPU cycle count of every target model of a device"
+            " (gvn-verilator --perform), per slice its repeats, Verilator cycles and share, as a bbbench"
+            ' snapshot. Args: "--device (all | <device>)"'
+        ),
+        "uvm": (
+            "Run the IP UVM suites registered by the device's default config and save the results."
+            ' Args: "--device (all | <device>)"'
+        ),
+        "dc-area": (
+            "DC area: the device's default config synthesized by DC (dc --area), its cell area and"
+            ' whether it met its constraints, as a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "power": (
+            "Power: the device's default config on its design's power workload (dc --power), PrimeTime's"
+            ' total, internal, switching and leakage power, as a bbbench snapshot. Args: "--device (all | <device>)"'
+        ),
+        "buildbitstream": (
+            "Generate P2E RTL and build the FPGA bitstream for a device."
+            ' Args: "--device (all | <device>) [--diff]"'
+        ),
+    },
+    "bench-tool": {
+        "bemu": (
+            "BEMU's speed on a device: its frequency (simulated cycles over wall time) on the Linux boot"
+            " and whole models that passed in the device's latest timeline steps; with --all-trace, those"
+            " same simulations run again with every trace, as a bbbench snapshot."
+            ' Args: "--device (all | <device>) [--all-trace]"'
+        ),
+        "verilator": (
+            "Verilator's speed on a device: its model built and the first ten workloads of its bare"
+            " list run on it, with every trace (--all-trace) or with DiffTest (--diff); the frequency"
+            ' over those that passed, as a bbbench snapshot. Args: "--device (all | <device>)'
+            ' [--all-trace | --diff]"'
+        ),
+        "p2e": (
+            "P2E's speed on a device: its frequency on the bare-metal whole models of the device's latest"
+            " fpga-model step; with --all-trace or --diff, those models run again on its newest bitstream"
+            " built with every trace (bebop-p2e --buildbitstream --itrace --mtrace) or DiffTest (--diff),"
+            ' as a bbbench snapshot. Args: "--device (all | <device>) [--all-trace | --diff]"'
+        ),
+    },
+    "bbmap": {
+        "designs": (
+            "Map every design (what it is for, its target models, its benchmarks, its tapeout/Verilator/P2E"
+            " configs and the composition of its tapeout config) into thirdparty/bbbench/save/bbmap.json."
         ),
     },
     "config": {
         "install": (
-            "Install design configurations: one design.pb per device config and core"
-            ' entry. Args: "[--design <design>]"'
+            "Install the design.pb of one config (every command installs its own); without"
+            " arguments, of every device's one <Design>DefaultConfig.toml, failing when a device"
+            ' has none or several. Args: "[[--config <config>] (--device <device> | --hart <hart>)]"'
         ),
     },
 }
@@ -370,9 +542,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         prog="bbdev",
         description=(
             "Development tool for buckyball project.\n"
-            "--device <config> names a device config registered in the design's sims"
-            " config\n(configs/sims/default.toml [targets.device.configs]), e.g."
-            " --device PolyVerilatorConfig."
+            "Exactly one of --device <device>, --hart <hart>, --thread <thread>, --ball <ball> names\n"
+            "the component to simulate, from its default config (a device: the one\n"
+            "<Design>DefaultConfig.toml of its design). --config <config> picks another config: a\n"
+            "config TOML Top relative to examples/designs, e.g. toy/devices/toy/configs/ToyGemvConfig.toml."
         ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
@@ -500,7 +673,7 @@ def extract_command_info(args: argparse.Namespace) -> dict:
 
 
 def _parse_sub_args(arg_string: str) -> dict:
-    """Parse a sub-argument string like '--binary /path --batch' into a dict."""
+    """Parse a sub-argument string like '--test <name> --batch' into a dict."""
     args_dict = {}
     try:
         tokens = shlex.split(arg_string)
@@ -825,7 +998,8 @@ def run_script_mode(args, cmd_info):
     server_start_lock = open(server_start_lock_path, "w")
     fcntl.flock(server_start_lock, fcntl.LOCK_EX)
 
-    http_port_start, http_port_end = 5100, 5500
+    # Above 5173 and the ports Vite falls back to: the bbbench site's.
+    http_port_start, http_port_end = 5200, 5600
     worker_port_start, worker_port_end = 49200, 49500
 
     # Reserve both ports atomically to prevent TOCTOU races with concurrent bbdev instances.
@@ -971,6 +1145,9 @@ def run_script_mode(args, cmd_info):
 
 
 if __name__ == "__main__":
+    # A terminated CLI unwinds like an interrupted one, so the server it
+    # started and the tasks of that server stop with it.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     args = parse_args(sys.argv[1:])
     cmd_info = extract_command_info(args)
 

@@ -1,9 +1,7 @@
 //! MXINT8QUANT: rows of K FP32 values to packed MXINT8 rows (K INT8 codes,
 //! then K/32 E8M0 exponent bytes, zero-padded to whole bank rows).
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
-use bebop_bemu::thread::instructions::decode::{
-    pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old, rs1_update,
-};
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
+use bebop_bemu::ball::blink::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old, rs1_update};
 use bebop_bemu::ExecContext;
 
 /// Bank rows of one packed row of length k.
@@ -29,10 +27,7 @@ fn encode(bits: u32, exponent: i32) -> u8 {
     let field = ((bits >> 23) & 0xff) as i32;
     let significand = (bits & 0x7f_ffff) | if field == 0 { 0 } else { 0x80_0000 };
     let shift = 150 + exponent - field.max(1);
-    assert!(
-        shift >= 17,
-        "mxint8quantize: element exceeds its block maximum"
-    );
+    assert!(shift >= 17, "mxint8quantize: element exceeds its block maximum");
     let magnitude = if shift > 31 {
         0
     } else {
@@ -42,11 +37,7 @@ fn encode(bits: u32, exponent: i32) -> u8 {
         quotient + u32::from(remainder > half || (remainder == half && quotient & 1 == 1))
     }
     .min(127) as i32;
-    (if bits >> 31 == 1 {
-        -magnitude
-    } else {
-        magnitude
-    }) as i8 as u8
+    (if bits >> 31 == 1 { -magnitude } else { magnitude }) as i8 as u8
 }
 
 pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
@@ -64,21 +55,14 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         rows > 0 && k > 0 && k % 32 == 0,
         "mxint8quantize: rows > 0 and K a positive multiple of 32"
     );
-    assert!(
-        input != output,
-        "mxint8quantize: input and output banks must differ"
-    );
+    assert!(input != output, "mxint8quantize: input and output banks must differ");
     for bank in [input, output] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,
             "mxint8quantize: banks must be allocated with one group"
         );
     }
-    assert_eq!(
-        bank_row_bytes(),
-        16,
-        "mxint8quantize: bank rows must be 128 bits"
-    );
+    assert_eq!(bank_row_bytes(), 16, "mxint8quantize: bank rows must be 128 bits");
     let stride = packed_rows(k);
     assert!(
         in_base + rows * k / 4 <= bank_lines() && out_base + rows * stride <= bank_lines(),
@@ -109,10 +93,6 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     0
 }
 
-// Each block reads eight bank rows, selects an exponent, and writes two code
-// rows. One additional scale row is written for every sixteen blocks or tail.
 pub(crate) fn latency(xs1: u64, xs2: u64) -> u64 {
-    let rows = rs1_iter(xs1);
-    let blocks = (xs2 & 0xffff) / 32;
-    8 + rows * (47 * blocks + 4 * blocks.div_ceil(16))
+    super::latency::cycles(rs1_iter(xs1), xs2)
 }

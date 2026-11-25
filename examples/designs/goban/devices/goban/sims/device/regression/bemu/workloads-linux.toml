@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "goban-test-linux",
+]

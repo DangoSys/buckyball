@@ -1,29 +1,27 @@
 package examples.balls.transpose
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import buckyball.balls.transpose.{Params => ParametersProto}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.ball.bbus.{BallFactory, BallPorts}
+import buckyball.balls.transpose.{Params => ParametersProto}
 
 import examples.balls.transpose.configs.TransposeBallParam
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 import examples.balls.transpose.Transpose
 
 @instantiable
 class TransposeBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val ballParam = TransposeBallParam.fromProto(ball.parameters.unpack(classOf[ParametersProto]))
 
@@ -33,10 +31,10 @@ class TransposeBall(
   val outBW = ballCommonConfig.outBW
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val transposeUnit: Instance[Transpose] =
-    Instantiate(new Transpose(fp, mp, bp, ball, ballParam))
+    Instantiate(new Transpose(link, ball, ballParam))
 
   transposeUnit.io.cmdReq <> blink.cmdReq
   transposeUnit.io.cmdResp <> blink.cmdResp
@@ -57,11 +55,10 @@ class TransposeBall(
 object TransposeBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new TransposeBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new TransposeBall(link, route)).blink, None)
 
 }

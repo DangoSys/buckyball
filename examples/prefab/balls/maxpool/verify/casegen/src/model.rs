@@ -56,9 +56,9 @@ pub fn iter_for(geo: &Geo) -> u32 {
 
 pub fn maxpool_rows(input: &[u8], geo: &Geo) -> Vec<(u32, [u8; BANK_ROW_BYTES])> {
     validate(geo);
-    let core = geo.input_side * geo.input_side;
-    if input.len() != core * BANK_ROW_BYTES {
-        panic!("maxpool: input bytes {} != core {} rows", input.len(), core);
+    let hart = geo.input_side * geo.input_side;
+    if input.len() != hart * BANK_ROW_BYTES {
+        panic!("maxpool: input bytes {} != hart {} rows", input.len(), hart);
     }
 
     let mut out = Vec::with_capacity(geo.output_side * geo.output_side);

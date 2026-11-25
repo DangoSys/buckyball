@@ -8,6 +8,9 @@ package int8add_pkg;
   `include "seq/int8add_sequences.svh"
   `include "cov/int8add_cov.svh"
   `include "env/int8add_scoreboard.svh"
+  `include "env/int8add_cycles.svh"
   `include "env/int8add_env.svh"
   `include "tests/int8add_test.svh"
+  `include "tests/int8add_throughput_test.svh"
+  `include "tests/int8add_latency_test.svh"
 endpackage

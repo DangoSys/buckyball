@@ -1,6 +1,6 @@
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
 
 fn rounded_shift(value: u32, shift: u32) -> u32 {
     if shift > 31 {
@@ -32,22 +32,19 @@ fn encode(bits: u32, block_exponent: i32) -> u8 {
 }
 
 pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "mxquant: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "mxquant: reads no old destination; rs1[29] must be clear"
+    );
     let input = rs1_b0(xs1);
     let output = rs1_b2(xs1);
     let count = rs1_iter(xs1) as usize;
-    assert!(
-        xs2 == 0 && rs1_b1(xs1) == 0,
-        "mxquant: reserved fields must be zero"
-    );
+    assert!(xs2 == 0 && rs1_b1(xs1) == 0, "mxquant: reserved fields must be zero");
     assert!(
         count > 0 && count % 32 == 0,
         "mxquant: count must be a positive multiple of 32"
     );
-    assert!(
-        input != output,
-        "mxquant: input and output banks must differ"
-    );
+    assert!(input != output, "mxquant: input and output banks must differ");
     for bank in [input, output] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,
@@ -63,9 +60,7 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     assert!(
         source
             .chunks_exact(4)
-            .all(
-                |element| u32::from_le_bytes(element.try_into().unwrap()) & 0x7fffffff < 0x7f800000
-            ),
+            .all(|element| u32::from_le_bytes(element.try_into().unwrap()) & 0x7fffffff < 0x7f800000),
         "mxquant: non-finite activation"
     );
     let mut packed = vec![0u8; count + count / 32];
@@ -82,8 +77,7 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         };
         packed[count + block] = (exponent + 127) as u8;
         for (index, element) in values.chunks_exact(4).enumerate() {
-            packed[block * 32 + index] =
-                encode(u32::from_le_bytes(element.try_into().unwrap()), exponent);
+            packed[block * 32 + index] = encode(u32::from_le_bytes(element.try_into().unwrap()), exponent);
         }
     }
     let destination = pbank(ctx, output);

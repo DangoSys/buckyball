@@ -67,3 +67,10 @@ pub extern "C" fn transpose_case_dst_word_hi(word_index: u32) -> u64 {
     }
     current_case(|case| case.dst_word_hi(word_index as usize))
 }
+
+/// The cycles BEMU models for a TRANSPOSE (iter, rs2, cols) in rows of
+/// BANK_ROW_BYTES.
+#[no_mangle]
+pub extern "C" fn transpose_bemu_cycles(iter: u64, rs2: u64, cols: u64) -> u64 {
+    crate::latency::cycles(iter, rs2 & 255, cols, crate::model::BANK_ROW_BYTES as u64)
+}

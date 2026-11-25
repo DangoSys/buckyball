@@ -1,5 +1,5 @@
 # Attention Thread Memory Domain Configuration (default)
-# Private (per-thread) memory parameters. Shared memory lives in the core TOML.
+# Private (per-thread) memory parameters. Shared memory lives in the hart TOML.
 
 addrLen = 39
 

@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the rocket hart's power
+# (bbdev bench --prefab "--hart rocket --power", as bbdev dc --power --workload).
+[power]
+workload = "rocket-hart0-ctest-cpu_arithmetic-baremetal"

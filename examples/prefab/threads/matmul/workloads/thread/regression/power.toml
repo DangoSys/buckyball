@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the matmul thread's power
+# (bbdev bench --prefab "--thread matmul --power", as bbdev dc --power --workload).
+[power]
+workload = "matmul-thread-smatmul_16x16-baremetal"

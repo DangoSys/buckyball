@@ -1,0 +1,8 @@
+add_ctest(gemv_groups.cpp)
+add_ctest(gemv_signed_rounding.cpp)
+add_ctest(gemv_zero_restart.cpp)
+add_ctest(gemv_k1024.cpp)
+add_ctest(gemv_headroom.cpp)
+add_ctest(gemv_quant_clamp.cpp)
+add_ctest(gemv_negative_state.cpp)
+add_ctest(gemv_zero_dot.cpp)

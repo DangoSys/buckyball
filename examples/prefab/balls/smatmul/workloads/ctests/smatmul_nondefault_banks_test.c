@@ -1,16 +1,15 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <dma.h>
 #include <isa/smatmul.h>
 #include <stdint.h>
 #include <stdio.h>
 
 enum { M = 16, N = 16, K = 16 };
 enum {
-  BIAS_BANK = CORE_VIRTUAL_BANK_COUNT - 4,
-  A_BANK = CORE_VIRTUAL_BANK_COUNT - 3,
-  B_BANK = CORE_VIRTUAL_BANK_COUNT - 2,
-  C_BANK = CORE_VIRTUAL_BANK_COUNT - 1
+  BIAS_BANK = HART_VIRTUAL_BANK_COUNT - 4,
+  A_BANK = HART_VIRTUAL_BANK_COUNT - 3,
+  B_BANK = HART_VIRTUAL_BANK_COUNT - 2,
+  C_BANK = HART_VIRTUAL_BANK_COUNT - 1
 };
 static int8_t input[M * K] __attribute__((aligned(64)));
 static int8_t weight[K * N] __attribute__((aligned(64)));

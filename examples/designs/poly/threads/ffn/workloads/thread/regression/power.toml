@@ -1,0 +1,5 @@
+# The workload whose gate-level activity measures the ffn thread's power
+# (bbdev bench --prefab "--thread poly/threads/ffn --power", as bbdev dc
+# --power --workload).
+[power]
+workload = "ffn-thread-mxint8matmul_small-baremetal"

@@ -46,3 +46,4 @@ localparam int TOINT8_MAX_SCALE_WORDS = 12;
 localparam int TOINT8_MAX_DST_WORDS = 12;
 localparam int TOINT8_NUM_CASES = 10;
 localparam int TOINT8_TIMEOUT_CYCLES = 4000;
+import "DPI-C" function longint unsigned toint8_bemu_cycles(input longint unsigned iter, input longint unsigned cols);

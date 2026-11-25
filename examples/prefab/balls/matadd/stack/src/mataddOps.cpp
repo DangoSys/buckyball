@@ -8,7 +8,7 @@
 #include "mataddOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::matadd_ball;
@@ -56,11 +56,11 @@ int64_t AddI32Op::getDestinationBank() { return getC(); }
 LogicalResult AddI32Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), a = getA(), b = getB(), c = getC();
-  if (rows <= 0 || rows > buckyball_target::getBuckyballTarget().bankDepth ||
-      a == b || a == c || b == c)
+  if (rows <= 0 || rows > target::getTarget().bankDepth || a == b || a == c ||
+      b == c)
     return emitOpError(
         "add_i32 requires distinct banks and rows within a bank");
-  emitInstruction(builder, loc, buckyball_target::getBuckyballFunct7("MATADD"),
+  emitInstruction(builder, loc, target::getFunct7("MATADD"),
                   constantI64(builder, loc, bankFields({a, b}, c, false, rows)),
                   constantI64(builder, loc, 0));
   return success();

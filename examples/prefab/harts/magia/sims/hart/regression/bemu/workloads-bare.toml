@@ -1,0 +1,21 @@
+# The bare-metal regression of the magia hart alone: its self-checking programs
+# (exit code 0 = pass) and the SoC tests of the single-hart system. The *_mm
+# mesh tests are out, as in the magia device's regression: the BEMU mesh takes
+# jobs of at least two columns.
+[workloads]
+tests = [
+  "magia-hart0-ctest-gemm_few_columns-baremetal",
+  "magia-hart0-ctest-gemm_one_column-baremetal",
+  "magia-hart0-ctest-gemm_one_row-baremetal",
+  "magia-hart0-ctest-gemm_service-baremetal",
+  "magia-hart0-ctest-gemm_two_columns-baremetal",
+  "magia-hart0-ctest-half_convert-baremetal",
+  "magia-hart0-soctest-clint_software_interrupt-baremetal",
+  "magia-hart0-soctest-clint_supervisor_timer-baremetal",
+  "magia-hart0-soctest-clint_timer_interrupt-baremetal",
+  "magia-hart0-soctest-lrsc_word-baremetal",
+  "magia-hart0-soctest-plic_register_access-baremetal",
+  "magia-hart0-soctest-time_csr_clock-baremetal",
+  "magia-hart0-soctest-time_csr_permissions-baremetal",
+  "magia-hart0-soctest-trace_events-baremetal",
+]

@@ -1,0 +1,5 @@
+# The workload whose gate-level activity measures the mixed5 thread's power
+# (bbdev bench --prefab "--thread poly/threads/mixed5 --power", as bbdev dc
+# --power --workload).
+[power]
+workload = "mixed5-thread-mxint8matmul_small-baremetal"

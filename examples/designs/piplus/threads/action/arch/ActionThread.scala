@@ -1,40 +1,45 @@
 package examples.designs.piplus.threads.action
 
-import examples.designs.piplus.thread.Acc
-import framework.core.tbus.ThreadFactory
-import framework.core.configs.CoreParam
-import sims.configs.SimParam
-import framework.core.memory.access.preflight.configs.PmpParams
+import framework.thread.ant.configs.AntParam
+
+import framework.thread.tbus.ThreadFactory
+
 import framework.thread.configs.ThreadParam
+
 import framework.thread.ant.Ant
-import framework.thread.tlink.{HasTLink, Stream, TLinkIO}
-import framework.acc.debug.Debug
+import framework.thread.tlink.{HasTLink, TLinkIO}
+import framework.thread.acc.debug.{Debug, DebugIds}
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import framework.generic.contract.sims.configs.SimParam
+import framework.generic.contract.memory.access.preflight.configs.PmpParams
 
 /** The action thread: an Ant hart issuing the MXINT8 Ball instructions to its accelerator, whose DMA goes to DDR. */
 @instantiable
 class ActionThread(
-  threadp:       ThreadParam,
-  permissionp:   PmpParams,
-  simp:          SimParam,
-  traceId:       Int,
-  sharedOwnerId: Int)
+  threadp:     ThreadParam,
+  permissionp: PmpParams,
+  simp:        SimParam)
     extends Module
     with HasTLink {
+  // Who the thread is, strapped where it is instantiated: every thread of a hart shares one module.
+  @public
+  val ids  = IO(Input(new DebugIds))
   val accp = threadp.acc.get
 
   @public
-  val tlink = IO(new TLinkIO(threadp, permissionp))
+  val tlink = IO(new TLinkIO(threadp.link, permissionp))
 
-  val ant: Instance[Ant] = Instantiate(new Ant(threadp.ant.get, permissionp))
+  val ant: Instance[Ant] = Instantiate(new Ant(AntParam.fromLink(threadp.link), permissionp))
   val acc: Instance[Acc] = Instantiate(new Acc(accp, permissionp, simp))
 
   val debug: Instance[Debug] =
-    Instantiate(new Debug(accp.frontend, accp.memDomain, accp.gpDomain, accp.ballDomain, simp, traceId, sharedOwnerId))
-  debug.io.ant := ant.io.trace
+    Instantiate(new Debug(accp.frontend, accp.memDomain, accp.gpDomain, accp.ballDomain, simp))
+  debug.io.ant   := ant.io.trace
   debug.io.acc <> acc.io.debug
+  debug.io.ids   := ids
+  acc.io.ownerId := ids.owner
 
   ant.io.task <> tlink.task
   tlink.tss <> ant.io.shared
@@ -45,17 +50,17 @@ class ActionThread(
 object ActionThread extends ThreadFactory {
 
   def instantiate(
-    corep:   CoreParam,
-    threadp: ThreadParam,
-    simp:    SimParam,
-    traceId: Int
-  ): TLinkIO =
-    Instantiate(new ActionThread(
-      threadp,
-      corep.privileged.permission,
-      simp,
-      traceId,
-      corep.hartId
-    )).tlink
+    threadp:    ThreadParam,
+    permission: PmpParams,
+    hartId:     Int,
+    simp:       SimParam,
+    traceId:    Int
+  ): TLinkIO = {
+    val thread = Instantiate(new ActionThread(threadp, permission, simp))
+    thread.ids.trace       := traceId.U
+    thread.ids.owner       := threadp.id.U
+    thread.ids.sharedOwner := hartId.U
+    thread.tlink
+  }
 
 }

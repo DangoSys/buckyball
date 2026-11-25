@@ -1,0 +1,20 @@
+foreach(PROFILE IN LISTS DESIGN_PROFILES)
+  if(DESIGN_PROFILES_${PROFILE}_THREAD_PKG STREQUAL "mixed5")
+    set(CTEST_PROFILE ${PROFILE})
+    add_ctest(ddr_raw.cpp)
+    add_ctest(ddr_war.cpp)
+    add_ctest(ddr_waw.cpp)
+    add_ctest(ddr_read_bypass.cpp)
+    add_ctest(ddr_independent_threads.cpp)
+    if(NOT DESIGN_PROFILES_${PROFILE}_THREAD_MEM_BANK_WIDTH EQUAL 128
+       OR DESIGN_PROFILES_${PROFILE}_THREAD_MEM_BANK_ENTRIES LESS 8
+       OR DESIGN_PROFILES_${PROFILE}_THREAD_FRONTEND_MAX_PRIVATE_VBANK LESS 2)
+      message(FATAL_ERROR
+        "mvin_hash_snapshot requires 128-bit rows, >=8 rows and private bank2; actual ${PROFILE}: width=${DESIGN_PROFILES_${PROFILE}_THREAD_MEM_BANK_WIDTH}, rows=${DESIGN_PROFILES_${PROFILE}_THREAD_MEM_BANK_ENTRIES}, maxPrivate=${DESIGN_PROFILES_${PROFILE}_THREAD_FRONTEND_MAX_PRIVATE_VBANK}")
+    endif()
+    add_ctest(mvin_hash_snapshot.cpp)
+    add_ctest(mvin_loopback_snapshot.cpp)
+    add_ctest(cpu_const_snapshot.cpp)
+    add_ctest(cpu_copy_snapshot.cpp)
+  endif()
+endforeach()

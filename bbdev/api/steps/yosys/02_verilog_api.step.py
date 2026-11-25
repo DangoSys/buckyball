@@ -24,16 +24,17 @@ config = {
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart", "ball"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     unknown = body.keys() - {
+        "config",
         "device",
-        "core",
+        "hart",
+        "thread",
+        "ball",
         "design",
         "top",
-        "output-dir",
-        "output_dir",
     }
     if unknown:
         return ApiResponse(
@@ -46,9 +47,6 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(status=400, body={"error": str(e)})
 
     data = {"design": design, "top": req_arg(body, "top")}
-    output_dir = req_arg(body, "output_dir")
-    if output_dir:
-        data["output_dir"] = output_dir
     await ctx.enqueue(
         {
             "topic": "yosys.verilog",

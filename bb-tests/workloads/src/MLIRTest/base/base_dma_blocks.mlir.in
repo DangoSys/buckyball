@@ -1,0 +1,34 @@
+func.func private @check_result(memref<320xi8>)
+func.func @main() -> i8 {
+  %c0 = arith.constant 0 : index
+  %c1 = arith.constant 1 : index
+  %c2 = arith.constant 2 : index
+  %c12 = arith.constant 12 : index
+  %c16 = arith.constant 16 : index
+  %c24 = arith.constant 24 : index
+  %c80 = arith.constant 80 : index
+  %c96 = arith.constant 96 : index
+  %c256 = arith.constant 256 : index
+  %depth = arith.constant @BANK_LINES@ : index
+  %first = arith.subi %depth, %c24 : index
+  %zero = arith.constant 0 : i8
+  %sentinel = arith.constant 90 : i8
+  %input = memref.alloc() alignment = 64 : memref<256xi8>
+  %output = memref.alloc() alignment = 64 : memref<320xi8>
+  scf.for %i = %c0 to %c256 step %c1 {
+    %byte = arith.index_cast %i : index to i8
+    memref.store %byte, %input[%i] : memref<256xi8>
+  }
+  linalg.fill ins(%sentinel : i8) outs(%output : memref<320xi8>)
+  %source = memref.subview %input[3] [230] [1] : memref<256xi8> to memref<230xi8, strided<[1], offset: 3>>
+  %destination = memref.subview %output[5] [300] [1] : memref<320xi8> to memref<300xi8, strided<[1], offset: 5>>
+  %bank = bbacc.bank_alloc <{row = 1 : i64, col = 2 : i64}>
+  %cleared = bbacc.bank_clear %bank <{row = 1 : i64, col = 2 : i64}>
+  %loaded = bbacc.bank_mvin_strided %source, %cleared at %first rows %c12 memory_stride %c80 bytes %c16 block_log2 %c2 <{group = 1 : i64, bank_stride = 6 : i64}> : memref<230xi8, strided<[1], offset: 3>>
+  %stored = bbacc.bank_mvout_strided %destination, %loaded at %first rows %c12 memory_stride %c96 bytes %c16 block_log2 %c2 <{group = 1 : i64, bank_stride = 6 : i64}> : memref<300xi8, strided<[1], offset: 5>>
+  bbacc.bank_release %stored
+  func.call @check_result(%output) : (memref<320xi8>) -> ()
+  memref.dealloc %input : memref<256xi8>
+  memref.dealloc %output : memref<320xi8>
+  return %zero : i8
+}

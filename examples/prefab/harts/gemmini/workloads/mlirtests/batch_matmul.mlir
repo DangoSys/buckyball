@@ -1,0 +1,45 @@
+// RUN: buddy-opt %s \
+// RUN:     --convert-linalg-to-gemmini | \
+// RUN: FileCheck %s
+// RUN: buddy-opt %s \
+// RUN:     --convert-linalg-to-gemmini \
+// RUN:     --expand-strided-metadata \
+// RUN:     --convert-linalg-to-loops \
+// RUN:     --lower-gemmini | \
+// RUN: buddy-translate -buddy-to-llvmir | \
+// RUN: buddy-llc -filetype=asm -mtriple=riscv64 \
+// RUN:     -mattr=+xgemmini,+D -float-abi=hard \
+// RUN:     -o - | FileCheck %s --check-prefix=ASM
+
+func.func @main() -> i8 {
+  %0 = arith.constant 0 : i8
+  %1 = arith.constant 1 : i8
+  %2 = arith.constant 2 : i8
+  %input0 = memref.alloc() : memref<3x3x3xi8>
+  %input1 = memref.alloc() : memref<3x3x3xi8>
+  %output = memref.alloc() : memref<3x3x3xi8>
+  linalg.fill
+    ins(%1 : i8)
+  outs(%input0 : memref<3x3x3xi8>)
+  linalg.fill
+    ins(%2 : i8)
+  outs(%input1 : memref<3x3x3xi8>)
+  // Each batch accumulates on its INT8 output: it is both C and D (lowD).
+  // CHECK: gemmini.tile_matmul %{{.+}} %{{.+}} %[[C0:[a-z_0-9]+]] %[[C0]] <lowD = true> :
+  // CHECK-SAME: memref<3x3xi8, strided<[3, 1]>> memref<3x3xi8, strided<[3, 1]>> memref<3x3xi8, strided<[3, 1]>> memref<3x3xi8, strided<[3, 1]>>
+  // CHECK: gemmini.tile_matmul %{{.+}} %{{.+}} %[[C1:[a-z_0-9]+]] %[[C1]] <lowD = true> :
+  // CHECK-SAME: memref<3x3xi8, strided<[3, 1], offset: 9>> memref<3x3xi8, strided<[3, 1], offset: 9>> memref<3x3xi8, strided<[3, 1], offset: 9>> memref<3x3xi8, strided<[3, 1], offset: 9>>
+  // CHECK: gemmini.tile_matmul %{{.+}} %{{.+}} %[[C2:[a-z_0-9]+]] %[[C2]] <lowD = true> :
+  // CHECK-SAME: memref<3x3xi8, strided<[3, 1], offset: 18>> memref<3x3xi8, strided<[3, 1], offset: 18>> memref<3x3xi8, strided<[3, 1], offset: 18>> memref<3x3xi8, strided<[3, 1], offset: 18>>
+  linalg.batch_matmul
+    ins(%input0, %input1: memref<3x3x3xi8>, memref<3x3x3xi8>)
+  outs(%output : memref<3x3x3xi8>)
+  gemmini.print %output : memref<3x3x3xi8>
+  memref.dealloc %output : memref<3x3x3xi8>
+  return %0 : i8
+}
+
+// ASM: .attribute 5, "{{.*xgemmini.*}}"
+// ASM: loop_ws_config_bounds{{[ \t]}}
+// ASM: loop_ws{{[ \t]}}
+// ASM: flush{{[ \t]}}

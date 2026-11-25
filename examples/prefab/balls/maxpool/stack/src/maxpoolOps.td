@@ -42,4 +42,21 @@ def MaxpoolI8Op : MaxPoolBall_Op<"maxpool_i8",
   let assemblyFormat = "prop-dict attr-dict";
 }
 
+def BankTopKU32Op : MaxPoolBall_Op<"bank_topk_u32",
+    [DeclareOpInterfaceMethods<BankSSALowering>]> {
+  let summary = "Descending U32 keys with ascending-index ties on virtual banks";
+  let arguments = (ins I64:$input, I64:$output, I64Attr:$rows,
+                       I64Attr:$count, I64Attr:$k);
+  let results = (outs I64:$outputOut);
+  let assemblyFormat = "$input `->` $output prop-dict attr-dict";
+}
+
+def TopKU32Op : MaxPoolBall_Op<"topk_u32",
+    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
+  let summary = "U32 top-K, packed key/index pairs on physical banks";
+  let arguments = (ins I64Attr:$input, I64Attr:$output, I64Attr:$rows,
+                       I64Attr:$count, I64Attr:$k);
+  let assemblyFormat = "prop-dict attr-dict";
+}
+
 #endif // MAXPOOL_OPS

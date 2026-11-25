@@ -55,6 +55,7 @@ function(add_mlir_test NAME)
   endif()
   set(ASSIGN_PHYSICAL_BANKS -assign-physical-banks)
   set(BIN "${DESIGN_COMPILER}/bin")
+  set(LLVM_OPT "${DESIGN_MLIR}/../../../bin/opt")
   # buddy-opt with this target's compiler plugins.
   string(JOIN " " OPT ${DESIGN_TARGET_OPT_${ARG_TARGET}})
   # The banks and Ball ISA of the target, as compiler flags.
@@ -110,7 +111,6 @@ function(add_mlir_test NAME)
   )
   set(LINUX_FLAGS -static -Wl,--no-dynamic-linker -march=rv64gc)
   set(CRUNNER_UTILS_SRC ${SERVICES_DIR}/mlir.cpp)
-  set(DMA_SRC ${SERVICES_DIR}/dma.c ${SERVICES_DIR}/dma_memory.c)
   set(LLVM_MLIR_EXECUTION_ENGINE_DIR ${STACK}/thirdparty/buddy-mlir/llvm/mlir/include/mlir/ExecutionEngine)
 
   if(ARG_PASSES)
@@ -136,8 +136,9 @@ function(add_mlir_test NAME)
 
   add_custom_command(
     OUTPUT ${OBJ}
-    COMMAND bash -o pipefail -c "${OPT} ${MLIR_SRC} ${MLIR_PASS_COMMAND} | ${BIN}/buddy-translate --buddy-to-llvmir | ${BIN}/buddy-llc -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbuckyball,+m,+D -float-abi=hard -o ${OBJ}"
+    COMMAND bash -o pipefail -c "${OPT} ${MLIR_SRC} ${MLIR_PASS_COMMAND} | ${BIN}/buddy-translate --buddy-to-llvmir | ${LLVM_OPT} -mtriple=riscv64 -mattr=+m,+a,+f,+d,+c '-passes=default<O2>' | ${BIN}/buddy-llc -filetype=obj -mtriple=riscv64 -O2 -code-model=medium -mattr=+xbuckyball,+m,+D -float-abi=hard -o ${OBJ}"
     DEPENDS ${MLIR_SRC}
+            ${DESIGN_PB}
             ${DESIGN_TARGET_PLUGIN_${ARG_TARGET}}
     COMMENT "Building ${NAME}.o from ${PREFIX} MLIR"
     VERBATIM
@@ -175,13 +176,12 @@ function(add_mlir_test NAME)
 
   add_custom_command(
     OUTPUT ${BAREMETAL_BIN}
-    COMMAND ${ELF_CC} ${C_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR} -I${SERVICES_DIR} ${MLIR_BAREMETAL_INCLUDES} ${TARGET_DEFINES} -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN} ${BOOT_DIR}/crt0.S ${BOOT_DIR}/syscalls.c ${CRUNNER_UTILS_SRC} ${DMA_SRC} ${MAIN_SRC} ${OBJ} ${MLIR_BAREMETAL_LIBRARIES}
+    COMMAND ${ELF_CC} ${C_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR} -I${SERVICES_DIR} ${MLIR_BAREMETAL_INCLUDES} ${TARGET_DEFINES} -o ${CMAKE_CURRENT_BINARY_DIR}/${BAREMETAL_BIN} ${BOOT_DIR}/crt0.S ${BOOT_DIR}/syscalls.c ${CRUNNER_UTILS_SRC} ${MAIN_SRC} ${OBJ} ${MLIR_BAREMETAL_LIBRARIES}
     DEPENDS ${OBJ}
             ${ARG_BAREMETAL_LIBRARIES}
             ${ARG_LIBRARIES}
             ${MAIN_SRC}
             ${CRUNNER_UTILS_SRC}
-            ${DMA_SRC}
             ${BOOT_DIR}/crt0.S
             ${BOOT_DIR}/syscalls.c
             ${BOOT_DIR}/device.ld
@@ -193,12 +193,11 @@ function(add_mlir_test NAME)
 
   add_custom_command(
     OUTPUT ${LINUX_BIN}
-    COMMAND ${CMAKE_CXX_COMPILER} ${LINUX_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR} -I${SERVICES_DIR} ${MLIR_LINK_INCLUDES} ${TARGET_DEFINES} -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN} ${CRUNNER_UTILS_SRC} -x c ${DMA_SRC} -x none ${MAIN_SRC} ${OBJ} ${MLIR_LINK_LIBRARIES}
+    COMMAND ${CMAKE_CXX_COMPILER} ${LINUX_FLAGS} -I${LLVM_MLIR_EXECUTION_ENGINE_DIR} -I${SERVICES_DIR} ${MLIR_LINK_INCLUDES} ${TARGET_DEFINES} -o ${CMAKE_CURRENT_BINARY_DIR}/${LINUX_BIN} ${CRUNNER_UTILS_SRC} ${MAIN_SRC} ${OBJ} ${MLIR_LINK_LIBRARIES}
     DEPENDS ${OBJ}
             ${ARG_LIBRARIES}
             ${MAIN_SRC}
             ${CRUNNER_UTILS_SRC}
-            ${DMA_SRC}
     COMMENT "Linking ${LINUX_BIN}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND_EXPAND_LISTS

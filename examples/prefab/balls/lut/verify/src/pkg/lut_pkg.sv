@@ -8,6 +8,9 @@ package lut_pkg;
   `include "seq/lut_sequences.svh"
   `include "cov/lut_cov.svh"
   `include "env/lut_scoreboard.svh"
+  `include "env/lut_cycles.svh"
   `include "env/lut_env.svh"
   `include "tests/lut_test.svh"
+  `include "tests/lut_throughput_test.svh"
+  `include "tests/lut_latency_test.svh"
 endpackage

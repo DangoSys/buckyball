@@ -1,0 +1,18 @@
+# The poly hart alone: the one instance of the single-hart system of this
+# entry, hart 0 with its coherence node IDs, as the device places a poly hart,
+# with the poly device's DDR.
+include = "../../configs/default.toml"
+nodeId = 1
+
+[memory.icache]
+include = "../../configs/memory/icache/hart.toml"
+nodeId = 1
+
+[memory.dcache.cache]
+include = "../../configs/memory/cache.toml"
+nodeId = 2
+
+[host.device.ddr]
+beatRows = 4
+bytes = 0x400000000
+model = 0x340000000

@@ -1,0 +1,5 @@
+# The workload whose gate-level activity measures the dense thread's power
+# (bbdev bench --prefab "--thread piplus/threads/dense --power", as bbdev dc
+# --power --workload).
+[power]
+workload = "dense-thread-mxint8mm_small-baremetal"

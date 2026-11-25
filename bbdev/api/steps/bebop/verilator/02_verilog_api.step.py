@@ -15,14 +15,9 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart", "thread"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    if body.get("balltype"):
-        return ApiResponse(
-            status=400,
-            body={"error": "ball-only verilog belongs to uvm; use bbdev uvm --verilog"},
-        )
     try:
         design = require_design(body)
     except ValueError as e:
@@ -31,7 +26,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={
                 "status": "error",
                 "message": str(e),
-                "example": 'bbdev bebop verilator --verilog "--design toy"',
+                "example": (
+                    'bbdev bebop verilator --verilog "--config'
+                    ' toy/devices/toy/configs/ToyDefaultConfig.toml --device toy"'
+                ),
             },
         )
     data = {"design": design, "diff": bool(body.get("diff", False))}

@@ -4,29 +4,29 @@ use super::int8add;
 
 const BALL_CLASS: &str = "examples.balls.int8add.Int8AddBall";
 
-pub fn execute_known(
-    ball_class: &str,
-    funct: u32,
-    xs1: u64,
-    xs2: u64,
-    ctx: &mut ExecContext,
-) -> Option<u64> {
+pub fn execute_known(ball_class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &mut ExecContext) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
         Some("INT8ADD") => Some(int8add::Int8Add::exec(xs1, xs2, ctx, false)),
         Some("INT8ADD_RELU") => Some(int8add::Int8Add::exec(xs1, xs2, ctx, true)),
         Some(_) | None => None,
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64, _ctx: &bebop_bemu::ExecContext) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("INT8ADD") | Some("INT8ADD_RELU") => Some(int8add::Int8Add::latency(xs1, xs2)),
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
+        Some("INT8ADD") | Some("INT8ADD_RELU") => Some(int8add::Int8Add::latency(xs1, xs2, ctx)),
         Some(_) | None => None,
     }
 }

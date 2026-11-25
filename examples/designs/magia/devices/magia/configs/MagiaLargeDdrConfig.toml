@@ -1,0 +1,11 @@
+# MagiaLargeDdrConfig: 4 GiB of DDR. The parameters of Qwen3-0.6B take 1.8 GiB;
+# the mesh reaches them through its windows.
+include = "design.toml"
+
+[[device.harts]]
+include = "../../../harts/magia/configs/default.toml"
+memory = { access = { include = "../../../harts/magia/configs/memory/access/large-ddr.toml" } }
+
+[device.ddr]
+include = "ddr.toml"
+bytes = 0x100000000

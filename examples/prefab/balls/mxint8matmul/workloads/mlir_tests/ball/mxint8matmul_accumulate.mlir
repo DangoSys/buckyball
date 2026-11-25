@@ -5,6 +5,7 @@
 // The caller loads A into bank 1, B into bank 2 and the old C into bank 3,
 // each from bank row 0.
 func.func @accumulate() attributes {llvm.emit_c_interface} {
-  mxint8matmul_ball.matmul_mxint8 <{a = 1 : i64, b = 2 : i64, c = 3 : i64, m = 5 : i64, n = 12 : i64, k = 96 : i64, accumulate = true}>
+  %m = arith.constant 5 : index
+  mxint8matmul_ball.matmul_mxint8 rows %m <{a = 1 : i64, b = 2 : i64, c = 3 : i64, n = 12 : i64, k = 96 : i64, accumulate = true}>
   return
 }

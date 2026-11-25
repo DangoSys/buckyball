@@ -1,0 +1,125 @@
+[[ips]]
+ip = "axi4"
+config = "default"
+
+[[ips]]
+ip = "bank_router"
+config = "default"
+
+[[ips]]
+ip = "bat"
+config = "default"
+
+[[ips]]
+ip = "boot"
+config = "default"
+
+[[ips]]
+ip = "cache"
+config = "default"
+
+[[ips]]
+ip = "chi"
+config = "default"
+
+[[ips]]
+ip = "coherence"
+config = "default"
+
+[[ips]]
+ip = "ddr"
+config = "default"
+
+[[ips]]
+ip = "fpu"
+config = "default"
+
+[[ips]]
+ip = "global_rob"
+config = "default"
+
+[[ips]]
+ip = "hart_cache"
+config = "default"
+
+[[ips]]
+ip = "hart_dataflow"
+config = "default"
+
+[[ips]]
+ip = "home"
+config = "default"
+
+[[ips]]
+ip = "instruction"
+config = "default"
+
+[[ips]]
+ip = "integer"
+config = "default"
+
+[[ips]]
+ip = "interlock"
+config = "default"
+
+[[ips]]
+ip = "mem_access"
+config = "default"
+
+[[ips]]
+ip = "mmu"
+config = "default"
+
+[[ips]]
+ip = "muldiv"
+config = "default"
+
+[[ips]]
+ip = "preflight"
+config = "default"
+
+[[ips]]
+ip = "privileged"
+config = "default"
+
+[[ips]]
+ip = "prm"
+config = "default"
+
+[[ips]]
+ip = "register_file"
+config = "default"
+
+[[ips]]
+ip = "scoreboard"
+config = "default"
+
+[[ips]]
+ip = "toddr"
+config = "default"
+
+[[ips]]
+ip = "tol1"
+config = "default"
+
+[[ips]]
+ip = "tomem"
+config = "default"
+
+[[ips]]
+ip = "cbus"
+
+[[ips]]
+ip = "clint"
+
+[[ips]]
+ip = "plic"
+
+[[ips]]
+ip = "scu"
+
+[[ips]]
+ip = "trace"
+
+[[ips]]
+ip = "bootrom"

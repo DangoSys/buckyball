@@ -1,0 +1,17 @@
+# The bare-metal regression of the xiangshan hart alone: its self-checking programs
+# (exit code 0 = pass) and the SoC tests of the single-hart system.
+[workloads]
+tests = [
+  "xiangshan-hart0-ctest-atomics-baremetal",
+  "xiangshan-hart0-ctest-cpu_arithmetic-baremetal",
+  "xiangshan-hart0-ctest-fpu-baremetal",
+  "xiangshan-hart0-ctest-memory-baremetal",
+  "xiangshan-hart0-soctest-clint_software_interrupt-baremetal",
+  "xiangshan-hart0-soctest-clint_supervisor_timer-baremetal",
+  "xiangshan-hart0-soctest-clint_timer_interrupt-baremetal",
+  "xiangshan-hart0-soctest-lrsc_word-baremetal",
+  "xiangshan-hart0-soctest-plic_register_access-baremetal",
+  "xiangshan-hart0-soctest-time_csr_clock-baremetal",
+  "xiangshan-hart0-soctest-time_csr_permissions-baremetal",
+  "xiangshan-hart0-soctest-trace_events-baremetal",
+]

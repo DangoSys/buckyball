@@ -4,7 +4,7 @@
 #include "isa.h"
 
 /* Move contiguous rows from a private Bank of one Thread to another in the same
- * Core. Bank IDs are Thread-local virtual IDs; row addresses are not byte
+ * Hart. Bank IDs are Thread-local virtual IDs; row addresses are not byte
  * addresses.
  */
 static inline void bb_mvover(uint32_t source_thread, uint32_t source_bank,

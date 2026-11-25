@@ -1,8 +1,8 @@
 package examples.balls.vector
 
-import chisel3.experimental.hierarchy.{Instance, Instantiate}
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.frontend.configs.FrontendParam
+import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
 import chisel3._
 import chisel3.util._
@@ -11,19 +11,19 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 import examples.balls.vector.warp.MeshWarp
 import examples.balls.vector.configs.VectorBallParam
 
-class ctrl_ex_req(frontendParam: FrontendParam, val ballParam: VectorBallParam) extends Bundle {
-  val iter = UInt(frontendParam.iter_len.W)
+class ctrl_ex_req(link: BlinkParam, val ballParam: VectorBallParam) extends Bundle {
+  val iter = UInt(link.iterBits.W)
 }
 
-class ld_ex_req(frontendParam: FrontendParam, val ballParam: VectorBallParam) extends Bundle {
+class ld_ex_req(link: BlinkParam, val ballParam: VectorBallParam) extends Bundle {
   val config = ballParam
   val op1    = Vec(config.lane, UInt(config.inputWidth.W))
   val op2    = Vec(config.lane, UInt(config.inputWidth.W))
-  val iter   = UInt(frontendParam.iter_len.W)
+  val iter   = UInt(link.iterBits.W)
 }
 
 @instantiable
-class VecEXUnit(val frontendParam: FrontendParam, val ballParam: VectorBallParam) extends Module {
+class VecEXUnit(link: BlinkParam, val ballParam: VectorBallParam) extends Module {
   val config     = ballParam
   val InputNum   = config.lane
   val inputWidth = config.inputWidth
@@ -31,10 +31,10 @@ class VecEXUnit(val frontendParam: FrontendParam, val ballParam: VectorBallParam
 
   @public
   val io = IO(new Bundle {
-    val ctrl_ex_i = Flipped(Decoupled(new ctrl_ex_req(frontendParam, ballParam)))
-    val ld_ex_i   = Flipped(Decoupled(new ld_ex_req(frontendParam, ballParam)))
+    val ctrl_ex_i = Flipped(Decoupled(new ctrl_ex_req(link, ballParam)))
+    val ld_ex_i   = Flipped(Decoupled(new ld_ex_req(link, ballParam)))
 
-    val ex_st_o = Decoupled(new ex_st_req(frontendParam, ballParam))
+    val ex_st_o = Decoupled(new ex_st_req(link, ballParam))
   })
 
   val idle :: busy :: Nil = Enum(2)

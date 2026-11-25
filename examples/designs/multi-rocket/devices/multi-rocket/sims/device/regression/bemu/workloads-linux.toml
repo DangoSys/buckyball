@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "multi-rocket-test-linux",
+]

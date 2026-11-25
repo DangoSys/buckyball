@@ -23,7 +23,7 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device",))
+        selection = require_target(body, ("device", "hart", "thread"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     design = body.get("design")
@@ -53,6 +53,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
                 "design": design,
                 "test": test_type,
                 "jobs": body.get("jobs", 1),
+                "all-trace": bool(body.get("all-trace", False)),
                 "_trace_id": ctx.trace_id,
                 "target": selection,
             },

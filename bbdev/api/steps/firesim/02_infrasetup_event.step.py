@@ -42,7 +42,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if "bitstream_tar: null" in text or "bitstream_tar: file://" not in text:
             raise ValueError(
                 f"no bitstream for recipe {recipe_name(design)}; "
-                f"run bbdev firesim --buildbitstream '--design {design}' first"
+                "run bbdev firesim --buildbitstream with the same --config first"
             )
     except ValueError as error:
         ctx.logger.error(str(error))

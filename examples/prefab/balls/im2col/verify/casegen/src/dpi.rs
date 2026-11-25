@@ -86,3 +86,9 @@ pub extern "C" fn im2col_case_dst_lo(i: u32) -> u64 {
 pub extern "C" fn im2col_case_dst_hi(i: u32) -> u64 {
     current_case(|case| hi(&case.dst[i as usize].2))
 }
+
+/// The cycles BEMU models for an IM2COL (iter, rs2, op1_col).
+#[no_mangle]
+pub extern "C" fn im2col_bemu_cycles(iter: u64, rs2: u64, input_groups: u64) -> u64 {
+    crate::latency::cycles(iter, rs2, input_groups)
+}

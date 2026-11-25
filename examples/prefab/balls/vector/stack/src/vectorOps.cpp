@@ -8,7 +8,7 @@
 #include "vectorOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::vector_ball;
@@ -55,13 +55,12 @@ int64_t MatmulAtI8Op::getDestinationBank() { return getC(); }
 LogicalResult MatmulAtI8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), at = getAt(), b = getB(), c = getC();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   if (target.bankWidthBits != 128 || rows <= 0 || rows > target.bankDepth)
     return emitOpError("matmul_at_i8 rows exceed the bank");
   if (at == c || b == c)
     return emitOpError("matmul_at_i8 requires C apart from A^T and B");
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("VECMAT16"),
+  emitInstruction(builder, loc, target::getFunct7("VECMAT16"),
                   constantI64(builder, loc, bankFields({at, b}, c, true, rows)),
                   constantI64(builder, loc, 0));
   return success();

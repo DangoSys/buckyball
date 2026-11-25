@@ -1,26 +1,12 @@
-import os
 from pathlib import Path
-from .path import get_buckyball_path, design_resource_dir
-
-
-def validate_design(design: str | None) -> str:
-    if not design:
-        raise ValueError("missing required parameter: design")
-    if not isinstance(design, str):
-        raise ValueError("design must be a string")
-    if os.path.sep in design or design in {".", ".."}:
-        raise ValueError(f"invalid design: {design}")
-    return design
+from .path import get_buckyball_path, simulation_target
 
 
 def design_regression_dir(
     design: str, backend: str, bbdir: str | None = None, *, selection: str
 ) -> Path:
-    design = validate_design(design)
     root = Path(bbdir or get_buckyball_path())
-    return (
-        design_resource_dir(root, design, "regression", selection=selection) / backend
-    )
+    return root / simulation_target(root, design, selection).regression / backend
 
 
 def resolve_workload_toml(
@@ -36,6 +22,8 @@ def resolve_workload_toml(
         suffix = "bare"
     elif test_type == "linux-tests":
         suffix = "linux"
+    elif test_type == "slice-tests":
+        suffix = "slices"
     else:
         raise ValueError(f"invalid test type: {test_type}")
     regression_dir = design_regression_dir(design, backend, bbdir, selection=selection)

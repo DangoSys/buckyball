@@ -1,0 +1,9 @@
+enable = false
+laneNumber = 4
+baseInteger = false
+vLen = 1024
+eLen = 64
+iBufWords = 4096
+memoryPorts = 4
+
+fp64 = false

@@ -1,0 +1,8 @@
+# The accelerator of the solo hart, on its RoCC port without a thread:
+# the Balls, GP domain and banks of the dense thread, for single-hart work
+# and for tuning the CPU and accelerator alone.
+balldomain = "balldomain.toml"
+memdomain = "memdomain.toml"
+frontend = "default"
+gpdomain = "gpdomain.toml"
+transport = "default"

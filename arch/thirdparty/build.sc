@@ -64,7 +64,7 @@ object midas_target_utils extends SbtModule {
 
 object gemmini extends SbtModule {
   override def millSourcePath =
-    archRoot / "thirdparty" / "gemmini"
+    archRoot / os.up / "examples" / "prefab" / "harts" / "gemmini" / "thirdparty" / "gemmini"
   override def scalaVersion   = "2.13.16"
   override def scalacOptions = Seq("-Ymacro-annotations")
 

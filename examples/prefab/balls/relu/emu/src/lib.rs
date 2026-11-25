@@ -1,7 +1,7 @@
-pub(crate) use bebop_bemu::{ball as instruction, thread::instructions::decode};
+pub(crate) use bebop_bemu::{ball as instruction, ball::blink as decode};
 
-#[path = "50_relu.rs"]
-mod f50_relu;
+mod relu;
 
 mod ball;
 mod dispatch;
+mod latency;

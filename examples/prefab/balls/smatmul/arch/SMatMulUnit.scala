@@ -1,35 +1,33 @@
 package examples.balls.smatmul
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
 import examples.balls.smatmul.configs.SMatMulBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class SMatMulUnit(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     SMatMulBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: SMatMulBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
   val param           = ballParam
   val rows            = param.tileRows
   val cols            = param.tileCols
   val resultWords     = 4
-  val addressWidth    = log2Ceil(memParam.bankEntries)
-  val bankIdWidth     = frontendParam.bank_id_len
-  val maxOutputRows   = memParam.bankEntries / resultWords
+  val addressWidth    = log2Ceil(link.bankEntries)
+  val bankIdWidth     = link.bankIdBits
+  val maxOutputRows   = link.bankEntries / resultWords
   val accDepth        = maxOutputRows.max(32)
   val accAddrWidth    = log2Ceil(accDepth)
 
@@ -43,40 +41,38 @@ class SMatMulUnit(
 
   require(mapping.inBW == 2, "SMatMulBall requires inBW=2")
   require(mapping.outBW == 1, "SMatMulBall requires outBW=1")
-  require(memParam.bankWidth == 128, "SMatMulBall requires 128-bit bank rows")
+  require(link.bankWidth == 128, "SMatMulBall requires 128-bit bank rows")
   require(
-    memParam.bankMaskLen == 16,
+    link.bankMaskLen == 16,
     "SMatMulBall requires sixteen byte enables"
   )
   require(
-    memParam.bankEntries % resultWords == 0,
+    link.bankEntries % resultWords == 0,
     "SMatMulBall bank depth must be divisible by four"
   )
-  require(maxOutputRows >= rows, "SMatMulBall accumulator must hold at least one core")
-  require(isPow2(memParam.bankEntries), "SMatMulBall requires power-of-two bank depth")
+  require(maxOutputRows >= rows, "SMatMulBall accumulator must hold at least one hart")
+  require(isPow2(link.bankEntries), "SMatMulBall requires power-of-two bank depth")
   require((osFunct >> 4) == 4, "SMATMUL_OS must encode two reads and one write")
   require((biasFunct >> 4) == 1, "SMATMUL_BIAS must encode one read")
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       mapping.inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       mapping.outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -102,7 +98,7 @@ class SMatMulUnit(
 
   val state = RegInit(idle)
 
-  val robId = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val robId = RegInit(0.U(link.robIdBits.W))
 
   val biasCommand = RegInit(false.B)
   val firstBlock  = RegInit(false.B)
@@ -111,17 +107,17 @@ class SMatMulUnit(
   val biasValid   = RegInit(false.B)
   val chainLive   = RegInit(false.B)
   val biasBank    = RegInit(0.U(bankIdWidth.W))
-  val biasBase    = RegInit(0.U(log2Ceil(memParam.bankEntries).W))
+  val biasBase    = RegInit(0.U(log2Ceil(link.bankEntries).W))
   val biasRow     = RegInit(0.U(2.W))
   val biasWords   = Reg(Vec(resultWords, UInt(128.W)))
 
   val aBank      = RegInit(0.U(bankIdWidth.W))
   val bBank      = RegInit(0.U(bankIdWidth.W))
   val cBank      = RegInit(0.U(bankIdWidth.W))
-  val bases      = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
+  val bases      = Reg(Vec(3, UInt(link.groupIdBits.W)))
   // A and B group g hold reduction block g; C rows continue across groups.
-  val kGroups    = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
-  val kGroup     = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
+  val kGroups    = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val kGroup     = RegInit(0.U(log2Up(link.bankNum + 1).W))
   val cBase      = RegInit(0.U(addressWidth.W))
   val chainRows  = RegInit(0.U(12.W))
   val chainCBank = RegInit(0.U(bankIdWidth.W))
@@ -251,7 +247,7 @@ class SMatMulUnit(
       assert(command.iter === 4.U, "SMATMUL_BIAS iter must be four rows")
       assert(command.rs2(63, 6) === 0.U, "SMATMUL_BIAS reserves rs2[63:6]")
       assert(
-        command.rs2(5, 0) +& 4.U <= memParam.bankEntries.U,
+        command.rs2(5, 0) +& 4.U <= link.bankEntries.U,
         "SMATMUL_BIAS inputBase plus four rows must fit one bank"
       )
       assert(
@@ -270,13 +266,13 @@ class SMatMulUnit(
       )
       assert(
         command.op1_col =/= 0.U && command.op1_col === command.op2_col &&
-          command.op1_col <= memParam.bankNum.U && command.wr_col =/= 0.U,
+          command.op1_col <= link.bankNum.U && command.wr_col =/= 0.U,
         "SMATMUL_OS A and B must have the same reduction groups"
       )
       assert(rows <= accDepth.U, "SMATMUL_OS M exceeds the accumulator")
       assert(
-        rows === 1.U || (rows =/= 0.U && rows(2, 0) === 0.U),
-        "SMATMUL_OS M must be one or a positive multiple of 8"
+        rows === 1.U || (rows =/= 0.U && rows % param.tileRows.U === 0.U),
+        "SMATMUL_OS M must be one or a positive multiple of tileRows"
       )
       assert(columns === cols.U, "SMATMUL_OS N must be 16")
       assert(reduction =/= 0.U && reduction(3, 0) === 0.U, "SMATMUL_OS K must be a positive multiple of 16")
@@ -286,18 +282,18 @@ class SMatMulUnit(
           rows === 1.U,
           reduction >> 4,
           (rows * reduction) >> 4
-        ) <= memParam.bankEntries.U,
+        ) <= link.bankEntries.U,
         "SMATMUL_OS A footprint exceeds bank depth"
       )
       assert(
-        reduction <= memParam.bankEntries.U,
+        reduction <= link.bankEntries.U,
         "SMATMUL_OS B footprint exceeds bank depth"
       )
       assert(
         command.rs2(
           31,
           26
-        ) +& rows * resultWords.U <= command.wr_col * memParam.bankEntries.U,
+        ) +& rows * resultWords.U <= command.wr_col * link.bankEntries.U,
         "SMATMUL_OS C footprint exceeds its groups"
       )
       when(first) {

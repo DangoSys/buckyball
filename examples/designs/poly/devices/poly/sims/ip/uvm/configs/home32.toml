@@ -1,0 +1,14 @@
+[parameters]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+agents = 9
+mshrEntries = 32
+homeId = 64
+cacheSets = 64
+cacheWays = 4
+cacheIdBits = 8
+metadataBits = 4
+responseDepth = 2
+
+[defines]

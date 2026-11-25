@@ -1,0 +1,86 @@
+func.func private @producer(tensor<8xf32>) -> tensor<8xf32>
+// The reader itself needs a later job of the sending hart. The early
+// value must not hold up that later job even when it has no earlier reader.
+// PLACE-LABEL: func.func @joined_inputs(
+// PLACE: %[[A:[0-9]+]] = device.launch @producer
+// PLACE: %[[B:[0-9]+]] = device.launch @producer
+// PLACE: device.transfer %[[B]]
+// PLACE-SAME: device.defer
+// PLACE: device.transfer %[[A]]
+// PLACE-SAME: device.defer
+// PLACE: device.launch @join
+// LOWER-LABEL: func.func @joined_inputs(
+// LOWER: call @program_dispatch(%c0_i64
+// LOWER: call @program_dispatch(%c1_i64
+// LOWER: constant @program_transfer_job
+// LOWER: call @program_dispatch(%c2_i64
+// LOWER: call @program_dispatch(%c3_i64
+// LOWER: call @program_dispatch(%c4_i64
+// LOWER: call @program_finish
+func.func private @join(tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+func.func @joined_inputs(%input: tensor<8xf32>) -> tensor<8xf32> {
+  %a = tensor.empty() : tensor<8xf32>
+  %b = tensor.empty() : tensor<8xf32>
+  %c = tensor.empty() : tensor<8xf32>
+  %early = "device.launch"(%input, %a) <{callee = @producer, hart_class = "poly", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %late = "device.launch"(%input, %b) <{callee = @producer, hart_class = "poly", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %result = "device.launch"(%late, %early, %c) <{callee = @join, hart_class = "poly", operandSegmentSizes = array<i32: 2, 1>}> {device.rank = 1 : i64} : (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  return %result : tensor<8xf32>
+}
+
+// Deferred sends of one value share one staging job when every receiver's
+// earlier work precedes the first send. Both receivers join the same pair.
+// PLACE-LABEL: func.func @fanout_program(
+// PLACE: %[[FAN_A:[0-9]+]] = device.launch @producer
+// PLACE: %[[FAN_B:[0-9]+]] = device.launch @producer
+// PLACE: device.transfer %[[FAN_A]]
+// PLACE-SAME: <from = 0, to = 1> {device.defer, device.fanout}
+// PLACE: device.transfer %[[FAN_A]]
+// PLACE-SAME: <from = 0, to = 2> {device.defer, device.fanout}
+// PLACE: device.transfer %[[FAN_B]]
+// PLACE-SAME: <from = 0, to = 1> {device.defer, device.fanout}
+// PLACE: device.transfer %[[FAN_B]]
+// PLACE-SAME: <from = 0, to = 2> {device.defer, device.fanout}
+// PLACE: device.launch @join
+// PLACE: device.launch @join
+// LOWER-LABEL: func.func @fanout_program(
+// LOWER: call @program_dispatch(%c0_i64
+// LOWER: call @program_dispatch(%c1_i64
+// LOWER: call @program_dispatch(%c2_i64
+// LOWER: call @program_dispatch(%c3_i64
+// LOWER: call @program_dispatch(%c4_i64
+// LOWER: call @program_dispatch(%c5_i64
+// LOWER-NOT: call @program_dispatch
+// LOWER: call @program_finish
+func.func @fanout_program(%input: tensor<8xf32>) -> (tensor<8xf32>, tensor<8xf32>) {
+  %a = tensor.empty() : tensor<8xf32>
+  %b = tensor.empty() : tensor<8xf32>
+  %c = tensor.empty() : tensor<8xf32>
+  %d = tensor.empty() : tensor<8xf32>
+  %early = "device.launch"(%input, %a) <{callee = @producer, hart_class = "@REDUCER_COMPONENT@", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %late = "device.launch"(%input, %b) <{callee = @producer, hart_class = "@REDUCER_COMPONENT@", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %first = "device.launch"(%early, %late, %c) <{callee = @join, hart_class = "poly", operandSegmentSizes = array<i32: 2, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %second = "device.launch"(%early, %late, %d) <{callee = @join, hart_class = "poly", operandSegmentSizes = array<i32: 2, 1>}> {device.rank = 1 : i64} : (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  return %first, %second : tensor<8xf32>, tensor<8xf32>
+}
+
+// Hart 1 must drain the broadcast before producing hart 2's other input.
+// Hart 2 must therefore start draining without waiting for that other send.
+// PLACE-LABEL: func.func @dependent_sender(
+// PLACE-COUNT-2: device.fanout
+// LOWER-LABEL: func.func @dependent_sender(
+// LOWER: call @program_dispatch(%c5_i64
+// LOWER: call @program_finish
+// LOWER: @dependent_sender_table(dense<[6, 3, 3, 1, 0, 5,
+// LOWER-SAME: 2, 19, 1, 6,
+func.func @dependent_sender(%input: tensor<8xf32>) -> tensor<8xf32> {
+  %a = tensor.empty() : tensor<8xf32>
+  %b = tensor.empty() : tensor<8xf32>
+  %c = tensor.empty() : tensor<8xf32>
+  %d = tensor.empty() : tensor<8xf32>
+  %own = "device.launch"(%input, %b) <{callee = @producer, hart_class = "poly", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %source = "device.launch"(%input, %a) <{callee = @producer, hart_class = "@REDUCER_COMPONENT@", operandSegmentSizes = array<i32: 1, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %middle = "device.launch"(%source, %own, %c) <{callee = @join, hart_class = "poly", operandSegmentSizes = array<i32: 2, 1>}> {device.rank = 0 : i64} : (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  %output = "device.launch"(%source, %middle, %d) <{callee = @join, hart_class = "poly", operandSegmentSizes = array<i32: 2, 1>}> {device.rank = 1 : i64} : (tensor<8xf32>, tensor<8xf32>, tensor<8xf32>) -> tensor<8xf32>
+  return %output : tensor<8xf32>
+}

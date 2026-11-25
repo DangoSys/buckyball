@@ -1,0 +1,12 @@
+# The tests of the attention thread alone (bbdev bebop-* --batch "--thread attention").
+[workloads]
+tests = [
+  "attention-thread-dma_roundtrip-baremetal",
+  "attention-thread-transpose_i8_16x16-baremetal",
+  "attention-thread-int2fp_scale-baremetal",
+  "attention-thread-mxint8matmul_small-baremetal",
+  "attention-thread-mxmm_mxfp8-baremetal",
+  "attention-thread-mxint8quantize_edges-baremetal",
+  "attention-thread-mxquant_values-baremetal",
+  "attention-thread-toint8_i32-baremetal",
+]

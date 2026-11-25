@@ -17,3 +17,23 @@ port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MXINT8QUANT", funct7 = 48 },
 ]
+
+[[balls]]
+id = 2
+name = "SoftmaxBall"
+component = "softmax"
+param = "../../../balls/softmax/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SOFTMAX", funct7 = 49 },
+]
+
+[[balls]]
+id = 3
+name = "LayerNormBall"
+component = "layernorm"
+param = "../../../balls/layernorm/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "LAYERNORM", funct7 = 65 },
+]

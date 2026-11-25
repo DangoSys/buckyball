@@ -1,6 +1,6 @@
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
 
 pub struct Int8Mul;
 
@@ -32,7 +32,10 @@ impl Int8Mul {
     }
 
     pub fn exec(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-        assert!(!rs1_read_old(xs1), "int8mul: reads no old destination; rs1[29] must be clear");
+        assert!(
+            !rs1_read_old(xs1),
+            "int8mul: reads no old destination; rs1[29] must be clear"
+        );
         let gate_bank = rs1_b0(xs1);
         let input_bank = rs1_b1(xs1);
         let output_bank = rs1_b2(xs1);
@@ -67,23 +70,20 @@ impl Int8Mul {
                 let mut input_values = [0u8; 16];
                 input_values.copy_from_slice(&ctx.banks[pi][base..base + 16]);
                 for lane in 0..16 {
-                    let value = (gate_values[lane] as i8 as f32)
-                        * (input_values[lane] as i8 as f32)
-                        * ratio;
-                    ctx.banks[po][base + lane] =
-                        value.round_ties_even().clamp(-128.0, 127.0) as i8 as u8;
+                    let value = (gate_values[lane] as i8 as f32) * (input_values[lane] as i8 as f32) * ratio;
+                    ctx.banks[po][base + lane] = value.round_ties_even().clamp(-128.0, 127.0) as i8 as u8;
                 }
             }
         }
         0
     }
 
-    pub fn latency(xs1: u64, xs2: u64) -> u64 {
+    pub fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
         let iter = rs1_iter(xs1);
         Self::fields(xs2);
         if iter == 0 || iter > bank_lines() as u64 {
             panic!("int8mul: iter must fit one physical bank");
         }
-        2 + iter * 20
+        super::latency::cycles(iter, ctx.config(rs1_b0(xs1)).cols as u64)
     }
 }

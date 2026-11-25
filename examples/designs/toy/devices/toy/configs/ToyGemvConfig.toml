@@ -1,0 +1,6 @@
+include = "design.toml"
+
+[[device.harts]]
+include = "../../../harts/toy/configs/default.toml"
+hartId = 0
+accelerator = { include = "../../../harts/toy/configs/acc/default.toml", balldomain = "../../../harts/toy/configs/acc/balldomain/gemv.toml" }

@@ -1,1 +1,13 @@
 # MaxPoolBall has no private configuration parameters.
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MAXPOOL", funct7 = 50 },
+  { mnemonic = "TOPK_U32", funct7 = 51 },
+]
+
+# The BallDomain that holds this Ball alone (--ball maxpool).
+[host]
+include = "default"

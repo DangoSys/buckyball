@@ -38,10 +38,20 @@ def _fail(message: str, status: int = 400) -> ApiResponse:
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    allowed = {"device", "core", "design", "run", "itrace", "mtrace"}
+    allowed = {
+        "config",
+        "device",
+        "hart",
+        "thread",
+        "ball",
+        "design",
+        "run",
+        "itrace",
+        "mtrace",
+    }
     unknown = sorted(k for k in body if k not in allowed)
     if unknown:
         return _fail(f"unknown parameter(s): {', '.join(unknown)}")

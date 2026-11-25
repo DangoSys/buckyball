@@ -35,7 +35,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             bbdir,
             design,
             "verilog",
-            input_data.get("output_dir"),
             selection=input_data["target"],
         )
         if os.path.exists(build_dir):
@@ -69,7 +68,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={
                 "task": "validation",
                 "error": str(error),
-                "example": 'bbdev verilator --verilog "--design toy"',
+                "example": (
+                    'bbdev verilator --verilog "--config toy/devices/toy/configs/ToyDefaultConfig.toml'
+                    ' --device toy"'
+                ),
             },
             trace_id=origin_tid,
         )

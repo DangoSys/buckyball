@@ -1,0 +1,5 @@
+syntax = "proto2";
+package buckyball.components.magia;
+option java_package = "buckyball.components.magia";
+option java_multiple_files = true;
+message Params { required string profile = 1; }

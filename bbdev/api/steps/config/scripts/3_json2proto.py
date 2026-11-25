@@ -84,9 +84,14 @@ def _fill_ball(msg: pb.BallDomain, d: dict[str, Any], bbdir: Path) -> None:
         instance.out_bw = port["outBW"]
         instance.mmio_read_bw = port["mmioReadBW"]
         instance.mmio_write_bw = port["mmioWriteBW"]
+        # A Ball's default config also holds its interface and its host alone.
         pack_parameters(
             instance,
-            {key: value for key, value in ball["param"].items() if key != "_file"},
+            {
+                key: value
+                for key, value in ball["param"].items()
+                if key not in ("_file", "ball", "host")
+            },
         )
         for instruction in ball["instructions"]:
             entry = instance.instructions.add()
@@ -120,6 +125,12 @@ def _fill_gpdomain(msg: pb.GpDomainConfig, d: dict[str, Any], bbdir: Path) -> No
     if type(d["enable"]) is not bool:
         raise ValueError("gpdomain.enable must be an explicit boolean")
     msg.enable = d["enable"]
+    if type(d["baseInteger"]) is not bool:
+        raise ValueError("gpdomain.baseInteger must be an explicit boolean")
+    msg.base_integer = d["baseInteger"]
+    if type(d["fp64"]) is not bool:
+        raise ValueError("gpdomain.fp64 must be an explicit boolean")
+    msg.fp64 = d["fp64"]
     for key in ("laneNumber", "vLen", "eLen", "iBufWords", "memoryPorts"):
         if type(d[key]) is not int or d[key] <= 0:
             raise ValueError(f"gpdomain.{key} must be a positive integer")
@@ -131,7 +142,7 @@ def _fill_gpdomain(msg: pb.GpDomainConfig, d: dict[str, Any], bbdir: Path) -> No
     msg.memory_ports = d["memoryPorts"]
 
 
-def _fill_core_params(msg: pb.CoreParamConfig, d: dict[str, Any]) -> None:
+def _fill_hart_params(msg: pb.HartParamConfig, d: dict[str, Any]) -> None:
     msg.thread_data_bytes = d["threadDataBytes"]
     msg.x_len = d["xLen"]
     msg.vaddr_bits = d["vaddrBits"]
@@ -248,7 +259,7 @@ def fill_design(
     b = pb.Design()
     b.name = derived["name"]
     b.path = derived["path"]
-    b.n_cores = derived["n_cores"]
+    b.n_harts = derived["n_harts"]
     b.includes.extend(derived["includes"])
 
     for key in ("ddr", "clint", "plic", "scu", "trace"):
@@ -264,7 +275,7 @@ def fill_design(
         raise ValueError(
             "BootROM image configuration header must contain zero placeholders"
         )
-    image[8:16] = b.n_cores.to_bytes(8, "little")
+    image[8:16] = b.n_harts.to_bytes(8, "little")
     image[16:24] = bootrom["entry"].to_bytes(8, "little")
     b.device.bootrom.base = bootrom["base"]
     b.device.bootrom.bytes = bootrom["bytes"]
@@ -272,35 +283,49 @@ def fill_design(
     b.includes.append(_rel(bbdir, image_path))
 
     ParseDict(
-        {key: _hardware_fields(config["sims"][key]) for key in ("diffTest", "memory")},
+        {
+            key: _hardware_fields(config["sims"][key])
+            for key in ("diffTest", "memory", "verilatorThreads")
+        },
         b.sims,
     )
     if not b.device.IsInitialized() or not b.sims.IsInitialized():
         raise ValueError("Device and simulation parameters must be complete")
+    if b.sims.verilator_threads == 0:
+        raise ValueError("sims.verilatorThreads must be positive")
 
+    # The device directory holds the simulation entries; the design directory
+    # above it holds the output. A hart alone, configured by <hart>/configs/
+    # default.toml, holds its entry and its output itself.
     root = Path(derived["path"]).parent.parent
+    owner = root if root.parent.name == "harts" else root.parent.parent
     ((name, registration),) = config["sims"]["targets"].items()
-    if not re.fullmatch(r"(core/)?[A-Za-z0-9_-]+", name) or name == "core":
-        raise ValueError(f"invalid simulation target: {name}")
-    if name.startswith("core/") and "regression" in registration:
-        raise ValueError(f"{name}: regression belongs to the device entry")
     target = b.simulation
     target.selection = config["sims"]["selection"]
-    target.output = str(root / "output/sims" / target.selection)
-    target.directory = str(root / "sims" / name)
-    for field in ("emu", "stack", "workloads"):
-        setattr(target, field, str(root / "sims" / name / field))
-    target.arch.directory = str(root / "sims" / name / "arch")
+    target.output = str(owner / "output/sims" / target.selection)
+    # A hart entry is under its hart class: harts/<class>/sims/hart.
+    if name == "device":
+        entry = root / "sims" / name
+    elif name == "hart":
+        entry = (
+            root.parent.parent
+            / "harts"
+            / target.selection.split("/")[1]
+            / "sims"
+            / name
+        )
+    else:
+        raise ValueError(f"invalid simulation target: {name}")
+    target.directory = str(entry)
+    for field in ("emu", "stack", "workloads", "regression"):
+        setattr(target, field, str(entry / field))
+    target.arch.directory = str(entry / "arch")
     target.arch.module = "simulation"
     target.arch.config = str(Path(target.output) / "generated/design.pb")
     target.entry_class = registration["config"]
     target.top = "BBSimHarness"
-    target.stack_name = registration["stack_name"]
     manifest = bbdir / target.emu / "Cargo.toml"
     target.emu_package = tomllib.loads(manifest.read_text())["package"]["name"]
-    for resource in ("regression", "kernel", "tapeout"):
-        if resource in registration:
-            target.resources[resource] = str(root / registration[resource])
     for entry in (
         Path(target.arch.directory) / "build.sc",
         Path(target.stack) / "CMakeLists.txt",
@@ -310,18 +335,20 @@ def fill_design(
             raise FileNotFoundError(bbdir / entry)
     from verification import ip_registrations
 
+    entries = config["sims"]["verification"]["registry"]["ips"]
+    # An IP listed by name alone is present but has no runnable verification profile.
     profiles = ip_registrations(
-        bbdir, config["sims"]["verification"]["registry"]["ips"]
+        bbdir, [entry for entry in entries if set(entry) != {"ip"}]
     )
-    b.verification.ips.extend(dict.fromkeys(profile.ip for profile in profiles))
+    b.verification.ips.extend(dict.fromkeys(entry["ip"] for entry in entries))
     b.verification.profiles.extend(profiles)
 
-    for raw in _derive.configured_cores(config["device"]):
-        _append_core(b, raw, bbdir)
+    for raw in _derive.configured_harts(config["device"]):
+        _append_hart(b, raw, bbdir)
 
     if "sharedBankFabric" in config["device"]:
         fabric = config["device"]["sharedBankFabric"]
-        harts = {core.hart_id for core in b.device.cores}
+        harts = {hart.hart_id for hart in b.device.harts}
         owner, participants = fabric["ownerHart"], fabric["participantHarts"]
         if (
             type(owner) is not int
@@ -338,9 +365,9 @@ def fill_design(
         ParseDict(_hardware_fields(fabric), b.device.shared_bank_fabric)
 
     domains = [
-        core.accelerator.balldomain
-        for core in b.device.cores
-        if core.HasField("accelerator")
+        hart.accelerator.balldomain
+        for hart in b.device.harts
+        if hart.HasField("accelerator")
     ]
     domains.extend(thread.balldomain for thread in b.threads)
     b.verification.balls.extend(
@@ -375,14 +402,14 @@ def fill_design(
         p.name = name
         p.ball_ctest_dirs.extend(targets[name]["ball_ctest_dirs"])
         p.thread.CopyFrom(instance)
-        # Programs of the profile run on the first core that runs it, on its
+        # Programs of the profile run on the first hart that runs it, on its
         # accelerator or on one of its threads.
-        p.core.CopyFrom(
+        p.hart.CopyFrom(
             next(
-                core
-                for core in b.device.cores
-                if core.profile == name
-                or any(b.threads[i].profile == name for i in core.thread_indices)
+                hart
+                for hart in b.device.harts
+                if hart.profile == name
+                or any(b.threads[i].profile == name for i in hart.thread_indices)
             )
         )
 
@@ -393,7 +420,7 @@ def fill_design(
         e.component = ball["component"]
         e.emu_lib = ball["emu_lib"]
 
-    harts = {core.hart_id for core in b.device.cores}
+    harts = {hart.hart_id for hart in b.device.harts}
     tests = config["workloads"]
     for key, field in (("controlHart", "control_hart"), ("reportHart", "report_hart")):
         hart = tests[key]
@@ -421,33 +448,33 @@ def write_thread_pb(raw: dict[str, Any], out_path: Path, bbdir: Path, pkg: str) 
     return out_path
 
 
-def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
-    core = design.device.cores.add()
-    core.path = _rel(bbdir, raw["_file"])
+def _append_hart(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
+    hart = design.device.harts.add()
+    hart.path = _rel(bbdir, raw["_file"])
     component = raw.get("component")
     if not isinstance(component, str) or not component:
-        raise ValueError("Core component must be explicitly named")
-    core.component = component
-    core.profile = raw["compiler"]["name"] if "compiler" in raw else ""
-    core.hart_id = raw["hartId"]
-    core.reset_vector = raw["resetVector"]
-    core.mtime_address = raw["mtimeAddress"]
-    core.service = raw["service"]
-    # The core's stack mirrors where its config lives: <root>/configs/<sub>
+        raise ValueError("Hart component must be explicitly named")
+    hart.component = component
+    hart.profile = raw["compiler"]["name"] if "compiler" in raw else ""
+    hart.hart_id = raw["hartId"]
+    if "nodeId" in raw:
+        hart.node_id = raw["nodeId"]
+    hart.reset_vector = raw["resetVector"]
+    hart.mtime_address = raw["mtimeAddress"]
+    hart.service = raw["service"]
+    # The hart's stack mirrors where its config lives: <root>/configs/<sub>
     # has its stack at <root>/stack/<sub>.
     root, sub = _derive.component_root(raw["_file"])
     stack = root / "stack" / sub
     if not (stack / "CMakeLists.txt").is_file():
-        raise FileNotFoundError(f"missing core stack project: {stack}")
-    core.stack_path = _rel(bbdir, stack)
+        raise FileNotFoundError(f"missing hart stack project: {stack}")
+    hart.stack_path = _rel(bbdir, stack)
     for key in ("memory", "fetch", "fpu", "interconnect", "controller"):
-        ParseDict(_hardware_fields(raw[key]), getattr(core, key))
+        ParseDict(_hardware_fields(raw[key]), getattr(hart, key))
     if "tbus" in raw:
-        ParseDict(_hardware_fields(raw["tbus"]), core.tbus)
-    if "dmaCache" in raw:
-        ParseDict(_hardware_fields(raw["dmaCache"]), core.dma_cache)
-    if not core.IsInitialized():
-        raise ValueError("Core IP configuration is incomplete")
+        ParseDict(_hardware_fields(raw["tbus"]), hart.tbus)
+    if not hart.IsInitialized():
+        raise ValueError("Hart IP configuration is incomplete")
     if "implementation" in raw:
         from importlib import import_module
 
@@ -460,35 +487,40 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
             ),
             implementation,
         )
-        core.implementation.Pack(implementation, deterministic=True)
+        hart.implementation.Pack(implementation, deterministic=True)
     if "param" in raw or "implementation" not in raw:
-        _fill_core_params(core.param, raw["param"])
+        _fill_hart_params(hart.param, raw["param"])
     if "tss" in raw:
-        _fill_spm(core.tss, raw["tss"])
+        _fill_spm(hart.tss, raw["tss"])
     shared = raw["sharedMem"]
-    core.virtual_bank_count = shared["virtualBankCount"]
-    core.shared_mem.enable = shared["enable"]
-    core.shared_mem.entries = shared["entries"]
-    core.shared_mem.bank_entries = shared["bankEntries"]
-    core.shared_mem.bank_width = shared["bankWidth"]
-    core.shared_mem.input_channels = shared["inputChannels"]
-    core.shared_mem.default_group_count = shared["defaultGroupCount"]
-    core.shared_mem.virtual_bank_count = shared["virtualBankCount"]
-    core.shared_mem.latency = shared["latency"]
+    hart.virtual_bank_count = shared["virtualBankCount"]
+    hart.shared_mem.enable = shared["enable"]
+    hart.shared_mem.entries = shared["entries"]
+    hart.shared_mem.bank_entries = shared["bankEntries"]
+    hart.shared_mem.bank_width = shared["bankWidth"]
+    hart.shared_mem.input_channels = shared["inputChannels"]
+    hart.shared_mem.default_group_count = shared["defaultGroupCount"]
+    hart.shared_mem.virtual_bank_count = shared["virtualBankCount"]
+    hart.shared_mem.latency = shared["latency"]
+    if "dataLinks" in raw:
+        for link in raw["dataLinks"]:
+            topology = hart.data_links.add()
+            topology.threads.extend(link["threads"])
+            topology.banks = link["banks"]
     if "accelerator" in raw:
         acc = raw["accelerator"]
-        _fill_ball(core.accelerator.balldomain, acc["balldomain"], bbdir)
-        _fill_mem(core.accelerator.mem, acc["memdomain"], bbdir)
-        _fill_frontend(core.accelerator.frontend, acc["frontend"], bbdir)
-        _fill_gpdomain(core.accelerator.gpdomain, acc["gpdomain"], bbdir)
-        ParseDict(_hardware_fields(acc["transport"]), core.accelerator.transport)
+        _fill_ball(hart.accelerator.balldomain, acc["balldomain"], bbdir)
+        _fill_mem(hart.accelerator.mem, acc["memdomain"], bbdir)
+        _fill_frontend(hart.accelerator.frontend, acc["frontend"], bbdir)
+        _fill_gpdomain(hart.accelerator.gpdomain, acc["gpdomain"], bbdir)
+        ParseDict(_hardware_fields(acc["transport"]), hart.accelerator.transport)
     threads = raw["threads"]
     ids = [thread["id"] for thread in threads]
     if any(type(value) is not int or value < 0 for value in ids) or len(
         set(ids)
     ) != len(ids):
         raise ValueError(
-            "Core-local thread IDs must be explicit, non-negative and unique"
+            "Hart-local thread IDs must be explicit, non-negative and unique"
         )
     offset = len(design.threads)
     for local, thread in enumerate(threads):
@@ -506,11 +538,11 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
         }
         item = design.threads.add()
         _fill_thread(item, thread, meta, bbdir, hardware=True)
-        core.thread_indices.append(index)
-    # The signature names the kind of core software runs on; where an instance
+        hart.thread_indices.append(index)
+    # The signature names the kind of hart software runs on; where an instance
     # sits (hart, config file, NoC nodes) is not part of it.
-    hardware = pb.CorePlacement()
-    hardware.CopyFrom(core)
+    hardware = pb.HartPlacement()
+    hardware.CopyFrom(hart)
     for field in ("hart_id", "path", "thread_indices", "stack_path"):
         hardware.ClearField(field)
     for ball in hardware.accelerator.balldomain.balls:
@@ -527,16 +559,167 @@ def _append_core(design: pb.Design, raw: dict[str, Any], bbdir: Path) -> None:
     clear_nodes(hardware)
     payload = hardware.SerializeToString(deterministic=True) + b"".join(
         design.threads[index].signature.to_bytes(8, "little")
-        for index in core.thread_indices
+        for index in hart.thread_indices
     )
-    core.signature = int.from_bytes(hashlib.sha256(payload).digest()[:8], "little")
+    hart.signature = int.from_bytes(hashlib.sha256(payload).digest()[:8], "little")
 
 
-def write_core_pb(raw: dict[str, Any], out_path: Path, bbdir: Path) -> Path:
-    design = pb.Design(name=f"hart-{raw['hartId']}", n_cores=1)
-    _append_core(design, raw, bbdir)
+def write_hart_pb(raw: dict[str, Any], out_path: Path, bbdir: Path) -> Path:
+    design = pb.Design(name=f"hart-{raw['hartId']}", n_harts=1)
+    _append_hart(design, raw, bbdir)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(design.SerializeToString(deterministic=True))
+    return out_path
+
+
+def fill_ball_design(config: dict[str, Any], bbdir: Path) -> pb.Design:
+    """design.pb of a Ball alone: its host and the one Ball, no device."""
+    b = pb.Design()
+    ((ball,),) = [config["ball"]["balldomain"]["balls"]]
+    b.name = ball["component"]
+    b.includes.extend(_rel(bbdir, path) for path in config["includes"])
+    host = config["ball"]["host"]
+    h = b.ball.host
+    h.rob_entries = host["robEntries"]
+    h.iter_bits = host["iterBits"]
+    h.bank_id_bits = host["bankIdBits"]
+    h.data_bits = host["dataBits"]
+    h.mem_addr_bits = host["memAddrBits"]
+    h.bank_alias_enable = host["bankAliasEnable"]
+    h.operators = host["operators"]
+    h.bank_num = host["bank"]["num"]
+    h.bank_entries = host["bank"]["entries"]
+    h.bank_width = host["bank"]["width"]
+    h.bank_mask_len = host["bank"]["maskLen"]
+    h.bank_request_ports = host["bank"]["requestPorts"]
+    h.mmio_enable = host["mmio"]["enable"]
+    h.mmio_bank_num = host["mmio"]["bankNum"]
+    h.mmio_bank_entries = host["mmio"]["bankEntries"]
+    h.mmio_bank_width = host["mmio"]["bankWidth"]
+    h.mmio_read_width = host["mmio"]["readWidth"]
+    h.sub_rob_enable = host["subRob"]["enable"]
+    h.sub_rob_depth = host["subRob"]["depth"]
+    h.pmp_address_bits = host["pmp"]["addressBits"]
+    h.pmp_entries = host["pmp"]["entries"]
+    _fill_ball(b.ball.balldomain, config["ball"]["balldomain"], bbdir)
+
+    # The entry of a Ball alone, whose classpath holds the Ball: the prefab
+    # one for a prefab Ball, its design's device's for a design's Ball,
+    # examples/designs/<design>/balls/<ball>. Its output is under the Ball's
+    # own directory.
+    root = _derive.ball_root(ball)
+    if root.is_relative_to(bbdir / "examples/prefab/balls"):
+        entry = Path("examples/prefab/sims/ball")
+    else:
+        design = root.relative_to(bbdir / "examples/designs").parts[0]
+        (device,) = (bbdir / "examples/designs" / design / "devices").iterdir()
+        entry = (
+            Path("examples/designs") / design / "devices" / device.name / "sims/ball"
+        )
+    target = b.simulation
+    target.selection = config["sims"]["selection"]
+    target.output = str(Path(_rel(bbdir, root)) / "output/sims" / target.selection)
+    target.directory = str(entry)
+    target.arch.directory = str(entry / "arch")
+    target.arch.module = "simulation"
+    target.arch.config = str(Path(target.output) / "generated/design.pb")
+    target.entry_class = "framework.ball.sims.Elaborate"
+    target.top = "BallDomain"
+    if not (bbdir / target.arch.directory / "build.sc").is_file():
+        raise FileNotFoundError(bbdir / target.arch.directory / "build.sc")
+    return b
+
+
+def fill_thread_design(config: dict[str, Any], bbdir: Path) -> pb.Design:
+    """design.pb of a thread alone: its host and the one thread, no device."""
+    b = pb.Design()
+    raw = config["thread"]["config"]
+    root = _derive.component_root(raw["_file"])[0]
+    pkg = root.name
+    b.name = pkg
+    b.includes.extend(_rel(bbdir, path) for path in config["includes"])
+    host = config["thread"]["host"]
+    h = b.thread.host
+    h.x_len = host["xLen"]
+    h.virtual_bank_count = host["virtualBankCount"]
+    _fill_spm(h.tss, host["tss"])
+    h.pmp_address_bits = host["pmp"]["addressBits"]
+    h.pmp_entries = host["pmp"]["entries"]
+    h.memory_base = host["memory"]["base"]
+    h.memory_bytes = host["memory"]["bytes"]
+    ParseDict(
+        {
+            key: _hardware_fields(host["sims"][key])
+            for key in ("diffTest", "memory", "verilatorThreads")
+        },
+        b.sims,
+    )
+    if b.sims.verilator_threads == 0:
+        raise ValueError("sims.verilatorThreads must be positive")
+    meta = {
+        "index": 0,
+        "thread_id": 0,
+        "role": pkg,
+        "pkg": pkg,
+        "config_path": _rel(bbdir, raw["_file"]),
+        "balldomain_base_dir": _derive._balldomain_base_dir(bbdir, raw, pkg),
+    }
+    _fill_thread(b.threads.add(), raw, meta, bbdir, hardware=True)
+    for ball in _derive._bemu_balls(bbdir, [{"config": raw}]):
+        e = b.bemu.balls.add()
+        e.emu_class = ball["emu_class"]
+        e.component = ball["component"]
+        e.emu_lib = ball["emu_lib"]
+
+    # The entry of a thread alone: its RTL, model and workload top. A prefab
+    # thread runs on the prefab entry, whose classpath holds every prefab
+    # thread; a design's thread on its own, <thread>/sims/thread, on the
+    # design's classpath. Its output is under the thread's own directory, and
+    # so are its tests and their regression lists (<thread>/workloads/thread).
+    entry = (
+        Path("examples/prefab/sims/thread")
+        if root.is_relative_to(bbdir / "examples/prefab/threads")
+        else Path(_rel(bbdir, root)) / "sims/thread"
+    )
+    target = b.simulation
+    target.selection = config["sims"]["selection"]
+    target.output = str(Path(_rel(bbdir, root)) / "output/sims" / target.selection)
+    target.directory = str(entry)
+    target.arch.directory = str(entry / "arch")
+    target.arch.module = "simulation"
+    target.arch.config = str(Path(target.output) / "generated/design.pb")
+    target.entry_class = "framework.thread.sims.Elaborate"
+    target.top = "ThreadAlone"
+    target.emu = str(entry / "emu")
+    target.workloads = str(entry / "workloads")
+    target.regression = str(Path(_rel(bbdir, root)) / "workloads/thread/regression")
+    manifest = bbdir / target.emu / "Cargo.toml"
+    target.emu_package = tomllib.loads(manifest.read_text())["package"]["name"]
+    for path in (
+        Path(target.arch.directory) / "build.sc",
+        Path(target.workloads) / "CMakeLists.txt",
+        Path(_rel(bbdir, root)) / "workloads/thread/CMakeLists.txt",
+    ):
+        if not (bbdir / path).is_file():
+            raise FileNotFoundError(bbdir / path)
+    return b
+
+
+def write_thread_alone_pb(config_path: Path, out_path: Path, bbdir: Path) -> Path:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    design = fill_thread_design(config, bbdir)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if not out_path.exists() or pb.Design.FromString(out_path.read_bytes()) != design:
+        out_path.write_bytes(design.SerializeToString(deterministic=True))
+    return out_path
+
+
+def write_ball_pb(config_path: Path, out_path: Path, bbdir: Path) -> Path:
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    design = fill_ball_design(config, bbdir)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if not out_path.exists() or pb.Design.FromString(out_path.read_bytes()) != design:
+        out_path.write_bytes(design.SerializeToString(deterministic=True))
     return out_path
 
 
@@ -559,9 +742,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Build a configured core protobuf using the standard TOML expansion"
+        description="Build a configured hart protobuf using the standard TOML expansion"
     )
-    parser.add_argument("--core", type=Path, required=True)
+    parser.add_argument("--hart", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--repo", type=Path, required=True)
     options = parser.parse_args()
@@ -569,5 +752,5 @@ if __name__ == "__main__":
     spec = importlib.util.spec_from_file_location("toml_expansion", source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    output = write_core_pb(module.toml2json(options.core), options.output, options.repo)
+    output = write_hart_pb(module.toml2json(options.hart), options.output, options.repo)
     print(output)

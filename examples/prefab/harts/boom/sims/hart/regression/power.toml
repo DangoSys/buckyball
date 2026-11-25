@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the boom hart's power
+# (bbdev dc --power --workload).
+[power]
+workload = "boom-hart0-ctest-cpu_arithmetic-baremetal"

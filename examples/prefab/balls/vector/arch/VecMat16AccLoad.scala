@@ -1,22 +1,19 @@
 package examples.balls.vector
 
-import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 import examples.balls.vector.configs.VectorBallParam
 
 import chisel3._
 import chisel3.util._
-import framework.acc.memdomain.BankRead
+import framework.generic.contract.memdomain.BankRead
 
 @instantiable
 class VecMat16AccLoad(
-  frontendParam: FrontendParam,
-  memParam:      MemDomainParam,
-  routingParam:  BallDomainParam,
+  link:          BlinkParam,
   val accWidth:  Int,
   lane:          Int,
   val ballParam: VectorBallParam)
@@ -25,15 +22,14 @@ class VecMat16AccLoad(
   @public
   val io = IO(new Bundle {
     val start   = Input(Bool())
-    val wrBank  = Input(UInt(frontendParam.bank_id_len.W))
-    val wrGroup = Input(UInt(memParam.groupIdWidth.W))
-    val robId   = Input(UInt(log2Up(frontendParam.rob_entries).W))
+    val wrBank  = Input(UInt(link.bankIdBits.W))
+    val wrGroup = Input(UInt(link.groupIdBits.W))
+    val robId   = Input(UInt(link.robIdBits.W))
 
     val bankRead = Vec(
       2,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 

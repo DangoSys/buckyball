@@ -1,6 +1,6 @@
-// Quantizes the quant_random rows of ctests/vectors.h (3 rows of 544 FP32)
+// Quantizes the quant_random rows of the C tests (3 rows of 544 FP32)
 // through the bank operation; the caller compares the packed rows with
-// quant_random_expected.
+// the MXINT8 definition.
 func.func @quant(%input: memref<408x4xi32>, %output: memref<108x16xi8>)
     attributes {llvm.emit_c_interface} {
   %in_bank = bbacc.bank_alloc <{row = 1 : i64, col = 1 : i64}>

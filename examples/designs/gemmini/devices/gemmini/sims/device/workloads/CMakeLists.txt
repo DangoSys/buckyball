@@ -1,0 +1,5 @@
+include("${DESIGN_DEVICE_BUILD}/device.cmake")
+add_subdirectory("${DESIGN_REPO}/examples/prefab/harts/gemmini/workloads/lib" harts/gemmini/lib)
+add_subdirectory("${DESIGN_REPO}/examples/prefab/harts/gemmini/workloads/ctests" harts/gemmini/ctests)
+add_subdirectory("${DESIGN_REPO}/examples/designs/gemmini/devices/gemmini/workloads" design)
+add_subdirectory("${DESIGN_REPO}/examples/prefab/harts/gemmini/workloads/mlirtests" harts/gemmini/mlirtests)

@@ -1,7 +1,6 @@
 package examples.balls.gemmini
 
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.ball.BallHostParam
 
 import chisel3._
 import chisel3.util._
@@ -20,18 +19,17 @@ import examples.balls.gemmini.configs.GemminiBallParam
  * The final compute row is followed by a drain row and bank release.
  */
 @instantiable
-class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDomainParam, val ballParam: GemminiBallParam)
-    extends Module {
+class LoopMatmulUnroller(host: BallHostParam, val ballParam: GemminiBallParam) extends Module {
   val config    = ballParam
   val DIM       = config.blockSize
   val elemSize  = config.inputWidth / 8
   val accBytes  = config.accWidth / 8
-  val bankBytes = memParam.bankWidth / 8
+  val bankBytes = host.link.bankWidth / 8
 
   @public
   val io = IO(new Bundle {
-    val start = Flipped(Decoupled(new LoopWsConfig(frontendParam, memParam, ballParam)))
-    val cmd   = Decoupled(new LoopCmd(frontendParam, memParam, ballParam))
+    val start = Flipped(Decoupled(new LoopWsConfig(host, ballParam)))
+    val cmd   = Decoupled(new LoopCmd(host, ballParam))
     val busy  = Output(Bool())
   })
 
@@ -41,7 +39,7 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
   val state                                                                                                                = RegInit(sIdle)
 
   // Config registers (latched at start)
-  val cfg = Reg(new LoopWsConfig(frontendParam, memParam, ballParam))
+  val cfg = Reg(new LoopWsConfig(host, ballParam))
 
   // Loop iterator registers
   val i_reg = RegInit(0.U(16.W))
@@ -58,15 +56,15 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
   // Defaults
   io.start.ready   := state === sIdle
   io.cmd.valid     := false.B
-  io.cmd.bits      := 0.U.asTypeOf(new LoopCmd(frontendParam, memParam, ballParam))
+  io.cmd.bits      := 0.U.asTypeOf(new LoopCmd(host, ballParam))
   io.cmd.bits.last := state === sFreeBanks
   io.busy          := state =/= sIdle
 
   // Helper to build an invalid LoopSubCmd slot
   def emptySlot(): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid := false.B
-    v.bits  := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits  := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v
   }
 
@@ -77,9 +75,9 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
     row:    Int,
     col:    Int
   ): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid         := true.B
-    v.bits          := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits          := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC
                        else LoopSubCmdType.MSET_FREE)
     v.bits.bank_id  := bankId
@@ -95,9 +93,9 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
     iter:   UInt,
     stride: UInt
   ): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid          := true.B
-    v.bits           := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits           := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v.bits.cmdType   := LoopSubCmdType.MVIN
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
@@ -113,9 +111,9 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
     iter:   UInt,
     stride: UInt
   ): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid          := true.B
-    v.bits           := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits           := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v.bits.cmdType   := LoopSubCmdType.MVOUT
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
@@ -205,7 +203,7 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
       }
     }
 
-    // Load the activation core before preloading it.
+    // Load the activation hart before preloading it.
     is(sPrimeLoad) {
       io.cmd.valid         := true.B
       io.cmd.bits.slots(0) := mvinSlot(
@@ -225,9 +223,9 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
     // Preload activations while loading independent weights.
     is(sMainRow1) {
       io.cmd.valid := true.B
-      val preSlot = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+      val preSlot = Wire(Valid(new LoopSubCmd(host, ballParam)))
       preSlot.valid         := k_reg === 0.U
-      preSlot.bits          := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+      preSlot.bits          := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
       preSlot.bits.cmdType  := LoopSubCmdType.PRELOAD
       preSlot.bits.op1_bank := cfg.bank_a // preload A (activations) into matrix array
       preSlot.bits.wr_bank  := cfg.bank_c
@@ -248,9 +246,9 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
     // Compute consumes the preceding preload and DMA row.
     is(sCompute) {
       io.cmd.valid := true.B
-      val compSlot = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+      val compSlot = Wire(Valid(new LoopSubCmd(host, ballParam)))
       compSlot.valid             := true.B
-      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
       compSlot.bits.cmdType      := LoopSubCmdType.COMPUTE
       compSlot.bits.op1_bank     := cfg.bank_a
       compSlot.bits.op2_bank     := cfg.bank_b
@@ -272,7 +270,7 @@ class LoopMatmulUnroller(val frontendParam: FrontendParam, val memParam: MemDoma
       }
     }
 
-    // Store the result while preparing the next activation core.
+    // Store the result while preparing the next activation hart.
     is(sMainRow2) {
       io.cmd.valid               := true.B
       io.cmd.bits.slots(0)       := mvoutSlot(

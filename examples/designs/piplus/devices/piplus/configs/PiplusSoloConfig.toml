@@ -1,0 +1,16 @@
+# PiplusSoloConfig: the solo hart alone, a CPU with the dense thread's
+# accelerator on its RoCC port, for work and tuning on a single hart
+# (--hart solo). The device of this config is that one hart.
+include = "design.toml"
+
+[[device.harts]]
+include = "../../../harts/solo/configs/default.toml"
+hartId = 0
+nodeId = 1
+memory = { icache = { include = "../../../harts/solo/configs/memory/icache.toml", nodeId = 1 }, dcache = { cache = { include = "../../../harts/solo/configs/memory/cache.toml", nodeId = 2 } } }
+
+[device.clint]
+hartIds = [0]
+
+[device.plic]
+hartIds = [0]

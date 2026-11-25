@@ -26,7 +26,7 @@ User / Agent host
 ## Daily path
 
 ```text
-bbdev_stack_build(design, thread, core, device)
+bbdev_stack_build(design, thread, hart, device)
   → bbdev_task_status(trace_id) until success
   → bbdev_workload_build(design)
   → bbdev_task_status(trace_id) until success

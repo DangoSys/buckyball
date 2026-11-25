@@ -4,11 +4,13 @@ pub const LANE_TABLE_BYTES: usize = 16 * SHARED_TABLE_BYTES;
 pub const MAX_SRC: usize = 8;
 pub const MAX_LUT: usize = LANE_TABLE_BYTES / BYTES_PER_ROW;
 pub const MAX_DST: usize = 8;
-pub const NUM_CASES: u32 = 4;
+pub const NUM_CASES: u32 = 10;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LutCmd {
+    pub mode: u32,
+    pub multiplier: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub op2_bank: u32,
@@ -68,6 +70,7 @@ pub fn gen_case(index: u32) -> LutCase {
         1 => directed(3, 1, false, [1, 2, 3]),
         2 => directed(4, 8, false, [2, 0, 1]),
         3 => directed(5, 4, true, [3, 1, 2]),
+        4..=9 => wide(index),
         _ => panic!("lut: unsupported directed case {index}"),
     }
 }
@@ -207,6 +210,8 @@ fn directed(rob_id: u32, iter: u32, per_lane: bool, groups: [u32; 3]) -> LutCase
     }
     LutCase {
         cmd: LutCmd {
+            mode: 0,
+            multiplier: 0,
             iter,
             op1_bank,
             op2_bank,
@@ -225,5 +230,57 @@ fn directed(rob_id: u32, iter: u32, per_lane: bool, groups: [u32; 3]) -> LutCase
         src_words: copy_words(&src),
         lut_words: copy_words(&lut),
         dst_words: copy_words(&dst),
+    }
+}
+
+fn wide(index: u32) -> LutCase {
+    let mode = if index == 4 { 1 } else { 2 };
+    let rows = match index { 5 => 1, 8 => 3, 9 => 8, _ => 2 };
+    let multiplier = match index {
+        4 => 0, 5 => 120 << 16, 6 => 4 << 16, 7 => 12 << 16,
+        8 => (1 << 30) - 1, 9 => 127 << 16, _ => unreachable!(),
+    };
+    let input: Vec<i32> = match index {
+        4 => vec![i32::MIN, -512, -511, -1, 0, 1, 511, i32::MAX],
+        5 => vec![7, 6, 5, 4],
+        6 | 7 => vec![0; rows * 4],
+        8 => vec![i32::MIN, i32::MAX, -1, 0, -512, 511, 7, 9, 0, 1, 2, 3],
+        9 => (0..rows * 4).map(|i| i as i32 % 17 - 8).collect(),
+        _ => unreachable!(),
+    };
+    let table: Vec<i32> = (0..1024).map(|i| {
+        if mode == 1 { i * 3 - 100 } else if i <= 30 { 1 << (30 - i) } else { 0 }
+    }).collect();
+    let source: Vec<u8> = input.iter().flat_map(|x| x.to_le_bytes()).collect();
+    let table_bytes: Vec<u8> = table.iter().flat_map(|x| x.to_le_bytes()).collect();
+    let mut output = vec![0u8; rows * 16];
+    if mode == 1 {
+        for (x, word) in input.iter().zip(output.chunks_exact_mut(4)) {
+            let at = ((*x).clamp(-512, 511) as u32 & 1023) as usize;
+            word.copy_from_slice(&table[at].to_le_bytes());
+        }
+    } else {
+        let peak = i64::from(*input.iter().max().unwrap());
+        let values: Vec<u64> = input.iter().map(|x| table[(peak - i64::from(*x)).min(1023) as usize] as u64).collect();
+        let sum: u64 = values.iter().sum();
+        let reciprocal = (u64::from(multiplier) << 32) / sum;
+        for (x, byte) in values.iter().zip(&mut output) {
+            let product = x * reciprocal;
+            let quotient = product >> 48;
+            let remainder = product & ((1 << 48) - 1);
+            let rounded = quotient + u64::from(remainder > 1 << 47 || (remainder == 1 << 47 && quotient & 1 != 0));
+            *byte = rounded.min(127) as u8;
+        }
+    }
+    LutCase {
+        cmd: LutCmd {
+            mode, multiplier, iter: rows as u32, op1_bank: 0, op2_bank: 1, wr_bank: 2,
+            op1_group: 1, op2_group: 3, wr_group: 2,
+            op1_col: 1, op2_col: 1, wr_col: 1, rob_id: index % 4 + 2,
+            num_src_words: rows as u32, num_lut_words: 256, num_dst_words: rows as u32,
+        },
+        src_words: copy_words(&pack_bytes(&source)),
+        lut_words: copy_words(&pack_bytes(&table_bytes)),
+        dst_words: copy_words(&pack_bytes(&output)),
     }
 }

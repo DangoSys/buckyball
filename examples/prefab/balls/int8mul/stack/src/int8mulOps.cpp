@@ -8,7 +8,7 @@
 #include "int8mulOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
@@ -59,8 +59,8 @@ LogicalResult GateMulI8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), gate = getGate(), input = getInput(),
           output = getOutput();
-  if (rows <= 0 || rows > buckyball_target::getBuckyballTarget().bankDepth ||
-      gate == input || gate == output || input == output)
+  if (rows <= 0 || rows > target::getTarget().bankDepth || gate == input ||
+      gate == output || input == output)
     return emitOpError(
         "gate_mul_i8 requires distinct banks and rows within a bank");
   // rs2: ratio bits in [31:0]; the gate row in [63:32] is the first row.
@@ -68,7 +68,7 @@ LogicalResult GateMulI8Op::lowerToInstructions(OpBuilder &builder) {
       arith::BitcastOp::create(builder, loc, builder.getI32Type(), getRatio());
   Value rs2 = arith::ExtUIOp::create(builder, loc, builder.getI64Type(), bits);
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("INT8MUL"),
+      builder, loc, target::getFunct7("INT8MUL"),
       constantI64(builder, loc, bankFields({gate, input}, output, false, rows)),
       rs2);
   return success();

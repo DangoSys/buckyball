@@ -12,8 +12,8 @@ config = {
 
 
 def _request_data(body: dict) -> dict:
-    design = require_design(body)
-    data = {"design": design, "target": require_target(body)}
+    selection = require_target(body)
+    data = {"design": require_design(body), "target": selection}
     return data
 
 

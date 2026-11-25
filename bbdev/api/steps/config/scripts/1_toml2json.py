@@ -12,8 +12,7 @@ from typing import Any
 
 
 def _die(msg: str) -> None:
-    print(f"1_toml2json: {msg}", file=sys.stderr)
-    raise SystemExit(1)
+    raise ValueError(f"1_toml2json: {msg}")
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -27,25 +26,30 @@ def _load(path: Path) -> dict[str, Any]:
 
 
 IP_DEFAULTS = {
-    "uncached": "arch/src/main/scala/framework/core/memory/uncached/configs/default.toml",
-    "fetch": "arch/src/main/scala/framework/core/execution/fetch/src/main/scala/configs/default.toml",
-    "fpu": "arch/src/main/scala/framework/core/execution/fpu/src/main/scala/configs/default.toml",
-    "controller": "arch/src/main/scala/framework/core/controller/configs/default.toml",
-    "axi": "arch/src/main/scala/framework/ip/axi4/configs/default.toml",
-    "requesters": "arch/src/main/scala/framework/ip/coherence/configs/requesters.toml",
-    "ddr": "arch/src/main/scala/framework/device/ddr/configs/default.toml",
-    "bootrom": "arch/src/main/scala/framework/device/peripherals/bootrom/configs/default.toml",
-    "clint": "arch/src/main/scala/framework/device/peripherals/clint/configs/default.toml",
-    "plic": "arch/src/main/scala/framework/device/peripherals/plic/configs/default.toml",
-    "scu": "arch/src/main/scala/framework/device/peripherals/scu/configs/default.toml",
-    "trace": "arch/src/main/scala/framework/device/peripherals/trace/configs/default.toml",
-    "frontend": "arch/src/main/scala/framework/acc/frontend/configs/default.toml",
-    "memdomain": "arch/src/main/scala/framework/acc/memdomain/configs/default.toml",
-    "gpdomain": "arch/src/main/scala/framework/acc/gpdomain/configs/default.toml",
-    "transport": (
-        "arch/src/main/scala/framework/acc/"
-        "memdomain/src/main/scala/tomem/configs/default.toml"
-    ),
+    "uncached": "arch/src/main/scala/hart/memory/uncached/configs/default.toml",
+    "fetch": "arch/src/main/scala/mlp/fetch/src/main/scala/configs/default.toml",
+    "fpu": "arch/src/main/scala/hart/execution/fpu/src/main/scala/configs/default.toml",
+    "controller": "arch/src/main/scala/tlp/controller/configs/default.toml",
+    "axi": "arch/src/main/scala/generic/axi4/configs/default.toml",
+    "requesters": "arch/src/main/scala/generic/coherence/configs/requesters.toml",
+    "ddr": "arch/src/main/scala/generic/ddr/configs/default.toml",
+    "bootrom": "arch/src/main/scala/device/peripherals/bootrom/configs/default.toml",
+    "clint": "arch/src/main/scala/device/peripherals/clint/configs/default.toml",
+    "plic": "arch/src/main/scala/device/peripherals/plic/configs/default.toml",
+    "scu": "arch/src/main/scala/device/peripherals/scu/configs/default.toml",
+    "trace": "arch/src/main/scala/device/peripherals/trace/configs/default.toml",
+    # The accelerator IPs: one copy in the hart (its specialization, custom/),
+    # one in the thread (thread/acc/); `{acc}` is the owner's.
+    "frontend": "arch/src/main/scala/{acc}/frontend/configs/default.toml",
+    "memdomain": "arch/src/main/scala/{acc}/memdomain/configs/default.toml",
+    "gpdomain": "arch/src/main/scala/{acc}/gpdomain/configs/default.toml",
+    "transport": "arch/src/main/scala/{acc}/memdomain/tomem/configs/default.toml",
+    # The host of a Ball alone (--ball).
+    "host": "arch/src/main/scala/ball/configs/default.toml",
+    # The host of a thread alone (--thread).
+    "threadhost": "arch/src/main/scala/thread/configs/default.toml",
+    # The host of a hart alone (--hart without --config).
+    "harthost": "arch/src/main/scala/hart/configs/default.toml",
 }
 CONFIG_REFERENCES = set(IP_DEFAULTS) | {
     "device",
@@ -60,7 +64,9 @@ def _reference(base: Path, value: str, slot: str | None) -> Path:
     if value == "default":
         if slot not in IP_DEFAULTS:
             _die(f"{base}: {slot!r} requires an explicit configuration path")
-        return Path(__file__).resolve().parents[5] / IP_DEFAULTS[slot]
+        # A thread's configuration lives under a `threads` directory, a hart's under `harts`.
+        acc = "thread/acc" if "threads" in base.parts else "custom"
+        return Path(__file__).resolve().parents[5] / IP_DEFAULTS[slot].format(acc=acc)
     return (base / value).resolve()
 
 
@@ -125,8 +131,9 @@ def _walk(
             if not isinstance(walked, dict):
                 _die(f"{base}: include siblings must be a table")
             if override:
-                # Inside a device config, include siblings replace included keys.
-                _override(loaded, walked, str(base / inc))
+                # Inside a device config, include siblings replace included
+                # keys and add the instance's own (its hart and nodes).
+                _replace(loaded, walked)
                 return loaded
             return _merge(loaded, walked, base / inc)
         result = {}
@@ -202,6 +209,14 @@ def design2json(top: Path) -> dict[str, Any]:
     return data
 
 
+def _replace(config: dict, value: dict) -> None:
+    for key, item in value.items():
+        if isinstance(config.get(key), dict) and isinstance(item, dict):
+            _replace(config[key], item)
+        else:
+            config[key] = item
+
+
 def _override(config: dict, override: dict, path: str) -> None:
     for key, value in override.items():
         if key == "_file":
@@ -214,52 +229,141 @@ def _override(config: dict, override: dict, path: str) -> None:
             config[key] = value
 
 
-def simulations(data: dict[str, Any]) -> list[tuple[str, str | None, str]]:
-    """(entry, config, selection) of every simulation of the design: one per
-    config registered on the device entry, one per core entry."""
-    design = Path(data["_file"]).parent.parent.name
-    prefix = "".join(part.capitalize() for part in re.split("[-_]", design))
-    result = []
-    for entry, registration in data["sims"]["targets"].items():
-        if entry == "_file":
-            continue
-        if entry != "device":
-            if "configs" in registration:
-                _die(f"targets.{entry}: only the device entry registers configs")
-            result.append((entry, None, entry))
-            continue
-        if not registration["configs"]:
-            _die("targets.device.configs registers no config")
-        for name in registration["configs"]:
-            if not re.fullmatch(prefix + "[A-Za-z0-9]*Config", name):
-                _die(f"targets.device.configs: {name!r} must be {prefix}<Name>Config")
-            result.append((entry, name, f"device/{name}"))
-    return result
+def ball2json(path: Path) -> dict[str, Any]:
+    """The config of a Ball alone: its default config `path`, <root>/configs/
+    default.toml. Its top-level keys are the Ball's parameters, [ball] its
+    interface (ports, instructions), [host] the BallDomain that holds it alone;
+    [host] values replace those of the framework default host."""
+    path = Path(path).resolve()
+    includes = [str(path)]
+    raw = _load(path)
+    for section in ("ball", "host"):
+        if section not in raw:
+            _die(f"{path}: a Ball's default config needs a [{section}] table")
+    host = _walk(raw["host"], path.parent, includes, [str(path)], "host", override=True)
+    param = {key: value for key, value in raw.items() if key not in ("ball", "host")}
+    param["_file"] = str(path)
+    component = path.parents[1].name
+    ball = {
+        "id": 0,
+        "name": component,
+        "component": component,
+        "port": raw["ball"]["port"],
+        "instructions": raw["ball"]["instructions"],
+        "param": param,
+    }
+    return {
+        "_file": str(path),
+        "includes": includes,
+        "ball": {"host": host, "balldomain": {"balls": [ball]}},
+        "sims": {"selection": f"ball/{component}/{path.stem}"},
+    }
 
 
-def simulation2json(
-    data: dict[str, Any], entry: str, name: str | None, selection: str
-) -> dict[str, Any]:
-    """The config of one simulation: the design config with the tables of device
-    config `name` replacing the same keys (arrays whole)."""
-    config = json.loads(json.dumps(data))
-    registration = config["sims"]["targets"][entry]
-    if name is not None:
-        overrides = registration.pop("configs")[name]
-        _override(config, overrides, overrides["_file"])
-    config["sims"]["targets"] = {entry: registration}
-    config["sims"]["selection"] = selection
-    return config
+def thread2json(path: Path) -> dict[str, Any]:
+    """The config of a thread alone: its default config `path`, <root>/configs/
+    default.toml, and the framework's default host, the placement a hart gives
+    its one thread."""
+    path = Path(path).resolve()
+    thread = toml2json(path)
+    includes = thread.pop("includes")
+    host = _walk_file(_reference(path.parent, "default", "threadhost"), includes, [])
+    return {
+        "_file": str(path),
+        "includes": includes,
+        "thread": {"host": host, "config": thread},
+        "sims": {"selection": f"thread/{path.parents[1].name}/{path.stem}"},
+    }
+
+
+def _select_hart(data: dict[str, Any], name: str, path: Path) -> None:
+    """Keep the first hart of class `name` of the device of `data`, alone on
+    the virtual SoC of the hart entry."""
+    harts = [hart for hart in data["device"]["harts"] if hart["component"] == name]
+    if not harts:
+        _die(f"{path}: the device has no hart of class {name!r}")
+    hart = harts[0]
+    # Alone, the hart is hart 0 of its system and, behind an external Home,
+    # its requester node 1.
+    hart["hartId"] = 0
+    hart["nodeId"] = 1
+    data["device"]["harts"] = [hart]
+    for peripheral in ("clint", "plic"):
+        data["device"][peripheral]["hartIds"] = [hart["hartId"]]
+    data["sims"]["targets"] = {"hart": data["sims"]["targets"]["hart"][name]}
+
+
+def hart2json(path: Path) -> dict[str, Any]:
+    """The config of a hart alone: `path`, <root>/sims/hart/default.toml, the
+    instance of the hart on the single-hart system of its entry <root>/sims/
+    hart (it includes the hart's config, <root>/configs/default.toml, and
+    places the instance as a device does), on the framework's default host,
+    the peripherals and simulation parameters of that system, whose values its
+    [host] table replaces. The entry's
+    arch/HartConfig.scala is in the package named by its path."""
+    path = Path(path).resolve()
+    # As a device config's hart instance, the instance's keys replace those of
+    # the hart config it includes and add its own.
+    includes: list[str] = []
+    hart = _walk_file(path, includes, [], True)
+    host = _walk_file(_reference(path.parent, "default", "harthost"), includes, [])
+    # [host] of the instance replaces values of the framework host, as the
+    # hart's ports need (the DDR AXI ID width of its uncached port).
+    if "host" in hart:
+        _override(host, hart.pop("host"), str(path))
+    repo = Path(__file__).resolve().parents[5]
+    entry = path.parent
+    # Scala packages drop the hyphens of directory names (multi-rocket is
+    # multirocket).
+    package = ".".join(part.replace("-", "") for part in entry.relative_to(repo).parts)
+    # The hart directory of the entry owns the simulation, even when its config
+    # includes another hart's (a design's copy of a prefab hart).
+    owner = str(entry.parents[1] / "configs/default.toml")
+    device = host["device"]
+    device["_file"] = owner
+    device["harts"] = [hart]
+    sims = host["sims"]
+    sims["targets"] = {"hart": {hart["component"]: {"config": f"{package}.HartConfig"}}}
+    data = {
+        "_file": owner,
+        "includes": includes,
+        "device": device,
+        "sims": sims,
+        "workloads": host["workloads"],
+    }
+    _select_hart(data, hart["component"], path)
+    data["sims"]["selection"] = f"hart/{entry.parents[1].name}/{path.stem}"
+    return data
+
+
+def config2json(path: Path, kind: str, name: str) -> dict[str, Any]:
+    """The config of one simulation: config TOML Top `path` includes the design
+    and replaces some of its values; `kind` `name` selects the component of the
+    design to simulate."""
+    path = Path(path).resolve()
+    raw = _load(path)
+    design = raw.pop("include")
+    data = design2json(path.parent / design)
+    data["includes"].append(str(path))
+    overrides = _walk(raw, path.parent, data["includes"], [str(path)], override=True)
+    _override(data, overrides, str(path))
+    if kind == "device":
+        device = Path(data["_file"]).parents[1].name
+        if name != device:
+            _die(f"{path}: the device of this config is {device!r}, not {name!r}")
+        data["sims"]["targets"] = {kind: data["sims"]["targets"][kind]}
+    elif kind == "hart":
+        _select_hart(data, name, path)
+    else:
+        _die(f"{path}: --{kind} simulation is not implemented yet")
+    data["sims"]["selection"] = f"{kind}/{name}/{path.stem}"
+    return data
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        _die(f"usage: {sys.argv[0]} DESIGN.toml SELECTION")
-    data = design2json(Path(sys.argv[1]))
-    found = [s for s in simulations(data) if s[2] == sys.argv[2]]
-    if not found:
-        _die(f"{sys.argv[1]}: no simulation {sys.argv[2]!r}")
-    out = simulation2json(data, *found[0])
+    if len(sys.argv) != 4:
+        _die(f"usage: {sys.argv[0]} CONFIG.toml KIND NAME")
+    out = config2json(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
     sys.stdout.write(json.dumps(out, indent=2, sort_keys=True) + "\n")
 
 

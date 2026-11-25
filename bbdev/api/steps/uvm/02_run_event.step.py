@@ -14,7 +14,7 @@ if step_dir not in sys.path:
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path
 from scripts.run import run_verification
-from scripts.ball import run_design
+from scripts.ball import run_design, run_performance
 
 config = {
     "name": "uvm-run",
@@ -30,13 +30,20 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
 
     try:
-        if input_data.get("ball") is not None:
+        if input_data.get("performance") is True:
+            info = await asyncio.to_thread(
+                run_performance,
+                bbdir,
+                input_data["design"],
+                input_data["target"],
+                ctx,
+            )
+        elif input_data.get("ball") is not None:
             info = await asyncio.to_thread(
                 run_design,
                 bbdir,
                 input_data["design"],
                 input_data["target"],
-                input_data["ball"],
                 ctx,
                 True,
             )

@@ -1,3 +1,12 @@
 rows = 4
 cols = 8
 lanes = 8
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8MM", funct7 = 64 }]
+
+# The BallDomain that holds this Ball alone (--ball mxint8matmul).
+[host]
+include = "default"

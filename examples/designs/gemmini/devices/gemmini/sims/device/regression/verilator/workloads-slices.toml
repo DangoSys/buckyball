@@ -1,0 +1,14 @@
+# Products of the models, run by the slice node once the models are built.
+[workloads]
+tests = [
+  # Whole LeNet (4 images) compiled through the Gemmini dialect, against the
+  # quantized model bit for bit (stack/models/archs/gemmini/lenet).
+  "gemmini-lenet-baremetal",
+  # The tail of ResNet18 (layer4[1], avgpool, fc) from the reference run's
+  # layer4[0] output, against its 1000 logits bit for bit; 27 M cycles.
+  "gemmini-resnet18-slice-baremetal",
+  # The tail of MobileNetV3-Small (features 11 and 12, avgpool, classifier)
+  # from the reference run's features 10 output, its 1000 logits bit for
+  # bit; 31 M cycles.
+  "gemmini-mobilenet-v3-small-slice-baremetal",
+]

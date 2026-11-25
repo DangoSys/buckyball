@@ -1,28 +1,24 @@
 // MXMM reference model, the contract shared with the BEMU model
-// (emu/src/mxfp8.rs, emu/src/fp32.rs) and MxmmBall:
+// (emu/src/mxfp8.rs) and MxmmBall:
 //
 // rs2[11:0] = M (1 or a multiple of 16), rs2[23:12] = N (multiple of 16),
 // rs2[24] = first, rs2[25] = last, rs2[31:26] = C base row, iter = K.
-// MXMM_MXFP8_WINDOW adds rs2[47:32] = fullK and rs2[63:48] = startK; the other
-// formats reserve rs2[63:32].
+// MXMM_MXFP8_WINDOW adds rs2[47:32] = fullK and rs2[63:48] = startK;
+// MXMM_MXFP8 reserves rs2[63:32].
 //
 // MXFP8 (K multiple of 32): A holds M rows of fullK E4M3 codes followed by the
 // E8M0 scales (row r, block j at byte M * fullK + r * fullK / 32 + j); B holds
-// N columns of K codes followed by their scales. FP32 (K multiple of four): A
-// is M rows of K floats, B is N columns of K floats.
+// N columns of K codes followed by their scales.
 // C[r][c] accumulates sum_k A[r][k] * B[c][k] in k order with a fused
-// multiply-add (MXFP8, FMA32) or a rounded product then a rounded add (F32),
-// starting from zero on first and from the chain otherwise. On last the chain
-// is written to C as row-major FP32 from row base; otherwise nothing is
-// written.
+// multiply-add, starting from zero on first and from the chain otherwise. On
+// last the chain is written to C as row-major FP32 from row base; otherwise
+// nothing is written.
 
 pub const ROW_BYTES: usize = 16;
-pub const NUM_CASES: u32 = 8;
+pub const NUM_CASES: u32 = 5;
 
 pub const FORMAT_MXFP8: u32 = 0;
 pub const FORMAT_WINDOW: u32 = 1;
-pub const FORMAT_FMA32: u32 = 2;
-pub const FORMAT_F32: u32 = 3;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -99,11 +95,6 @@ impl Rng {
             120 + (self.next() % 14) as u8
         }
     }
-
-    fn float(&mut self) -> f32 {
-        let bits = (self.next() & 0x807f_ffff) | ((120 + self.next() % 12) << 23);
-        f32::from_bits(bits)
-    }
 }
 
 fn word(bytes: &[u8]) -> u128 {
@@ -116,7 +107,11 @@ fn word(bytes: &[u8]) -> u128 {
 
 fn decode(code: u8, scale: u8) -> f32 {
     assert!(code & 0x7f != 0x7f && scale != 255, "mxfp8: NaN encoding");
-    let factor = if scale == 0 { f32::from_bits(1 << 22) } else { f32::from_bits((scale as u32) << 23) };
+    let factor = if scale == 0 {
+        f32::from_bits(1 << 22)
+    } else {
+        f32::from_bits((scale as u32) << 23)
+    };
     let exponent = (code >> 3) & 15;
     let mantissa = (code & 7) as u32;
     let normal = ((exponent as u32 + 120) << 23) | (mantissa << 20);
@@ -143,7 +138,11 @@ fn mx_operand(rng: &mut Rng, rows: usize, k: usize) -> Operand {
     let codes: Vec<u8> = (0..rows * k).map(|_| rng.code()).collect();
     let scales: Vec<u8> = (0..rows * k / 32).map(|_| rng.scale()).collect();
     let values = (0..rows)
-        .map(|r| (0..k).map(|i| decode(codes[r * k + i], scales[r * (k / 32) + i / 32])).collect())
+        .map(|r| {
+            (0..k)
+                .map(|i| decode(codes[r * k + i], scales[r * (k / 32) + i / 32]))
+                .collect()
+        })
         .collect();
     let mut bytes = codes;
     bytes.extend_from_slice(&scales);
@@ -179,16 +178,11 @@ fn window_operand(image: &[u8], rows: usize, full_k: usize, start_k: usize, k: u
             }
         }
     }
-    Operand { bytes: image.to_vec(), reads, values }
-}
-
-fn f32_operand(rng: &mut Rng, rows: usize, k: usize, zero_rows: &[usize]) -> Operand {
-    let values: Vec<Vec<f32>> = (0..rows)
-        .map(|r| (0..k).map(|_| if zero_rows.contains(&r) { 0.0 } else { rng.float() }).collect())
-        .collect();
-    let bytes: Vec<u8> = values.iter().flatten().flat_map(|x| x.to_le_bytes()).collect();
-    let reads = sequential_reads(rows * k * 4 / ROW_BYTES, 0);
-    Operand { bytes, reads, values }
+    Operand {
+        bytes: image.to_vec(),
+        reads,
+        values,
+    }
 }
 
 fn mx_window_image(rng: &mut Rng, rows: usize, full_k: usize) -> Vec<u8> {
@@ -223,11 +217,12 @@ struct Chain {
 
 fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b: Operand) -> Step {
     let bank_bytes = bank_entries as usize * ROW_BYTES;
-    let mx = c.format == FORMAT_MXFP8 || c.format == FORMAT_WINDOW;
-    if !(c.m == 1 || (c.m > 0 && c.m % 16 == 0)) || c.n == 0 || c.n % 16 != 0 || c.k == 0 || c.k % (if mx { 32 } else { 4 }) != 0 {
+    if !(c.m == 1 || (c.m > 0 && c.m % 16 == 0)) || c.n == 0 || c.n % 16 != 0 || c.k == 0 || c.k % 32 != 0 {
         panic!("mxmm: invalid shape");
     }
-    if c.format == FORMAT_WINDOW && (c.full_k == 0 || c.full_k % 32 != 0 || c.start_k % 32 != 0 || c.start_k + c.k > c.full_k) {
+    if c.format == FORMAT_WINDOW
+        && (c.full_k == 0 || c.full_k % 32 != 0 || c.start_k % 32 != 0 || c.start_k + c.k > c.full_k)
+    {
         panic!("mxmm: invalid activation window");
     }
     if c.format != FORMAT_WINDOW && (c.full_k != c.k || c.start_k != 0) {
@@ -243,14 +238,22 @@ fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b:
     if c.m * c.n > bank_entries as usize * 4 {
         panic!("mxmm: result exceeds the accumulator buffer");
     }
-    if a.values.len() != c.m || b.values.len() != c.n || a.values.iter().chain(b.values.iter()).any(|v| v.len() != c.k) {
+    if a.values.len() != c.m || b.values.len() != c.n || a.values.iter().chain(b.values.iter()).any(|v| v.len() != c.k)
+    {
         panic!("mxmm: operand shape mismatch");
     }
     let mut live = if c.first {
         if chain.is_some() {
             panic!("mxmm: first while chain is live");
         }
-        Chain { format: c.format, m: c.m, n: c.n, bank: c.banks[2], base: c.base, values: vec![0f32; c.m * c.n] }
+        Chain {
+            format: c.format,
+            m: c.m,
+            n: c.n,
+            bank: c.banks[2],
+            base: c.base,
+            values: vec![0f32; c.m * c.n],
+        }
     } else {
         chain.take().expect("mxmm: continuation without first")
     };
@@ -262,7 +265,7 @@ fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b:
             let mut sum = live.values[row * c.n + col];
             for inner in 0..c.k {
                 let (x, y) = (a.values[row][inner], b.values[col][inner]);
-                sum = if c.format == FORMAT_F32 { (x * y) + sum } else { x.mul_add(y, sum) };
+                sum = x.mul_add(y, sum);
             }
             assert!(sum.is_finite(), "mxmm: accumulator overflow");
             live.values[row * c.n + col] = sum;
@@ -272,7 +275,11 @@ fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b:
     if c.last {
         let bytes: Vec<u8> = live.values.iter().flat_map(|x| x.to_le_bytes()).collect();
         for (w, chunk) in bytes.chunks(ROW_BYTES).enumerate() {
-            writes.push(Write { addr: (c.base + w) as u32, mask: 0xffff, data: word(chunk) });
+            writes.push(Write {
+                addr: (c.base + w) as u32,
+                mask: 0xffff,
+                data: word(chunk),
+            });
         }
     } else {
         *chain = Some(live);
@@ -282,10 +289,19 @@ fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b:
         let mut padded = image.clone();
         padded.resize(image.len().div_ceil(ROW_BYTES) * ROW_BYTES, 0);
         for (row, chunk) in padded.chunks(ROW_BYTES).enumerate() {
-            preload.push(Preload { bank: c.banks[operand], group: c.groups[operand], addr: row as u32, data: word(chunk) });
+            preload.push(Preload {
+                bank: c.banks[operand],
+                group: c.groups[operand],
+                addr: row as u32,
+                data: word(chunk),
+            });
         }
     }
-    let mut rs2 = (c.m as u64) | ((c.n as u64) << 12) | (u64::from(c.first) << 24) | (u64::from(c.last) << 25) | ((c.base as u64) << 26);
+    let mut rs2 = (c.m as u64)
+        | ((c.n as u64) << 12)
+        | (u64::from(c.first) << 24)
+        | (u64::from(c.last) << 25)
+        | ((c.base as u64) << 26);
     if c.format == FORMAT_WINDOW {
         rs2 |= ((c.full_k as u64) << 32) | ((c.start_k as u64) << 48);
     }
@@ -312,8 +328,32 @@ fn step(bank_entries: u32, chain: &mut Option<Chain>, c: Command, a: Operand, b:
     }
 }
 
-fn command(format: u32, rob_id: u32, banks: [u32; 3], groups: [u32; 3], m: usize, n: usize, k: usize, first: bool, last: bool, base: usize) -> Command {
-    Command { format, rob_id, banks, groups, m, n, k, first, last, base, full_k: k, start_k: 0 }
+fn command(
+    format: u32,
+    rob_id: u32,
+    banks: [u32; 3],
+    groups: [u32; 3],
+    m: usize,
+    n: usize,
+    k: usize,
+    first: bool,
+    last: bool,
+    base: usize,
+) -> Command {
+    Command {
+        format,
+        rob_id,
+        banks,
+        groups,
+        m,
+        n,
+        k,
+        first,
+        last,
+        base,
+        full_k: k,
+        start_k: 0,
+    }
 }
 
 pub fn gen_case(index: u32, bank_entries: u32) -> Case {
@@ -324,59 +364,94 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
         // One MXFP8 tile.
         0 => {
             let (a, b) = (mx_operand(&mut rng, 16, 32), mx_operand(&mut rng, 16, 32));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_MXFP8, 1, [1, 2, 3], [0, 0, 0], 16, 16, 32, true, true, 0), a, b));
+            steps.push(step(
+                bank_entries,
+                &mut chain,
+                command(FORMAT_MXFP8, 1, [2, 0, 1], [0, 1, 2], 16, 16, 32, true, true, 0),
+                a,
+                b,
+            ));
         }
         // MXFP8 vector (M = 1) over two scale blocks.
         1 => {
             let (a, b) = (mx_operand(&mut rng, 1, 64), mx_operand(&mut rng, 32, 64));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_MXFP8, 2, [4, 5, 6], [1, 2, 3], 1, 32, 64, true, true, 3), a, b));
-        }
-        // FMA32 with two column groups.
-        2 => {
-            let (a, b) = (f32_operand(&mut rng, 16, 8, &[]), f32_operand(&mut rng, 32, 8, &[]));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_FMA32, 3, [7, 8, 9], [4, 5, 6], 16, 32, 8, true, true, 1), a, b));
-        }
-        // F32 (rounded product, rounded add) with two row groups and zero rows.
-        3 => {
-            let (a, b) = (f32_operand(&mut rng, 32, 4, &[0, 17]), f32_operand(&mut rng, 16, 4, &[]));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_F32, 4, [10, 11, 12], [7, 8, 9], 32, 16, 4, true, true, 2), a, b));
+            steps.push(step(
+                bank_entries,
+                &mut chain,
+                command(FORMAT_MXFP8, 2, [2, 0, 1], [0, 1, 2], 1, 32, 64, true, true, 3),
+                a,
+                b,
+            ));
         }
         // MXFP8 chain: first, continuation, last.
-        4 => {
+        2 => {
             for (i, (first, last)) in [(true, false), (false, false), (false, true)].into_iter().enumerate() {
                 let (a, b) = (mx_operand(&mut rng, 16, 32), mx_operand(&mut rng, 16, 32));
-                steps.push(step(bank_entries, &mut chain, command(FORMAT_MXFP8, 5 + i as u32, [13, 14, 15], [10, 11, 12], 16, 16, 32, first, last, 5), a, b));
+                steps.push(step(
+                    bank_entries,
+                    &mut chain,
+                    command(
+                        FORMAT_MXFP8,
+                        5 + i as u32,
+                        [2, 0, 1],
+                        [0, 1, 2],
+                        16,
+                        16,
+                        32,
+                        first,
+                        last,
+                        5,
+                    ),
+                    a,
+                    b,
+                ));
             }
         }
         // Sliding activation window over fullK = 96 accumulated as one chain.
-        5 => {
+        3 => {
             let image = mx_window_image(&mut rng, 16, 96);
             for (i, start_k) in [0usize, 32, 64].into_iter().enumerate() {
                 let a = window_operand(&image, 16, 96, start_k, 32);
                 let b = mx_operand(&mut rng, 16, 32);
-                let c = Command { full_k: 96, start_k, ..command(FORMAT_WINDOW, 8 + i as u32, [16, 17, 18], [13, 14, 15], 16, 16, 32, i == 0, i == 2, 7) };
+                let c = Command {
+                    full_k: 96,
+                    start_k,
+                    ..command(
+                        FORMAT_WINDOW,
+                        1 + i as u32,
+                        [2, 0, 1],
+                        [0, 1, 2],
+                        16,
+                        16,
+                        32,
+                        i == 0,
+                        i == 2,
+                        7,
+                    )
+                };
                 steps.push(step(bank_entries, &mut chain, c, a, b));
             }
             // A single-command vector window over the upper half of fullK = 64.
             let image = mx_window_image(&mut rng, 1, 64);
             let a = window_operand(&image, 1, 64, 32, 32);
             let b = mx_operand(&mut rng, 32, 32);
-            let c = Command { full_k: 64, start_k: 32, ..command(FORMAT_WINDOW, 15, [16, 17, 18], [13, 14, 15], 1, 32, 32, true, true, 4) };
+            let c = Command {
+                full_k: 64,
+                start_k: 32,
+                ..command(FORMAT_WINDOW, 7, [2, 0, 1], [0, 1, 2], 1, 32, 32, true, true, 4)
+            };
             steps.push(step(bank_entries, &mut chain, c, a, b));
         }
-        // Eight MXFP8 panels (two batches of contexts) filling the C bank.
-        6 => {
+        // Eight MXFP8 panels exercise two batches of accumulator contexts.
+        4 => {
             let (a, b) = (mx_operand(&mut rng, 32, 32), mx_operand(&mut rng, 64, 32));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_MXFP8, 11, [1021, 1022, 1023], [31, 30, 29], 32, 64, 32, true, true, 0), a, b));
-        }
-        // F32 chain, then an FMA32 vector after the chain closes.
-        7 => {
-            for (i, (first, last)) in [(true, false), (false, true)].into_iter().enumerate() {
-                let (a, b) = (f32_operand(&mut rng, 16, 8, &[3]), f32_operand(&mut rng, 16, 8, &[]));
-                steps.push(step(bank_entries, &mut chain, command(FORMAT_F32, 12 + i as u32, [19, 20, 21], [16, 17, 18], 16, 16, 8, first, last, 9), a, b));
-            }
-            let (a, b) = (f32_operand(&mut rng, 1, 12, &[]), f32_operand(&mut rng, 48, 12, &[]));
-            steps.push(step(bank_entries, &mut chain, command(FORMAT_FMA32, 14, [22, 23, 24], [19, 20, 21], 1, 48, 12, true, true, 0), a, b));
+            steps.push(step(
+                bank_entries,
+                &mut chain,
+                command(FORMAT_MXFP8, 4, [2, 0, 1], [0, 1, 2], 32, 64, 32, true, true, 0),
+                a,
+                b,
+            ));
         }
         _ => panic!("mxmm: unsupported case {index}"),
     }

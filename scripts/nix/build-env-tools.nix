@@ -104,6 +104,9 @@ in
   # Coverage report (genhtml)
   lcov = pkgs.lcov;
 
+  # fst2vcd: FST waveforms of Verilator runs to VCD for switching activity
+  gtkwave = pkgs.gtkwave;
+
   # Verilog/SystemVerilog formatter for pre-commit
   verible = pkgs.verible;
 }

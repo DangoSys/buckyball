@@ -102,7 +102,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             bbdir,
             design,
             "dc",
-            input_data.get("output_dir"),
             selection=input_data["target"],
         )
         if os.path.exists(build_dir):

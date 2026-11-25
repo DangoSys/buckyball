@@ -8,7 +8,7 @@
 #include "redmuleOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::redmule_ball;
@@ -58,7 +58,7 @@ LogicalResult MatmulF16Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), k = getK(), a = getA(), b = getB(), c = getC();
   bool readDestination = getReadDestination();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   if (a == b || a == c || b == c)
     return emitOpError("FP16 matmul requires distinct A, B and C banks");
   if (target.bankWidthBits != 128 || rows <= 0 || rows > 4095 || k <= 0 ||
@@ -69,7 +69,7 @@ LogicalResult MatmulF16Op::lowerToInstructions(OpBuilder &builder) {
   // bit 42 whether the FMAs start from positive zero.
   uint64_t rs2 = field(rows, 0, 11) | field(!readDestination, 42, 42);
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("REDMULE_F16"),
+      builder, loc, target::getFunct7("REDMULE_F16"),
       constantI64(builder, loc, bankFields({a, b}, c, readDestination, k)),
       constantI64(builder, loc, rs2));
   return success();

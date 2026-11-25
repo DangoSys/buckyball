@@ -1,3 +1,4 @@
+import re
 import shlex
 from pathlib import Path
 
@@ -7,21 +8,28 @@ from utils.stream_run import stream_run_logger
 def build_model(
     repo: str,
     design: str,
-    model: str | None = None,
+    model: str,
     *,
     selection: str,
     logger,
     task_scope: str,
 ) -> None:
-    """Build one model recipe of `design`, or every recipe of it when `model` is None.
-    Models run on the whole device, so they build against a device config."""
-    recipes = Path(repo) / "examples/models" / design
-    models = (
-        [model]
-        if model
-        else sorted(path.parent.name for path in recipes.glob("*/CMakeLists.txt"))
-    )
+    """Build one model recipe of `design`, or every recipe of it when `model` is "all".
+    Models run on the whole device, so they build against a device config. The
+    design's recipes sit under stack/models/archs/<arch>/.../<design>/, listed
+    by its CMakeLists.txt; <arch> selects the recipe tree."""
     source = Path(repo) / "stack/models"
+    archs = source / "archs"
+    (owner,) = [p for p in archs.rglob(design) if (p / "CMakeLists.txt").is_file()]
+    arch = owner.relative_to(archs).parts[0]
+    models = (
+        re.findall(
+            r"add_subdirectory\(([A-Za-z0-9_.-]+)\)",
+            (owner / "CMakeLists.txt").read_text(),
+        )
+        if model == "all"
+        else [model]
+    )
     environment = [
         "nix",
         "build",
@@ -74,7 +82,7 @@ def build_model(
                 str(build),
                 "-G",
                 "Ninja",
-                "-DARCH=buckyball",
+                f"-DARCH={arch}",
                 f"-DDESIGN_CMAKE={design_cmake}",
                 f"-DMODEL={model}",
             ],

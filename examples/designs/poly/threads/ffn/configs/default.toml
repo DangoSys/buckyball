@@ -1,0 +1,11 @@
+component = "ffn"
+balldomain = "balls.toml"
+memdomain = "memdomain.toml"
+frontend = "../../../../../prefab/threads/ffn/configs/frontends/default.toml"
+cpu = "../../../../../prefab/threads/ffn/configs/cpu/default.toml"
+transport = "../../../harts/poly/configs/transport.toml"
+gpdomain = "gpdomain.toml"
+
+[compiler]
+name = "ffn"
+component = "ffn"

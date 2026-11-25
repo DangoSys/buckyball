@@ -1,0 +1,43 @@
+# The default host of a hart alone (--hart without --config): the device
+# peripherals and simulation parameters of the framework's single-hart system
+# (hart/sims, HartEnvironment). The values are those of toy.
+
+[device]
+bootrom = "default"
+clint = "default"
+plic = "default"
+scu = "default"
+trace = "default"
+
+[device.ddr]
+clients = 1
+slotsPerClient = 16
+dataBits = 128
+beatRows = 1
+idBits = 4
+idBase = 0
+base = 0x80000000
+bytes = 0x20000000
+model = 0x4000000
+
+[device.ddr.line]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256
+
+# The simulation hardware (SimParam). A hart alone registers no UVM IPs.
+[sims]
+diffTest = false
+verilatorThreads = 4
+
+[sims.memory]
+lineBytes = 64
+clockHz = 1000000000
+
+[sims.verification.registry]
+ips = []
+
+# The hart alone is hart 0: it controls the workloads and reports.
+[workloads]
+controlHart = 0
+reportHart = 0

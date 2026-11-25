@@ -24,16 +24,17 @@ config = {
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart", "ball"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     unknown = body.keys() - {
+        "config",
         "device",
-        "core",
+        "hart",
+        "thread",
+        "ball",
         "design",
         "top",
-        "output-dir",
-        "output_dir",
         "vcd",
     }
     if unknown:
@@ -52,9 +53,6 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "top": req_arg(body, "top"),
         "next_topic": "yosys.synth",
     }
-    output_dir = req_arg(body, "output_dir")
-    if output_dir:
-        data["output_dir"] = output_dir
     vcd = req_arg(body, "vcd")
     if vcd:
         data["vcd"] = vcd

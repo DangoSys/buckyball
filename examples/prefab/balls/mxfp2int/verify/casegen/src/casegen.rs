@@ -1,5 +1,5 @@
 // MXFP2INT reference model (MXFP4 to INT8), the contract shared with the
-// BEMU model (emu/src/55_mxfp2int.rs) and Mxfp2IntBall:
+// BEMU model (emu/src/mxfp2int.rs) and Mxfp2IntBall:
 //
 // op1 bank: block b in row b, element e in byte e / 2, low nibble first; the
 //           element value is raw - 8.
@@ -183,13 +183,13 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
             vec![step(bank_entries, 5, [4, 7, 9], [3, 11, 6], &data, &scales)]
         }
         // One block, highest banks and groups.
-        3 => vec![step(bank_entries, 15, [1021, 1022, 1023], [15, 15, 15], &random_data(&mut rng, 1), &[129])],
+        3 => vec![step(bank_entries, 7, [1021, 1022, 1023], [15, 15, 15], &random_data(&mut rng, 1), &[129])],
         // Full capacity: iter = bank_entries / 2.
         4 => {
             let blocks = (bank_entries / 2) as usize;
             let scales: Vec<u8> = (0..blocks).map(|_| rng.next() as u8).collect();
             let data = random_data(&mut rng, blocks);
-            vec![step(bank_entries, 9, [0, 512, 768], [1, 2, 4], &data, &scales)]
+            vec![step(bank_entries, 6, [0, 512, 768], [1, 2, 4], &data, &scales)]
         }
         // Back-to-back commands without reset.
         5 => (0..3)
@@ -197,7 +197,7 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
                 let blocks = 1 + (rng.next() % 18) as usize;
                 let scales: Vec<u8> = (0..blocks).map(|_| 118 + (rng.next() % 20) as u8).collect();
                 let data = random_data(&mut rng, blocks);
-                step(bank_entries, 6 + i, [8 + i, 16 + i, 24 + i], [i, i + 4, i + 8], &data, &scales)
+                step(bank_entries, 3 + i, [8 + i, 16 + i, 24 + i], [i, i + 4, i + 8], &data, &scales)
             })
             .collect(),
         _ => panic!("mxfp2int: unsupported case {index}"),

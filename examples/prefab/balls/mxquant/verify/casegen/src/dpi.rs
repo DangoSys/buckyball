@@ -112,3 +112,9 @@ pub extern "C" fn mxquant_case_write_lo(step: u32, i: u32) -> u64 {
 pub extern "C" fn mxquant_case_write_hi(step: u32, i: u32) -> u64 {
     current_step(step, |s| (s.writes[idx(i, s.writes.len(), "write")].data >> 64) as u64)
 }
+
+/// The cycles BEMU models for an MXQUANT instruction of `iter` elements.
+#[no_mangle]
+pub extern "C" fn mxquant_bemu_cycles(iter: u64) -> u64 {
+    crate::latency::cycles(iter)
+}

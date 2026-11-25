@@ -1,0 +1,5 @@
+ports = 1
+[axi]
+addressBits = 44
+dataBits = 128
+idBits = 6

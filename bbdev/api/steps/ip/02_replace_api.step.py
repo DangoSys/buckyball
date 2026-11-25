@@ -20,7 +20,7 @@ config = {
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     try:
@@ -35,13 +35,6 @@ async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     }
     if data["consumer"] not in ("dc", "yosys"):
         return ApiResponse(status=400, body={"error": "consumer must be dc or yosys"})
-    output_dir = req_arg(body, "output_dir")
-    if output_dir is not None:
-        if not isinstance(output_dir, str) or not output_dir:
-            return ApiResponse(
-                status=400, body={"error": "output_dir must be a non-empty string"}
-            )
-        data["output_dir"] = output_dir
     next_topic = req_arg(body, "next_topic")
     if next_topic is not None:
         if not isinstance(next_topic, str) or not next_topic:

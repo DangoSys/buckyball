@@ -14,6 +14,8 @@ typedef struct {
   int unsigned num_dst;
 } im2col_cmd_dpi_t;
 
+import "DPI-C" function longint unsigned im2col_bemu_cycles(
+    input longint unsigned iter, input longint unsigned rs2, input longint unsigned input_groups);
 import "DPI-C" function int im2col_case_load(input int unsigned index);
 import "DPI-C" function void im2col_case_cmd(output im2col_cmd_dpi_t cmd);
 import "DPI-C" function int unsigned im2col_case_src_group(input int unsigned i);

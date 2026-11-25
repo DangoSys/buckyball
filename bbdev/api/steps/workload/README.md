@@ -7,14 +7,15 @@ Workload build workflow in Buckyball framework, used to build test workloads and
 ### `clean`
 **Endpoint**: `POST /workload/clean`
 
-**Function**: Clean workload output directory for one design.
+**Function**: Clean the workloads of one selection: deletes `output/sims/<selection>/workloads` and `output/sims/<selection>/workloads-build`.
 
 **Parameters**:
-- **`design`** - Required design name.
+- **`config`** - Required. Config TOML path relative to `examples/designs`; the design is its first path segment.
+- **`device`** / **`hart`** - Exactly one is required; selects the component of the config.
 
 **Examples**:
 ```bash
-bbdev workload --clean "--design toy"
+bbdev workload --clean "--device toy"
 ```
 
 ### `build`
@@ -25,27 +26,27 @@ then the C API `bb-tests/workloads/lib` (bbsw, its own CMake build in
 `output/sims/<selection>/bbsw`), then the workloads with both.
 
 **Parameters**:
-- **`design`** - Required design name. Selects design-specific workloads.
-- **`stable`** - Optional boolean flag. If set, build with stable LLVM Buckyball extensions.
+- **`config`** - Required. Config TOML path relative to `examples/designs`; the design is its first path segment.
+- **`device`** / **`hart`** - Exactly one is required; selects the component of the config.
 - **`ctest`** - Build CTest workloads only.
 - **`mlirtest`** - Build MLIRTest workloads only.
 - **`soctest`** - Build SoC test workloads only.
 
-For design workloads under paths like `*/designs/<design>`, only the directory selected by `design` is synced to `bb-tests/output/<design>/workloads`.
+`ctest`, `mlirtest` and `soctest` are mutually exclusive. Products are copied to `output/sims/<selection>/workloads`.
 
 **Examples**:
 ```bash
 # Build all workloads
-bbdev workload --build "--design toy"
+bbdev workload --build "--device toy"
 
 # Build only CTest workloads
-bbdev workload --build "--design pebble --ctest"
+bbdev workload --build "--device pebble --ctest"
 
 # Build only MLIRTest workloads
-bbdev workload --build "--design pebble --mlirtest"
+bbdev workload --build "--device pebble --mlirtest"
 
 # Build only SoC test workloads
-bbdev workload --build "--design goban --soctest"
+bbdev workload --build "--device goban --soctest"
 ```
 
 **Response**:
@@ -62,6 +63,7 @@ bbdev workload --build "--design goban --soctest"
 
 ## Notes
 
-- Workload build directory is `bb-tests/workloads/build/<design>`
+- `output/sims/<selection>` is `examples/designs/<design>/output/sims/<level>/<name>/<Config>`
+- Workload build directory is `output/sims/<selection>/workloads-build`
 - Workload source code is distributed under `bb-tests/workloads/src` and `examples/*/*/workloads`
-- Workload binaries are emitted under `bb-tests/output/<design>/workloads/src`
+- Workload binaries are emitted under `output/sims/<selection>/workloads`

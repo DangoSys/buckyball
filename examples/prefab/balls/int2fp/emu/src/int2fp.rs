@@ -1,6 +1,6 @@
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
-use bebop_bemu::thread::banks::bank_lines;
+use bebop_bemu::ball::blink::bank_lines;
 
 pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     assert!(
@@ -14,17 +14,11 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if input_bank == scale_bank || input_bank == output_bank || scale_bank == output_bank {
         panic!("int32_to_fp32: banks must be distinct");
     }
-    if !ctx.config(input_bank).allocated
-        || !ctx.config(scale_bank).allocated
-        || !ctx.config(output_bank).allocated
-    {
+    if !ctx.config(input_bank).allocated || !ctx.config(scale_bank).allocated || !ctx.config(output_bank).allocated {
         panic!("int32_to_fp32: bank not allocated");
     }
     let groups = ctx.config(input_bank).cols;
-    if groups == 0
-        || ctx.config(scale_bank).cols != groups
-        || ctx.config(output_bank).cols != groups
-    {
+    if groups == 0 || ctx.config(scale_bank).cols != groups || ctx.config(output_bank).cols != groups {
         panic!("int32_to_fp32: operands must have the same channel groups");
     }
     if iter == 0 || iter % 4 != 0 || iter > bank_lines() {
@@ -44,12 +38,9 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             for lane in 0..4 {
                 let offset = row * 16 + lane * 4;
                 let scale_offset = (row % 4) * 16 + lane * 4;
-                let value =
-                    i32::from_le_bytes(ctx.banks[input][offset..offset + 4].try_into().unwrap());
+                let value = i32::from_le_bytes(ctx.banks[input][offset..offset + 4].try_into().unwrap());
                 let factor = f32::from_bits(u32::from_le_bytes(
-                    ctx.banks[scale][scale_offset..scale_offset + 4]
-                        .try_into()
-                        .unwrap(),
+                    ctx.banks[scale][scale_offset..scale_offset + 4].try_into().unwrap(),
                 ));
                 if !factor.is_finite() || factor <= 0.0 {
                     panic!("int32_to_fp32: scales must be finite and positive");
@@ -63,19 +54,9 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     0
 }
 
-pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+pub(crate) fn latency(xs1: u64, ctx: &ExecContext) -> u64 {
     let rows = rs1_iter(xs1);
     let input = rs1_b0(xs1);
     let groups = ctx.config(input).cols;
-    let mut zeros = 0;
-    for group in 0..groups {
-        let bank = pbank_group(ctx, input, group);
-        for value in ctx.banks[bank][..rows as usize * 16].chunks_exact(4) {
-            let value = i32::from_le_bytes(value.try_into().unwrap());
-            zeros += u64::from(value == 0 || (xs2 & 1 != 0 && value < 0));
-        }
-    }
-    // Two parallel reads, conversion, four serial multipliers, and a write.
-    // Fp32Mul bypasses its 24-step multiplier for zero inputs.
-    8 + rows * groups * (10 + 4 * 31) - zeros * 29
+    super::latency::cycles(rows, groups)
 }

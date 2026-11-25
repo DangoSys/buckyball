@@ -14,9 +14,6 @@
 //     byte cols * k + c * k/32.
 //   mxfp8_window: mxfp8 on columns start_k .. start_k + k of an A of
 //     full_k columns; full_k and start_k are multiples of 32.
-//   fma32: k is a multiple of four. A holds rows x k FP32 row-major, B column c
-//     the k FP32 from byte 4 * c * k; every product is fused into the sum.
-//   f32: fma32 with the product rounded before the sum.
 // A, B and C are distinct banks of one 128-bit wide bank each.
 //
 //===----------------------------------------------------------------------===//
@@ -74,44 +71,6 @@ def MatmulMxfp8WindowOp : MxmmBall_Op<"matmul_mxfp8_window",
                        I64Attr:$cols, I64Attr:$k, I64Attr:$full_k,
                        I64Attr:$start_k, I64Attr:$base, UnitAttr:$first,
                        UnitAttr:$last);
-  let assemblyFormat = "prop-dict attr-dict";
-}
-
-def BankMatmulFma32Op : MxmmBall_Op<"bank_matmul_fma32",
-    [DeclareOpInterfaceMethods<BankSSALowering>]> {
-  let summary = "matmul_fma32 on virtual banks";
-  let arguments = (ins I64:$a, I64:$b, I64:$c, I64Attr:$rows, I64Attr:$cols,
-                       I64Attr:$k, I64Attr:$base, UnitAttr:$first,
-                       UnitAttr:$last);
-  let results = (outs I64:$cOut);
-  let assemblyFormat = "$a `,` $b `->` $c prop-dict attr-dict";
-}
-
-def MatmulFma32Op : MxmmBall_Op<"matmul_fma32",
-    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
-  let summary = "matmul_fma32 on physical banks";
-  let arguments = (ins I64Attr:$a, I64Attr:$b, I64Attr:$c, I64Attr:$rows,
-                       I64Attr:$cols, I64Attr:$k, I64Attr:$base,
-                       UnitAttr:$first, UnitAttr:$last);
-  let assemblyFormat = "prop-dict attr-dict";
-}
-
-def BankMatmulF32Op : MxmmBall_Op<"bank_matmul_f32",
-    [DeclareOpInterfaceMethods<BankSSALowering>]> {
-  let summary = "matmul_f32 on virtual banks";
-  let arguments = (ins I64:$a, I64:$b, I64:$c, I64Attr:$rows, I64Attr:$cols,
-                       I64Attr:$k, I64Attr:$base, UnitAttr:$first,
-                       UnitAttr:$last);
-  let results = (outs I64:$cOut);
-  let assemblyFormat = "$a `,` $b `->` $c prop-dict attr-dict";
-}
-
-def MatmulF32Op : MxmmBall_Op<"matmul_f32",
-    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
-  let summary = "matmul_f32 on physical banks";
-  let arguments = (ins I64Attr:$a, I64Attr:$b, I64Attr:$c, I64Attr:$rows,
-                       I64Attr:$cols, I64Attr:$k, I64Attr:$base,
-                       UnitAttr:$first, UnitAttr:$last);
   let assemblyFormat = "prop-dict attr-dict";
 }
 

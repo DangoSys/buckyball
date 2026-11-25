@@ -54,21 +54,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    vsrc_dir = rtl_dir(
-        bbdir, design, "p2e", input_data.get("vsrc_dir"), selection=input_data["target"]
-    )
+    vsrc_dir = rtl_dir(bbdir, design, "p2e", selection=input_data["target"])
     normalize_p2e_timescale(vsrc_dir, ctx.logger)
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     diff = bool(input_data.get("diff", False))
     build_root = (
         Path(design_output_root(bbdir, design, selection=input_data["target"])) / "p2e"
     ).resolve()
-    build_dir = input_data.get("output_dir") or str(
-        build_root / f"{timestamp}{'-diff' if diff else ''}"
-    )
+    build_dir = str(build_root / f"{timestamp}{'-diff' if diff else ''}")
     build_path = Path(build_dir).resolve()
-    if build_root not in build_path.parents:
-        raise ValueError(f"P2E output_dir must be under {build_root}: {build_path}")
     if build_path.exists():
         shutil.rmtree(build_path)
     build_path.mkdir(parents=True)

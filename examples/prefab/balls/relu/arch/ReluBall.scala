@@ -1,31 +1,30 @@
 package examples.balls.relu
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.relu.{Params => ParametersProto}
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 
 @instantiable
 class ReluBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
-  val unit: Instance[Relu] = Instantiate(new Relu(fp, mp, bp, ball))
+  val unit: Instance[Relu] = Instantiate(new Relu(link, ball))
   unit.io.cmdReq <> blink.cmdReq
   unit.io.cmdResp <> blink.cmdResp
   unit.io.bankRead(0) <> blink.bankRead(0)
@@ -36,11 +35,10 @@ class ReluBall(
 object ReluBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new ReluBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new ReluBall(link, route)).blink, None)
 
 }

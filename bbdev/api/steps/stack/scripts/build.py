@@ -33,8 +33,8 @@ def run(
             task_scope=task_scope,
         )
     if result.returncode != 0:
-        detail = result.stderr.strip() if logger is not None else ""
-        if not detail and logger is not None:
+        detail = ""
+        if logger is not None:
             lines = result.stdout.splitlines()
             failed = [i for i, line in enumerate(lines) if "FAILED:" in line]
             if failed:
@@ -42,6 +42,8 @@ def run(
                 detail = "\n".join(lines[start:])
             else:
                 detail = "\n".join(lines[-20:])
+            if result.stderr.strip():
+                detail += "\n" + result.stderr.strip()
         if detail:
             raise RuntimeError(
                 f"command failed ({result.returncode}): {' '.join(cmd)}\n{detail}"
@@ -190,20 +192,16 @@ def build_design(
     design.cmake, the input of every software build of that simulation.
 
     The stack/CMakeLists.txt of its entry is the top of that build: it lists the
-    thread, core and device stacks the entry needs and builds each of them.
+    thread, hart and device stacks the entry needs and builds each of them.
     """
     root = Path(repo).resolve()
     sys.path.insert(0, str(root))
     from stack.scripts import design as design_config
 
-    design_pb = (
-        root
-        / "examples/designs"
-        / design
-        / "output/sims"
-        / selection
-        / "generated/design.pb"
-    )
+    sys.path.insert(0, str(root / "bbdev/api"))
+    from utils.path import design_pb_path
+
+    design_pb = design_pb_path(root, design, selection=selection)
     config = design_config.load(design_pb)
     build = design_config.stack_build(config)
     design_config.generate(design_pb, build / "generated")

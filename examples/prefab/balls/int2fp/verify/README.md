@@ -42,13 +42,11 @@ are 100%.
 ## BID (required)
 
 `+BID=<n>` is mandatory. Missing it fatals at test start. No default bid.
-
-| Config | Plusarg |
-|--------|---------|
-| `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=4` |
+The Ball runs alone from `configs/default.toml`, where its id is 0; bbdev
+passes `+BID=0`.
 
 ```console
-./simv +UVM_TESTNAME=int2fp_ball_test +BID=4
+./simv +UVM_TESTNAME=int2fp_ball_test +BID=0
 ```
 
 ## Build / Run
@@ -63,15 +61,15 @@ cargo build --manifest-path casegen/Cargo.toml
 Human:
 
 ```console
-bbdev uvm --run '--design pebble'
-bbdev uvm --run '--design pebble --ball int2fp'
+bbdev uvm --run '--ball int2fp'
 ```
 
 Agent (MCP):
 
 ```text
-bbdev_uvm_run(design="pebble", ball="int2fp")
+bbdev_uvm_run(ball="int2fp")
 ```
 
 bbdev injects `INT32_TO_FP32_FUNCT7`, `BB_IN_BW`, `BB_OUT_BW`, `+BID`, and
-`+UVM_TESTNAME=int2fp_ball_test` from pebble design.pb.
+`+UVM_TESTNAME=int2fp_ball_test` from the design.pb of the Ball alone
+(`configs/default.toml`).

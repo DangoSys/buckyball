@@ -9,20 +9,20 @@ from common import submit, err, fmt, need, opt
 def register(mcp):
     @mcp.tool()
     def bbdev_bebop_verilator_build(
-        design: str,
         jobs: int = 16,
         diff: bool = False,
+        config: str | None = None,
         device: str | None = None,
-        core: str | None = None,
+        hart: str | None = None,
     ) -> str:
         """Build bebop verilator binary. POST /bebop/verilator/build."""
-        if e := need("design", design):
-            return err(e)
-        request = {"design": design, "jobs": jobs, "diff": diff}
+        request = {"jobs": jobs, "diff": diff}
+        if config is not None:
+            request["config"] = config
         if device is not None:
             request["device"] = device
-        if core is not None:
-            request["core"] = core
+        if hart is not None:
+            request["hart"] = hart
         return fmt(
             submit(
                 "/bebop/verilator/build",

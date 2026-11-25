@@ -1,7 +1,7 @@
 from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_design
+from utils.event_common import require_design, require_product
 
 config = {
     "name": "vcs-sim-api",
@@ -15,19 +15,14 @@ config = {
 async def handler(req: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = req.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    binary = body.get("binary")
     try:
         design = require_design(body)
+        require_product(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-    if not isinstance(binary, str) or not binary:
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --binary must be specified"},
-        )
     await ctx.enqueue(
         {
             "topic": "vcs.sim",

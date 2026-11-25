@@ -1,0 +1,12 @@
+diffTest = false
+verilatorThreads = 17
+
+[memory]
+lineBytes = 64
+clockHz = 1000000000
+
+[targets.device]
+config = "examples.designs.magia.devices.magia.sims.device.DeviceConfig"
+
+[verification]
+registry = "../../sims/ip/uvm/registry.toml"

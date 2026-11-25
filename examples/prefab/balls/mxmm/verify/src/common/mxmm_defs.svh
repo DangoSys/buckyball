@@ -16,7 +16,7 @@ typedef struct {
 } mxmm_cmd_dpi_t;
 
 import "DPI-C" function int unsigned mxmm_num_cases();
-import "DPI-C" function int unsigned mxmm_case_load(input int unsigned index);
+import "DPI-C" function int unsigned mxmm_case_load(input int unsigned index, input int unsigned bank_entries);
 import "DPI-C" function void mxmm_case_cmd(input int unsigned step, output mxmm_cmd_dpi_t cmd);
 import "DPI-C" function int unsigned mxmm_case_preload_count(input int unsigned step);
 import "DPI-C" function int unsigned mxmm_case_preload_bank(input int unsigned step, input int unsigned i);
@@ -31,6 +31,8 @@ import "DPI-C" function int unsigned mxmm_case_write_addr(input int unsigned ste
 import "DPI-C" function int unsigned mxmm_case_write_mask(input int unsigned step, input int unsigned i);
 import "DPI-C" function longint unsigned mxmm_case_write_lo(input int unsigned step, input int unsigned i);
 import "DPI-C" function longint unsigned mxmm_case_write_hi(input int unsigned step, input int unsigned i);
+import "DPI-C" function longint unsigned mxmm_bemu_cycles(
+    input int unsigned window, input longint unsigned iter, input longint unsigned rs2);
 
 `ifndef MXMM_MXFP8_FUNCT7
 `error "MXMM_MXFP8_FUNCT7 must be provided by the selected ballISA"
@@ -38,14 +40,6 @@ import "DPI-C" function longint unsigned mxmm_case_write_hi(input int unsigned s
 `ifndef MXMM_MXFP8_WINDOW_FUNCT7
 `error "MXMM_MXFP8_WINDOW_FUNCT7 must be provided by the selected ballISA"
 `endif
-`ifndef MXMM_FMA32_FUNCT7
-`error "MXMM_FMA32_FUNCT7 must be provided by the selected ballISA"
-`endif
-`ifndef MXMM_F32_FUNCT7
-`error "MXMM_F32_FUNCT7 must be provided by the selected ballISA"
-`endif
-
-// Formats of the reference model, in the order of mxmm_case_cmd.format.
-localparam int MXMM_FUNCT7[4] = '{`MXMM_MXFP8_FUNCT7, `MXMM_MXFP8_WINDOW_FUNCT7, `MXMM_FMA32_FUNCT7,
-                                  `MXMM_F32_FUNCT7};
+// The two MXFP8 command layouts match mxmm_case_cmd.format.
+localparam int MXMM_FUNCT7[2] = '{`MXMM_MXFP8_FUNCT7, `MXMM_MXFP8_WINDOW_FUNCT7};
 localparam int MXMM_TIMEOUT_CYCLES = 100000;

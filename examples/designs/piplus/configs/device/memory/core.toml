@@ -1,5 +1,0 @@
-# Memory of every core; the device assigns the cache node IDs.
-uncached = "default"
-access = "access.toml"
-dcache = "dcache.toml"
-home = "home.toml"

@@ -13,8 +13,7 @@ Hardware simulation workflow based on Verilator in the Buckyball framework, prov
 
 - **`jobs`** - Number of parallel compilation tasks
   - Default value: `16`
-- **`binary`** [Required] - Test binary file path
-  - Default value: `""`
+- **`model`** with **`os`** (`baremetal` | `linux`), or **`test`** [one Required] - The workload: a model's `<design>-<model>-<os>`, or a test by its whole name
 - **`batch`** - Run without the interactive monitor
 - **`no-wave`** - Disable FST waveform generation
 - **`itrace`**, **`mtrace`**, **`pmctrace`**, **`ctrace`**, **`banktrace`** - Enable selected BDB traces
@@ -26,10 +25,10 @@ must be run with `bebop-verilator` instead.
 **Example**:
 ```bash
 # bbdev wrapper
-bbdev verilator --run "--design toy --jobs 16 --binary toy-toy-ctest-mvin_mvout_test-baremetal --batch"
+bbdev verilator --run "--device toy --jobs 16 --test toy-toy-ctest-mvin_mvout_test-baremetal --batch"
 
 # Raw command
-curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"design":"toy", "jobs":8, "binary":"toy-toy-ctest-mvin_mvout_test-baremetal", "batch":true}'
+curl -X POST http://localhost:5000/verilator/run -H "Content-Type: application/json" -d '{"config":"toy/devices/toy/configs/ToyDefaultConfig.toml", "device":"toy", "jobs":8, "test":"toy-toy-ctest-mvin_mvout_test-baremetal", "batch":true}'
 ```
 
 
@@ -83,19 +82,19 @@ curl -X POST http://localhost:5000/verilator/build -d '{"jobs": 16}'
 
 **Parameters**:
 
-- **`binary`** [Required] - Custom test binary file path
+- **`model`** with **`os`** (`baremetal` | `linux`), or **`test`** [one Required] - The workload: a model's `<design>-<model>-<os>`, or a test by its whole name
 - **`batch`** - Run without the interactive monitor
 - **`no-wave`** - Disable FST waveform generation
 - **`itrace`**, **`mtrace`**, **`pmctrace`**, **`ctrace`**, **`banktrace`** - Enable selected BDB traces
 
-The binary may be a workload filename or an existing absolute path. It must be
-a baremetal ELF; Linux workload ELFs require `bebop-verilator`.
+The name matches exactly one file under the config's workloads. It must be a
+baremetal ELF; Linux images require `bebop-verilator`.
 
 **Example**:
 ```bash
 curl -X POST http://localhost:5000/verilator/sim \
   -H "Content-Type: application/json" \
-  -d '{"binary": "/home/user/test_program.elf"}'
+  -d '{"config": "toy/devices/toy/configs/ToyDefaultConfig.toml", "device": "toy", "test": "toy-toy-ctest-mvin_mvout_test-baremetal"}'
 ```
 
 
@@ -159,7 +158,7 @@ steps/verilator/
 - **Type**: `event` step
 - **Subscribes**: `verilator.sim`
 - **Emits**: `verilator.complete`
-- **Function**: Run simulation, supports custom binary parameter
+- **Function**: Run simulation of the workload named by `model`/`os` or `test`
 
 #### 7. Completion Handling (`99_complete_event_step.py`)
 - **Type**: `event` step

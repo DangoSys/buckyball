@@ -4,28 +4,28 @@ use super::int8mul;
 
 const BALL_CLASS: &str = "examples.balls.int8mul.Int8MulBall";
 
-pub fn execute_known(
-    ball_class: &str,
-    funct: u32,
-    xs1: u64,
-    xs2: u64,
-    ctx: &mut ExecContext,
-) -> Option<u64> {
+pub fn execute_known(ball_class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &mut ExecContext) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
         Some("INT8MUL") => Some(int8mul::Int8Mul::exec(xs1, xs2, ctx)),
         Some(_) | None => None,
     }
 }
 
-pub fn cycles_after_issue(ball_class: &str, funct: u32, xs1: u64, xs2: u64, _ctx: &bebop_bemu::ExecContext) -> Option<u64> {
+pub fn cycles_after_issue(
+    ball_class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if ball_class != BALL_CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("INT8MUL") => Some(int8mul::Int8Mul::latency(xs1, xs2)),
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
+        Some("INT8MUL") => Some(int8mul::Int8Mul::latency(xs1, xs2, ctx)),
         Some(_) | None => None,
     }
 }

@@ -1,0 +1,13 @@
+# The solo hart alone: the one instance of the single-hart system of this
+# entry, hart 0 with its coherence node IDs.
+include = "../../configs/default.toml"
+hartId = 0
+nodeId = 1
+
+[memory.icache]
+include = "../../configs/memory/icache.toml"
+nodeId = 1
+
+[memory.dcache.cache]
+include = "../../configs/memory/cache.toml"
+nodeId = 2

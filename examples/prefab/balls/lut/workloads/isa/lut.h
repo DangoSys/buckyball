@@ -8,4 +8,15 @@
                                 BB_BANK2(output_bank) | BB_ITER(iter),         \
                             0, FUNCT7(lut, LUT))
 
+#define bb_lut_i32(input_bank, lut_bank, output_bank, iter)                    \
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(input_bank) | BB_BANK1(lut_bank) |        \
+                                BB_BANK2(output_bank) | BB_ITER(iter),         \
+                            1, FUNCT7(lut, LUT))
+
+#define bb_lut_softmax_i8(input_bank, lut_bank, output_bank, iter, multiplier) \
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(input_bank) | BB_BANK1(lut_bank) |        \
+                                BB_BANK2(output_bank) | BB_ITER(iter),         \
+                            2 | ((uint64_t)(multiplier) << 32),                \
+                            FUNCT7(lut, LUT))
+
 #endif // _BB_LUT_H_

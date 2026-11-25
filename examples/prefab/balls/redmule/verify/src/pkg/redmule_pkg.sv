@@ -13,68 +13,19 @@ package redmule_uvm_pkg;
     half
   );
 
-  class redmule_mem_model extends bb_blink_mem_model #(`BB_IN_BW, `BB_OUT_BW);
-    `uvm_component_utils(redmule_mem_model)
-    int read_stalls[2], write_stalls, response_stalls;
-    bit inject_stalls = 1;
+  import "DPI-C" function longint unsigned redmule_bemu_cycles(
+    input longint unsigned iter,
+    input longint unsigned rs2
+  );
+
+  // REDMULE_F16's cycles: its BEMU cycle model (emu/src/latency.rs).
+  class redmule_cycles extends bb_blink_cycles #(`BB_IN_BW, `BB_OUT_BW);
+    `uvm_component_utils(redmule_cycles)
     function new(string name, uvm_component parent);
       super.new(name, parent);
     endfunction
-    // Both performance ports model one-cycle memory; only functional cases inject stalls.
-    task run_phase(uvm_phase phase);
-      forever begin
-        @(posedge vif.clock);
-        if (vif.reset) begin
-          for (int port = 0; port < 2; port++) begin
-            vif.bank_read_req_ready[port]  <= 1;
-            vif.bank_read_resp_valid[port] <= 0;
-          end
-          vif.bank_write_req_ready[0] <= 1;
-          vif.bank_write_resp_valid[0] <= 0;
-          vif.bank_write_resp_ok[0] <= 1;
-          vif.cmd_resp_ready <= 1;
-        end else begin
-          for (int port = 0; port < 2; port++) begin
-            if (vif.bank_read_resp_valid[port] && vif.bank_read_resp_ready[port])
-              vif.bank_read_resp_valid[port] <= 0;
-            if (vif.bank_read_req_valid[port] && vif.bank_read_req_ready[port]) begin
-              if (!mem.exists(
-                      vif.bank_read_bank_id[port]
-                  ) || !mem[vif.bank_read_bank_id[port]].exists(
-                      vif.bank_read_group_id[port]
-                  ) || !mem[vif.bank_read_bank_id[port]][vif.bank_read_group_id[port]].exists(
-                      vif.bank_read_req_addr[port]
-                  ))
-                `uvm_fatal("MEM", "bank read was not preloaded")
-              vif.bank_read_resp_data[port] <= mem[vif.bank_read_bank_id[port]][vif.bank_read_group_id[port]][vif.bank_read_req_addr[port]];
-              vif.bank_read_resp_valid[port] <= 1;
-            end
-            vif.bank_read_req_ready[port] <= (!vif.bank_read_resp_valid[port] || vif.bank_read_resp_ready[port]) &&
-              (!inject_stalls || $urandom_range(
-                0, 3
-            ) != 0);
-            if (vif.bank_read_req_valid[port] && !vif.bank_read_req_ready[port])
-              read_stalls[port]++;
-          end
-          if (vif.bank_write_resp_valid[0] && vif.bank_write_resp_ready[0])
-            vif.bank_write_resp_valid[0] <= 0;
-          if (vif.bank_write_req_valid[0] && vif.bank_write_req_ready[0])
-            vif.bank_write_resp_valid[0] <= 1;
-          vif.bank_write_req_ready[0] <= (!vif.bank_write_resp_valid[0] || vif.bank_write_resp_ready[0]) &&
-            (!inject_stalls || $urandom_range(
-              0, 3
-          ) != 0);
-          vif.cmd_resp_ready <= (!inject_stalls || $urandom_range(0, 3) != 0);
-          if (vif.bank_write_req_valid[0] && !vif.bank_write_req_ready[0]) write_stalls++;
-          if (vif.cmd_resp_valid && !vif.cmd_resp_ready) response_stalls++;
-        end
-      end
-    endtask
-    function void check_phase(uvm_phase phase);
-      verification_pkg::evidence::checks++;
-      super.check_phase(phase);
-      if (!read_stalls[0] || !read_stalls[1] || !write_stalls || !response_stalls)
-        `uvm_fatal("STALL", "missing read/write/completion backpressure coverage")
+    function longint unsigned expected(bb_blink_cmd_item cmd);
+      return redmule_bemu_cycles(cmd.iter, cmd.rs2);
     endfunction
   endclass
 
@@ -232,8 +183,6 @@ package redmule_uvm_pkg;
       super.new(name, parent);
     endfunction
     function void build_phase(uvm_phase phase);
-      bb_blink_mem_model#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(
-          redmule_mem_model::get_type());
       super.build_phase(phase);
       scb = redmule_scoreboard::type_id::create("scb", this);
     endfunction
@@ -262,6 +211,8 @@ package redmule_uvm_pkg;
         `uvm_fatal("NOVIF", "bb_blink_if not found")
       if (!uvm_config_db#(virtual redmule_reference_if)::get(this, "", "reference", reference))
         `uvm_fatal("NOVIF", "native reference interface not found")
+      bb_blink_cycles#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(
+          redmule_cycles::get_type());
       env = redmule_env::type_id::create("env", this);
     endfunction
     task run_phase(uvm_phase phase);
@@ -270,15 +221,12 @@ package redmule_uvm_pkg;
       longint unsigned shape;
       longint native_cycles, ball_started, ball_cycles, total_native = 0, total_ball = 0;
       redmule_seq seq;
-      redmule_mem_model memory_agent;
-      if (!$cast(memory_agent, env.mem_model)) `uvm_fatal("MEM", "wrong memory model type")
       phase.raise_objection(this);
       for (int index = 0; index < 67; index++) begin
         vif.reset = 1;
         repeat (5) @(posedge vif.clock);
         vif.reset = 0;
         repeat (2) @(posedge vif.clock);
-        memory_agent.inject_stalls = index < 64;
         redmule_case_load(index, `REDMULE_LANES);
         shape = redmule_case_shape();
         rows = shape[15:0];
@@ -333,7 +281,7 @@ package redmule_uvm_pkg;
               ), redmule_case_word(
                   2, block_index * rows + row, 0
               )})
-            `uvm_fatal("REFERENCE", "native engine disagrees with golden")
+            `uvm_fatal("REFERENCE", "native kernel disagrees with golden")
           ball_started = reference.get_ticks();
           seq.start(env.cmd_agent.seqr);
           cycles = 0;
@@ -360,4 +308,7 @@ package redmule_uvm_pkg;
       phase.drop_objection(this);
     endtask
   endclass
+
+  `include "tests/redmule_throughput_test.svh"
+  `include "tests/redmule_latency_test.svh"
 endpackage

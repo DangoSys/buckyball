@@ -1,0 +1,375 @@
+package framework.hart.memory.access.preflight
+
+import framework.generic.contract.memory.access.preflight.{Params => ModuleParam}
+
+import chisel3._
+import chisel3.util._
+import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
+import framework.hart.memory.access.mmu.{PteRequest, PteResponse, Walker}
+
+/**
+ * Preparation only. A consumer retains the entire successful mapping until DMA retires. Every
+ * page is translated before any data moves, so a page fault stalls the command precisely at the
+ * faulting segment until its owner retries the translation (resolve true) or fails the command
+ * with a page fault (false).
+ */
+@instantiable
+class Preflight(b: ModuleParam) extends Module {
+  val p = b
+
+  val contextBits = log2Ceil(p.contexts)
+
+  @public
+  val io = IO(new Bundle {
+    val command       = Flipped(Decoupled(new Command(b)))
+    val prepared      = Decoupled(new PreparedSegment(b))
+    val authorization = Decoupled(new Authorization(b))
+    val permission    = Flipped(Decoupled(new Permission(b)))
+
+    val pteRequest = Decoupled(new PteRequest(b.walker))
+
+    val pteResponse = Flipped(Decoupled(new PteResponse))
+
+    val fault   = Valid(new PageFault(b))
+    val resolve = Flipped(Valid(Bool()))
+  })
+
+  val free :: queued :: working :: ready :: Nil = Enum(4)
+  val phase                                     = RegInit(VecInit(Seq.fill(p.contexts)(free)))
+  val commands                                  = Reg(Vec(p.contexts, new Command(b)))
+  val counts                                    = RegInit(VecInit(Seq.fill(p.contexts)(0.U(4.W))))
+  val errors                                    = Reg(Vec(p.contexts, UInt(3.W)))
+  val faultVA                                   = Reg(Vec(p.contexts, UInt(64.W)))
+  val vas                                       = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(64.W))))
+  val pas                                       = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(p.bus.addressBits.W))))
+  val sizes                                     = Reg(Vec(p.contexts, Vec(p.maxRanges, UInt(13.W))))
+  val available                                 = VecInit(phase.map(_ === free))
+  val duplicate                                 =
+    (0 until p.contexts).map(i => phase(i) =/= free && commands(i).id === io.command.bits.id).reduce(_ || _)
+  io.command.ready := available.asUInt.orR && !duplicate && !reset.asBool
+  when(io.command.fire) {
+    val slot = PriorityEncoder(available.asUInt)
+    commands(slot) := io.command.bits; counts(slot) := 0.U; errors(slot) := Error.Ok.U; phase(slot) := queued
+  }
+
+  def select(candidates: Vec[Bool], cursor: UInt): UInt = {
+    MuxCase(
+      0.U(contextBits.W),
+      (0 until p.contexts).map { off =>
+        val sum   = cursor +& off.U
+        val index = Mux(sum >= p.contexts.U, sum - p.contexts.U, sum)(contextBits - 1, 0)
+        candidates(index) -> index
+      }
+    )
+  }
+
+  val (idle :: checkShape :: multiply :: measure :: span :: sendSpan :: segment :: walk :: waitWalk :: authorize ::
+    waitPermission :: save :: retire :: stalled :: Nil) = Enum(14)
+  val state                                             = RegInit(idle)
+  val worker                                            = Reg(UInt(contextBits.W))
+  val cursor                                            = RegInit(0.U(contextBits.W))
+  val row                                               = Reg(UInt(32.W)); val column      = Reg(UInt(32.W))
+  val dense                                             = Reg(Bool()); val wholeBytes      = Reg(UInt(32.W))
+  val spanAddress                                       = Reg(UInt(64.W)); val spanBytes   = Reg(UInt(32.W))
+  val spanLast                                          = Reg(Bool())
+  val currentVA                                         = Reg(UInt(64.W)); val currentPA   = Reg(UInt(p.bus.addressBits.W))
+  val currentBytes                                      = Reg(UInt(13.W)); val segmentLast = Reg(Bool())
+  val unionAuthorization                                = RegInit(false.B)
+  // The worker's command, copied when it is selected so shape arithmetic starts at registers.
+  val cmd                                               = Reg(new Command(b))
+  // VA of the current row and of the current span: baseVA + row * rowStride (+ column * columnStride).
+  val rowStart                                          = Reg(UInt(67.W)); val spanStart   = Reg(UInt(67.W))
+  // Shape products, built eight multiplier bits per cycle: columns * spanBytes, rows * rowStride,
+  // columns * columnStride and rows * (columns * spanBytes)(31, 0).
+  val products                                          = Reg(Vec(4, UInt(64.W)))
+  val product                                           = Reg(UInt(2.W)); val digit        = Reg(UInt(2.W))
+  val outcome                                           = Reg(UInt(3.W)); val outcomeVA    = Reg(UInt(64.W))
+  val previous                                          = (counts(worker) - 1.U)(2, 0)
+  val previousVA                                        = vas(worker)(previous)
+  val previousPA                                        = pas(worker)(previous)
+  val previousEnd                                       = previousVA +& sizes(worker)(previous)
+  val currentEnd                                        = currentVA +& currentBytes
+  val cancelSegmenter                                   = WireDefault(false.B)
+
+  val splitter: Instance[Segmenter] = Instantiate(new Segmenter)
+
+  splitter.io.cancel := cancelSegmenter
+
+  val walker: Instance[Walker] = Instantiate(new Walker(p.walker))
+
+  // The outcome is recorded one cycle after it is decided.
+  def finish(code: UInt, address: UInt): Unit = {
+    outcome := code; outcomeVA := address; state := retire
+  }
+
+  when(state === retire) {
+    errors(worker) := outcome; faultVA(worker) := outcomeVA; phase(worker) := ready; state := idle
+    when(outcome =/= Error.Ok.U) { counts(worker) := 0.U; cancelSegmenter := true.B }
+  }
+
+  val waiting        = VecInit(phase.map(_ === queued))
+  when(state === idle && waiting.asUInt.orR) {
+    val slot = select(waiting, cursor)
+    worker := slot; cursor := slot + 1.U; phase(slot) := working; cmd := commands(slot); state := checkShape
+  }
+  when(state === checkShape) {
+    when(cmd.rows === 0.U || cmd.columns === 0.U || cmd.spanBytes === 0.U ||
+      (cmd.rows > 1.U && cmd.rowStride === 0.U) || (cmd.columns > 1.U && cmd.columnStride === 0.U)) {
+      finish(Error.Shape.U, cmd.baseVA)
+    }.elsewhen(cmd.mode =/= 0.U && cmd.mode =/= 8.U || cmd.privilege === 2.U) {
+      finish(Error.Context.U, cmd.baseVA)
+    }.otherwise {
+      product := 0.U; digit := 0.U; state := multiply
+    }
+  }
+  // Least significant multiplier byte first. The upper half of products(k) carries the running
+  // sum, which stays below 2^32; each step shifts one finished product byte into the lower half.
+  val multiplicand   = VecInit(cmd.columns, cmd.rows, cmd.columns, cmd.rows)(product)
+  val multiplier     = VecInit(cmd.spanBytes, cmd.rowStride, cmd.columnStride, products(0)(31, 0))(product)
+  val multiplierByte = VecInit((0 until 4).map(i => multiplier(8 * i + 7, 8 * i)))(digit)
+  when(state === multiply) {
+    val step = Mux(digit === 0.U, 0.U, products(product)(63, 32)) +& multiplicand * multiplierByte
+    products(product) := Cat(step(39, 0), products(product)(31, 8))
+    digit             := digit + 1.U
+    when(digit === 3.U) {
+      product                     := product + 1.U
+      when(product === 3.U)(state := measure)
+    }
+  }
+  when(state === measure) {
+    val rowExtent = products(0)
+    val total     = products(3)
+    val isDense   = (cmd.columns === 1.U || cmd.columnStride === cmd.spanBytes) &&
+      (cmd.rows === 1.U || cmd.rowStride === rowExtent)
+    // baseVA + (rows - 1) * rowStride + (columns - 1) * columnStride + spanBytes - 1
+    val end       = cmd.baseVA.pad(67) + products(1).pad(67) - cmd.rowStride.pad(67) + products(2).pad(67) -
+      cmd.columnStride.pad(67) + cmd.spanBytes.pad(67) - 1.U
+    // rows >= 1, so rows * rowExtent exceeds 32 bits whenever rowExtent does.
+    when(end(66, 64).orR || (isDense && (rowExtent(63, 32).orR || total(63, 32).orR))) {
+      finish(Error.Overflow.U, cmd.baseVA)
+    }.otherwise {
+      dense    := isDense; wholeBytes   := total(31, 0); row := 0.U; column := 0.U
+      rowStart := cmd.baseVA; spanStart := cmd.baseVA; state := span
+    }
+  }
+  when(state === span) {
+    val bytes     = Mux(dense, wholeBytes, cmd.spanBytes)
+    val beatShift = log2Ceil(p.beatBytes)
+    // Reads widen to whole beats: (start % beat + bytes + beat - 1) rounded down to a beat.
+    val widened   = (spanStart(beatShift - 1, 0).pad(34) + bytes.pad(34) + (p.beatBytes - 1).U) >> beatShift << beatShift
+    val length    = Mux(cmd.write, bytes.pad(34), widened)
+    val first     = Mux(cmd.write, spanStart(63, 0), spanStart(63, beatShift) << beatShift)
+    when(length(33, 32).orR)(finish(Error.Overflow.U, spanStart(63, 0)))
+      .otherwise {
+        spanAddress := first; spanBytes := length(31, 0)
+        spanLast    := dense || (row === cmd.rows - 1.U && column === cmd.columns - 1.U)
+        state       := sendSpan
+      }
+  }
+  splitter.io.descriptor.valid := state === sendSpan
+  splitter.io.descriptor.bits.addr        := spanAddress
+  splitter.io.descriptor.bits.bytes       := spanBytes
+  splitter.io.descriptor.bits.rowBytes    := spanBytes
+  splitter.io.descriptor.bits.rowStride   := spanBytes
+  when(splitter.io.descriptor.fire)(state := segment)
+  splitter.io.segment.ready               := state === segment
+  when(splitter.io.segment.fire) {
+    currentVA   := splitter.io.segment.bits.addr; currentBytes := splitter.io.segment.bits.bytes(12, 0)
+    segmentLast := splitter.io.segment.bits.last; state        := walk
+  }
+  walker.io.flush                         := false.B
+  walker.io.lookup.config                 := 0.U.asTypeOf(walker.io.lookup.config)
+  walker.io.lookup.req                    := 0.U.asTypeOf(walker.io.lookup.req)
+  walker.io.config.mode                   := cmd.mode; walker.io.config.rootPpn    := cmd.rootPpn
+  walker.io.req.valid                     := state === walk
+  walker.io.req.bits.vaddr                := currentVA; walker.io.req.bits.write   := cmd.write; walker.io.req.bits.execute := false.B
+  walker.io.req.bits.privilege            := cmd.privilege; walker.io.req.bits.sum := cmd.sum; walker.io.req.bits.mxr       := cmd.mxr
+  when(walker.io.req.fire)(state          := waitWalk)
+  walker.io.resp.ready                    := state === waitWalk
+  when(walker.io.resp.fire) {
+    val end = walker.io.resp.bits.paddr.pad(p.bus.addressBits + 2) + currentBytes.pad(p.bus.addressBits + 2) - 1.U
+    when(walker.io.resp.bits.pageFault)(state := stalled)
+      .elsewhen(walker.io.resp.bits.accessFault || end(p.bus.addressBits + 1, p.bus.addressBits).orR) {
+        finish(Error.AccessFault.U, currentVA)
+      }.otherwise {
+        currentPA          := walker.io.resp.bits.paddr
+        unionAuthorization := counts(worker) =/= 0.U && previousVA(63, 12) === currentVA(63, 12) &&
+          currentVA > previousEnd && previousPA +& (currentVA - previousVA) === walker.io.resp.bits.paddr
+        state              := authorize
+      }
+  }
+  io.fault.valid                          := state === stalled
+  io.fault.bits.id                        := cmd.id
+  io.fault.bits.va                        := currentVA
+  io.fault.bits.write                     := cmd.write
+  when(io.resolve.valid) {
+    assert(state === stalled, "Preflight page fault resolved without a stalled command")
+    when(io.resolve.bits)(state := walk).otherwise(finish(Error.PageFault.U, currentVA))
+  }
+  val pteIdle :: pteAsk :: pteWait :: pteIssue :: pteReturn :: pteReject :: pteRejectReturn :: Nil = Enum(7)
+  val pteState = RegInit(pteIdle)
+  when(pteState === pteIdle && walker.io.access.valid)(pteState := pteAsk)
+  io.authorization.valid                                        := (pteState === pteAsk || state === authorize) && !reset.asBool
+  io.authorization.bits.id                                      := cmd.id
+  io.authorization.bits.isPte                                   := pteState === pteAsk
+  io.authorization.bits.pa                                      := Mux(
+    pteState === pteAsk,
+    walker.io.access.bits.addr,
+    Mux(unionAuthorization, previousPA, currentPA)
+  )
+  io.authorization.bits.bytes                                   := Mux(
+    pteState === pteAsk,
+    8.U,
+    Mux(unionAuthorization, currentEnd - previousVA, currentBytes)
+  )
+  io.authorization.bits.write                                   := pteState =/= pteAsk && cmd.write
+  io.authorization.bits.privilege                               := Mux(pteState === pteAsk, 1.U, cmd.privilege)
+  when(io.authorization.fire) {
+    when(pteState === pteAsk)(pteState := pteWait).otherwise(state := waitPermission)
+  }
+  io.permission.ready                                           := (pteState === pteWait || state === waitPermission) && !reset.asBool
+  when(io.permission.fire) {
+    assert(io.permission.bits.id === cmd.id, "Preflight permission response tag mismatch")
+    when(pteState === pteWait)(pteState := Mux(io.permission.bits.allow, pteIssue, pteReject))
+      .otherwise {
+        when(io.permission.bits.allow)(state := save)
+          .elsewhen(unionAuthorization) {
+            unionAuthorization := false.B
+            state              := authorize
+          }.otherwise(finish(Error.AccessFault.U, currentVA))
+      }
+  }
+  io.pteRequest.valid                                           := pteState === pteIssue && walker.io.access.valid && !reset.asBool
+  io.pteRequest.bits                                            := walker.io.access.bits
+  walker.io.access.ready                                        := pteState === pteReject || pteState === pteIssue && io.pteRequest.ready
+  when(walker.io.access.fire)(pteState                          := Mux(pteState === pteReject, pteRejectReturn, pteReturn))
+  walker.io.result.valid                                        := pteState === pteRejectReturn || pteState === pteReturn && io.pteResponse.valid
+  walker.io.result.bits                                         := 0.U.asTypeOf(walker.io.result.bits)
+  walker.io.result.bits.data                                    := Mux(pteState === pteRejectReturn, 0.U, io.pteResponse.bits.data)
+  walker.io.result.bits.error                                   := pteState === pteRejectReturn || io.pteResponse.bits.error
+  io.pteResponse.ready                                          := pteState === pteReturn && walker.io.result.ready && !reset.asBool
+  when(walker.io.result.fire)(pteState                          := pteIdle)
+  // Touching spans already cover their union. Gapped spans merge only after that whole
+  // same-page physical union was explicitly authorized; a denied union keeps exact spans.
+  val merge        = counts(worker) =/= 0.U && previousVA(63, 12) === currentVA(63, 12) &&
+    currentVA >= previousVA && (currentVA <= previousEnd || unionAuthorization)
+  val saveCapacity = merge || counts(worker) =/= p.maxRanges.U
+  when(state === save && !saveCapacity)(finish(Error.Capacity.U, currentVA))
+  when(state === save && saveCapacity) {
+    when(merge) {
+      assert(
+        pas(worker)(previous) +& (currentVA - previousVA) === currentPA,
+        "Preflight same-page ranges disagree on PA"
+      )
+    }.otherwise(counts(worker) := counts(worker) + 1.U)
+    for (i <- 0 until p.contexts) {
+      when(worker === i.U) {
+        when(merge) {
+          when(currentEnd > previousEnd)(sizes(i)(previous) := currentEnd - previousVA)
+        }.otherwise {
+          val index = counts(i)(2, 0)
+          vas(i)(index) := currentVA; pas(i)(index) := currentPA; sizes(i)(index) := currentBytes
+        }
+      }
+    }
+    when(segmentLast && spanLast)(finish(Error.Ok.U, currentVA))
+      .elsewhen(segmentLast) {
+        when(column === cmd.columns - 1.U) {
+          column   := 0.U; row                            := row + 1.U
+          rowStart := rowStart + cmd.rowStride; spanStart := rowStart + cmd.rowStride
+        }.otherwise { column := column + 1.U; spanStart := spanStart + cmd.columnStride }
+        state := span
+      }.otherwise(state := segment)
+  }
+  val offer        = RegInit(false.B); val outputSlot = Reg(UInt(contextBits.W)); val outputIndex = Reg(UInt(3.W))
+  val outputSelect = Reg(UInt(p.contexts.W))
+  val outputCursor = RegInit(0.U(contextBits.W))
+  val prepared     = VecInit(phase.map(_ === ready))
+  when(!offer && prepared.asUInt.orR) {
+    val slot = select(prepared, outputCursor)
+    offer := true.B; outputSlot := slot; outputSelect := UIntToOH(slot, p.contexts); outputIndex := 0.U
+  }
+  // Decode contexts and ranges separately instead of broadcasting binary slot bits across every field.
+  val outputVA     = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> vas(i)))
+  val outputPA     = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> pas(i)))
+  val outputBytes  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> sizes(i)))
+  val outputError  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> errors(i)))
+  val outputFault  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> faultVA(i)))
+  val outputCount  = Mux1H((0 until p.contexts).map(i => outputSelect(i) -> counts(i)))
+  val rangeSelect  = UIntToOH(outputIndex, p.maxRanges)
+  io.prepared.valid := offer && !reset.asBool
+  val failed = outputError =/= Error.Ok.U
+  io.prepared.bits.id    := Mux1H((0 until p.contexts).map(i => outputSelect(i) -> commands(i).id))
+  io.prepared.bits.va    := Mux(failed, outputFault, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputVA(i))))
+  io.prepared.bits.pa    := Mux(failed, 0.U, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputPA(i))))
+  io.prepared.bits.bytes := Mux(failed, 0.U, Mux1H((0 until p.maxRanges).map(i => rangeSelect(i) -> outputBytes(i))))
+  io.prepared.bits.write := Mux1H((0 until p.contexts).map(i => outputSelect(i) -> commands(i).write))
+  io.prepared.bits.error := outputError
+  io.prepared.bits.last  := failed || outputIndex === outputCount - 1.U
+  when(io.prepared.fire) {
+    when(io.prepared.bits.last) { phase(outputSlot) := free; offer := false.B; outputCursor := outputSlot + 1.U }
+      .otherwise(outputIndex := outputIndex + 1.U)
+  }
+}
+
+/** Shape describes transport bytes, including any read beyond the user's useful payload. */
+class Command(b: ModuleParam) extends Bundle {
+  val p = b
+
+  val id           = UInt(p.idBits.W)
+  val baseVA       = UInt(64.W)
+  val rows         = UInt(32.W)
+  val columns      = UInt(32.W)
+  val spanBytes    = UInt(32.W)
+  val columnStride = UInt(32.W)
+  val rowStride    = UInt(32.W)
+  val write        = Bool()
+  val mode         = UInt(4.W)
+  val rootPpn      = UInt(44.W)
+  val privilege    = UInt(2.W)
+  val sum          = Bool()
+  val mxr          = Bool()
+}
+
+/** The segment a command is stalled on: its virtual address and whether it is written. */
+class PageFault(b: ModuleParam) extends Bundle {
+  val id    = UInt(b.idBits.W)
+  val va    = UInt(64.W)
+  val write = Bool()
+}
+
+object Error {
+  val Ok          = 0; val Shape    = 1; val Overflow = 2; val PageFault = 3
+  val AccessFault = 4; val Capacity = 5; val Context  = 6
+}
+
+/** Failure returns one terminal zero-PA record. The caller retains successful maps and IDs until DMA retirement. */
+class PreparedSegment(b: ModuleParam) extends Bundle {
+  val p = b
+
+  val id    = UInt(p.idBits.W)
+  val va    = UInt(64.W)
+  val pa    = UInt(p.bus.addressBits.W)
+  val bytes = UInt(13.W)
+  val write = Bool()
+  val last  = Bool()
+  val error = UInt(3.W)
+}
+
+class Authorization(b: ModuleParam) extends Bundle {
+  val p = b
+
+  val id        = UInt(p.idBits.W)
+  val pa        = UInt(p.bus.addressBits.W)
+  val bytes     = UInt(13.W)
+  val write     = Bool()
+  val isPte     = Bool()
+  val privilege = UInt(2.W)
+}
+
+class Permission(b: ModuleParam) extends Bundle {
+  val p = b
+
+  val id    = UInt(p.idBits.W)
+  val allow = Bool()
+}

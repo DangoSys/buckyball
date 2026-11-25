@@ -1,4 +1,5 @@
 typedef struct {
+  int unsigned is_topk;
   int unsigned iter;
   int unsigned op1_bank;
   int unsigned wr_bank;
@@ -23,6 +24,10 @@ typedef struct {
   int unsigned num_dst_words;
 } maxpool_cmd_dpi_t;
 
+import "DPI-C" function longint unsigned maxpool_bemu_cycles(input longint unsigned rs2,
+                                                             input longint unsigned groups);
+import "DPI-C" function longint unsigned topk_bemu_cycles(
+    input longint unsigned iter, input longint unsigned groups, input longint unsigned rs2);
 import "DPI-C" function int maxpool_case_load(input int unsigned index);
 import "DPI-C" function void maxpool_case_cmd(output maxpool_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned maxpool_case_input_word_lo(input int unsigned word_index);
@@ -38,8 +43,12 @@ import "DPI-C" function int unsigned maxpool_case_dst_group(input int unsigned w
 `error "MAXPOOL_FUNCT7 must be provided by the selected Thread ballISA"
 `endif
 
+`ifndef TOPK_U32_FUNCT7
+`error "TOPK_U32_FUNCT7 must be provided by the selected Ball ISA"
+`endif
+localparam int TOPK_THREAD_FUNCT7 = `TOPK_U32_FUNCT7;
 localparam int MAXPOOL_THREAD_FUNCT7 = `MAXPOOL_FUNCT7;
 localparam int MAXPOOL_MAX_INPUT_WORDS = 128;
-localparam int MAXPOOL_MAX_DST_WORDS = 64;
-localparam int MAXPOOL_NUM_CASES = 11;
-localparam int MAXPOOL_TIMEOUT_CYCLES = 20000;
+localparam int MAXPOOL_MAX_DST_WORDS = 256;
+localparam int MAXPOOL_NUM_CASES = 16;
+localparam int MAXPOOL_TIMEOUT_CYCLES = 100000;

@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 
@@ -19,7 +15,7 @@ trait GemminiExCtrlAccumulateState { this: GemminiExCtrl =>
     }.otherwise {
       rdQueue0.io.deq.ready := true.B
       when(rdQueue0.io.deq.fire) {
-        val elemsPerPort = memParam.bankWidth / config.accWidth
+        val elemsPerPort = link.bankWidth / config.accWidth
         val previous     = rdQueue0.io.deq.bits.data.asTypeOf(Vec(elemsPerPort, accType))
         for ((value, index) <- outBuf(store_row_cnt).flatten.zipWithIndex) {
           when(acc_read_group === (index / elemsPerPort).U) {

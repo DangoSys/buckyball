@@ -1,7 +1,7 @@
 #ifndef BBSW_BAREMETAL_MULTITHREAD_H
 #define BBSW_BAREMETAL_MULTITHREAD_H
 
-#include <bb_cores.h>
+#include <bb_harts.h>
 #include <stdint.h>
 
 static inline uint32_t bb_get_hart_id(void) {

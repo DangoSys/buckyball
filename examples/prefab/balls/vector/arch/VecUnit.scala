@@ -1,31 +1,29 @@
 package examples.balls.vector
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
+
+import framework.generic.contract.blink.BallResponse
 
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
 import examples.balls.vector.configs.VectorBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class VecUnit(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     VectorBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: VectorBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
   val cfg             = ballParam
   val lane            = cfg.lane
   val inW             = cfg.inputWidth
@@ -45,23 +43,21 @@ class VecUnit(
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -69,7 +65,7 @@ class VecUnit(
   })
 
   val thread =
-    Instantiate(new VecMat16(frontendParam, memParam, routingParam, inBW, outBW, inW, accW, lane, ballParam))
+    Instantiate(new VecMat16(link, inBW, outBW, inW, accW, lane, ballParam))
 
   thread.io.cmdReq <> io.cmdReq
   thread.io.cmdResp <> io.cmdResp

@@ -94,7 +94,7 @@ manager = ToolManager()
 manager.register_tool(RunCommandTool())
 ```
 
-## 📚 Core Concepts
+## 📚 Hart Concepts
 
 ### Tool (Base Class)
 

@@ -1,0 +1,34 @@
+# The boom hart alone: the one instance of the single-hart system of this
+# entry, the boom hart class with the placement and parameters the boom
+# design gives it.
+include = "../../configs/default.toml"
+implementation = "../../configs/boom.toml"
+threads = []
+hartId = 0
+resetVector = 0x80000000
+mtimeAddress = 0x200bff8
+memory = "../../configs/memory/hart.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "../../configs/interconnect/hart.toml"
+service = false
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 8
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 16
+latency = 10
+bankEntries = 1024
+bankWidth = 128

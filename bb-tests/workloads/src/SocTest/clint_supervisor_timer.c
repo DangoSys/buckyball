@@ -57,7 +57,7 @@ static void __attribute__((noreturn)) supervisor_main(void) {
            : (read_csr(sip) & MIP_STIP) || clear_errors ? 3
                                                         : 0;
   if (!result)
-    for (period = 20; period <= 50; period += 30) {
+    for (period = 2; period <= 5; period += 3) { // mtime ticks, short for RTL
       machine_timer = supervisor_timer = clear_errors = 0;
       foreground = 0;
       deadline = read_csr(time) + period;
@@ -79,6 +79,10 @@ static void __attribute__((noreturn)) supervisor_main(void) {
   __builtin_unreachable();
 }
 int main(void) {
+  // Clear menvcfg.STCE (Sstc) so mip.STIP is writable; no menvcfg: trap past.
+  asm volatile("la t0, 1f; csrw mtvec, t0; li t0, 1; slli t0, t0, 63;"
+               "csrc 0x30a, t0; .balign 4; 1:" ::
+                   : "t0", "memory");
   write_csr(pmpaddr0, ~0UL);
   write_csr(pmpcfg0, 0x1f);
   write_csr(mcounteren, 3);
@@ -86,7 +90,7 @@ int main(void) {
   write_csr(stvec, (uintptr_t)supervisor);
   write_csr(mideleg, MIP_STIP);
   write_csr(sie, MIP_STIP);
-  CLINT_MTIMECMP(read_csr(mhartid)) = CLINT_MTIME + 300;
+  CLINT_MTIMECMP(read_csr(mhartid)) = CLINT_MTIME + 3;
   set_csr(mie, MIP_MTIP | MIP_STIP);
   clear_csr(mstatus, (3UL << 11) | SIE);
   set_csr(mstatus, 1UL << 11);

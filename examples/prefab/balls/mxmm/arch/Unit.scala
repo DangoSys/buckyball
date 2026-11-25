@@ -1,62 +1,56 @@
 package examples.balls.mxmm
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
 import examples.balls.mxmm.configs.MxmmBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class Unit(
-  frontendParam: FrontendParam,
-  memParam:      MemDomainParam,
-  routingParam:  BallDomainParam,
-  val instance:  BallRouteParam,
+  link:          BlinkParam,
+  instance:      BallRouteParam,
   val ballParam: MxmmBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
   val p               = ballParam
-  val entries         = memParam.bankEntries
+  val entries         = link.bankEntries
   val addressWidth    = log2Ceil(entries)
   require(
-    memParam.bankWidth == 128 && memParam.bankMaskLen == 16
+    link.bankWidth == 128 && link.bankMaskLen == 16
   )
   require(entries >= 64 && entries % 32 == 0)
   val mapping     = instance
   val mxFunct     = instance.instructions.find(_.mnemonic == "MXMM_MXFP8").get.funct7
   val windowFunct = instance.instructions.find(_.mnemonic == "MXMM_MXFP8_WINDOW").get.funct7
-  val fmaFunct    = instance.instructions.find(_.mnemonic == "MXMM_FMA32").get.funct7
-  val f32Funct    = instance.instructions.find(_.mnemonic == "MXMM_F32").get.funct7
   require(mapping.inBW == 2 && mapping.outBW == 1)
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       2,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       1,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -81,14 +75,12 @@ class Unit(
 
   val state = RegInit(idle)
 
-  val command = Reg(new BallCommand(frontendParam, memParam))
+  val command = Reg(new BallCommand(link))
 
   val m           = Reg(UInt(12.W))
   val n           = Reg(UInt(12.W))
   val k           = Reg(UInt(34.W))
-  val mx          = Reg(Bool())
   val windowed    = Reg(Bool())
-  val separate    = Reg(Bool())
   val first       = Reg(Bool())
   val last        = Reg(Bool())
   val base        = Reg(UInt(6.W))
@@ -96,7 +88,7 @@ class Unit(
   val chainM      = Reg(UInt(12.W))
   val chainN      = Reg(UInt(12.W))
   val chainFormat = Reg(UInt(7.W))
-  val chainBank   = Reg(UInt(frontendParam.bank_id_len.W))
+  val chainBank   = Reg(UInt(link.bankIdBits.W))
   val chainBase   = Reg(UInt(6.W))
 
   val nGroups       = n >> 4
@@ -104,7 +96,7 @@ class Unit(
   val totalPanels   = Mux(m === 1.U, 1.U, m >> 4) * nGroups
   val batch         = Reg(UInt(addressWidth.W))
   val count         = Mux(totalPanels - batch > p.contexts.U, p.contexts.U, totalPanels - batch)
-  val minimumPeriod = Mux(separate, (2 * p.arithmeticLatency + 1).U, (p.arithmeticLatency + 1).U)
+  val minimumPeriod = (p.arithmeticLatency + 1).U
   val period        = Mux(count > minimumPeriod, count, minimumPeriod)
   val context       = Reg(UInt(log2Ceil(p.contexts).W))
   val row           = Reg(UInt(4.W))
@@ -129,12 +121,10 @@ class Unit(
   panels.io.columnGroup := columnGroup
   panels.io.k           := reduction
   panels.io.reduction   := k
-  panels.io.mxfp8       := mx
   panels.io.vector      := m === 1.U
   array.io.valid        := panels.io.valid
   array.io.a            := panels.io.a
   array.io.b            := panels.io.b
-  array.io.separate     := separate
   array.io.vector       := m === 1.U
   val computeContext = RegNext(context)
   array.io.context := Mux(state === compute || state === drain, computeContext, context)
@@ -162,8 +152,8 @@ class Unit(
   val scaleMode  = Reg(Vec(2, Bool()))
   val scaleByte  = Reg(Vec(2, UInt(4.W)))
   val scaleCount = Reg(Vec(2, UInt((addressWidth + 4).W)))
-  val rowWords   = Mux(mx, k >> 4, k >> 2)
-  val window     = Instantiate(new InputWindow(memParam, ballParam))
+  val rowWords   = k >> 4
+  val window     = Instantiate(new InputWindow(link, ballParam))
   window.io.start          := io.cmdReq.fire && io.cmdReq.bits.funct === windowFunct.U
   window.io.enable         := state === loadInputs && windowed
   window.io.rows           := io.cmdReq.bits.rs2(11, 0)
@@ -199,9 +189,9 @@ class Unit(
     )
     panels.io.word(operand)       := port.io.resp.bits.data
     panels.io.scale(operand)      := (inputWord(operand) >> (scaleByte(operand) << 3))(7, 0)
-    val legacy = if (operand == 0) !windowed else true.B
-    when(port.io.req.fire && legacy)(inputState(operand) := 1.U)
-    when(port.io.resp.fire && legacy) {
+    val linearInput = if (operand == 0) !windowed else true.B
+    when(port.io.req.fire && linearInput)(inputState(operand) := 1.U)
+    when(port.io.resp.fire && linearInput) {
       when(scaleMode(operand)) {
         inputWord(operand)  := port.io.resp.bits.data
         scaleByte(operand)  := 0.U
@@ -213,16 +203,14 @@ class Unit(
           inputRow(operand)  := inputRow(operand) + 1.U
         }.otherwise(rowOffset(operand)  := rowOffset(operand) + 1.U)
         when(inputIndex(operand) +& 1.U === codeWords) {
-          when(mx) {
-            scaleMode(operand)  := true.B
-            inputRow(operand)   := 0.U
-            rowOffset(operand)  := 0.U
-            inputState(operand) := 0.U
-          }.otherwise(inputState(operand) := 3.U)
+          scaleMode(operand)  := true.B
+          inputRow(operand)   := 0.U
+          rowOffset(operand)  := 0.U
+          inputState(operand) := 0.U
         }.otherwise(inputState(operand) := 0.U)
       }
     }
-    when(state === loadInputs && inputState(operand) === 2.U && legacy) {
+    when(state === loadInputs && inputState(operand) === 2.U && linearInput) {
       scaleCount(operand)            := scaleCount(operand) + 1.U
       scaleByte(operand)             := scaleByte(operand) + 1.U
       when(rowOffset(operand) + 1.U === (k >> 5)) {
@@ -266,14 +254,13 @@ class Unit(
     val cols      = cmd.rs2(23, 12)
     val inputK    = cmd.iter
     val isWindow  = cmd.funct === windowFunct.U
-    val isMx      = cmd.funct === mxFunct.U || isWindow
     assert(
-      isMx || cmd.funct === fmaFunct.U || cmd.funct === f32Funct.U,
-      "MATMUL format is invalid"
+      cmd.funct === mxFunct.U || isWindow,
+      "MXMM instruction is invalid"
     )
     assert(rows === 1.U || (rows =/= 0.U && rows(3, 0) === 0.U), "MATMUL M must be one or a positive multiple of 16")
     assert(cols =/= 0.U && cols(3, 0) === 0.U, "MATMUL N must be a positive multiple of 16")
-    assert(inputK =/= 0.U && Mux(isMx, inputK(4, 0) === 0.U, inputK(1, 0) === 0.U), "MATMUL K alignment is invalid")
+    assert(inputK =/= 0.U && inputK(4, 0) === 0.U, "MATMUL K alignment is invalid")
     when(isWindow) {
       val full  = cmd.rs2(47, 32)
       val start = cmd.rs2(63, 48)
@@ -290,8 +277,8 @@ class Unit(
     )
     val aElements = rows * Mux(isWindow, cmd.rs2(47, 32), inputK)
     val bElements = cols * inputK
-    assert(Mux(isMx, aElements + (aElements >> 5), aElements << 2) <= (entries * 16).U, "MATMUL A exceeds bank capacity")
-    assert(Mux(isMx, bElements + (bElements >> 5), bElements << 2) <= (entries * 16).U, "MATMUL B exceeds bank capacity")
+    assert(aElements + (aElements >> 5) <= (entries * 16).U, "MATMUL A exceeds bank capacity")
+    assert(bElements + (bElements >> 5) <= (entries * 16).U, "MATMUL B exceeds bank capacity")
     assert((cmd.rs2(31, 26) << 4) +& ((rows * cols) << 2) <= (entries * 16).U, "MATMUL C exceeds bank capacity")
     when(cmd.rs2(24)) {
       assert(!chain, "MATMUL first cannot replace a live chain")
@@ -314,9 +301,7 @@ class Unit(
     m         := rows
     n         := cols
     k         := inputK
-    mx        := isMx
     windowed  := isWindow
-    separate  := cmd.funct === f32Funct.U
     first     := cmd.rs2(24)
     last      := cmd.rs2(25)
     base      := cmd.rs2(31, 26)

@@ -14,10 +14,9 @@ class Array(val ballParam: MxmmBallParam) extends Module {
   val io = IO(new Bundle {
     val valid     = Input(Bool())
     val context   = Input(UInt(log2Ceil(p.contexts).W))
-    val separate  = Input(Bool())
     val vector    = Input(Bool())
-    val a         = Input(Vec(p.tileRows, UInt(32.W)))
-    val b         = Input(Vec(p.tileCols, UInt(32.W)))
+    val a         = Input(Vec(p.tileRows, new Mxfp8Value))
+    val b         = Input(Vec(p.tileCols, new Mxfp8Value))
     val load      = Input(Bool())
     val row       = Input(UInt(4.W))
     val rowData   = Input(UInt(512.W))
@@ -32,22 +31,20 @@ class Array(val ballParam: MxmmBallParam) extends Module {
     }
   }
   io.rowOut := Cat((0 until p.tileCols).reverse.map(col => fNFromRecFN(8, 24, accumulators(io.context)(io.row)(col))))
-  val fusedTag     = Pipe(io.valid && !io.separate, io.context, p.arithmeticLatency)
-  val separateTag  = Pipe(io.valid && io.separate, io.context, 2 * p.arithmeticLatency)
-  io.completed := fusedTag.valid || separateTag.valid
+  val tag          = Pipe(io.valid, io.context, p.arithmeticLatency)
+  io.completed := tag.valid
   for {
     row <- 0 until p.tileRows
     col <- 0 until p.tileCols
   } {
     val pe =
-      Instantiate(new PE(p.arithmeticLatency, ballParam))
-    pe.io.valid    := io.valid && (if (row == 0) true.B else !io.vector)
-    pe.io.separate := io.separate
-    pe.io.a        := io.a(row)
-    pe.io.b        := io.b(col)
-    pe.io.c        := accumulators(io.context)(row)(col)
+      Instantiate(new PE(p.arithmeticLatency))
+    pe.io.valid := io.valid && (if (row == 0) true.B else !io.vector)
+    pe.io.a     := io.a(row)
+    pe.io.b     := io.b(col)
+    pe.io.c     := accumulators(io.context)(row)(col)
     when(pe.io.outValid) {
-      accumulators(Mux(separateTag.valid, separateTag.bits, fusedTag.bits))(row)(col) := pe.io.out
+      accumulators(tag.bits)(row)(col) := pe.io.out
     }
   }
 }

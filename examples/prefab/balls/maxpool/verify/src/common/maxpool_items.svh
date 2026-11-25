@@ -1,6 +1,7 @@
 class maxpool_cmd_item extends bb_blink_cmd_item;
   `uvm_object_utils(maxpool_cmd_item)
 
+  bit is_topk;
   bit [31:0] input_base;
   bit [31:0] output_base;
   bit [31:0] output_stride;
@@ -39,7 +40,8 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
 
     // bb_maxpool: banks and iter come from rs1, the pooling geometry from rs2.
     rob_id          = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
-    funct           = MAXPOOL_THREAD_FUNCT7[6:0];
+    is_topk         = cmd.is_topk != 0;
+    funct           = is_topk ? TOPK_THREAD_FUNCT7[6:0] : MAXPOOL_THREAD_FUNCT7[6:0];
     rs2             = {cmd.rs2_hi, cmd.rs2_lo};
     iter            = cmd.iter;
     op1_bank        = cmd.op1_bank;
@@ -66,15 +68,24 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
     num_input_words = cmd.num_input_words;
     num_dst_words   = cmd.num_dst_words;
 
-    if (op1_col == 0 || wr_col != op1_col)
-      `uvm_fatal("CASE", "MAXPOOL input and output must have the same channel groups")
-    if (op1_bank == wr_bank) `uvm_fatal("CASE", "MAXPOOL input and output banks must differ")
-    if (rs2[63:46] != 0) `uvm_fatal("CASE", "MAXPOOL reserved rs2 bits must be zero")
-    if (num_dst_words != iter * op1_col)
-      `uvm_fatal("CASE", $sformatf("num_dst_words %0d != iter %0d x groups", num_dst_words, iter))
-    if (iter != output_side * output_side)
-      `uvm_fatal("CASE", $sformatf("iter %0d != output_side^2 %0d", iter, output_side * output_side
-                 ))
+    if (is_topk) begin
+      if (op1_col == 0 || wr_col != 1 || op1_bank == wr_bank || rs2[63:48] != 0)
+        `uvm_fatal("CASE", "invalid TOPK_U32 bank or reserved fields")
+      if (rs2[31:0] == 0 || rs2[31:0] > iter * op1_col * 4 ||
+          rs2[47:32] == 0 || rs2[47:32] > rs2[31:0] ||
+          num_dst_words != (rs2[47:32] + 1) / 2)
+        `uvm_fatal("CASE", "invalid TOPK_U32 count or footprint")
+    end else begin
+      if (op1_col == 0 || wr_col != op1_col)
+        `uvm_fatal("CASE", "MAXPOOL input and output must have the same channel groups")
+      if (op1_bank == wr_bank) `uvm_fatal("CASE", "MAXPOOL input and output banks must differ")
+      if (rs2[63:46] != 0) `uvm_fatal("CASE", "MAXPOOL reserved rs2 bits must be zero")
+      if (num_dst_words != iter * op1_col)
+        `uvm_fatal("CASE", $sformatf("num_dst_words %0d != iter %0d x groups", num_dst_words, iter))
+      if (iter != output_side * output_side)
+        `uvm_fatal("CASE", $sformatf(
+                   "iter %0d != output_side^2 %0d", iter, output_side * output_side))
+    end
     if (num_input_words == 0 || num_input_words > MAXPOOL_MAX_INPUT_WORDS)
       `uvm_fatal("CASE", $sformatf("num_input_words out of range: %0d", num_input_words))
     if (num_dst_words == 0 || num_dst_words > MAXPOOL_MAX_DST_WORDS)
@@ -102,6 +113,7 @@ class maxpool_cmd_item extends bb_blink_cmd_item;
     if (!$cast(rhs_, rhs)) begin
       `uvm_fatal("COPY", "rhs is not maxpool_cmd_item")
     end
+    is_topk = rhs_.is_topk;
     input_base = rhs_.input_base;
     output_base = rhs_.output_base;
     output_stride = rhs_.output_stride;

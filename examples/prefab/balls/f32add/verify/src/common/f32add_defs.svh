@@ -12,6 +12,7 @@ typedef struct {
   int unsigned rob_id;
 } f32add_cmd_dpi_t;
 
+import "DPI-C" function longint unsigned f32add_bemu_cycles(input longint unsigned iter);
 import "DPI-C" function int f32add_case_load(input int unsigned index);
 import "DPI-C" function void f32add_case_cmd(output f32add_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned f32add_case_a_word_lo(input int unsigned word_index);

@@ -1,11 +1,12 @@
 package examples.balls.mxint8matmul
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.mxint8matmul.{Params => ParametersProto}
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 
 import chisel3._
 import chisel3.util._
@@ -19,13 +20,11 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
  */
 @instantiable
 class Mxint8matmulBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val params = ball.parameters.unpack(classOf[ParametersProto])
   require(params.hasRows && params.hasCols && params.hasLanes, "Mxint8matmulBall requires rows, cols and lanes")
@@ -34,28 +33,28 @@ class Mxint8matmulBall(
   val lanes  = params.getLanes
   require(rows > 0 && cols > 0 && cols % 4 == 0, "Mxint8matmulBall needs a positive array with cols a multiple of 4")
   require(lanes > 0 && 32              % lanes == 0, "Mxint8matmulBall lanes must divide 32")
-  require(mp.bankWidth == 128 && mp.bankMaskLen == 16, "Mxint8matmulBall requires 128-bit bank rows and byte masks")
+  require(link.bankWidth == 128 && link.bankMaskLen == 16, "Mxint8matmulBall requires 128-bit bank rows and byte masks")
   require(ball.inBW == 2 && ball.outBW == 1, "Mxint8matmulBall requires two reads and one write")
-  require(fp.commandDataBits == 64, "Mxint8matmulBall decodes a 64-bit rs2")
+  require(link.dataBits == 64, "Mxint8matmulBall decodes a 64-bit rs2")
   val steps = 32 / lanes
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val idle :: tile :: oldC :: load :: mac :: convert :: accumulate :: store :: complete :: Nil = Enum(9)
   val state                                                                                    = RegInit(idle)
 
-  val robId   = Reg(UInt(log2Up(fp.rob_entries).W))
-  val aBank   = Reg(UInt(fp.bank_id_len.W))
-  val bBank   = Reg(UInt(fp.bank_id_len.W))
-  val cBank   = Reg(UInt(fp.bank_id_len.W))
-  val oldBank = Reg(UInt(fp.bank_id_len.W))
-  val aGroup  = Reg(UInt(mp.groupIdWidth.W))
-  val bGroup  = Reg(UInt(mp.groupIdWidth.W))
-  val cGroup  = Reg(UInt(mp.groupIdWidth.W))
+  val robId   = Reg(UInt(link.robIdBits.W))
+  val aBank   = Reg(UInt(link.bankIdBits.W))
+  val bBank   = Reg(UInt(link.bankIdBits.W))
+  val cBank   = Reg(UInt(link.bankIdBits.W))
+  val oldBank = Reg(UInt(link.bankIdBits.W))
+  val aGroup  = Reg(UInt(link.groupIdBits.W))
+  val bGroup  = Reg(UInt(link.groupIdBits.W))
+  val cGroup  = Reg(UInt(link.groupIdBits.W))
   val m       = Reg(UInt(10.W))
   val n       = Reg(UInt(10.W))
-  val k       = Reg(UInt(fp.iter_len.W))
+  val k       = Reg(UInt(link.iterBits.W))
   val stride  = Reg(UInt(32.W))
   val bBase   = Reg(UInt(32.W))
   val fromOld = Reg(Bool())
@@ -66,7 +65,7 @@ class Mxint8matmulBall(
   val aTile = Reg(UInt(32.W))
   val bTile = Reg(UInt(32.W))
   val cTile = Reg(UInt(32.W))
-  val block = Reg(UInt(fp.iter_len.W))
+  val block = Reg(UInt(link.iterBits.W))
   val step  = Reg(UInt(log2Ceil(steps).max(1).W))
 
   val activeRows = Mux(m - m0 > rows.U, rows.U, m - m0)
@@ -92,12 +91,14 @@ class Mxint8matmulBall(
   val cRespGroup  = Reg(UInt(log2Up(cols / 4 + 1).W))
 
   val aCodes = Reg(Vec(rows, Vec(2, UInt(128.W))))
-  val aScale = Reg(Vec(rows, UInt(8.W)))
+  val aScale = Reg(Vec(rows, UInt(128.W)))
   val bCodes = Reg(Vec(cols, Vec(2, UInt(128.W))))
-  val bScale = Reg(Vec(cols, UInt(8.W)))
+  val bScale = Reg(Vec(cols, UInt(128.W)))
 
   val scaleRow    = (k >> 4) + (block >> 4)
   val scaleOffset = Cat(block(3, 0), 0.U(3.W))
+  // One exponent row serves sixteen consecutive 32-code blocks.
+  val lastPart    = Mux(block(3, 0) === 0.U, 2.U(2.W), 1.U(2.W))
 
   val active = !reset.asBool
   blink.cmdReq.ready        := state === idle && active
@@ -156,7 +157,7 @@ class Mxint8matmulBall(
     pe.io.a          := aLanes(i)
     pe.io.b          := bLanes(j)
     pe.io.convert    := state === convert
-    pe.io.scale      := aScale(i).zext +& bScale(j).zext - 254.S
+    pe.io.scale      := (aScale(i) >> scaleOffset)(7, 0).zext +& (bScale(j) >> scaleOffset)(7, 0).zext - 254.S
     pe.io.accumulate := state === accumulate
     // Each tile starts from +0.0 or from the old C element.
     pe.io.load       := (state === tile && !fromOld) ||
@@ -172,7 +173,7 @@ class Mxint8matmulBall(
         cIssueAddr  := cIssueAddr + (n >> 2)
       }.otherwise(cIssueGroup := cIssueGroup + 1.U)
     }.otherwise {
-      when(aIssuePart === 2.U) {
+      when(aIssuePart === lastPart) {
         aIssuePart := 0.U
         aIssueRow  := aIssueRow + 1.U
         aIssueAddr := aIssueAddr + stride
@@ -188,17 +189,18 @@ class Mxint8matmulBall(
       }.otherwise(cRespGroup := cRespGroup + 1.U)
     }.otherwise {
       when(aRespPart === 2.U) {
-        aScale(aRespRow) := (readA.io.resp.bits.data >> scaleOffset)(7, 0)
-        aRespPart        := 0.U
-        aRespRow         := aRespRow + 1.U
+        aScale(aRespRow) := readA.io.resp.bits.data
       }.otherwise {
         aCodes(aRespRow)(aRespPart(0)) := readA.io.resp.bits.data
-        aRespPart                      := aRespPart + 1.U
       }
+      when(aRespPart === lastPart) {
+        aRespPart := 0.U
+        aRespRow  := aRespRow + 1.U
+      }.otherwise(aRespPart := aRespPart + 1.U)
     }
   }
   when(readB.io.req.fire) {
-    when(bIssuePart === 2.U) {
+    when(bIssuePart === lastPart) {
       bIssuePart := 0.U
       bIssueRow  := bIssueRow + 1.U
       bIssueAddr := bIssueAddr + stride
@@ -206,13 +208,14 @@ class Mxint8matmulBall(
   }
   when(readB.io.resp.fire) {
     when(bRespPart === 2.U) {
-      bScale(bRespRow) := (readB.io.resp.bits.data >> scaleOffset)(7, 0)
-      bRespPart        := 0.U
-      bRespRow         := bRespRow + 1.U
+      bScale(bRespRow) := readB.io.resp.bits.data
     }.otherwise {
       bCodes(bRespRow)(bRespPart(0)) := readB.io.resp.bits.data
-      bRespPart                      := bRespPart + 1.U
     }
+    when(bRespPart === lastPart) {
+      bRespPart := 0.U
+      bRespRow  := bRespRow + 1.U
+    }.otherwise(bRespPart := bRespPart + 1.U)
   }
   when(write.io.req.fire) {
     when(cIssueGroup === cGroups - 1.U) {
@@ -248,9 +251,9 @@ class Mxint8matmulBall(
           "MXINT8MM banks must differ"
         )
         assert(cmd.op1_col === 1.U && cmd.op2_col === 1.U && cmd.wr_col === 1.U, "MXINT8MM banks must have one group")
-        assert(aStart +& mCount * packed <= mp.bankEntries.U, "MXINT8MM A window exceeds capacity")
-        assert(bStart +& nCount * packed <= mp.bankEntries.U, "MXINT8MM B window exceeds capacity")
-        assert(cStart +& mCount * (nCount >> 2) <= mp.bankEntries.U, "MXINT8MM C window exceeds capacity")
+        assert(aStart +& mCount * packed <= link.bankEntries.U, "MXINT8MM A window exceeds capacity")
+        assert(bStart +& nCount * packed <= link.bankEntries.U, "MXINT8MM B window exceeds capacity")
+        assert(cStart +& mCount * (nCount >> 2) <= link.bankEntries.U, "MXINT8MM C window exceeds capacity")
         robId   := cmd.rob_id
         aBank   := cmd.op1_bank
         bBank   := cmd.op2_bank
@@ -349,11 +352,10 @@ class Mxint8matmulBall(
 object Mxint8matmulBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new Mxint8matmulBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new Mxint8matmulBall(link, route)).blink, None)
 
 }

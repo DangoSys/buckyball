@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "poly-test-linux",
+]

@@ -1,7 +1,6 @@
 package examples.balls.gemmini
 
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.ball.BallHostParam
 
 import chisel3._
 import chisel3.util._
@@ -14,34 +13,33 @@ import examples.balls.gemmini.configs.GemminiBallParam
  * Simplified iteration:
  *   batch → orow → ocol → och → krow → kcol → kch (innermost)
  *
- * Each (orow, ocol, och, krow, kcol, kch) core generates:
+ * Each (orow, ocol, och, krow, kcol, kch) hart generates:
  *   MVIN weight → PRELOAD + MVIN input → COMPUTE → (on last k-iter) MVOUT
  *
- * First implementation: no pooling, no im2col tiling, single DIM×DIM cores.
+ * First implementation: no pooling, no im2col tiling, single DIM×DIM harts.
  */
 @instantiable
-class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomainParam, val ballParam: GemminiBallParam)
-    extends Module {
+class LoopConvUnroller(host: BallHostParam, val ballParam: GemminiBallParam) extends Module {
   val config    = ballParam
   val DIM       = config.blockSize
   val elemSize  = config.inputWidth / 8
-  val bankBytes = memParam.bankWidth / 8
+  val bankBytes = host.link.bankWidth / 8
 
   @public
   val io = IO(new Bundle {
-    val start = Flipped(Decoupled(new LoopConvWsConfig(frontendParam, memParam, ballParam)))
-    val cmd   = Decoupled(new LoopCmd(frontendParam, memParam, ballParam))
+    val start = Flipped(Decoupled(new LoopConvWsConfig(host, ballParam)))
+    val cmd   = Decoupled(new LoopCmd(host, ballParam))
     val busy  = Output(Bool())
   })
 
-  val addrGen: Instance[LoopConvAddrGen] = Instantiate(new LoopConvAddrGen(frontendParam, memParam, ballParam))
+  val addrGen: Instance[LoopConvAddrGen] = Instantiate(new LoopConvAddrGen(host, ballParam))
 
   // FSM states
   val sIdle :: sAlloc :: sMvinInput :: sMvinWeight :: sCompute :: sMvout :: sFree :: sDone :: Nil =
     Enum(8)
   val state                                                                                       = RegInit(sIdle)
 
-  val cfg = Reg(new LoopConvWsConfig(frontendParam, memParam, ballParam))
+  val cfg = Reg(new LoopConvWsConfig(host, ballParam))
 
   // Iterator registers
   val batch_reg = RegInit(0.U(16.W))
@@ -58,7 +56,7 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
   // Is this the last k-iteration?
   val isLastK = (krow_reg === cfg.kernel_dim - 1.U) &&
     (kcol_reg === cfg.kernel_dim - 1.U) &&
-    (kch_reg + DIM.U >= cfg.in_channels) // Core boundary
+    (kch_reg + DIM.U >= cfg.in_channels) // Hart boundary
 
   // Connect address generator
   addrGen.io.cfg   := cfg
@@ -73,14 +71,14 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
   // Defaults
   io.start.ready   := state === sIdle
   io.cmd.valid     := false.B
-  io.cmd.bits      := 0.U.asTypeOf(new LoopCmd(frontendParam, memParam, ballParam))
+  io.cmd.bits      := 0.U.asTypeOf(new LoopCmd(host, ballParam))
   io.cmd.bits.last := state === sFree
   io.busy          := state =/= sIdle
 
   def emptySlot(): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid := false.B
-    v.bits  := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits  := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v
   }
 
@@ -90,9 +88,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
     row:    Int,
     col:    Int
   ): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid         := true.B
-    v.bits          := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits          := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v.bits.cmdType  := (if (alloc) LoopSubCmdType.MSET_ALLOC
                        else LoopSubCmdType.MSET_FREE)
     v.bits.bank_id  := bankId
@@ -107,9 +105,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
     iter:   UInt,
     stride: UInt
   ): Valid[LoopSubCmd] = {
-    val v = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+    val v = Wire(Valid(new LoopSubCmd(host, ballParam)))
     v.valid          := true.B
-    v.bits           := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+    v.bits           := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
     v.bits.cmdType   := LoopSubCmdType.MVIN
     v.bits.bank_id   := bankId
     v.bits.dram_addr := addr
@@ -202,9 +200,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
     // Preload weights while loading independent input data.
     is(sMvinWeight) {
       io.cmd.valid := true.B
-      val preSlot = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+      val preSlot = Wire(Valid(new LoopSubCmd(host, ballParam)))
       preSlot.valid           := true.B
-      preSlot.bits            := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+      preSlot.bits            := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
       preSlot.bits.cmdType    := LoopSubCmdType.PRELOAD
       preSlot.bits.op1_bank   := cfg.bank_weight
       preSlot.bits.wr_bank    := cfg.bank_output
@@ -226,9 +224,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
     // Compute consumes the preceding preload and DMA row.
     is(sCompute) {
       io.cmd.valid := true.B
-      val compSlot = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+      val compSlot = Wire(Valid(new LoopSubCmd(host, ballParam)))
       compSlot.valid             := true.B
-      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+      compSlot.bits              := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
       compSlot.bits.cmdType      := LoopSubCmdType.COMPUTE
       compSlot.bits.op1_bank     := cfg.bank_input
       compSlot.bits.op2_bank     := cfg.bank_weight
@@ -239,7 +237,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
         1.U
       ) // PRELOADED first, then ACCUMULATED
       compSlot.bits.iter          := DIM.U
-      compSlot.bits.zero_op2      := cfg.no_bias
+      // no_bias zeroes the bias of the first (WS) compute; the accumulating
+      // ones run OS, where op2 is the weights and is read.
+      compSlot.bits.zero_op2      := cfg.no_bias && isFirstK
       compSlot.bits.zero_op1_tail := true.B
 
       io.cmd.bits.slots(0) := compSlot
@@ -260,9 +260,9 @@ class LoopConvUnroller(val frontendParam: FrontendParam, val memParam: MemDomain
     // [MVOUT, --, --, --]
     is(sMvout) {
       io.cmd.valid := true.B
-      val mvSlot = Wire(Valid(new LoopSubCmd(frontendParam, memParam, ballParam)))
+      val mvSlot = Wire(Valid(new LoopSubCmd(host, ballParam)))
       mvSlot.valid          := true.B
-      mvSlot.bits           := 0.U.asTypeOf(new LoopSubCmd(frontendParam, memParam, ballParam))
+      mvSlot.bits           := 0.U.asTypeOf(new LoopSubCmd(host, ballParam))
       mvSlot.bits.cmdType   := LoopSubCmdType.MVOUT
       mvSlot.bits.bank_id   := cfg.bank_output
       mvSlot.bits.dram_addr := addrGen.io.outputAddr

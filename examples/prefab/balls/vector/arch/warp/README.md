@@ -12,7 +12,7 @@ warp/
 └── VecBall.scala     - Vector ball processor
 ```
 
-## Core Components
+## Hart Components
 
 ### MeshWarp - Mesh Warp
 

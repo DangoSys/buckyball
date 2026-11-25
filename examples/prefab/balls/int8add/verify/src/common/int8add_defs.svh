@@ -18,6 +18,8 @@ typedef struct {
   int unsigned num_dst_words;
 } int8add_cmd_dpi_t;
 
+import "DPI-C" function longint unsigned int8add_bemu_cycles(input longint unsigned iter,
+                                                            input longint unsigned groups);
 import "DPI-C" function int int8add_case_load(input int unsigned index);
 import "DPI-C" function void int8add_case_cmd(output int8add_cmd_dpi_t cmd);
 import "DPI-C" function longint unsigned int8add_case_lhs_word_lo(input int unsigned word_index);

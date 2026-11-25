@@ -83,6 +83,8 @@ message DdrHardware {
   required uint64 base = 7;
   required uint64 bytes = 8;
   required uint64 model = 9;
+  // The bank rows (of data_bits) one beat of the DDR port carries.
+  required uint32 beat_rows = 10;
 }
 message BootRomHardware {
   required uint64 base = 1;
@@ -122,6 +124,8 @@ message SimHardware {
   required bool diff_test = 1;
   required SimMemoryHardware memory = 2;
   reserved 3;
+  // The host threads the Verilator model of this simulation evaluates on.
+  required uint32 verilator_threads = 4;
 }
 
 message MemoryAccessConfig {

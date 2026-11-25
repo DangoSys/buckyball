@@ -4,7 +4,7 @@
 
 This directory implements Buckyball's matrix transpose accelerator for matrix transpose operations. Located at `examples/prefab/balls/transpose/arch`, it serves as a matrix transpose accelerator supporting pipelined transpose operations.
 
-Core components:
+Hart components:
 - **Transpose.scala**: Pipelined transposer implementation
 
 ## Code Structure

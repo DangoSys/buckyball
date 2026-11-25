@@ -195,8 +195,7 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
             let input: Vec<u32> = (0..4).flat_map(|test| values_test(&mut state, test)).collect();
             vec![step(bank_entries, 1, [3, 4], [0, 0], &input)]
         }
-        // The exponent sweep of mxquant_values_test: 64 blocks, the full input
-        // capacity of a 512-row bank.
+        // The exponent sweep of mxquant_values_test: 64 blocks.
         1 => {
             let mut state = 0x6d2b_79f5u32;
             let input: Vec<u32> = (0..68).flat_map(|test| values_test(&mut state, test)).skip(4 * BLOCK).collect();
@@ -205,11 +204,11 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
         // One block, random magnitudes around one, highest group bases.
         2 => {
             let input: Vec<u32> = (0..BLOCK).map(|_| (rng.next() & 0x807f_ffff) | ((120 + rng.next() % 16) << 23)).collect();
-            vec![step(bank_entries, 15, [1022, 1023], [31, 31], &input)]
+            vec![step(bank_entries, 7, [1022, 1023], [31, 31], &input)]
         }
-        // Random exponents over the whole finite range, 3 / 4 of the input capacity.
+        // Random exponents over the whole finite range, the full input capacity.
         3 => {
-            let count = (bank_entries * 3) as usize;
+            let count = (bank_entries * 4) as usize;
             let input: Vec<u32> = (0..count).map(|_| (rng.next() & 0x807f_ffff) | ((rng.next() % 255) << 23)).collect();
             vec![step(bank_entries, 7, [0, 1], [5, 6], &input)]
         }
@@ -225,7 +224,7 @@ pub fn gen_case(index: u32, bank_entries: u32) -> Case {
             .map(|i| {
                 let count = BLOCK * (1 + (rng.next() % 5) as usize);
                 let input: Vec<u32> = (0..count).map(|_| (rng.next() & 0x807f_ffff) | ((100 + rng.next() % 60) << 23)).collect();
-                step(bank_entries, 8 + i, [11 + i, 20 + i], [i, i + 7], &input)
+                step(bank_entries, 1 + i, [11 + i, 20 + i], [i, i + 7], &input)
             })
             .collect(),
         _ => panic!("mxquant: unsupported case {index}"),

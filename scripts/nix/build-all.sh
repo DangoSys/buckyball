@@ -21,7 +21,7 @@ usage() {
   echo "   9. register project MCP"
   echo ""
   echo "Selected steps require earlier steps to have completed already."
-  echo "Steps 2, 3 and 4 build toy with ToyVerilatorConfig to verify the base setup."
+  echo "Steps 2, 3 and 4 build toy on its default config to verify the base setup."
   echo ""
   echo "Options"
   echo "  -h     : Display this message"
@@ -118,19 +118,19 @@ fi
 if run_step "2"; then
   begin_step "2" "Compiler installation"
   cd "$BBDIR"
-  bbdev stack --build '--design toy --device ToyVerilatorConfig'
+  bbdev stack --build '--device toy'
 fi
 
 if run_step "3"; then
   begin_step "3" "RTL source pre-compile"
   cd "$BBDIR"
-  bbdev verilator --verilog '--design toy --device ToyVerilatorConfig'
+  bbdev verilator --verilog '--device toy'
 fi
 
 if run_step "4"; then
   begin_step "4" "Workload pre-compile sources"
   cd "$BBDIR"
-  bbdev workload --build '--design toy --device ToyVerilatorConfig'
+  bbdev workload --build '--device toy'
 fi
 
 if run_step "5"; then

@@ -1,4 +1,4 @@
-use bebop_bemu::thread::instructions::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
+use bebop_bemu::ball::blink::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use bebop_bemu::ball::ExecContext;
 pub(super) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     let a = rs1_b0(xs1);
@@ -23,11 +23,16 @@ pub(super) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     );
     assert!(a != b && a != c && b != c, "redmule: banks must differ");
     assert_eq!(
-        bebop_bemu::configs::bank_width(),
+        bebop_bemu::ball::blink::bank_width(),
         128,
         "redmule: bank rows must be 128 bits"
     );
-    assert_eq!(bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("redmule", ctx.ball_id.expect("Ball instance")).lanes.expect("lanes") as usize, 8);
+    assert_eq!(
+        bebop_bemu::ball::blink::parameters::<super::params::Params>("redmule", ctx.ball_id.expect("Ball instance"))
+            .lanes
+            .expect("lanes") as usize,
+        8
+    );
     for bank in [a, b, c] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,
@@ -67,4 +72,33 @@ pub(super) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         ctx.banks[pc][offset..offset + 2].copy_from_slice(&value.to_le_bytes());
     }
     0
+}
+
+pub(super) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+    let rows = xs2 & 4095;
+    let k = rs1_iter(xs1);
+    let first = xs2 & (1 << 42) != 0;
+    assert_eq!(xs2 >> 43, 0, "redmule: reserved bits must be zero");
+    assert!(
+        rows > 0 && k > 0 && k % 8 == 0,
+        "redmule: M > 0, K must be a positive multiple of eight"
+    );
+    let a = rs1_b0(xs1);
+    let b = rs1_b1(xs1);
+    let c = rs1_b2(xs1);
+    assert!(a != b && a != c && b != c, "redmule: banks must differ");
+    for bank in [a, b, c] {
+        assert!(
+            ctx.config(bank).allocated && ctx.config(bank).cols == 1,
+            "redmule: banks must be allocated with one group"
+        );
+    }
+    super::latency::cycles(
+        rows,
+        k,
+        (xs2 >> 12) & 1023,
+        (xs2 >> 22) & 1023,
+        (xs2 >> 32) & 1023,
+        first,
+    )
 }

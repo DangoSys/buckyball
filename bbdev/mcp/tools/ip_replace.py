@@ -10,28 +10,26 @@ from common import err, fmt, need, opt, submit
 def register(mcp):
     @mcp.tool()
     def bbdev_ip_replace(
-        design: str,
         consumer: Optional[str] = None,
         top: Optional[str] = None,
-        output_dir: Optional[str] = None,
         next_topic: Optional[str] = None,
+        config: str | None = None,
         device: str | None = None,
-        core: str | None = None,
+        hart: str | None = None,
     ) -> str:
         """Assemble synthesis source list plus SRAM macros. POST /ip/replace."""
-        if e := need("design", design):
-            return err(e)
         request = opt(
-            {"design": design},
+            {},
             consumer=consumer,
             top=top,
-            output_dir=output_dir,
             next_topic=next_topic,
         )
+        if config is not None:
+            request["config"] = config
         if device is not None:
             request["device"] = device
-        if core is not None:
-            request["core"] = core
+        if hart is not None:
+            request["hart"] = hart
         return fmt(
             submit(
                 "/ip/replace",

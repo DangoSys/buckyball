@@ -1,0 +1,5 @@
+syntax = "proto3";
+package buckyball.balls.mxint5gemv;
+option java_package = "buckyball.balls.mxint5gemv";
+option java_multiple_files = true;
+message Params {}

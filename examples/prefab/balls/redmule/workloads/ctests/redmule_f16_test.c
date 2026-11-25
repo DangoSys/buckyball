@@ -7,7 +7,7 @@ static uint16_t b[18 * 8] __attribute__((aligned(64)));
 static uint16_t c[7 * 8] __attribute__((aligned(64)));
 
 int main(void) {
-  unsigned ab = CORE_VIRTUAL_BANK_COUNT - 3, bb = ab + 1, cb = ab + 2;
+  unsigned ab = HART_VIRTUAL_BANK_COUNT - 3, bb = ab + 1, cb = ab + 2;
   for (unsigned i = 0; i < 8 * 8; ++i)
     a[i] = 0x7e00;
   for (unsigned i = 0; i < 18 * 8; ++i)

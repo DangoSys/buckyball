@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "magia-test-linux-ddr.hex",
+]

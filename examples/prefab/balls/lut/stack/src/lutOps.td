@@ -40,4 +40,36 @@ def LookupI8Op : LutBall_Op<"lookup_i8",
   let assemblyFormat = "prop-dict attr-dict";
 }
 
+def BankLookupI32Op : LutBall_Op<"bank_lookup_i32",
+    [DeclareOpInterfaceMethods<BankSSALowering>]> {
+  let summary = "lookup_i32 on virtual banks";
+  let arguments = (ins I64:$codes, I64:$table, I64:$output, I64Attr:$rows);
+  let results = (outs I64:$outputOut);
+  let assemblyFormat = "$codes `,` $table `->` $output prop-dict attr-dict";
+}
+
+def LookupI32Op : LutBall_Op<"lookup_i32",
+    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
+  let summary = "lookup_i32 on physical banks";
+  let arguments = (ins I64Attr:$codes, I64Attr:$table, I64Attr:$output,
+                       I64Attr:$rows);
+  let assemblyFormat = "prop-dict attr-dict";
+}
+
+def BankSoftmaxI8Op : LutBall_Op<"bank_softmax_i8",
+    [DeclareOpInterfaceMethods<BankSSALowering>]> {
+  let summary = "softmax_i8 on virtual banks";
+  let arguments = (ins I64:$codes, I64:$table, I64:$output, I64Attr:$rows, I64Attr:$multiplier);
+  let results = (outs I64:$outputOut);
+  let assemblyFormat = "$codes `,` $table `->` $output prop-dict attr-dict";
+}
+
+def SoftmaxI8Op : LutBall_Op<"softmax_i8",
+    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
+  let summary = "softmax_i8 on physical banks";
+  let arguments = (ins I64Attr:$codes, I64Attr:$table, I64Attr:$output,
+                       I64Attr:$rows, I64Attr:$multiplier);
+  let assemblyFormat = "prop-dict attr-dict";
+}
+
 #endif // LUT_OPS

@@ -64,7 +64,7 @@ Run:
 Or via bbdev:
 
 ```console
-bbdev uvm --run '--design pebble --ball transpose'
+bbdev uvm --run '--ball transpose'
 ```
 
 

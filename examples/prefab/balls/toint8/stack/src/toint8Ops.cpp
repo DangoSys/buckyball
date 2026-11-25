@@ -8,7 +8,7 @@
 #include "toint8Ops.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::toint8_ball;
@@ -57,8 +57,7 @@ LogicalResult Fp32ToInt8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   uint64_t rs1 = bankFields({int64_t(getInput()), int64_t(getScales())},
                             getOutput(), false, getRows());
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("QUANT_F32_TO_I8"),
+  emitInstruction(builder, loc, target::getFunct7("QUANT_F32_TO_I8"),
                   constantI64(builder, loc, rs1), constantI64(builder, loc, 0));
   return success();
 }
@@ -82,7 +81,7 @@ int64_t Int32ToInt8Op::getDestinationBank() { return getOutput(); }
 LogicalResult Int32ToInt8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows();
-  int64_t depth = buckyball_target::getBuckyballTarget().bankDepth;
+  int64_t depth = target::getTarget().bankDepth;
   if (rows <= 0 || rows * 4 > depth)
     return emitOpError("INT32-to-INT8 rows exceed the bank depth");
   // The output rows start at the base of the destination, packed; the
@@ -92,8 +91,8 @@ LogicalResult Int32ToInt8Op::lowerToInstructions(OpBuilder &builder) {
                             getOutput(), false, rows * 4);
   uint64_t rs2 = uint64_t(getRelu()) | (uint64_t(width) << 8) |
                  (uint64_t(rows / width) << 15) | (uint64_t(width) << 22);
-  emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("QUANT_I32_TO_I8"),
-      constantI64(builder, loc, rs1), constantI64(builder, loc, rs2));
+  emitInstruction(builder, loc, target::getFunct7("QUANT_I32_TO_I8"),
+                  constantI64(builder, loc, rs1),
+                  constantI64(builder, loc, rs2));
   return success();
 }

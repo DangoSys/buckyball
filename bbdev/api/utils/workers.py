@@ -4,14 +4,14 @@ import subprocess
 from pathlib import Path
 
 
-def server_ports_path(workflow_dir: str) -> str:
-    return os.path.join(workflow_dir, "data", "bbdev-server.json")
+def server_ports_path(workflow_dir: str, http_port: int) -> str:
+    return os.path.join(workflow_dir, "data", f"bbdev-server-{http_port}.json")
 
 
 def write_server_ports(
     workflow_dir: str, http_port: int, worker_port: int, bb_root: str
 ) -> None:
-    path = server_ports_path(workflow_dir)
+    path = server_ports_path(workflow_dir, http_port)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -27,8 +27,8 @@ def write_server_ports(
     os.replace(tmp, path)
 
 
-def read_server_ports(workflow_dir: str) -> dict:
-    path = server_ports_path(workflow_dir)
+def read_server_ports(workflow_dir: str, http_port: int) -> dict:
+    path = server_ports_path(workflow_dir, http_port)
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     if not isinstance(data, dict):

@@ -8,21 +8,20 @@
 #include <iostream>
 #include <sys/mman.h>
 
-void mm_t::write(uint64_t faddr, uint8_t *data, uint64_t strb, uint64_t size) {
+void mm_t::write(uint64_t faddr, uint8_t *data, const uint32_t *strb,
+                 uint64_t size) {
   uint64_t addr = faddr - this->mem_base;
   assert(addr < this->mem_size);
-  auto max_strb_bytes = sizeof(uint64_t) * 8;
-  assert(size <= max_strb_bytes); // Ensure the strb is wide enough to support
-                                  // the desired transaction
-  if (size != max_strb_bytes) {
-    strb &= ((1 << size) - 1) << (addr % word_size);
-  }
-
+  // A transfer of `size` bytes takes its lanes of the word, from the address
+  // to the end of its `size` block; the strobe holds one bit a byte of the
+  // word.
+  uint64_t first = addr % word_size;
+  uint64_t end = first / size * size + size;
+  assert(end <= (uint64_t)word_size);
   uint8_t *base = this->data + (addr / word_size) * word_size;
-  for (int i = 0; i < word_size; i++) {
-    if (strb & 1)
+  for (uint64_t i = first; i < end; i++) {
+    if ((strb[i / 32] >> (i % 32)) & 1)
       base[i] = data[i];
-    strb >>= 1;
   }
 }
 
@@ -43,7 +42,8 @@ void mm_magic_t::tick(bool reset,
                       bool aw_valid, uint64_t aw_addr, uint64_t aw_id,
                       uint64_t aw_size, uint64_t aw_len,
 
-                      bool w_valid, uint64_t w_strb, void *w_data, bool w_last,
+                      bool w_valid, const uint32_t *w_strb, void *w_data,
+                      bool w_last,
 
                       bool r_ready, bool b_ready) {
   bool ar_fire = !reset && ar_valid && ar_ready();

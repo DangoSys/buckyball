@@ -8,7 +8,7 @@ alignas(16) static const uint8_t image[] = {
 };
 alignas(16) static float input[40], output[40];
 // The launch descriptor followed by log(alpha) and log(beta) of each channel.
-alignas(16) static uint8_t descriptor[sizeof(kernel_launch) + 16];
+alignas(16) static uint8_t descriptor[sizeof(operator_launch) + 16];
 
 int main() {
   for (unsigned i = 0; i < 40; ++i)
@@ -16,13 +16,13 @@ int main() {
   float logAlpha[2]{-0.5f, 0.5f}, logBeta[2]{0.25f, -0.25f};
   rvv_load(image, sizeof(image));
   bb_mvin_group((uintptr_t)input, RVV_READ_BANK, 0, 10, 1);
-  kernel_launch call{rvv_image_word(image, 2),
-                     rvv_image_word(image, 1),
-                     RVV_STACK,
-                     {UINT64_C(3) << 32, 0, 2, 19,
-                      RVV_DESCRIPTOR + sizeof(call),
-                      RVV_DESCRIPTOR + sizeof(call) + 8},
-                     0};
+  operator_launch call{rvv_image_word(image, 2),
+                       rvv_image_word(image, 1),
+                       RVV_STACK,
+                       {UINT64_C(3) << 32, 0, 2, 19,
+                        RVV_DESCRIPTOR + sizeof(call),
+                        RVV_DESCRIPTOR + sizeof(call) + 8},
+                       0};
   std::memcpy(descriptor, &call, sizeof(call));
   std::memcpy(descriptor + sizeof(call), logAlpha, 8);
   std::memcpy(descriptor + sizeof(call) + 8, logBeta, 8);

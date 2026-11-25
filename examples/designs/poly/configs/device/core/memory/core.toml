@@ -1,5 +1,0 @@
-# Memory of every poly core; the device assigns the cache node IDs.
-uncached = "default"
-access = "access/core.toml"
-dcache = "dcache/core.toml"
-home = "home/core.toml"

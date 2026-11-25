@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* One device-visible heap per core worker; blocks are first fit and coalesce on
+/* One device-visible heap per hart worker; blocks are first fit and coalesce on
  * free. */
 
 struct block {
@@ -23,7 +23,7 @@ void workspace_init(void *memory, size_t bytes) {
     ((volatile unsigned char *)memory)[offset] = 0;
 }
 
-/* Starts an empty heap for the calling core worker. */
+/* Starts an empty heap for the calling hart worker. */
 void workspace_begin(void *memory, size_t bytes) {
   head = memory;
   *head = (struct block){.size = bytes - sizeof(struct block), .available = 1};

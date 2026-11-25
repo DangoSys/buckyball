@@ -1,0 +1,10 @@
+# The tests of the ffn thread alone
+# (bbdev bebop-* --batch "--thread poly/threads/ffn").
+[workloads]
+tests = [
+  "ffn-thread-dma_roundtrip-baremetal",
+  "ffn-thread-transpose_i8_16x16-baremetal",
+  "ffn-thread-mxint8quantize_edges-baremetal",
+  "ffn-thread-mxint8matmul_small-baremetal",
+  "ffn-thread-mxint8act_relu-baremetal",
+]

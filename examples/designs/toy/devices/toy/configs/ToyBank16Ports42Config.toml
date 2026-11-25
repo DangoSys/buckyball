@@ -1,0 +1,7 @@
+include = "design.toml"
+
+# Interconnect area experiment: sixteen Balls, 16 banks, one channel per Ball port (42).
+[[device.harts]]
+include = "../../../harts/toy/configs/default.toml"
+hartId = 0
+accelerator = { include = "../../../harts/toy/configs/acc/default.toml", balldomain = "../../../harts/toy/configs/acc/balldomain/balls16.toml", memdomain = "../../../harts/toy/configs/acc/memdomain/bank16-ports42.toml", frontend = "../../../harts/toy/configs/acc/frontend/no-subrob.toml" }

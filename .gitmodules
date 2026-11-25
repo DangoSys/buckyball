@@ -26,8 +26,8 @@
 	path = stack
 	url = https://github.com/buddy-compiler/buddy-examples
 	branch = buckyball
-[submodule "arch/thirdparty/gemmini"]
-	path = arch/thirdparty/gemmini
+[submodule "examples/prefab/cores/gemmini/thirdparty/gemmini"]
+	path = examples/prefab/harts/gemmini/thirdparty/gemmini
 	url = https://github.com/ucb-bar/gemmini.git
 [submodule "thirdparty/soc-framework"]
 	path = thirdparty/soc-framework
@@ -54,15 +54,21 @@
 	path = arch/thirdparty/tech_cells_generic
 	url = https://github.com/pulp-platform/tech_cells_generic.git
 [submodule "examples/prefab/core/rocket/thirdparty/rocket-chip"]
-	path = examples/prefab/cores/rocket/thirdparty/rocket-chip
+	path = examples/prefab/harts/rocket/thirdparty/rocket-chip
 	url = https://github.com/SEU-ACAL/rocket-chip.git
 
 [submodule "examples/prefab/core/xiangshan/thirdparty/xiangshan"]
-	path = examples/prefab/cores/xiangshan/thirdparty/xiangshan
+	path = examples/prefab/harts/xiangshan/thirdparty/xiangshan
 	url = https://github.com/OpenXiangShan/XiangShan.git
 [submodule "examples/prefab/cores/boom/thirdparty/riscv-boom"]
-	path = examples/prefab/cores/boom/thirdparty/riscv-boom
+	path = examples/prefab/harts/boom/thirdparty/riscv-boom
 	url = https://github.com/riscv-boom/riscv-boom.git
 [submodule "examples/prefab/cores/boom/thirdparty/rocket-chip"]
-	path = examples/prefab/cores/boom/thirdparty/rocket-chip
+	path = examples/prefab/harts/boom/thirdparty/rocket-chip
 	url = https://github.com/chipsalliance/rocket-chip.git
+[submodule "examples/prefab/cores/magia/thirdparty/MAGIA"]
+	path = examples/prefab/harts/magia/thirdparty/MAGIA
+	url = https://github.com/pulp-platform/MAGIA.git
+[submodule "thirdparty/bbbench"]
+	path = thirdparty/bbbench
+	url = https://github.com/DangoSys/bbbench.git

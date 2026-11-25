@@ -33,21 +33,32 @@
 #define BB_BARRIER_FUNC7 1
 #define BB_MVOVER_FUNC7 0x0d
 #define BB_MVOUT_FUNC7 16
+#define BB_MVOUT_STRIDED_FUNC7 18
+#define BB_MVOUT_BLOCKS_FUNC7 19
 #define BB_MSET_FUNC7 32
 #define BB_MVIN_FUNC7 33
 #define BB_MVIN_2D_FUNC7 34
 #define BB_MVIN_MMIO_FUNC7 35
+#define BB_MVIN_STRIDED_FUNC7 36
+#define BB_MVIN_BLOCKS_FUNC7 37
 
 // The funct7 of instruction `mne` of the Ball in directory `ball`, from the
 // compile definitions of the target (DESIGN_TARGET_DEFS in design.cmake).
 #define FUNCT7(ball, mne)                                                      \
   THREAD_BALLDOMAIN_BALLS_##ball##_INSTRUCTIONS_##mne##_FUNCT7
 
-// Issues one instruction on the calling hart.
+// Issues one instruction on the calling hart; with BUCKYBALL_STREAM it goes
+// into the kernel's stream of the target thread instead.
+#ifdef BUCKYBALL_STREAM
+#include <stream.h>
+#define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
+  stream_emit((func7), (uint64_t)(rs1_val), (uint64_t)(rs2_val))
+#else
 #define BUCKYBALL_INSTRUCTION_R_R(rs1_val, rs2_val, func7)                     \
   asm volatile(".insn r " STR(CUSTOM_3) ", 3, %c2, x0, %0, %1"                 \
                :                                                               \
                : "r"(rs1_val), "r"(rs2_val), "i"(func7)                        \
                : "memory")
+#endif
 
 #endif // BUCKYBALL_BB_ISA_H

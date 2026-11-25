@@ -1,0 +1,6 @@
+# The solo hart's MXINT8 matrix product: the 16x16 array of the dense
+# thread.
+include = "../../../../balls/mxint8mm/configs/default.toml"
+
+rows = 16
+cols = 16

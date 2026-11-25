@@ -1,17 +1,17 @@
 # FireSim Workflow
 
-FireSim FPGA simulation. All commands take `--design`; mill class comes from
-`examples/designs/<design>/configs/design.toml` `[sims].firesim`.
+FireSim FPGA simulation. All commands take `[--config <config TOML>] --device <device>` (or
+`--hart <hart>`), a device without `--config` from its design's one `<Design>DefaultConfig.toml`; the mill class comes from the generated design.pb.
 
 Manager YAMLs are generated per design under `scripts/yaml/<design>/`.
 
 ## Commands
 
 ```bash
-bbdev firesim --enumeratefpgas '--design toy'
-bbdev firesim --buildbitstream '--design toy'
-bbdev firesim --infrasetup '--design toy'
-bbdev firesim --runworkload '--design toy'
+bbdev firesim --enumeratefpgas '--device toy'
+bbdev firesim --buildbitstream '--device toy'
+bbdev firesim --infrasetup '--device toy'
+bbdev firesim --runworkload '--device toy'
 ```
 
 `buildbitstream` takes hours. `infrasetup` / `runworkload` require a prior

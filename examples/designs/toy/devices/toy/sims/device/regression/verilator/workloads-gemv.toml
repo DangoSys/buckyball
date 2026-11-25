@@ -1,0 +1,14 @@
+[workloads]
+tests = [
+  "toy-hart0-ctest-dma_strided_rows_test-baremetal",
+  "toy-hart0-ctest-gemv_groups-baremetal",
+  "toy-hart0-ctest-gemv_zero_dot-baremetal",
+  "toy-hart0-ctest-gemv_negative_state-baremetal",
+  "toy-hart0-ctest-gemv_signed_rounding-baremetal",
+  "toy-hart0-ctest-gemv_zero_restart-baremetal",
+  "toy-hart0-ctest-gemv_k1024-baremetal",
+  "toy-hart0-ctest-gemv_headroom-baremetal",
+  "toy-hart0-ctest-gemv_quant_clamp-baremetal",
+  "toy-toy-mlirtest-bank_gemv_state-baremetal",
+  "toy-toy-mlirtest-ball_gemv_rounding-baremetal",
+]

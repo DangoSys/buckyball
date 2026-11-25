@@ -77,6 +77,7 @@ class maxpool_scoreboard extends uvm_scoreboard;
     int unsigned min_addr;
     int unsigned max_addr;
 
+    if (stim.is_topk) return addr < stim.iter;
     min_addr = stim.input_base;
     max_addr = stim.input_base + stim.input_side * stim.input_side - 1;
     if (addr < min_addr || addr > max_addr) return 1'b0;
@@ -91,19 +92,25 @@ class maxpool_scoreboard extends uvm_scoreboard;
     stim = current_stim("READ");
     if (item.port != 0)
       `uvm_fatal("READ", $sformatf("MaxPoolBall has one read port, got port %0d", item.port))
-    // Groups are pooled in order: every read belongs to the group being written.
-    if (item.group_id !== stim.op1_group + stim.dst_group[write_count])
-      `uvm_fatal("READ", $sformatf(
-                 "group mismatch: got %0d exp %0d",
-                 item.group_id,
-                 stim.op1_group + stim.dst_group[write_count]
-                 ))
+    if (stim.is_topk) begin
+      if (item.group_id !== stim.op1_group + (read_count / stim.iter) % stim.op1_col ||
+          item.addr !== read_count % stim.iter)
+        `uvm_fatal("READ", "TOPK_U32 scan order mismatch")
+    end else begin
+      // Groups are pooled in order: every read belongs to the group being written.
+      if (item.group_id !== stim.op1_group + stim.dst_group[write_count])
+        `uvm_fatal("READ", $sformatf(
+                   "group mismatch: got %0d exp %0d",
+                   item.group_id,
+                   stim.op1_group + stim.dst_group[write_count]
+                   ))
+    end
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
     if (item.bank_id !== stim.op1_bank)
       `uvm_fatal("READ", $sformatf("bank mismatch: got %0d exp %0d", item.bank_id, stim.op1_bank))
     if (!input_addr_legal(stim, item.addr))
-      `uvm_fatal("READ", $sformatf("addr out of input core: got %0d", item.addr))
+      `uvm_fatal("READ", $sformatf("addr out of input hart: got %0d", item.addr))
     read_count++;
   endfunction
 
@@ -146,6 +153,8 @@ class maxpool_scoreboard extends uvm_scoreboard;
     stim = current_stim("RESP");
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("RESP", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
+    if (stim.is_topk && read_count != stim.iter * stim.op1_col * ((stim.rs2[47:32] + 3) / 4))
+      `uvm_fatal("RESP", "TOPK_U32 read footprint mismatch")
     resp_count++;
   endfunction
 

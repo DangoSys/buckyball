@@ -4,10 +4,8 @@
 //!   t = fp32_rne(p * 2^(ea + eb))       ea, eb the block exponents
 //!   acc = fp32_rne(acc + t)             acc starts at +0.0, or at the old C
 //! Every t and acc must be finite.
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
-use bebop_bemu::thread::instructions::decode::{
-    pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old, rs1_update,
-};
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
+use bebop_bemu::ball::blink::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old, rs1_update};
 use bebop_bemu::ExecContext;
 
 fn packed_rows(k: usize) -> usize {
@@ -40,21 +38,14 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         k > 0 && k % 32 == 0,
         "mxint8matmul: K must be a positive multiple of 32"
     );
-    assert!(
-        a != c && b != c && a != b,
-        "mxint8matmul: banks must differ"
-    );
+    assert!(a != c && b != c && a != b, "mxint8matmul: banks must differ");
     for bank in [a, b, c] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,
             "mxint8matmul: banks must be allocated with one group"
         );
     }
-    assert_eq!(
-        bank_row_bytes(),
-        16,
-        "mxint8matmul: bank rows must be 128 bits"
-    );
+    assert_eq!(bank_row_bytes(), 16, "mxint8matmul: bank rows must be 128 bits");
     let stride = packed_rows(k);
     assert!(
         a_base + m * stride <= bank_lines()
@@ -90,42 +81,35 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                 sum += term;
                 assert!(
                     term.is_finite() && sum.is_finite(),
-                    "mxint8matmul: result overflows FP32"
+                    "mxint8matmul: result overflows FP32; M={m} N={n} K={k} row={row} col={col} block={block} a_exp={} b_exp={} product={product} rs1={xs1:#x} rs2={xs2:#x}",
+                    lhs[k + block], rhs[k + block]
                 );
             }
             result[row * n + col] = sum;
         }
     }
-    let bytes: Vec<u8> = result
-        .iter()
-        .flat_map(|value| value.to_le_bytes())
-        .collect();
+    let bytes: Vec<u8> = result.iter().flat_map(|value| value.to_le_bytes()).collect();
     ctx.banks[pc][window].copy_from_slice(&bytes);
     0
 }
 
-/// Event cost of tile setup, bank bursts, PE steps, and result acknowledgement.
+/// The cycles of the Ball against an ideal outside world (latency.rs).
 pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
-    let p = bebop_bemu::configs::ball_domain::parameters::<super::params::Params>(
+    let p = bebop_bemu::ball::blink::parameters::<super::params::Params>(
         "mxint8matmul",
         ctx.ball_id.expect("Ball instance"),
     );
-    let tile_m = p.rows.expect("rows") as u64;
-    let tile_n = p.cols.expect("cols") as u64;
-    let steps = 32 / p.lanes.expect("lanes") as u64;
-    let m = xs2 & 0x3ff;
-    let n = (xs2 >> 10) & 0x3ff;
-    let blocks = rs1_iter(xs1) / 32;
-    let mut clocks = 12;
-    for row in (0..m).step_by(tile_m as usize) {
-        for col in (0..n).step_by(tile_n as usize) {
-            let rows = tile_m.min(m - row);
-            let cols = tile_n.min(n - col);
-            clocks += 2 + blocks * (12 * rows.max(cols) + 8 + steps) + rows * cols;
-            if xs2 & (1 << 62) != 0 {
-                clocks += rows * cols + 6;
-            }
-        }
-    }
-    clocks
+    instruction_cycles(xs1, xs2, &p)
+}
+
+fn instruction_cycles(xs1: u64, xs2: u64, p: &super::params::Params) -> u64 {
+    super::latency::cycles(
+        xs2 & 0x3ff,
+        (xs2 >> 10) & 0x3ff,
+        rs1_iter(xs1),
+        xs2 & (1 << 62) != 0,
+        p.rows.expect("rows") as u64,
+        p.cols.expect("cols") as u64,
+        p.lanes.expect("lanes") as u64,
+    )
 }

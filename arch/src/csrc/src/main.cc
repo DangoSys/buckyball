@@ -20,12 +20,12 @@ static void coverage_atexit() {
     contextp->coveragep()->write();
   }
 }
-
-static void coverage_signal_handler(int sig) {
-  coverage_atexit();
-  _exit(128 + sig);
-}
 #endif
+
+// SIGTERM/SIGINT (a timeout) end the run at the next cycle through sim_exit,
+// so the waveform is closed and coverage written.
+static volatile sig_atomic_t stop_signal = 0;
+static void stop_handler(int sig) { stop_signal = sig; }
 
 static void dump_wave() {
   if (enable_wave) {
@@ -69,9 +69,9 @@ void sim_init(int argc, char **argv) {
 
 #if VM_COVERAGE
   atexit(coverage_atexit);
-  signal(SIGTERM, coverage_signal_handler);
-  signal(SIGINT, coverage_signal_handler);
 #endif
+  signal(SIGTERM, stop_handler);
+  signal(SIGINT, stop_handler);
 }
 
 void sim_exit(int code) {
@@ -87,6 +87,9 @@ void sim_exit(int code) {
 }
 
 void ball_exec_once() {
+  if (stop_signal) {
+    sim_exit(128 + stop_signal);
+  }
   // posedge: clock=1, eval (FF outputs settle)
   top->clock = 1;
   top->eval();

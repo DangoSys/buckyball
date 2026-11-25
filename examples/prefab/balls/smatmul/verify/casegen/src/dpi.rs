@@ -102,3 +102,22 @@ pub extern "C" fn smatmul_case_write_data_lo(index: u32) -> u64 {
 pub extern "C" fn smatmul_case_write_data_hi(index: u32) -> u64 {
     current_case(|case| u64::from_le_bytes(case.writes[index as usize].data[8..16].try_into().unwrap()))
 }
+
+/// The cycles BEMU models for one instruction: SMATMUL_BIAS when `bias` is
+/// set, else SMATMUL_OS (iter, rs2) over `k_groups` reduction groups on a
+/// tile_rows x tile_cols array.
+#[no_mangle]
+pub extern "C" fn smatmul_bemu_cycles(
+    bias: u32,
+    iter: u64,
+    rs2: u64,
+    k_groups: u64,
+    tile_rows: u64,
+    tile_cols: u64,
+) -> u64 {
+    if bias != 0 {
+        crate::latency::bias_cycles()
+    } else {
+        crate::latency::os_cycles(iter, rs2, k_groups, tile_rows, tile_cols)
+    }
+}

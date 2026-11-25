@@ -167,6 +167,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     env = runtime_env.copy()
     env["OUT_PATH"] = build_dir
+    run_log = log_dir(
+        bbdir,
+        design,
+        "p2e",
+        datetime.now().strftime("%Y-%m-%d-%H-%M"),
+        "bebop-p2e",
+        test_type,
+        selection=input_data["target"],
+    )
     harness_args = [
         "--",
         "--workload-toml",
@@ -178,15 +187,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--p2e-fpga-location",
         input_data.get("fpga-location", "0.A"),
         "--log-dir",
-        log_dir(
-            bbdir,
-            design,
-            "p2e",
-            datetime.now().strftime("%Y-%m-%d-%H-%M"),
-            "bebop-p2e",
-            test_type,
-            selection=input_data["target"],
-        ),
+        run_log,
     ]
     if diff:
         harness_args.append("--diff")
@@ -215,6 +216,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "test_type": test_type,
         "diff": diff,
         "workload_toml": workload_toml,
+        "log_dir": run_log,
     }
 
     await check_result(

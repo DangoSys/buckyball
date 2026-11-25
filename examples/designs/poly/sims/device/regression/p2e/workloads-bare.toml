@@ -1,6 +1,0 @@
-[workloads]
-tests = [
-  "poly-main-ctest-design-dataflow-multicore-baremetal",
-  "poly-main-ctest-device_storage-baremetal",
-  "poly-main-ctest-device_transfer-multicore-baremetal",
-]

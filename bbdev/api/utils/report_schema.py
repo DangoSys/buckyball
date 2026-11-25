@@ -96,7 +96,7 @@ def validate_run(run):
         raise ValueError("verification results contain undeclared targets")
     names = set()
     for model in run["workloads"]:
-        if model["kind"] not in {"model", "core", "ball"}:
+        if model["kind"] not in {"model", "hart", "ball"}:
             raise ValueError("invalid workload kind")
         if model["latency_ms"] is not None:
             number(model["latency_ms"], "latency_ms", positive=True)
@@ -207,7 +207,7 @@ def validate_submission(run):
                 or result["benchmark"]["scope"] != "model_execution"
             ):
                 raise ValueError(
-                    "core, Ball and operator tests are not leaderboard model runs"
+                    "hart, Ball and operator tests are not leaderboard model runs"
                 )
             if result["counter"] != "riscv-cycle":
                 raise ValueError(

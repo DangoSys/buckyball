@@ -1,5 +1,17 @@
-# MXINT8 matrix product Ball: a rows x cols array of processing elements, each
-# multiplying `lanes` INT8 code pairs per cycle (lanes divides 32).
+# MXINT8 matrix product Ball: output tiles of rows x cols, a row of the tile at
+# a time on `cols` columns, each multiplying `lanes` INT8 code pairs per cycle
+# (lanes divides 32, 16 at most). 16 lanes take a row in two cycles: the rows
+# of a block as fast as the loader reads them, twice as fast as the tile's C
+# rows are written.
 rows = 8
 cols = 8
-lanes = 8
+lanes = 16
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8MM", funct7 = 64 }]
+
+# The BallDomain that holds this Ball alone (--ball piplus/balls/mxint8mm).
+[host]
+include = "default"

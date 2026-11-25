@@ -1,0 +1,8 @@
+# Products of the models, run by the slice node once the models are built.
+[workloads]
+tests = [
+  # Slices of the models: the first product of each, against the reference
+  # run's values (stack/models/archs/magia/<model>/slice.cpp).
+  "magia-bert-base-uncased-emotion-slice-baremetal",
+  "magia-qwen3-0-6b-slice-baremetal",
+]

@@ -2,3 +2,12 @@
 
 inputType = "INT32"
 outputType = "FP32"
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "INT32_TO_FP32", funct7 = 68 }]
+
+# The BallDomain that holds this Ball alone (--ball int2fp).
+[host]
+include = "default"

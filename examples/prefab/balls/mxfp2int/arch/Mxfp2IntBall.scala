@@ -1,10 +1,11 @@
 package examples.balls.mxfp2int
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.mxfp2int.{Params => ParametersProto}
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
 
 import examples.balls.mxfp2int.configs.Mxfp2IntBallParam
 
@@ -12,7 +13,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 
 /**
  * Mxfp2IntBall - MXFP4 to INT8 dequantizer.
@@ -22,13 +23,11 @@ import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
  */
 @instantiable
 class Mxfp2IntBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val ballParam = Mxfp2IntBallParam.fromProto(ball.parameters.unpack(classOf[ParametersProto]))
 
@@ -40,10 +39,10 @@ class Mxfp2IntBall(
   require(ballCommonConfig.mmioReadBW == 0 && ballCommonConfig.mmioWriteBW == 0)
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val mxfp2intUnit: Instance[PipelinedMxfp2Int] = Instantiate(
-    new PipelinedMxfp2Int(fp, mp, bp, ball, ballParam)
+    new PipelinedMxfp2Int(link, ball, ballParam)
   )
 
   mxfp2intUnit.io.cmdReq <> blink.cmdReq
@@ -63,11 +62,10 @@ class Mxfp2IntBall(
 object Mxfp2IntBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new Mxfp2IntBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new Mxfp2IntBall(link, route)).blink, None)
 
 }

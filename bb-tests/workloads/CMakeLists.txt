@@ -32,9 +32,13 @@ set(BUCKYBALL_REPO_ROOT ${DESIGN_REPO})
 
 find_program(ELF_CC riscv64-unknown-elf-gcc REQUIRED)
 find_program(ELF_CXX riscv64-unknown-elf-g++ REQUIRED)
+get_filename_component(ELF_BIN_DIR "${ELF_CC}" DIRECTORY)
+file(REAL_PATH "${ELF_BIN_DIR}/.." ELF_TOOLCHAIN)
+set(ELF_CC "${ELF_TOOLCHAIN}/bin/riscv64-unknown-elf-gcc")
+set(ELF_CXX "${ELF_TOOLCHAIN}/bin/riscv64-unknown-elf-g++")
 find_program(ELF_OBJCOPY riscv64-unknown-elf-objcopy REQUIRED)
 
-set(BUCKYBALL_CONTROL_TARGET "core${DESIGN_WORKLOAD_CONTROL_HART}")
+set(BUCKYBALL_CONTROL_TARGET "hart${DESIGN_WORKLOAD_CONTROL_HART}")
 # The definitions of every program of the design, as compiler flags.
 set(DESIGN_DEFINES ${DESIGN_DEFS})
 list(TRANSFORM DESIGN_DEFINES PREPEND "-D")
@@ -47,7 +51,7 @@ set(CMAKE_EXE_LINKER_FLAGS
 set(OUTPUT_BIN_DIR "${DESIGN_OUTPUT}/workloads")
 
 set(CTEST_MAX_LINES 100)
-set(BUCKYBALL_CTEST_C_FLAGS
+set(CTEST_C_FLAGS
     -g
     -fno-common
     -O2

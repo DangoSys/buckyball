@@ -10,6 +10,7 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 -F @RTL@/filelist.f
++incdir+src
 src/reference/redmule_reference.sv
 src/pkg/redmule_pkg.sv
 src/tb_top.sv

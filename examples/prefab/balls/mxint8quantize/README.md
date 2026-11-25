@@ -68,11 +68,11 @@ or the row's last block the zero-padded exponent row. No parameters.
 
 ## Tests
 
-`workloads/ctests/vectors.py` writes `vectors.h` offline from
-`quantize_mxint8` (`quant_edges`: ties, clamps, signed zeros, subnormals,
-all-zero and tiny-normal blocks, the FP32 extremes; `quant_random`: 3 rows of
-544 values, two exponent rows per output row). `quant_edges.c` and
-`quant_random.c` are the thread programs; a design runs them and compares the
-packed rows with `<case>_expected` byte for byte.
+The C tests in `workloads/ctests` are self-contained and run through their
+hart's thread: `quant_edges` checks hand-picked blocks (ties to even, the
+clamp at 127, signed zeros, all-zero and small blocks) byte for byte;
+`quant_random` checks 3 rows of 544 values against the definition (the block
+exponent, each code within half a step, the zero padding). The BEMU model is
+the bit-exact reference.
 `workloads/mlir_tests` holds the instruction encoding (`ball/`) and the
 `quant_random` case through the bank operation (`bank/`).

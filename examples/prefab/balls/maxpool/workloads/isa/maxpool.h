@@ -20,4 +20,13 @@
           FIELD(start_row, 38, 41) | FIELD(start_col, 42, 45),                 \
       FUNCT7(maxpool, MAXPOOL))
 
+// Input: four U32 keys per bank row, interleaved across input groups.
+// Output: two [key, original-index] pairs per row in one output group.
+// rs2[31:0] is N, rs2[47:32] is K; upper bits are reserved.
+#define bb_topk_u32(input_bank, output_bank, rows, n, k)                       \
+  BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(input_bank) | BB_BANK2(output_bank) |     \
+                                BB_ITER(rows) | BB_UPDATE_WR,                  \
+                            FIELD(n, 0, 31) | FIELD(k, 32, 47),                \
+                            FUNCT7(maxpool, TOPK_U32))
+
 #endif // _BB_MAXPOOL_H_

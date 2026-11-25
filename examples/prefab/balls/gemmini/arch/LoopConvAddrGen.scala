@@ -1,7 +1,6 @@
 package examples.balls.gemmini
 
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.ball.BallHostParam
 
 import chisel3._
 import chisel3.util._
@@ -18,8 +17,7 @@ import examples.balls.gemmini.configs.GemminiBallParam
  * - Bias DRAM address
  */
 @instantiable
-class LoopConvAddrGen(val frontendParam: FrontendParam, val memParam: MemDomainParam, val ballParam: GemminiBallParam)
-    extends Module {
+class LoopConvAddrGen(host: BallHostParam, val ballParam: GemminiBallParam) extends Module {
   val config   = ballParam
   val elemSize = config.inputWidth / 8
   val accBytes = config.accWidth / 8
@@ -27,7 +25,7 @@ class LoopConvAddrGen(val frontendParam: FrontendParam, val memParam: MemDomainP
   @public
   val io = IO(new Bundle {
     // Conv config
-    val cfg        = Input(new LoopConvWsConfig(frontendParam, memParam, ballParam))
+    val cfg        = Input(new LoopConvWsConfig(host, ballParam))
     // Loop indices
     val batch      = Input(UInt(16.W))
     val orow       = Input(UInt(16.W))
@@ -37,10 +35,10 @@ class LoopConvAddrGen(val frontendParam: FrontendParam, val memParam: MemDomainP
     val kcol       = Input(UInt(16.W))
     val kch        = Input(UInt(16.W))
     // Outputs
-    val inputAddr  = Output(UInt(memParam.memAddrLen.W))
-    val weightAddr = Output(UInt(memParam.memAddrLen.W))
-    val outputAddr = Output(UInt(memParam.memAddrLen.W))
-    val biasAddr   = Output(UInt(memParam.memAddrLen.W))
+    val inputAddr  = Output(UInt(host.memAddrBits.W))
+    val weightAddr = Output(UInt(host.memAddrBits.W))
+    val outputAddr = Output(UInt(host.memAddrBits.W))
+    val biasAddr   = Output(UInt(host.memAddrBits.W))
     val isPadding  = Output(Bool())
   })
 

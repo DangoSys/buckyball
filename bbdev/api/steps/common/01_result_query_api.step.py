@@ -4,7 +4,7 @@ config = {
     "name": "result-query-api",
     "description": "Query task result by trace_id",
     "flows": ["common"],
-    "triggers": [api("GET", "/result/{trace_id}")],
+    "triggers": [api("GET", "/result/:trace_id")],
 }
 
 

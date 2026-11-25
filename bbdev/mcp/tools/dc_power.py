@@ -10,7 +10,6 @@ from common import err, fmt, opt, submit
 def register(mcp):
     @mcp.tool()
     def bbdev_dc_power(
-        design: Optional[str] = None,
         top: Optional[str] = None,
         activity: Optional[str] = None,
         activity_format: Optional[str] = None,
@@ -18,21 +17,19 @@ def register(mcp):
         workload: Optional[str] = None,
         start_ns: Optional[str] = None,
         end_ns: Optional[str] = None,
+        config: str | None = None,
         device: str | None = None,
-        core: str | None = None,
+        hart: str | None = None,
     ) -> str:
         """Run DC synthesis, design-owned activity simulation, and PrimeTime PX.
 
         Omit activity/activity_format for the normal rerun-and-measure flow.
         Supply both only as a debugging override.
         """
-        if not design:
-            return err("design is required")
         if bool(activity) != bool(activity_format):
             return err("activity and activity_format must be provided together")
         request = opt(
             {},
-            design=design,
             top=top,
             activity=activity,
             format=activity_format,
@@ -41,10 +38,12 @@ def register(mcp):
             start_ns=start_ns,
             end_ns=end_ns,
         )
+        if config is not None:
+            request["config"] = config
         if device is not None:
             request["device"] = device
-        if core is not None:
-            request["core"] = core
+        if hart is not None:
+            request["hart"] = hart
         return fmt(
             submit(
                 "/dc/power",

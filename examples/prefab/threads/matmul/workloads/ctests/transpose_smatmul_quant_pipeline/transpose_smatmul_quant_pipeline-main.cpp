@@ -4,7 +4,7 @@ static volatile uint32_t completed, failed;
 int main() {
   const uint32_t hart = bb_get_hart_id();
   const uint32_t expected =
-      bb_profile_core_count(BB_COMPONENT_WORKLOAD_PROFILE);
+      bb_profile_hart_count(BB_COMPONENT_WORKLOAD_PROFILE);
   if (!expected)
     return 1;
   if (bb_hart_profile(hart) == BB_COMPONENT_WORKLOAD_PROFILE) {

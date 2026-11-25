@@ -1,49 +1,49 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import framework.acc.balldomain.sub_rob.{Expansion, HasExpansion}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
+import framework.ball.sub_rob.{Expansion, HasExpansion}
 import buckyball.balls.gemmini.{Params => ParametersProto}
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
 
 import examples.balls.gemmini.configs.GemminiBallParam
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import chisel3.util._
-import framework.acc.balldomain.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
 
 @instantiable
 class GemminiBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:      BlinkParam,
+  route:     BallRouteParam,
+  expanding: ExpansionParam)
     extends Module
     with HasBlink
     with HasExpansion {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val ballParam = GemminiBallParam.fromProto(ball.parameters.unpack(classOf[ParametersProto]))
 
   require(
-    mp.bankEntries <= 1024,
+    link.bankEntries <= 1024,
     "GemminiBall rs2 row-base fields support at most 1024 bank entries"
   )
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   @public
-  val expansion = IO(new Expansion(fp, mp, bp))
+  val expansion = IO(new Expansion(expanding.host, expanding.balls))
 
-  val loop: Instance[Loop] = Instantiate(new Loop(fp, mp, bp, id))
+  val loop: Instance[Loop] = Instantiate(new Loop(expanding.host, expanding.balls, route.id))
   expansion <> loop.expansion
 
   val execution: Instance[GemminiExCtrl] =
-    Instantiate(new GemminiExCtrl(fp, mp, bp, ball, ballParam))
-  val robId = RegInit(0.U(log2Up(fp.rob_entries).W))
+    Instantiate(new GemminiExCtrl(link, ball, ballParam))
+  val robId = RegInit(0.U(link.robIdBits.W))
   when(blink.cmdReq.fire)(robId := blink.cmdReq.bits.rob_id)
 
   execution.exio.cmdReq <> blink.cmdReq
@@ -75,12 +75,11 @@ class GemminiBall(
 object GemminiBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts = {
-    val ball = Instantiate(new GemminiBall(fp, mp, bp, id))
+    val ball = Instantiate(new GemminiBall(link, route, expansion.get))
     BallPorts(ball.blink, Some(ball.expansion))
   }
 

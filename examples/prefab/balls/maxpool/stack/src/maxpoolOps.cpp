@@ -8,7 +8,7 @@
 #include "maxpoolOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::maxpool_ball;
@@ -63,7 +63,7 @@ LogicalResult MaxpoolI8Op::lowerToInstructions(OpBuilder &builder) {
   if (inputSide <= 0 || inputSide > 15 || kernel <= 0 || kernel > 15 ||
       stride <= 0 || stride > 15 || padding < 0 || padding > 15 || span < 0 ||
       span % stride || span / stride + 1 > 15 ||
-      inputSide * inputSide > buckyball_target::getBuckyballTarget().bankDepth)
+      inputSide * inputSide > target::getTarget().bankDepth)
     return emitOpError("maxpool_i8 geometry exceeds the ISA field ranges");
   int64_t outputSide = span / stride + 1;
   // Both maps start at the base of their groups; output rows are packed.
@@ -71,10 +71,41 @@ LogicalResult MaxpoolI8Op::lowerToInstructions(OpBuilder &builder) {
                  field(kernel, 8, 11) | field(stride, 12, 15) |
                  field(padding, 16, 19) | field(outputSide, 32, 37);
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("MAXPOOL"),
+      builder, loc, target::getFunct7("MAXPOOL"),
       constantI64(builder, loc,
                   bankFields({input}, output, false, outputSide * outputSide) |
                       (1ULL << 63)),
       constantI64(builder, loc, rs2));
+  return success();
+}
+
+SmallVector<Value, 2> BankTopKU32Op::getSourceBanks() { return {getInput()}; }
+Value BankTopKU32Op::getDestinationBank() { return getOutput(); }
+bool BankTopKU32Op::readsDestination() { return false; }
+Operation *BankTopKU32Op::buildPhysical(OpBuilder &builder,
+                                        ArrayRef<int64_t> sources,
+                                        int64_t destination) {
+  return TopKU32Op::create(builder, getLoc(), sources[0], destination,
+                           getRows(), getCount(), getK());
+}
+
+SmallVector<int64_t, 2> TopKU32Op::getSourceBanks() {
+  return {int64_t(getInput())};
+}
+int64_t TopKU32Op::getDestinationBank() { return getOutput(); }
+LogicalResult TopKU32Op::lowerToInstructions(OpBuilder &builder) {
+  int64_t rows = getRows(), count = getCount(), k = getK();
+  const auto &target = target::getTarget();
+  if (getInput() == getOutput() || rows <= 0 || rows > target.bankDepth ||
+      count <= 0 || count > UINT32_MAX || count > rows * target.bankNum * 4 ||
+      k <= 0 || k > count || k > 65535 || k > target.bankDepth * 2)
+    return emitOpError("topk_u32 requires distinct banks, valid N/K and "
+                       "bank-sized rows/output");
+  emitInstruction(
+      builder, getLoc(), target::getFunct7("TOPK_U32"),
+      constantI64(builder, getLoc(),
+                  bankFields({int64_t(getInput())}, getOutput(), false, rows) |
+                      (1ULL << 63)),
+      constantI64(builder, getLoc(), field(count, 0, 31) | field(k, 32, 47)));
   return success();
 }

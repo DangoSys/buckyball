@@ -11,7 +11,7 @@ module redmule_reference (
   logic [7:0] request_id, response_id;
   logic response_valid = 0;
   bit [127:0] memory[3][1 << `BB_BANK_ADDR_W];
-  int rows, reduction, row_base;
+  int a_limit, b_limit, c_limit;
   longint ticks = 0;
 
   RedmuleNative original (
@@ -51,9 +51,9 @@ module redmule_reference (
       bank = int'(address[25:24]) - 1;
       word_index = address[23:4];
       case (bank)
-        0: limit = row_base + rows * reduction / 8;
-        1: limit = row_base + reduction;
-        2: limit = row_base + rows;
+        0: limit = a_limit;
+        1: limit = b_limit;
+        2: limit = c_limit;
         default: $fatal(1, "Native reference address has no bank region");
       endcase
       if (load) begin
@@ -72,40 +72,47 @@ module redmule_reference (
     end
   end
 
+  // One native job per row tile of 8 C rows, as RedmuleBall issues them.
   task execute(int m, int k, int base, bit first, output longint elapsed);
     longint started;
     int register_addr[9] = '{4, 44, 48, 52, 32, 36, 40, 60, 0};
     int register_data[9];
-    rows = m;
-    reduction = k;
-    row_base = base;
-    register_data = '{
-        0,
-        32'h01000000 + (base << 4),
-        32'h02000000 + (base << 4),
-        32'h03000000 + (base << 4),
-        (8 << 16) | m,
-        32'h02800000 | (!first << 20) | k,
-        0,
-        0,
-        0
-    };
+    int tile_rows, a_base, c_base;
     started = ticks;
-    for (int step = 0; step < 9; step++) begin
-      @(negedge clock);
-      control_addr = register_addr[step];
-      control_data = register_data[step];
-      control_wen  = (step == 0);
-      control_req  = 1;
-      do @(posedge clock); while (!control_grant);
-      @(negedge clock);
-      control_req = 0;
-      wait (control_valid);
-      if (step == 0 && control_result == 32'hffffffff)
-        $fatal(1, "Native reference has no job context");
+    for (int tile = 0; tile * 8 < m; tile++) begin
+      tile_rows = m - tile * 8 > 8 ? 8 : m - tile * 8;
+      a_base = base + tile * k;
+      c_base = base + tile * 8;
+      a_limit = a_base + tile_rows * k / 8;
+      b_limit = base + k;
+      c_limit = c_base + tile_rows;
+      register_data = '{
+          0,
+          32'h01000000 + (a_base << 4),
+          32'h02000000 + (base << 4),
+          32'h03000000 + (c_base << 4),
+          (8 << 16) | tile_rows,
+          32'h02800000 | (!first << 20) | k,
+          0,
+          0,
+          0
+      };
+      for (int step = 0; step < 9; step++) begin
+        @(negedge clock);
+        control_addr = register_addr[step];
+        control_data = register_data[step];
+        control_wen  = (step == 0);
+        control_req  = 1;
+        do @(posedge clock); while (!control_grant);
+        @(negedge clock);
+        control_req = 0;
+        wait (control_valid);
+        if (step == 0 && control_result == 32'hffffffff)
+          $fatal(1, "Native reference has no job context");
+      end
+      wait (event_done);
+      wait (!busy);
     end
-    wait (event_done);
-    wait (!busy);
     elapsed = ticks - started;
     @(negedge clock);
   endtask

@@ -13,14 +13,15 @@ def mill_cmd(
     directory = (repo / directory).resolve()
     designs = repo / "examples/designs"
     if directory.is_relative_to(designs):
-        relative = directory.relative_to(designs)
-        owner = designs / relative.parts[0]
-        if directory.is_relative_to(owner / "sims"):
-            work = (
-                owner
-                / "output/sims"
-                / directory.relative_to(owner / "sims").parent
-                / "mill"
+        # A simulation entry (devices/<device>/sims/<entry>/arch, harts/<hart>/
+        # sims/hart/arch) builds in the design's output/sims/<entry>/<name>/mill:
+        # each hart of a design has its own entry.
+        parts = directory.relative_to(designs).parts
+        owner = designs / parts[0]
+        if "sims" in parts:
+            sims = parts.index("sims")
+            work = owner.joinpath(
+                "output/sims", *parts[sims + 1 : -1], parts[sims - 1], "mill"
             )
         else:
             work = owner / "output/mill"
@@ -70,7 +71,22 @@ def design_cmd(
         directory,
         build.module + ".runMain",
         [
-            "sims.p2e.Elaborate" if product == "p2e" else "sims.verilator.Elaborate",
+            (
+                # A thread alone runs on its virtual environment; its entry
+                # class elaborates the thread alone, for synthesis.
+                "framework.thread.sims.Verilator"
+                if selection.startswith("thread/") and product == "verilator"
+                # A Ball or a thread alone: its entry class is its elaborator.
+                else (
+                    registered.entry_class
+                    if selection.startswith(("ball/", "thread/"))
+                    else (
+                        "framework.device.sims.p2e.Elaborate"
+                        if product == "p2e"
+                        else "framework.device.sims.verilator.Elaborate"
+                    )
+                )
+            ),
             "--config",
             str(config),
             "--target-class",
@@ -80,6 +96,7 @@ def design_cmd(
             "--disable-annotation-unknown",
             "--strip-debug-info",
             "-O=debug",
+            "-lowering-options=disallowLocalVariables",
             *(["--difftest"] if diff else []),
         ],
     )
@@ -95,7 +112,6 @@ def elaborate_cmd(
     if seq_mem:
         command += " " + shlex.join(
             [
-                "-lowering-options=disallowLocalVariables",
                 "--repl-seq-mem",
                 f"--repl-seq-mem-file={os.path.join(out, 'mems.conf')}",
             ]

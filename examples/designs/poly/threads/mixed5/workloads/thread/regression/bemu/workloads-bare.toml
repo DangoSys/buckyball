@@ -1,0 +1,12 @@
+# The tests of the mixed5 thread alone
+# (bbdev bebop-* --batch "--thread poly/threads/mixed5").
+[workloads]
+tests = [
+  "mixed5-thread-dma_roundtrip-baremetal",
+  "mixed5-thread-transpose_i8_16x16-baremetal",
+  "mixed5-thread-mxint8quantize_edges-baremetal",
+  "mixed5-thread-mxint8matmul_small-baremetal",
+  "mixed5-thread-mxint8act_relu-baremetal",
+  "mixed5-thread-mxint5gemv_block-baremetal",
+  "mixed5-thread-intsoftmax_rows-baremetal",
+]

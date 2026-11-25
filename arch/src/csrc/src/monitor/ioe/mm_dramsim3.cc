@@ -95,7 +95,7 @@ void mm_dramsim3_t::tick(bool reset,
                          bool aw_valid, uint64_t aw_addr, uint64_t aw_id,
                          uint64_t aw_size, uint64_t aw_len,
 
-                         bool w_valid, uint64_t w_strb, void *w_data,
+                         bool w_valid, const uint32_t *w_strb, void *w_data,
                          bool w_last,
 
                          bool r_ready, bool b_ready) {

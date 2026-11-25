@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
 use super::accumulator::{Chain, Format};
 use super::decode::{pbank, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
+use std::collections::HashMap;
 
 fn value(code: u8, factor: f32) -> f32 {
     let exponent = (code >> 3) & 15;
@@ -15,7 +15,10 @@ fn value(code: u8, factor: f32) -> f32 {
 }
 
 pub(crate) fn execute(xs1: u64, xs2: u64, window: bool, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "mxmm: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "mxmm: reads no old destination; rs1[29] must be clear"
+    );
     let ball_state = ctx.state::<HashMap<usize, Chain>>();
     let rows = (xs2 & 0xfff) as usize;
     let cols = ((xs2 >> 12) & 0xfff) as usize;
@@ -26,19 +29,16 @@ pub(crate) fn execute(xs1: u64, xs2: u64, window: bool, ctx: &mut ExecContext) -
     let a = rs1_b0(xs1);
     let b = rs1_b1(xs1);
     let c = rs1_b2(xs1);
-    let full_k = if window {
-        ((xs2 >> 32) & 0xffff) as usize
-    } else {
-        k
-    };
+    let full_k = if window { ((xs2 >> 32) & 0xffff) as usize } else { k };
     let start_k = if window { (xs2 >> 48) as usize } else { 0 };
-    let format = if window {
-        Format::Mxfp8Window
-    } else {
-        Format::Mxfp8
-    };
+    let format = if window { Format::Mxfp8Window } else { Format::Mxfp8 };
     assert!(
-        (window || xs2 >> 32 == 0) && (rows == 1 || (rows > 0 && rows % 16 == 0)) && cols > 0 && cols % 16 == 0 && k > 0 && k % 32 == 0,
+        (window || xs2 >> 32 == 0)
+            && (rows == 1 || (rows > 0 && rows % 16 == 0))
+            && cols > 0
+            && cols % 16 == 0
+            && k > 0
+            && k % 32 == 0,
         "mxfp8: requires M=1/multiple of 16, N multiple of 16, K multiple of 32 and zero reserved bits"
     );
     assert!(
@@ -117,10 +117,7 @@ pub(crate) fn execute(xs1: u64, xs2: u64, window: bool, ctx: &mut ExecContext) -
     let mut chain = {
         let mut chains = ball_state.lock().unwrap();
         if first {
-            assert!(
-                !chains.contains_key(&ctx.hart_id),
-                "mxfp8: first while chain is live"
-            );
+            assert!(!chains.contains_key(&ctx.hart_id), "mxfp8: first while chain is live");
             Chain {
                 format,
                 rows,
@@ -130,17 +127,11 @@ pub(crate) fn execute(xs1: u64, xs2: u64, window: bool, ctx: &mut ExecContext) -
                 values: vec![0f32; rows * cols],
             }
         } else {
-            chains
-                .remove(&ctx.hart_id)
-                .expect("mxfp8: continuation without first")
+            chains.remove(&ctx.hart_id).expect("mxfp8: continuation without first")
         }
     };
     assert!(
-        chain.format == format
-            && chain.rows == rows
-            && chain.cols == cols
-            && chain.bank == c
-            && chain.base == base,
+        chain.format == format && chain.rows == rows && chain.cols == cols && chain.bank == c && chain.base == base,
         "mxfp8: continuation changed destination"
     );
     for row in 0..rows {
@@ -167,8 +158,7 @@ pub(crate) fn execute(xs1: u64, xs2: u64, window: bool, ctx: &mut ExecContext) -
     if last {
         let pc = pbank(ctx, c);
         for (i, value) in chain.values.iter().enumerate() {
-            ctx.banks[pc][base * stride + i * 4..base * stride + i * 4 + 4]
-                .copy_from_slice(&value.to_le_bytes());
+            ctx.banks[pc][base * stride + i * 4..base * stride + i * 4 + 4].copy_from_slice(&value.to_le_bytes());
         }
     } else {
         {

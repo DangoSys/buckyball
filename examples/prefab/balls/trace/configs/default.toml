@@ -1,1 +1,10 @@
 # Trace Ball Configuration
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "BDB_COUNTER", funct7 = 4 }]
+
+# The BallDomain that holds this Ball alone (--ball trace).
+[host]
+include = "default"

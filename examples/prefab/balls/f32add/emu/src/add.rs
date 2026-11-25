@@ -1,8 +1,11 @@
-use bebop_bemu::thread::instructions::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
+use bebop_bemu::ball::blink::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use bebop_bemu::ball::ExecContext;
 
 pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "add_f32: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "add_f32: reads no old destination; rs1[29] must be clear"
+    );
     let a = rs1_b0(xs1);
     let b = rs1_b1(xs1);
     let c = rs1_b2(xs1);
@@ -40,11 +43,7 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             f32::from_le_bytes(ctx.banks[pb][offset..offset + 4].try_into().unwrap())
         };
         let sum = accumulator + value;
-        let bits = if sum.is_nan() {
-            0x7fc00000
-        } else {
-            sum.to_bits()
-        };
+        let bits = if sum.is_nan() { 0x7fc00000 } else { sum.to_bits() };
         ctx.banks[pc][offset..offset + 4].copy_from_slice(&bits.to_le_bytes());
     }
     0

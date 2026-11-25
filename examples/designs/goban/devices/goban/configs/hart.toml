@@ -1,0 +1,2 @@
+include = "../../../harts/goban/configs/default.toml"
+hartId = 0

@@ -11,7 +11,7 @@ scripts_path = os.path.join(os.path.dirname(__file__), "scripts")
 if scripts_path not in sys.path:
     sys.path.insert(0, scripts_path)
 
-from utils.event_common import require_design
+from utils.event_common import require_design, require_product
 
 config = {
     "name": "bebop-bemu-sim-api",
@@ -25,12 +25,11 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart", "thread"))
         require_design(body)
+        require_product(body)
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    if not body.get("binary"):
-        return ApiResponse(status=400, body={"error": "binary parameter is required"})
 
     await ctx.enqueue(
         {

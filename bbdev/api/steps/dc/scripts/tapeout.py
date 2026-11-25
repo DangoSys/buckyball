@@ -8,7 +8,7 @@ import shlex
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from utils.path import design_resource_dir
+from utils.path import simulation_dir
 
 
 def _tcl_word(value: str) -> str:
@@ -100,7 +100,7 @@ def get_tapeout_contract(
     *,
     selection: str,
 ) -> TapeoutContract:
-    root = design_resource_dir(bbdir, design, "tapeout", selection=selection)
+    root = simulation_dir(bbdir, design, selection=selection) / "tapeout"
     with (root / "config.toml").open("rb") as f:
         s = tomllib.load(f)["tapeout"]
 

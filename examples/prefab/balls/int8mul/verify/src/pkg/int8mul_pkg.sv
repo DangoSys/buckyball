@@ -8,6 +8,9 @@ package int8mul_pkg;
   `include "seq/int8mul_sequences.svh"
   `include "cov/int8mul_cov.svh"
   `include "env/int8mul_scoreboard.svh"
+  `include "env/int8mul_cycles.svh"
   `include "env/int8mul_env.svh"
   `include "tests/int8mul_test.svh"
+  `include "tests/int8mul_throughput_test.svh"
+  `include "tests/int8mul_latency_test.svh"
 endpackage

@@ -1,0 +1,7 @@
+# PolyFfnConfig: one ffn thread as the poly harts instantiate it.
+include = "../../../../../prefab/threads/ffn/configs/default.toml"
+name = "ffn0"
+component = "ffn"
+transport = "../../../harts/poly/configs/transport.toml"
+memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }
+gpdomain = { eLen = 64, iBufWords = 4096 }

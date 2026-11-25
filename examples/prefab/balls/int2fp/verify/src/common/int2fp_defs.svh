@@ -37,3 +37,4 @@ localparam int INT2FP_MAX_SCALE_WORDS = 12;
 localparam int INT2FP_MAX_DST_WORDS = 48;
 localparam int INT2FP_NUM_CASES = 8;
 localparam int INT2FP_TIMEOUT_CYCLES = 20000;
+import "DPI-C" function longint unsigned int2fp_bemu_cycles(input longint unsigned iter, input longint unsigned cols);

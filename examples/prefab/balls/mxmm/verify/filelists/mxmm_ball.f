@@ -18,23 +18,7 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
-@RTL@/MulAddRecFNToRaw_preMul_e8_s24.sv
-@RTL@/MulAddRecFNToRaw_postMul_e8_s24.sv
-@RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
-@RTL@/RoundRawFNToRecFN_e8_s24.sv
-@RTL@/Fma_l3_e8_s24.sv
-@RTL@/AddRawFN.sv
-@RTL@/AddPipe.sv
-@RTL@/PE.sv
-@RTL@/Array.sv
-@RTL@/Mxfp8Decode.sv
-@RTL@/codes_32x128.sv
-@RTL@/scales_16x8.sv
-@RTL@/Panels.sv
-@RTL@/InputWindow.sv
-@RTL@/accumulator_128x512.sv
-@RTL@/Unit.sv
-@RTL@/MxmmBall.sv
+-F @RTL@/filelist.f
 
 src/pkg/mxmm_pkg.sv
 src/tb_top.sv

@@ -1,0 +1,52 @@
+name: bbbench pages
+
+# Publishes the 3BBench site at https://dangosys.github.io/buckyball/ from the
+# snapshots committed to the bbbench repository.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: bbbench-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: DangoSys/bbbench
+          ref: main
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.18.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build site
+        run: |
+          pnpm -C web install --frozen-lockfile
+          pnpm -C web build
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v5

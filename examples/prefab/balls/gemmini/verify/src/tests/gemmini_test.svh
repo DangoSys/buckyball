@@ -4,6 +4,10 @@ class gemmini_ball_test extends uvm_test;
   typedef virtual bb_blink_if #(`BB_IN_BW, `BB_OUT_BW) vif_t;
   vif_t vif;
   virtual gemmini_expansion_if xif;
+  // This test drives the interfaces itself, without bb_blink_env: it holds
+  // the cycle checkers of both ports.
+  gemmini_cycles cycles;
+  gemmini_expansion_cycles expansion_cycles;
 
   function new(string name, uvm_component parent);
     super.new(name, parent);
@@ -15,6 +19,8 @@ class gemmini_ball_test extends uvm_test;
       `uvm_fatal("NOVIF", "bb_blink_if not found")
     if (!uvm_config_db#(virtual gemmini_expansion_if)::get(this, "", "expansion", xif))
       `uvm_fatal("NOVIF", "gemmini_expansion_if not found")
+    cycles = gemmini_cycles::type_id::create("cycles", this);
+    expansion_cycles = gemmini_expansion_cycles::type_id::create("expansion_cycles", this);
   endfunction
 
   task run_phase(uvm_phase phase);
@@ -23,6 +29,9 @@ class gemmini_ball_test extends uvm_test;
     run_config();
     run_loop_bounds();
     run_group_select();
+    run_ws_bias();
+    run_ws_back_to_back();
+    run_conv_tile();
     phase.drop_objection(this);
   endtask
 
@@ -78,7 +87,7 @@ class gemmini_ball_test extends uvm_test;
     int unsigned writes;
     bit [63:0] rs2 = 64'h0001_0002_0003;
     @(negedge vif.clock);
-    xif.command_bits_rob_id = 'h9;
+    xif.command_bits_rob_id = 'h4;
     xif.command_bits_funct  = `GEMMINI_LOOP_WS_CONFIG_BOUNDS_FUNCT7;
     xif.command_bits_rs2    = rs2;
     xif.command_valid       = 1'b1;
@@ -115,7 +124,7 @@ class gemmini_ball_test extends uvm_test;
       if (cycles > 40) `uvm_fatal("TIMEOUT", "loop bounds command did not complete")
     end
     verification_pkg::evidence::checks++;
-    if (writes != 8 || xif.complete_bits_rob_id !== 'h9)
+    if (writes != 8 || xif.complete_bits_rob_id !== 'h4)
       `uvm_fatal("EXPANSION", $sformatf(
                  "completion mismatch: writes=%0d rob=%0h", writes, xif.complete_bits_rob_id))
     @(negedge vif.clock);
@@ -139,7 +148,7 @@ class gemmini_ball_test extends uvm_test;
 
   // Issues one command and serves its bank traffic until it completes:
   // reads answer one cycle after they fire, writes are recorded in c.
-  task issue(int rob, int funct, bit [63:0] rs2, int op1_bank, int op2_bank,
+  task issue(int rob, int funct, bit [63:0] rs2, int iter, int op1_bank, int op2_bank,
              ref bit [31:0] c[16][16], ref int written);
     bit read_fire[`BB_IN_BW], write_fire[`BB_OUT_BW];
     bit read_done[`BB_IN_BW], write_done[`BB_OUT_BW];
@@ -150,7 +159,7 @@ class gemmini_ball_test extends uvm_test;
     vif.cmd_req_bits_rob_id       = rob;
     vif.cmd_req_bits_funct        = funct;
     vif.cmd_req_bits_rs2          = rs2;
-    vif.cmd_req_bits_iter         = 16;
+    vif.cmd_req_bits_iter         = iter;
     vif.cmd_req_bits_op1_bank     = op1_bank;
     vif.cmd_req_bits_op2_bank     = op2_bank;
     vif.cmd_req_bits_wr_bank      = 3;
@@ -160,7 +169,7 @@ class gemmini_ball_test extends uvm_test;
     vif.cmd_req_bits_op1_col      = 3;
     vif.cmd_req_bits_op2_col      = 3;
     vif.cmd_req_bits_wr_col       = 4;
-    vif.cmd_req_bits_wr_read_bank = '0;
+    vif.cmd_req_bits_wr_read_bank = 3;
     vif.cmd_req_bits_wr_arch_bank = 3;
     vif.cmd_req_valid             = 1'b1;
     cycles                        = 0;
@@ -173,8 +182,15 @@ class gemmini_ball_test extends uvm_test;
         if (read_fire[port]) begin
           if (vif.bank_read_resp_valid[port]) `uvm_fatal("BANK", "read response overrun")
           vif.bank_read_resp_valid[port] = 1'b1;
-          vif.bank_read_resp_data[port] =
-              bank_row(read_bank[port], read_group[port], read_addr[port]);
+          // Bank 3 is C: COMPUTE_ACCUMULATED reads back what was written.
+          if (read_bank[port] == 3)
+            for (int lane = 0; lane < 4; lane++)
+            vif.bank_read_resp_data[port][lane*32+:32] =
+                c[read_addr[port]][read_group[port]*4+lane];
+          else
+            vif.bank_read_resp_data[port] = bank_row(
+                read_bank[port], read_group[port], read_addr[port]
+            );
         end
       end
       for (int port = 0; port < `BB_OUT_BW; port++) begin
@@ -191,9 +207,10 @@ class gemmini_ball_test extends uvm_test;
           read_group[port] = vif.bank_read_group_id[port];
           read_addr[port]  = vif.bank_read_req_addr[port];
           verification_pkg::evidence::checks++;
-          if (read_bank[port] != op1_bank && read_bank[port] != op2_bank)
+          if (read_bank[port] != op1_bank && read_bank[port] != op2_bank && read_bank[port] != 3)
             `uvm_fatal("BANK", $sformatf("read of bank %0d", read_bank[port]))
-          if (read_group[port] != (read_bank[port] == 1 ? GroupA : GroupB))
+          if (read_bank[port] == 3 ? read_group[port] > 3 || read_addr[port] > 15 :
+              read_group[port] != (read_bank[port] == 1 ? GroupA : GroupB))
             `uvm_fatal("GROUP", $sformatf(
                        "bank %0d read group %0d", read_bank[port], read_group[port]))
         end
@@ -231,10 +248,10 @@ class gemmini_ball_test extends uvm_test;
   task run_group_select();
     bit [31:0] c[16][16];
     int written = 0;
-    issue('h6, `GEMMINI_CONFIG_FUNCT7, 64'd0, 0, 0, c, written);
-    issue('h7, `GEMMINI_PRELOAD_FUNCT7, 64'd1 | (64'(GroupB) << 36), 2, 0, c, written);
-    issue('h8, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, 64'd2 | (64'(GroupA) << 36) | (64'(GroupB) << 42),
-          1, 2, c, written);
+    issue('h6, `GEMMINI_CONFIG_FUNCT7, 64'd0, 16, 0, 0, c, written);
+    issue('h7, `GEMMINI_PRELOAD_FUNCT7, 64'd1 | (64'(GroupB) << 36), 16, 2, 0, c, written);
+    issue('h3, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, 64'd2 | (64'(GroupA) << 36) | (64'(GroupB) << 42),
+          16, 1, 2, c, written);
     verification_pkg::evidence::checks++;
     if (written != 64) `uvm_fatal("WRITE", $sformatf("%0d row writes, expected 64", written))
     for (int row = 0; row < 16; row++)
@@ -250,6 +267,98 @@ class gemmini_ball_test extends uvm_test;
                      (row + 2 * col + 1) % 7 - 3
                      ))
     `uvm_info("GEMMINI", "operand group select passed", UVM_LOW)
+  endtask
+
+  // WS with a bias: C = A W + D (original Gemmini, BEMU). W = B's rows 0..15
+  // (PRELOAD), A = the identity's rows (bank 1), D = B's rows 16..31
+  // (op2_base 16, int8, one bank row per row of D): C[i][j] = B[i][j] +
+  // B[16 + i][j].
+  task run_ws_bias();
+    bit [31:0] c[16][16];
+    int written = 0;
+    issue('h1, `GEMMINI_CONFIG_FUNCT7, 64'd1 << 4, 16, 0, 0, c, written);
+    issue('h2, `GEMMINI_PRELOAD_FUNCT7, 64'd1 | (64'(GroupB) << 36), 16, 2, 0, c, written);
+    issue('h4, `GEMMINI_COMPUTE_PRELOADED_FUNCT7,
+          64'd2 | (64'd16 << 16) | (64'(GroupA) << 36) | (64'(GroupB) << 42), 16, 1, 2, c, written);
+    verification_pkg::evidence::checks++;
+    if (written != 64) `uvm_fatal("WRITE", $sformatf("%0d row writes, expected 64", written))
+    for (int row = 0; row < 16; row++)
+      for (int col = 0; col < 16; col++)
+        if ($signed(c[row][col]) != (row + 2 * col + 1) % 7 - 3 + (row + 16 + 2 * col + 1) % 7 - 3)
+          `uvm_fatal("RESULT", $sformatf(
+                     "C[%0d][%0d] = %0d, expected %0d",
+                     row,
+                     col,
+                     $signed(
+                         c[row][col]
+                     ),
+                     (row + 2 * col + 1) % 7 - 3 + (row + 16 + 2 * col + 1) % 7 - 3
+                     ))
+    `uvm_info("GEMMINI", "WS bias passed", UVM_LOW)
+  endtask
+
+  // WS, each instruction issued the cycle after the previous response: a
+  // 16-row PRELOAD and COMPUTE fill every weight register with defined values,
+  // then a 1-row PRELOAD of B's row 0 shifts it into the first PE row and a
+  // 1-row COMPUTE of A's row 0, (1, 0, .., 0), with D = B's row 0 reads it
+  // back: C row 0 must be 2 B row 0. The 1-row PRELOAD's own rows still leave
+  // the mesh while the
+  // COMPUTE drains; it must take only its own row (the cycle checker checks
+  // its cycles as well).
+  task run_ws_back_to_back();
+    bit [31:0] c[16][16];
+    int written = 0;
+    bit [63:0] preload = 64'd1 | (64'(GroupB) << 36);
+    bit [63:0] compute = 64'd2 | (64'(GroupA) << 36) | (64'(GroupB) << 42);
+    issue('h1, `GEMMINI_CONFIG_FUNCT7, 64'd1 << 4, 16, 0, 0, c, written);
+    issue('h2, `GEMMINI_PRELOAD_FUNCT7, preload, 16, 2, 0, c, written);
+    issue('h4, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, compute, 16, 1, 2, c, written);
+    issue('h5, `GEMMINI_PRELOAD_FUNCT7, preload, 1, 2, 0, c, written);
+    written = 0;
+    issue('h6, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, compute, 1, 1, 2, c, written);
+    verification_pkg::evidence::checks++;
+    if (written != 4) `uvm_fatal("WRITE", $sformatf("%0d row writes, expected 4", written))
+    for (int col = 0; col < 16; col++)
+      if ($signed(c[0][col]) != 2 * ((2 * col + 1) % 7 - 3))
+        `uvm_fatal(
+            "RESULT", $sformatf(
+            "C[0][%0d] = %0d, expected %0d", col, $signed(c[0][col]), 2 * ((2 * col + 1) % 7 - 3)))
+    `uvm_info("GEMMINI", "WS back-to-back preload and compute passed", UVM_LOW)
+  endtask
+
+  // The BLink commands of one LOOP_CONV_WS output tile of two compute tiles
+  // (a 3x3 kernel or more than 16 input channels), under CONFIG WS without
+  // a_transpose: PRELOAD, COMPUTE_PRELOADED (WS), PRELOAD, COMPUTE_ACCUMULATED
+  // (OS), each with zero_op2 (no bias) and zero_op1_tail (one input row).
+  // A is bank row 5 of the identity (op1_base 5: A' = e5 in row 0, the other
+  // rows zero), B the weights: the WS compute gives C row 0 = B row 5, the
+  // accumulated one adds A' B again (BEMU: zero_op2 is the WS bias only; OS
+  // reads B), so C row 0 must be 2 B row 5 and the other rows zero.
+  task run_conv_tile();
+    bit [31:0] c[16][16];
+    int written = 0;
+    bit [63:0] preload = 64'd1 | (64'(GroupB) << 36);
+    bit [63:0] tail = (64'd1 << 4) | (64'd1 << 5) | (64'd5 << 6) | (64'(GroupA) << 36) | (64'(GroupB) << 42);
+    issue('h1, `GEMMINI_CONFIG_FUNCT7, 64'd1 << 4, 16, 0, 0, c, written);
+    issue('h2, `GEMMINI_PRELOAD_FUNCT7, preload, 16, 2, 0, c, written);
+    issue('h4, `GEMMINI_COMPUTE_PRELOADED_FUNCT7, 64'd2 | tail, 16, 1, 2, c, written);
+    issue('h5, `GEMMINI_PRELOAD_FUNCT7, preload, 16, 2, 0, c, written);
+    issue('h6, `GEMMINI_COMPUTE_ACCUMULATED_FUNCT7, 64'd3 | tail, 16, 1, 2, c, written);
+    verification_pkg::evidence::checks++;
+    if (written != 128) `uvm_fatal("WRITE", $sformatf("%0d row writes, expected 128", written))
+    for (int row = 0; row < 16; row++)
+      for (int col = 0; col < 16; col++)
+        if ($signed(c[row][col]) != (row == 0 ? 2 * ((2 * col + 6) % 7 - 3) : 0))
+          `uvm_fatal("RESULT", $sformatf(
+                     "C[%0d][%0d] = %0d, expected %0d",
+                     row,
+                     col,
+                     $signed(
+                         c[row][col]
+                     ),
+                     row == 0 ? 2 * ((2 * col + 6) % 7 - 3) : 0
+                     ))
+    `uvm_info("GEMMINI", "conv tile with zero_op2 and zero_op1_tail passed", UVM_LOW)
   endtask
 
   function void check_no_bank_traffic(string what);

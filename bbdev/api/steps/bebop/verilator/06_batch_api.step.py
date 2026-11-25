@@ -14,7 +14,7 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device",))
+        selection = require_target(body, ("device", "hart", "thread"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     try:
@@ -27,14 +27,20 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(
             status=400,
             body={
-                "error": "Missing required parameter: --test must be specified (bare-tests or linux-tests)"
+                "error": (
+                    "Missing required parameter: --test must be specified (bare-tests, linux-tests"
+                    " or slice-tests)"
+                ),
             },
         )
-    if test_type not in ("bare-tests", "linux-tests"):
+    if test_type not in ("bare-tests", "linux-tests", "slice-tests"):
         return ApiResponse(
             status=400,
             body={
-                "error": f"Invalid test type: {test_type}. Must be 'bare-tests' or 'linux-tests'"
+                "error": (
+                    f"Invalid test type: {test_type}. Must be 'bare-tests', 'linux-tests'"
+                    " or 'slice-tests'"
+                ),
             },
         )
     data = {
@@ -42,6 +48,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         "test": test_type,
         "jobs": body.get("jobs", 1),
         "diff": diff,
+        "all-trace": bool(body.get("all-trace", False)),
     }
     await ctx.enqueue(
         {

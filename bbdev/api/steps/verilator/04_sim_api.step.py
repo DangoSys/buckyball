@@ -1,7 +1,7 @@
 from utils.event_common import require_target
 from motia import ApiRequest, ApiResponse, FlowContext, api
 
-from utils.event_common import require_design
+from utils.event_common import require_design, require_product
 
 config = {
     "name": "verilator-sim-api",
@@ -15,22 +15,12 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    binary = body.get("binary", "")
-    if not binary:
-        return ApiResponse(
-            status=400,
-            body={
-                "success": False,
-                "failure": True,
-                "returncode": 400,
-                "message": "binary parameter is required",
-            },
-        )
     try:
         design = require_design(body)
+        require_product(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
 

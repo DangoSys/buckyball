@@ -17,8 +17,10 @@ int main(void) {
   CLINT_MTIMECMP(hart) = start + 200;
   set_csr(mie, MIP_MTIP);
   set_csr(mstatus, MSTATUS_MIE);
-  for (int i = 0; i < 100000 && !fired; i++)
-    asm volatile("nop");
+  // Wait in mtime, not in instructions: a fast core runs any fixed count of
+  // nops before mtime reaches the compare value.
+  while (!fired && CLINT_MTIME - start < 2000)
+    ;
   clear_csr(mstatus, MSTATUS_MIE);
   clear_csr(mie, MIP_MTIP);
   if (fired != 1)

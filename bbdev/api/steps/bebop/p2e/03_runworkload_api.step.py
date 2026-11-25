@@ -1,4 +1,4 @@
-from utils.event_common import require_target
+from utils.event_common import require_product, require_target
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
 from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
@@ -15,13 +15,14 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
+        require_product(body)
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    if not body.get("image") or not body.get("bitstream"):
-        return ApiResponse(
-            status=400, body={"error": "image and bitstream are required"}
-        )
+    if not body.get("bitstream"):
+        return ApiResponse(status=400, body={"error": "bitstream is required"})
+    if body.get("ddr-image") is not None and not body.get("diff", False):
+        return ApiResponse(status=400, body={"error": "ddr-image requires diff"})
     bitstream = body["bitstream"]
     if body.get("reuse-runtime", False):
         try:

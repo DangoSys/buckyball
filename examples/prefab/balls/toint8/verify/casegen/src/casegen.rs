@@ -519,7 +519,7 @@ fn f32_two_groups() -> ToInt8Case {
 
 // Three channel groups, each with its own scales in rows 4g..4g+3 of the one
 // scale group: input rows start at 3,
-// output core base 1, width 2, height 2, stride 3 -> rows 1, 2, 4, 5 in
+// output hart base 1, width 2, height 2, stride 3 -> rows 1, 2, 4, 5 in
 // every group.
 fn i32_three_groups() -> ToInt8Case {
     let mut values = [0u32; 3 * 64];

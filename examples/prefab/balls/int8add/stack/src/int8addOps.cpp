@@ -8,7 +8,7 @@
 #include "int8addOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
@@ -57,8 +57,8 @@ int64_t AddI8Op::getDestinationBank() { return getC(); }
 LogicalResult AddI8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), a = getA(), b = getB(), c = getC();
-  if (rows <= 0 || rows > buckyball_target::getBuckyballTarget().bankDepth ||
-      a == b || a == c || b == c)
+  if (rows <= 0 || rows > target::getTarget().bankDepth || a == b || a == c ||
+      b == c)
     return emitOpError("add_i8 requires distinct banks and rows within a bank");
   // rs2: lhs_ratio bits in [31:0], rhs_ratio bits in [63:32].
   auto ratioBits = [&](Value ratio) -> Value {
@@ -69,10 +69,8 @@ LogicalResult AddI8Op::lowerToInstructions(OpBuilder &builder) {
   Value rhs = arith::ShLIOp::create(builder, loc, ratioBits(getRhsRatio()),
                                     constantI64(builder, loc, 32));
   Value rs2 = arith::OrIOp::create(builder, loc, ratioBits(getLhsRatio()), rhs);
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7(
-                      getRelu() ? "INT8ADD_RELU" : "INT8ADD"),
-                  constantI64(builder, loc, bankFields({a, b}, c, false, rows)),
-                  rs2);
+  emitInstruction(
+      builder, loc, target::getFunct7(getRelu() ? "INT8ADD_RELU" : "INT8ADD"),
+      constantI64(builder, loc, bankFields({a, b}, c, false, rows)), rs2);
   return success();
 }

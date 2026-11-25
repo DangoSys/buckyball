@@ -8,7 +8,7 @@
 #include "int2fpOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::int2fp_ball;
@@ -57,7 +57,7 @@ LogicalResult Int32ToFp32Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows();
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("INT32_TO_FP32"),
+      builder, loc, target::getFunct7("INT32_TO_FP32"),
       constantI64(builder, loc,
                   bankFields({int64_t(getValues()), int64_t(getScales())},
                              getOutput(), false, rows * 4)),

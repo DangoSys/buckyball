@@ -16,22 +16,6 @@ static inline void bb_mxmm_mxfp8(uint32_t a, uint32_t b, uint32_t c, uint32_t m,
       bb_mxmm_cfg(m, n, first, last, base), FUNCT7(mxmm, MXMM_MXFP8));
 }
 
-static inline void bb_mxmm_fma32(uint32_t a, uint32_t b, uint32_t c, uint32_t m,
-                                 uint32_t n, uint64_t k, uint32_t first,
-                                 uint32_t last, uint32_t base) {
-  BUCKYBALL_INSTRUCTION_R_R(
-      BB_BANK0(a) | BB_BANK1(b) | BB_BANK2(c) | BB_ITER(k),
-      bb_mxmm_cfg(m, n, first, last, base), FUNCT7(mxmm, MXMM_FMA32));
-}
-
-static inline void bb_mxmm_f32(uint32_t a, uint32_t b, uint32_t c, uint32_t m,
-                               uint32_t n, uint64_t k, uint32_t first,
-                               uint32_t last, uint32_t base) {
-  BUCKYBALL_INSTRUCTION_R_R(
-      BB_BANK0(a) | BB_BANK1(b) | BB_BANK2(c) | BB_ITER(k),
-      bb_mxmm_cfg(m, n, first, last, base), FUNCT7(mxmm, MXMM_F32));
-}
-
 static inline void bb_mxmm_mxfp8_window(uint32_t a, uint32_t b, uint32_t c,
                                         uint32_t m, uint32_t n, uint64_t k,
                                         uint32_t first, uint32_t last,

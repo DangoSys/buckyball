@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "multi-rocket-hart0-ctest-hello-baremetal.hex",
+]

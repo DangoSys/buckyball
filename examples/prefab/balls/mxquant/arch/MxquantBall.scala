@@ -1,49 +1,47 @@
 package examples.balls.mxquant
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.mxquant.{Params => ParametersProto}
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
-
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.acc.balldomain.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
 
 @instantiable
 class MxquantBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
   require(
-    mp.bankWidth == 128 && mp.bankMaskLen == 16,
+    link.bankWidth == 128 && link.bankMaskLen == 16,
     "MxquantBall requires 128-bit bank rows and byte write masks"
   )
-  require(mp.bankEntries >= 8, "MxquantBall requires eight input rows")
+  require(link.bankEntries >= 8, "MxquantBall requires eight input rows")
   require(ball.inBW == 1 && ball.outBW == 1, "MxquantBall requires one read and one write")
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val idle :: readReq :: readResp :: exponent :: encode :: codeReq :: codeResp :: scaleReq :: scaleResp :: complete :: Nil =
     Enum(10)
   val state                                                                                                                = RegInit(idle)
-  val robId                                                                                                                = Reg(UInt(log2Up(fp.rob_entries).W))
-  val source                                                                                                               = Reg(UInt(fp.bank_id_len.W))
-  val destination                                                                                                          = Reg(UInt(fp.bank_id_len.W))
-  val bases                                                                                                                = Reg(Vec(3, UInt(mp.groupIdWidth.W)))
-  val count                                                                                                                = Reg(UInt(fp.iter_len.W))
-  val group                                                                                                                = RegInit(0.U(fp.iter_len.W))
+  val robId                                                                                                                = Reg(UInt(link.robIdBits.W))
+  val source                                                                                                               = Reg(UInt(link.bankIdBits.W))
+  val destination                                                                                                          = Reg(UInt(link.bankIdBits.W))
+  val bases                                                                                                                = Reg(Vec(3, UInt(link.groupIdBits.W)))
+  val count                                                                                                                = Reg(UInt(link.iterBits.W))
+  val group                                                                                                                = RegInit(0.U(link.iterBits.W))
   val readRow                                                                                                              = RegInit(0.U(3.W))
   val lane                                                                                                                 = RegInit(0.U(5.W))
   val codeRow                                                                                                              = RegInit(0.U(1.W))
@@ -94,11 +92,11 @@ class MxquantBall(
 
         assert(cmd.iter > 0.U && cmd.iter(4, 0) === 0.U, "MxquantBall count must be positive and divisible by 32")
         assert(
-          cmd.iter <= (mp.bankEntries * 4).U,
+          cmd.iter <= (link.bankEntries * 4).U,
           "MxquantBall input exceeds capacity"
         )
         assert(
-          cmd.iter +& (cmd.iter >> 5) <= (mp.bankEntries * 16).U,
+          cmd.iter +& (cmd.iter >> 5) <= (link.bankEntries * 16).U,
           "MxquantBall output exceeds capacity"
         )
         assert(cmd.rs2 === 0.U, "MxquantBall reserved fields must be zero")
@@ -163,11 +161,10 @@ class MxquantBall(
 object MxquantBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new MxquantBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new MxquantBall(link, route)).blink, None)
 
 }

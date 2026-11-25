@@ -52,14 +52,14 @@ int main() {
   bb_mem_transfer(2, RVV_READ_BANK);
   bb_mem_transfer(0, RVV_WRITE_BANK);
   bb_mem_transfer(1, RVV_WRITE_BANK);
-  mvin_kernel(image, sizeof(image), RVV_PROGRAM_BANK);
+  mvin_operator(image, sizeof(image), RVV_PROGRAM_BANK);
   bb_mvin_group((uintptr_t)input, RVV_READ_BANK, 0, 32, 1);
-  alignas(16) kernel_launch call{
+  alignas(16) operator_launch call{
       rvv_image_word(image, 2),
       rvv_image_word(image, 1),
       RVV_STACK,
       {UINT64_C(2) << 32, (UINT64_C(2) << 32) + 128, 0, 128,
-       (UINT64_C(1) << 32) + offsetof(kernel_launch, reserved)},
+       (UINT64_C(1) << 32) + offsetof(operator_launch, reserved)},
       0};
   rvv_run(&call, sizeof(call));
   bb_mvout_group((uintptr_t)&call, RVV_WRITE_BANK, 0, sizeof(call) / 16, 1);

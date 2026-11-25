@@ -6,9 +6,9 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 @instantiable
 class PE extends Module {
 
-  // One core accumulates sixteen signed 8x8 products.  Twenty bits cover the
+  // One hart accumulates sixteen signed 8x8 products.  Twenty bits cover the
   // full range [-262144, 258064]; the unit-level accumulator remains 32-bit
-  // for reduction across cores.
+  // for reduction across harts.
   val tileSumWidth = 20
 
   @public

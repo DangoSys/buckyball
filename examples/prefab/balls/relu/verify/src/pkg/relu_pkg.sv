@@ -8,6 +8,9 @@ package relu_pkg;
   `include "seq/relu_sequences.svh"
   `include "cov/relu_cov.svh"
   `include "env/relu_scoreboard.svh"
+  `include "env/relu_cycles.svh"
   `include "env/relu_env.svh"
   `include "tests/relu_test.svh"
+  `include "tests/relu_throughput_test.svh"
+  `include "tests/relu_latency_test.svh"
 endpackage

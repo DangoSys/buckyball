@@ -1,0 +1,61 @@
+[[ips]]
+ip = "axi4"
+config = "default"
+
+[[ips]]
+ip = "cache"
+config = "default"
+
+[[ips]]
+ip = "chi"
+config = "default"
+
+[[ips]]
+ip = "coherence"
+config = "default"
+
+[[ips]]
+ip = "ddr"
+config = "default"
+
+[[ips]]
+ip = "fetch"
+config = "default"
+
+[[ips]]
+ip = "hart_cache"
+config = "default"
+
+[[ips]]
+ip = "hart_dataflow"
+config = "default"
+
+[[ips]]
+ip = "home"
+config = "default"
+
+[[ips]]
+ip = "mem_access"
+config = "default"
+
+[[ips]]
+ip = "mmu"
+config = "default"
+
+[[ips]]
+ip = "cbus"
+
+[[ips]]
+ip = "clint"
+
+[[ips]]
+ip = "plic"
+
+[[ips]]
+ip = "scu"
+
+[[ips]]
+ip = "trace"
+
+[[ips]]
+ip = "bootrom"

@@ -25,7 +25,7 @@ class Array(val ballParam: SMatMulBallParam) extends Module {
   val pe      = Seq.tabulate(rows, cols)((_, _) => Instantiate(new PE))
   val aShift  = Reg(Vec(rows, UInt(128.W)))
   // The PE product register adds one cycle between the systolic operands and
-  // the accumulator.  Keep the final drain cycle explicit so the last core
+  // the accumulator.  Keep the final drain cycle explicit so the last hart
   // product is included before done is asserted.
   val lastCyc = (rows + cols + 15).U
 

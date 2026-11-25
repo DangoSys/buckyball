@@ -1,7 +1,10 @@
 # ===============================================================
-# Generic functions to help add CTest workloads
+# C tests. A test is written for a profile (CTEST_PROFILE) and built for each
+# instance of it, each its own top: every hart whose CPU has the profile
+# (<design>-hart<c>-ctest-<test>), and every thread of the profile, through
+# its hart (<design>-hart<c>-thread<t>-ctest-<test>).
 # ===============================================================
-function(buckyball_enforce_ctest_line_limit SOURCE_FILE)
+function(ctest_line_limit SOURCE_FILE)
     if(IS_ABSOLUTE "${SOURCE_FILE}")
         set(_src "${SOURCE_FILE}")
     else()
@@ -33,24 +36,48 @@ function(buckyball_enforce_ctest_line_limit SOURCE_FILE)
     endif()
 endfunction()
 
-function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
-    if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
-        message(FATAL_ERROR "BUCKYBALL_CTEST_TARGET is required for C tests")
+# The instances of CTEST_PROFILE: "<hart>" for a hart whose CPU has it,
+# "<hart>/<thread>" for a thread of it.
+function(ctest_instances OUT)
+    if(NOT CTEST_PROFILE IN_LIST DESIGN_PROFILES)
+        message(FATAL_ERROR "unknown C test profile: ${CTEST_PROFILE}")
     endif()
-    list(
-        FIND DESIGN_PROFILES
-        "${BUCKYBALL_CTEST_TARGET}"
-        _buckyball_target_index
-    )
-    if(_buckyball_target_index EQUAL -1)
-        message(FATAL_ERROR "unknown C test target: ${BUCKYBALL_CTEST_TARGET}")
+    set(INSTANCES)
+    foreach(HART IN LISTS DESIGN_DEVICE_HARTS)
+        if(DESIGN_DEVICE_HARTS_${HART}_PROFILE STREQUAL CTEST_PROFILE)
+            list(APPEND INSTANCES ${HART})
+        endif()
+        foreach(THREAD IN LISTS DESIGN_DEVICE_HARTS_${HART}_THREAD_INDICES)
+            if(DESIGN_THREADS_${THREAD}_PROFILE STREQUAL CTEST_PROFILE)
+                list(APPEND INSTANCES ${HART}/${THREAD})
+            endif()
+        endforeach()
+    endforeach()
+    set(${OUT} ${INSTANCES} PARENT_SCOPE)
+endfunction()
+
+# The name of test STEM of INSTANCE (of ctest_instances).
+function(ctest_name OUT INSTANCE STEM)
+    # A thread is named by its id within its hart.
+    string(REPLACE "/" ";" PARTS ${INSTANCE})
+    list(GET PARTS 0 HART)
+    set(PATH ${HART})
+    list(LENGTH PARTS LENGTH)
+    if(LENGTH EQUAL 2)
+        list(GET PARTS 1 THREAD)
+        set(PATH "${HART}-thread${DESIGN_THREADS_${THREAD}_LOCAL_ID}")
     endif()
+    set(${OUT} "${DESIGN_NAME}-hart${PATH}-ctest-${STEM}" PARENT_SCOPE)
+endfunction()
+
+function(ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE HART)
     set(DEPS
         ${SOURCE_DIR}/${SOURCE_FILE}
-        $<TARGET_FILE:bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal>
-        $<TARGET_FILE:bbsw-core-baremetal>
+        $<TARGET_FILE:bbsw-thread-${CTEST_PROFILE}-baremetal>
+        $<TARGET_FILE:bbsw-hart-baremetal>
         $<TARGET_FILE:bbsw-device-baremetal>
-        $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_PROFILES_${BUCKYBALL_CTEST_TARGET}_CORE_HART_ID}-baremetal>
+        $<TARGET_OBJECTS:bbsw-crt0-hart${HART}-baremetal>
+        $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
         ${BUCKYBALL_BBSW_HEADERS}
         ${BUCKYBALL_DESIGN_COMMON_SOURCES}
         ${BUCKYBALL_DESIGN_COMMON_HEADERS}
@@ -62,8 +89,9 @@ function(buckyball_ctest_deps OUT_DEPS SOURCE_DIR SOURCE_FILE)
     set(${OUT_DEPS} ${DEPS} PARENT_SCOPE)
 endfunction()
 
-# A C test for Linux: the C API of the target thread, the core and the device.
-function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
+# A C test of a hart for Linux: the C API of the profile, the hart and the
+# device.
+function(add_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     set(EXECUTABLE "${TEST_NAME}-linux")
 
     add_executable(
@@ -78,8 +106,8 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     target_link_libraries(
         ${EXECUTABLE}
         PRIVATE
-            bbsw-thread-${BUCKYBALL_CTEST_TARGET}-linux
-            bbsw-core-linux
+            bbsw-thread-${CTEST_PROFILE}-linux
+            bbsw-hart-linux
             bbsw-device-linux
     )
     set_target_properties(${EXECUTABLE} PROPERTIES LINKER_LANGUAGE C)
@@ -87,11 +115,13 @@ function(add_buckyball_linux_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     add_custom_target(${TEST_NAME}-linux-build DEPENDS ${EXECUTABLE})
 endfunction()
 
-# A C test on the hart of the target: the C API of the target thread, the
-# core and the device, booted by crt0 of that hart.
-function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
+# A C test booted by crt0 of hart HART: the C API of the profile, the hart
+# and the device. A test of THREAD (else empty) issues its Ball instructions
+# through the kernel's stream to that thread (bb_thread_run), whose loader
+# runs the stream interpreter on it.
+function(add_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE HART THREAD)
     set(EXECUTABLE "${TEST_NAME}-baremetal")
-    buckyball_ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE})
+    ctest_deps(TEST_DEPS ${SOURCE_DIR} ${SOURCE_FILE} ${HART})
 
     set(BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS)
     foreach(DESIGN_COMMON_INCLUDE_DIR ${BUCKYBALL_DESIGN_COMMON_INCLUDE_DIRS})
@@ -100,24 +130,40 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
             -I${DESIGN_COMMON_INCLUDE_DIR}
         )
     endforeach()
-    set(THREAD bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal)
-    set(CRT0 bbsw-crt0-hart${DESIGN_PROFILES_${BUCKYBALL_CTEST_TARGET}_CORE_HART_ID}-baremetal)
+    set(LIBRARY bbsw-thread-${CTEST_PROFILE}-baremetal)
+    set(CRT0 bbsw-crt0-hart${HART}-baremetal)
+    set(STREAM_FLAGS)
+    set(STREAM_LINK)
+    if(NOT THREAD STREQUAL "")
+        set(STREAM_FLAGS
+            -DBUCKYBALL_STREAM
+            -DTHREAD_SIGNATURE=${DESIGN_THREADS_${THREAD}_SIGNATURE}ULL
+            -I${BUCKYBALL_REPO_ROOT}/stack/kernel/include)
+        # The kernel binds every thread of the hart: one loader per kind.
+        set(LOADERS)
+        foreach(INDEX IN LISTS DESIGN_DEVICE_HARTS_${HART}_THREAD_INDICES)
+            list(APPEND LOADERS ${DESIGN_THREAD_BUILD_${DESIGN_THREADS_${INDEX}_PROFILE}}/loader.o)
+        endforeach()
+        list(REMOVE_DUPLICATES LOADERS)
+        set(STREAM_LINK ${LOADERS} $<TARGET_FILE:runtime-baremetal> $<TARGET_FILE:kernel>)
+        list(APPEND TEST_DEPS ${LOADERS} runtime-baremetal kernel)
+    endif()
 
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${EXECUTABLE}
         COMMAND
-            ${ELF_CC} ${BUCKYBALL_CTEST_C_FLAGS}
+            ${ELF_CC} ${CTEST_C_FLAGS}
             $<TARGET_PROPERTY:${CRT0},INTERFACE_LINK_OPTIONS> -o ${EXECUTABLE}
-            $<TARGET_OBJECTS:${CRT0}> ${BUCKYBALL_DESIGN_COMMON_SOURCES}
-            ${SOURCE_DIR}/${SOURCE_FILE}
-            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${THREAD},INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
-            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${THREAD},INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
-            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            $<TARGET_OBJECTS:${CRT0}> $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
+            ${BUCKYBALL_DESIGN_COMMON_SOURCES} ${SOURCE_DIR}/${SOURCE_FILE}
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${LIBRARY},INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${LIBRARY},INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-hart-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
-            ${BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS} -I${SOURCE_DIR}
-            $<TARGET_FILE:${THREAD}> $<TARGET_FILE:bbsw-core-baremetal>
-            $<TARGET_FILE:bbsw-device-baremetal>
+            ${BUCKYBALL_DESIGN_COMMON_INCLUDE_FLAGS} -I${SOURCE_DIR} ${STREAM_FLAGS}
+            $<TARGET_FILE:${LIBRARY}> $<TARGET_FILE:bbsw-hart-baremetal>
+            $<TARGET_FILE:bbsw-device-baremetal> ${STREAM_LINK}
         DEPENDS ${TEST_DEPS}
         COMMENT "Building baremetal executable: ${EXECUTABLE}"
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -131,45 +177,53 @@ function(add_buckyball_baremetal_ctest TEST_NAME SOURCE_DIR SOURCE_FILE)
     )
 endfunction()
 
-function(add_buckyball_ctest SOURCE_FILE)
-    get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
-    if(NOT DEFINED BUCKYBALL_CTEST_TARGET OR BUCKYBALL_CTEST_TARGET STREQUAL "")
-        message(
-            FATAL_ERROR
-            "BUCKYBALL_CTEST_TARGET is required for ${SOURCE_FILE}"
-        )
-    endif()
-    set(TEST_NAME
-        "${DESIGN_NAME}-${BUCKYBALL_CTEST_TARGET}-ctest-${_stem}"
-    )
-    set(SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+# The test SOURCE_FILE of CTEST_PROFILE, for every instance of it. A thread
+# is the kernel's, not the OS's: its tests are baremetal.
+function(add_ctest SOURCE_FILE)
+    get_filename_component(STEM ${SOURCE_FILE} NAME_WE)
+    ctest_line_limit(${SOURCE_FILE})
+    ctest_instances(INSTANCES)
+    foreach(INSTANCE IN LISTS INSTANCES)
+        ctest_name(TEST_NAME ${INSTANCE} ${STEM})
+        string(REPLACE "/" ";" PARTS ${INSTANCE})
+        list(GET PARTS 0 HART)
+        list(LENGTH PARTS LENGTH)
+        if(LENGTH EQUAL 2)
+            list(GET PARTS 1 THREAD)
+            add_baremetal_ctest(${TEST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${SOURCE_FILE} ${HART} ${THREAD})
+            add_custom_target(${TEST_NAME}-ctest-build DEPENDS ${TEST_NAME}-baremetal-build)
+        else()
+            add_baremetal_ctest(${TEST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${SOURCE_FILE} ${HART} "")
+            add_linux_ctest(${TEST_NAME} ${CMAKE_CURRENT_SOURCE_DIR} ${SOURCE_FILE})
+            add_custom_target(${TEST_NAME}-ctest-build
+                DEPENDS ${TEST_NAME}-linux-build ${TEST_NAME}-baremetal-build)
+        endif()
+        if(DEFINED CTEST_GROUP)
+            add_dependencies(${CTEST_GROUP} ${TEST_NAME}-ctest-build)
+        endif()
+    endforeach()
+endfunction()
 
-    buckyball_enforce_ctest_line_limit(${SOURCE_FILE})
-
-    add_buckyball_linux_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-    add_buckyball_baremetal_ctest(${TEST_NAME} ${SOURCE_DIR} ${SOURCE_FILE})
-
-    add_custom_target(
-        ${TEST_NAME}-ctest-build
-        DEPENDS ${TEST_NAME}-linux-build ${TEST_NAME}-baremetal-build
-        COMMENT "Building CTest workload ${TEST_NAME}"
-    )
-
-    if(DEFINED BUCKYBALL_CTEST_GROUP_TARGET)
-        add_dependencies(
-            ${BUCKYBALL_CTEST_GROUP_TARGET}
-            ${TEST_NAME}-ctest-build
-        )
-    endif()
+# The C tests of the Balls of every profile.
+function(add_ball_ctests)
+    foreach(CTEST_PROFILE IN LISTS DESIGN_PROFILES)
+        foreach(DIR IN LISTS DESIGN_PROFILES_${CTEST_PROFILE}_BALL_CTEST_DIRS)
+            cmake_path(GET DIR PARENT_PATH WORKLOADS)
+            cmake_path(GET WORKLOADS PARENT_PATH ROOT)
+            cmake_path(GET ROOT FILENAME BALL)
+            add_subdirectory("${BUCKYBALL_REPO_ROOT}/${DIR}"
+                "${CMAKE_CURRENT_BINARY_DIR}/balls/${CTEST_PROFILE}/${BALL}")
+        endforeach()
+    endforeach()
 endfunction()
 
 add_custom_target(component-ctests-build)
 
-function(add_buckyball_component_workload NAME)
+function(add_component_workload NAME)
     cmake_parse_arguments(ARG "" "" "SOURCES" ${ARGN})
     if(
-        NOT DEFINED BUCKYBALL_CTEST_TARGET
-        OR BUCKYBALL_CTEST_TARGET STREQUAL ""
+        NOT DEFINED CTEST_PROFILE
+        OR CTEST_PROFILE STREQUAL ""
         OR NOT ARG_SOURCES
     )
         message(
@@ -177,30 +231,30 @@ function(add_buckyball_component_workload NAME)
             "Workload target and sources are required for ${NAME}"
         )
     endif()
-    list(FIND DESIGN_PROFILES "${BUCKYBALL_CTEST_TARGET}" _profile)
+    list(FIND DESIGN_PROFILES "${CTEST_PROFILE}" _profile)
     set(_test
-        "${DESIGN_NAME}-${BUCKYBALL_CTEST_TARGET}-ctest-pipeline-${NAME}"
+        "${DESIGN_NAME}-${CTEST_PROFILE}-ctest-pipeline-${NAME}"
     )
     set(_elf "${_test}-multicore-baremetal")
     set(_sources)
     foreach(_source IN LISTS ARG_SOURCES)
-        buckyball_enforce_ctest_line_limit("${_source}")
+        ctest_line_limit("${_source}")
         list(APPEND _sources "${CMAKE_CURRENT_SOURCE_DIR}/${_source}")
     endforeach()
-    set(_thread bbsw-thread-${BUCKYBALL_CTEST_TARGET}-baremetal)
+    set(_thread bbsw-thread-${CTEST_PROFILE}-baremetal)
     add_custom_command(
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${_elf}"
         COMMAND
-            ${ELF_CXX} ${BUCKYBALL_CTEST_C_FLAGS}
+            ${ELF_CXX} ${CTEST_C_FLAGS}
             $<TARGET_PROPERTY:bbsw-start-baremetal,INTERFACE_LINK_OPTIONS>
             -DBB_COMPONENT_WORKLOAD_PROFILE=${_profile}
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${_thread},INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:${_thread},INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
-            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-core-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
+            "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-hart-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_INCLUDE_DIRECTORIES>,PREPEND,-I>"
             "$<LIST:TRANSFORM,$<TARGET_PROPERTY:bbsw-device-baremetal,INTERFACE_COMPILE_DEFINITIONS>,PREPEND,-D>"
             -o ${_elf} $<TARGET_OBJECTS:bbsw-start-baremetal> ${_sources}
-            $<TARGET_FILE:${_thread}> $<TARGET_FILE:bbsw-core-baremetal>
+            $<TARGET_FILE:${_thread}> $<TARGET_FILE:bbsw-hart-baremetal>
             $<TARGET_FILE:bbsw-device-baremetal>
         DEPENDS
             ${_sources}
@@ -216,7 +270,7 @@ function(add_buckyball_component_workload NAME)
         ${_test}-thread-build
         DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${_elf}"
     )
-    add_dependencies(${BUCKYBALL_CTEST_GROUP_TARGET} ${_test}-thread-build)
+    add_dependencies(${CTEST_GROUP} ${_test}-thread-build)
 endfunction()
 
 # ===============================================================

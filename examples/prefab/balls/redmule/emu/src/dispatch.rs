@@ -7,18 +7,24 @@ pub fn execute_known(class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &mut Exec
     if class != CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
         Some("REDMULE_F16") => Some(matmul::execute(xs1, xs2, ctx)),
         _ => None,
     }
 }
 
-pub fn cycles_after_issue(class: &str, funct: u32, _xs1: u64, _xs2: u64, _ctx: &bebop_bemu::ExecContext) -> Option<u64> {
+pub fn cycles_after_issue(
+    class: &str,
+    funct: u32,
+    xs1: u64,
+    xs2: u64,
+    ctx: &bebop_bemu::ExecContext,
+) -> Option<u64> {
     if class != CLASS {
         return None;
     }
-    match bebop_bemu::configs::ball_domain::mnemonic_for_funct(funct).as_deref() {
-        Some("REDMULE_F16") => Some(1),
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
+        Some("REDMULE_F16") => Some(matmul::latency(xs1, xs2, ctx)),
         _ => None,
     }
 }

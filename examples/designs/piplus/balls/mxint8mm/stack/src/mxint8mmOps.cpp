@@ -8,7 +8,7 @@
 #include "mxint8mmOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::mxint8mm_ball;
@@ -41,13 +41,16 @@ SmallVector<Value, 2> BankMatmulMxint8Op::getSourceBanks() {
   return {getA(), getB()};
 }
 Value BankMatmulMxint8Op::getDestinationBank() { return getC(); }
-bool BankMatmulMxint8Op::readsDestination() { return getAccumulate(); }
+bool BankMatmulMxint8Op::readsDestination() {
+  return getAccumulate() || getBias();
+}
 Operation *BankMatmulMxint8Op::buildPhysical(OpBuilder &builder,
                                              ArrayRef<int64_t> sources,
                                              int64_t destination) {
   return MatmulMxint8Op::create(builder, getLoc(), sources[0], sources[1],
                                 destination, getM(), getN(), getK(),
-                                getAccumulate());
+                                getAccumulate(), getBias(), getABase(),
+                                getCPitch(), getCBase(), getUpdate());
 }
 
 SmallVector<int64_t, 2> MatmulMxint8Op::getSourceBanks() {
@@ -58,22 +61,28 @@ LogicalResult MatmulMxint8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t a = getA(), b = getB(), c = getC(), m = getM(), n = getN(),
           k = getK();
-  bool accumulate = getAccumulate();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  bool accumulate = getAccumulate(), bias = getBias();
+  int64_t aBase = getABase(), cPitch = getCPitch(), cBase = getCBase();
+  const auto &target = target::getTarget();
   int64_t packed = k / 16 + (k + 511) / 512;
   if (target.bankWidthBits != 128 || m <= 0 || m >= 1024 || n <= 0 ||
-      n >= 1024 || n % 4 || k <= 0 || k % 32 || m * packed > target.bankDepth ||
-      n * packed > target.bankDepth || m * n / 4 > target.bankDepth)
+      n >= 1024 || n % 4 || k <= 0 || k % 32 ||
+      aBase + m * packed > target.bankDepth || n * packed > target.bankDepth ||
+      cPitch < n / 4 || cBase + (m - 1) * cPitch + n / 4 > target.bankDepth ||
+      (bias && cBase < n / 4))
     return emitOpError("matmul_mxint8 exceeds the bank");
   if (a == b || a == c || b == c)
     return emitOpError("matmul_mxint8 requires distinct banks");
-  // Every operand starts at bank row 0: the bank-row fields aBase (20-33),
-  // bBase (34-47) and cBase (48-61) are 0.
+  // A at aBase (20-33), B at bank row 0, C's rows cPitch (34-47) apart from
+  // cBase (48-61).
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("MXINT8MM"),
-      constantI64(builder, loc, bankFields({a, b}, c, accumulate, k)),
+      builder, loc, target::getFunct7("MXINT8MM"),
       constantI64(builder, loc,
-                  field(m, 0, 9) | field(n, 10, 19) |
-                      field(accumulate, 62, 62)));
+                  bankFields({a, b}, c, accumulate || bias, k) |
+                      field(getUpdate(), 63, 63)),
+      constantI64(builder, loc,
+                  field(m, 0, 9) | field(n, 10, 19) | field(aBase, 20, 33) |
+                      field(cPitch, 34, 47) | field(cBase, 48, 61) |
+                      field(accumulate, 62, 62) | field(bias, 63, 63)));
   return success();
 }

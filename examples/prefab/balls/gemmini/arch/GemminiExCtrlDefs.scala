@@ -1,22 +1,20 @@
 package examples.balls.gemmini
 
-import framework.lib.queue.Queue
+import framework.generic.contract.blink.BallResponse
+
+import framework.generic.queue.Queue
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
-import framework.ip.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
+import framework.generic.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.ip.memory.bank.{SramReadReq, SramReadResp, SramWriteIO}
+import framework.ball.blink.BallStatus
+import framework.generic.memory.bank.{SramReadReq, SramReadResp, SramWriteIO}
 import examples.balls.gemmini.configs.GemminiBallParam
 import gemmini._
 import gemmini.Util._
+import framework.generic.contract.blink.BallCommand
 
 /** Minimal tag for MeshWithDelays that satisfies TagQueueTag */
 class SimpleTag extends Bundle with gemmini.TagQueueTag {
@@ -40,19 +38,19 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val ctrlIo = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp      = Decoupled(new BallResponse(frontendParam))
-    val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq(memParam)))
+    val cmdResp      = Decoupled(new BallResponse(link))
+    val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq))
     val bankReadResp =
-      Vec(inBW, Flipped(Decoupled(new SramReadResp(memParam))))
-    val bankWrite    = Vec(outBW, Flipped(new SramWriteIO(memParam)))
-    val op1_bank_o   = Output(UInt(frontendParam.bank_id_len.W))
-    val op1_group_o  = Output(UInt(memParam.groupIdWidth.W))
-    val op2_bank_o   = Output(UInt(frontendParam.bank_id_len.W))
-    val op2_group_o  = Output(UInt(memParam.groupIdWidth.W))
-    val wr_bank_o    = Output(UInt(frontendParam.bank_id_len.W))
-    val wr_group_o   = Output(UInt(memParam.groupIdWidth.W))
+      Vec(inBW, Flipped(Decoupled(new SramReadResp(link.bankWidth))))
+    val bankWrite    = Vec(outBW, Flipped(new SramWriteIO(link.bankWidth, link.bankMaskLen)))
+    val op1_bank_o   = Output(UInt(link.bankIdBits.W))
+    val op1_group_o  = Output(UInt(link.groupIdBits.W))
+    val op2_bank_o   = Output(UInt(link.bankIdBits.W))
+    val op2_group_o  = Output(UInt(link.groupIdBits.W))
+    val wr_bank_o    = Output(UInt(link.bankIdBits.W))
+    val wr_group_o   = Output(UInt(link.groupIdBits.W))
     val status       = new BallStatus
   })
 
@@ -96,7 +94,7 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     Enum(11)
   val state                                                                                                                                                = RegInit(sIdle)
 
-  val rob_id_reg = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val rob_id_reg = RegInit(0.U(link.robIdBits.W))
 
   /** Match SimpleTag.rob (8b); must match mesh req tag bits */
   protected def robIdAsTag8(x: UInt): UInt = {
@@ -104,13 +102,13 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
     if (w >= 8) x(7, 0) else Cat(0.U((8 - w).W), x)
   }
 
-  val op1_bank     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val op2_bank     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wr_bank      = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wr_read_bank = RegInit(0.U(frontendParam.bank_id_len.W))
-  val op1_group    = RegInit(0.U(memParam.groupIdWidth.W))
-  val op2_group    = RegInit(0.U(memParam.groupIdWidth.W))
-  val wr_group     = RegInit(0.U(memParam.groupIdWidth.W))
+  val op1_bank     = RegInit(0.U(link.bankIdBits.W))
+  val op2_bank     = RegInit(0.U(link.bankIdBits.W))
+  val wr_bank      = RegInit(0.U(link.bankIdBits.W))
+  val wr_read_bank = RegInit(0.U(link.bankIdBits.W))
+  val op1_group    = RegInit(0.U(link.groupIdBits.W))
+  val op2_group    = RegInit(0.U(link.groupIdBits.W))
+  val wr_group     = RegInit(0.U(link.groupIdBits.W))
   val op1_base     = RegInit(0.U(10.W))
   val op2_base     = RegInit(0.U(10.W))
   val wr_base      = RegInit(0.U(10.W))
@@ -132,8 +130,8 @@ trait GemminiExCtrlDefs { this: GemminiExCtrl =>
 
   val sub_cmd = io.cmdReq.bits.rs2(3, 0)
 
-  val rdQueue0 = Instantiate(new Queue(new SramReadResp(memParam), DIM))
-  val rdQueue1 = Instantiate(new Queue(new SramReadResp(memParam), DIM))
+  val rdQueue0 = Instantiate(new Queue(new SramReadResp(link.bankWidth), DIM))
+  val rdQueue1 = Instantiate(new Queue(new SramReadResp(link.bankWidth), DIM))
   rdQueue0.io.enq <> io.bankReadResp(0)
   rdQueue1.io.enq <> io.bankReadResp(1)
 

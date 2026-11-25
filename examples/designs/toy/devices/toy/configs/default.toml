@@ -1,0 +1,9 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "default"
+plic = "default"
+scu = "default"
+trace = "default"
+
+[[harts]]
+include = "../../../harts/toy/configs/default.toml"

@@ -13,7 +13,7 @@ add_compile_options(-O2 -g -march=rv64gc -mabi=lp64d -mcmodel=medany
   -msmall-data-limit=0 -fno-common)
 
 # ===----------------------------------------------------------------------===
-# Thread: the instructions of each profile and the bank bookkeeping of its DMA.
+# Thread: the instructions of each profile.
 # ===----------------------------------------------------------------------===
 set(THREAD_LIBRARIES)
 foreach(PROFILE IN LISTS DESIGN_PROFILES)
@@ -24,12 +24,10 @@ foreach(PROFILE IN LISTS DESIGN_PROFILES)
       "${DESIGN_REPO}/${DESIGN_PROFILES_${PROFILE}_THREAD_BALLDOMAIN_BALLS_${BALL}_SOURCE_PATH}/workloads")
   endforeach()
   add_library(bbsw-thread-${PROFILE}-baremetal STATIC
-    "${LIB}/buckyball.c"
-    "${LIB}/bbhw/dma/dma.c")
+    "${LIB}/buckyball.c")
   target_include_directories(bbsw-thread-${PROFILE}-baremetal
     PUBLIC "${LIB}"
            "${LIB}/bbhw/isa"
-           "${LIB}/bbhw/dma"
            "${LIB}/bbsw/thread"
            ${BALL_WORKLOADS})
   target_compile_definitions(bbsw-thread-${PROFILE}-baremetal
@@ -37,22 +35,22 @@ foreach(PROFILE IN LISTS DESIGN_PROFILES)
   list(APPEND THREAD_LIBRARIES bbsw-thread-${PROFILE}-baremetal)
 endforeach()
 
-# RVV kernel images of the GP domain: <rvv/math.h> and the image layout.
+# RVV operator images of the GP domain: <rvv/math.h> and the image layout.
 add_library(bbsw-thread-rvv INTERFACE)
 target_include_directories(bbsw-thread-rvv
   INTERFACE "${LIB}/bbsw/thread")
 target_link_options(bbsw-thread-rvv
-  INTERFACE "--script=${LIB}/bbsw/thread/rvv/kernel.ld")
+  INTERFACE "--script=${LIB}/bbsw/thread/rvv/operator.ld")
 
 # ===----------------------------------------------------------------------===
-# Core: CoreLink between cores.
+# Hart: HartLink between harts.
 # ===----------------------------------------------------------------------===
-add_library(bbsw-core-baremetal STATIC "${LIB}/bbsw/core/corelink.c")
-target_include_directories(bbsw-core-baremetal
-  PUBLIC "${LIB}/bbsw/core")
+add_library(bbsw-hart-baremetal STATIC "${LIB}/bbsw/hart/hartlink.c")
+target_include_directories(bbsw-hart-baremetal
+  PUBLIC "${LIB}/bbsw/hart")
 
 # ===----------------------------------------------------------------------===
-# Device: its cores and harts, the workspace heap, and the boot of its harts.
+# Device: its harts and harts, the workspace heap, and the boot of its harts.
 # ===----------------------------------------------------------------------===
 add_library(bbsw-device-baremetal STATIC "${LIB}/bbsw/device/workspace.c")
 target_include_directories(bbsw-device-baremetal
@@ -60,34 +58,34 @@ target_include_directories(bbsw-device-baremetal
 target_compile_definitions(bbsw-device-baremetal
   PUBLIC ${DESIGN_DEFS})
 
-# Boot of one hart of a core only; the others park.
+# Boot of one hart of a hart only; the others park.
 set(CRT0_LIBRARIES)
-foreach(HART IN LISTS DESIGN_DEVICE_CORES)
+foreach(HART IN LISTS DESIGN_DEVICE_HARTS)
   add_library(bbsw-crt0-hart${HART}-baremetal OBJECT
-    "${LIB}/bbsw/device/baremetal/crt0.S")
+    "${LIB}/sims/device/crt0.S")
   target_compile_definitions(bbsw-crt0-hart${HART}-baremetal
-    PRIVATE "CORE_HART_ID=${HART}")
+    PRIVATE "HART_HART_ID=${HART}")
   target_link_options(bbsw-crt0-hart${HART}-baremetal
-    INTERFACE "-Wl,-T,${LIB}/bbsw/device/baremetal/bbsim.ld")
+    INTERFACE "-Wl,-T,${LIB}/sims/device/bbsim.ld")
   list(APPEND CRT0_LIBRARIES bbsw-crt0-hart${HART}-baremetal)
 endforeach()
 
 # Boot of every hart; the reporting hart publishes the result of main.
-add_library(bbsw-start-baremetal OBJECT "${LIB}/bbsw/device/baremetal/start.S")
+add_library(bbsw-start-baremetal OBJECT "${LIB}/sims/device/start.S")
 target_compile_definitions(bbsw-start-baremetal
   PRIVATE ${DESIGN_DEFS})
 target_link_options(bbsw-start-baremetal
-  INTERFACE "-Wl,-T,${LIB}/bbsw/device/baremetal/bbsim.ld")
+  INTERFACE "-Wl,-T,${LIB}/sims/device/bbsim.ld")
 
 # Output through the UART and exit through the exit slot of the hart.
 add_library(bbsw-syscalls-baremetal OBJECT
-  "${LIB}/bbsw/device/baremetal/syscalls.c")
+  "${LIB}/sims/device/syscalls.c")
 
 export(TARGETS
     ${THREAD_LIBRARIES}
     ${CRT0_LIBRARIES}
     bbsw-thread-rvv
-    bbsw-core-baremetal
+    bbsw-hart-baremetal
     bbsw-device-baremetal
     bbsw-start-baremetal
     bbsw-syscalls-baremetal

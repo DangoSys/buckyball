@@ -68,3 +68,10 @@ pub extern "C" fn relu_case_dst_word_hi(index: u32) -> u64 {
 pub extern "C" fn relu_bank_entries() -> u32 {
     model::bank_entries()
 }
+
+/// The cycles BEMU models for a RELU instruction (iter, rs2) in a bank of
+/// `bank_entries` rows.
+#[no_mangle]
+pub extern "C" fn relu_bemu_cycles(iter: u64, rs2: u64, bank_entries: u64) -> u64 {
+    crate::latency::cycles(iter, rs2, bank_entries)
+}

@@ -92,6 +92,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "activity_format": activity_format,
                 "report_dir": os.path.join(analysis_dir, "power-reports"),
                 "strip_path": input_data.get("strip_path") or "",
+                # The instance the activity annotates; empty for the whole top.
+                "instance": input_data.get("instance") or "",
                 "start_ns": start_ns or "",
                 "end_ns": end_ns or "",
                 **tech,
@@ -110,12 +112,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
 
     result = await stream_run_logger_async(
         cmd=(
-            f"set -o pipefail; pt_shell -f {shlex.quote(str(script))} "
+            "set -o pipefail; env -u PYTHONPATH -u PYTHONHOME"
+            " -u _PYTHON_SYSCONFIGDATA_NAME"
+            f" pt_shell -f {shlex.quote(str(script))} "
             f"-x {shlex.quote('set RUN_CONFIG ' + '{' + str(run_config) + '}')} "
             f"2>&1 | tee {shlex.quote(os.path.join(analysis_dir, 'pt_shell.log'))}"
         ),
         logger=ctx.logger,
-        cwd=os.path.dirname(script),
+        cwd=analysis_dir,
         stdout_prefix="pt",
         stderr_prefix="pt",
     )
@@ -133,7 +137,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "power_scope": "dynamic (internal + switching)",
         "start_ns": start_ns,
         "end_ns": end_ns,
+        "report_path": input_data["report_path"],
     }
+    if "uvm" in input_data:
+        extra_fields["uvm"] = input_data["uvm"]
     if dynamic_power:
         extra_fields["dynamic_power"] = dynamic_power
     await check_result(

@@ -8,12 +8,14 @@ from common import submit, fmt
 def register(mcp):
     @mcp.tool()
     def bbdev_workload_tohex(
-        design: str, device: str | None = None, core: str | None = None
+        config: str | None = None, device: str | None = None, hart: str | None = None
     ) -> str:
         """Convert design workload ELF to hex. POST /workload/tohex."""
-        request = {"design": design}
+        request = {}
+        if config is not None:
+            request["config"] = config
         if device is not None:
             request["device"] = device
-        if core is not None:
-            request["core"] = core
+        if hart is not None:
+            request["hart"] = hart
         return fmt(submit("/workload/tohex", request))

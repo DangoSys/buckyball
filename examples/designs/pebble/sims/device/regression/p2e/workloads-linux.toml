@@ -1,4 +1,0 @@
-[workloads]
-tests = [
-  "fw_payload-h1-pebble-pk.hex",
-]

@@ -10,7 +10,7 @@ class mxmm_cov extends uvm_component;
   int unsigned cmd_count;
 
   covergroup cmd_cg;
-    coverpoint cur_format {bins mxfp8 = {0}; bins window = {1}; bins fma32 = {2}; bins f32 = {3};}
+    coverpoint cur_format {bins mxfp8 = {0}; bins window = {1};}
     // {first, last}
     coverpoint cur_chain {
       bins single = {2'b11}; bins open = {2'b10}; bins middle = {2'b00}; bins close = {2'b01};
@@ -20,14 +20,7 @@ class mxmm_cov extends uvm_component;
     coverpoint cur_panels {
       bins one = {1}; bins batch = {[2 : 7]}; bins batches = {[8 : 4095]};
     }
-    format_chain: cross cur_format, cur_chain{
-      ignore_bins fused_chain = binsof (cur_format) intersect {2} && !binsof (cur_chain) intersect {
-        2'b11
-      };
-      ignore_bins f32_middle = binsof (cur_format) intersect {3} && binsof (cur_chain) intersect {
-        2'b00
-      };
-    }
+    format_chain: cross cur_format, cur_chain;
   endgroup
 
   function new(string name, uvm_component parent);

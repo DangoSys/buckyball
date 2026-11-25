@@ -19,6 +19,8 @@
 @UVM@/src/ball/bb_uvm_pkg.sv
 
 @RTL@/LutBall.sv
+@RTL@/DivRem.sv
+@RTL@/Multiply.sv
 
 src/pkg/lut_pkg.sv
 src/tb_top.sv

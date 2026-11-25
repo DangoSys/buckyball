@@ -1,0 +1,12 @@
+[workloads]
+tests = [
+  "piplus-hart0-ctest-control_hello-baremetal",
+  "piplus-hart0-soctest-clint_software_interrupt-baremetal",
+  "piplus-hart0-soctest-clint_supervisor_timer-baremetal",
+  "piplus-hart0-soctest-clint_timer_interrupt-baremetal",
+  "piplus-hart0-soctest-lrsc_word-baremetal",
+  "piplus-hart0-soctest-plic_register_access-baremetal",
+  "piplus-hart0-soctest-time_csr_clock-baremetal",
+  "piplus-hart0-soctest-time_csr_permissions-baremetal",
+  "piplus-hart0-soctest-trace_events-baremetal",
+]

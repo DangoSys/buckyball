@@ -1,0 +1,14 @@
+# The bare-metal regression of the multi-rocket rocket hart alone: its
+# self-checking program and the SoC tests of the single-hart system.
+[workloads]
+tests = [
+  "multi-rocket-hart0-ctest-cpu_arithmetic-baremetal",
+  "multi-rocket-hart0-soctest-clint_software_interrupt-baremetal",
+  "multi-rocket-hart0-soctest-clint_supervisor_timer-baremetal",
+  "multi-rocket-hart0-soctest-clint_timer_interrupt-baremetal",
+  "multi-rocket-hart0-soctest-lrsc_word-baremetal",
+  "multi-rocket-hart0-soctest-plic_register_access-baremetal",
+  "multi-rocket-hart0-soctest-time_csr_clock-baremetal",
+  "multi-rocket-hart0-soctest-time_csr_permissions-baremetal",
+  "multi-rocket-hart0-soctest-trace_events-baremetal",
+]

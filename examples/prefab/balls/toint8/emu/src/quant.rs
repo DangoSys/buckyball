@@ -1,6 +1,6 @@
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
-use bebop_bemu::thread::banks::bank_lines;
+use bebop_bemu::ball::blink::bank_lines;
 
 pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     assert!(
@@ -14,8 +14,7 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if src == scale_bank || src == dst || scale_bank == dst {
         panic!("quant_f32_to_i8: input, scale, and output banks must differ");
     }
-    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated
-    {
+    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated {
         panic!("quant_f32_to_i8: bank not allocated");
     }
     let groups = ctx.config(src).cols;
@@ -62,9 +61,7 @@ pub(crate) fn exec_f32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                     let offset = base + lane * 4;
                     let bits = u32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
                     let channel = group * 4 + lane;
-                    packed[channel] =
-                        super::model::quantize_f32(f32::from_bits(bits), scales[channel], false)
-                            as u8;
+                    packed[channel] = super::model::quantize_f32(f32::from_bits(bits), scales[channel], false) as u8;
                 }
             }
             let base = output_row * 16;
@@ -86,8 +83,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     if src == scale_bank || src == dst || scale_bank == dst {
         panic!("quant_i32_to_i8: input, scale, and output banks must differ");
     }
-    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated
-    {
+    if !ctx.config(src).allocated || !ctx.config(scale_bank).allocated || !ctx.config(dst).allocated {
         panic!("quant_i32_to_i8: bank not allocated");
     }
     let groups = ctx.config(src).cols;
@@ -118,7 +114,7 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             .is_none_or(|end| end > bank_lines())
         || input_base + iter > bank_lines()
     {
-        panic!("quant_i32_to_i8: invalid output core");
+        panic!("quant_i32_to_i8: invalid output hart");
     }
     let relu = xs2 & 1 != 0;
 
@@ -152,13 +148,10 @@ pub(crate) fn exec_i32_to_i8(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                     let offset = base + lane * 4;
                     let value = i32::from_le_bytes(input[offset..offset + 4].try_into().unwrap());
                     let channel = group * 4 + lane;
-                    packed[channel] =
-                        super::model::quantize_i32(value, scales[channel], relu) as u8;
+                    packed[channel] = super::model::quantize_i32(value, scales[channel], relu) as u8;
                 }
             }
-            let row = output_base
-                + (output_row / output_width) * output_stride
-                + output_row % output_width;
+            let row = output_base + (output_row / output_width) * output_stride + output_row % output_width;
             let base = row * 16;
             output[base..base + 16].copy_from_slice(&packed);
         }
@@ -171,7 +164,7 @@ pub(crate) fn f32_to_i8_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
     if iter == 0 || iter % 4 != 0 || xs2 != 0 {
         panic!("quant_f32_to_i8: illegal encoding");
     }
-    8 + ctx.config(rs1_b0(xs1)).cols * (20 + 17 * iter)
+    super::latency::cycles(iter, ctx.config(rs1_b0(xs1)).cols)
 }
 
 pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
@@ -195,5 +188,5 @@ pub(crate) fn i32_to_i8_latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
     {
         panic!("quant_i32_to_i8: illegal encoding");
     }
-    8 + ctx.config(rs1_b0(xs1)).cols * (20 + 17 * iter)
+    super::latency::cycles(iter, ctx.config(rs1_b0(xs1)).cols)
 }

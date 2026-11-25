@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 import gemmini._
@@ -24,13 +20,14 @@ trait GemminiExCtrlComputeFeedState { this: GemminiExCtrl =>
         true.B,
         cfg_a_transpose
       )
-      mesh.io.req.bits.bd_transpose         := Mux(
-        execution_dataflow === Dataflow.OS.id.U,
-        false.B,
-        cfg_bd_transpose
-      )
+      // b_transpose applies to the operand op2Buf holds (OS) or to the weights
+      // PRELOAD feeds (WS); a compute feeds the mesh no weights to transpose.
+      mesh.io.req.bits.bd_transpose         := false.B
       mesh.io.req.bits.total_rows           := total_rows
-      mesh.io.req.bits.tag.rob              := robIdAsTag8(rob_id_reg)
+      // A request's tag labels the matmul after it (WS) or the one after that
+      // (OS): the preload before a compute tags the compute's result rows. The
+      // rows a compute's tag labels, the next preload's, hold no result.
+      mesh.io.req.bits.tag.rob              := 0xff.U
       mesh.io.req.bits.flush                := 0.U
       when(mesh.io.req.fire) {
         req_sent := true.B
@@ -42,13 +39,19 @@ trait GemminiExCtrlComputeFeedState { this: GemminiExCtrl =>
     val needXpose  = op1FromBuf || (op2FromBuf && !zero_op2)
 
     when(req_sent && needXpose && !xpose_ready) {
-      val op1Ready = !op1FromBuf || rdQueue0.io.deq.valid
-      val op2Ready = !op2FromBuf || zero_op2 || rdQueue1.io.deq.valid
+      // zero_op1_tail reads only op1's row 0 (sComputeRead): its other rows
+      // are zero, buffered without a read.
+      val op1TailZero = zero_op1_tail && xpose_row_cnt =/= 0.U
+      val op1Ready    = !op1FromBuf || op1TailZero || rdQueue0.io.deq.valid
+      val op2Ready    = !op2FromBuf || zero_op2 || rdQueue1.io.deq.valid
       when(xpose_row_cnt < total_rows && op1Ready && op2Ready) {
         when(op1FromBuf) {
-          op1Buf(xpose_row_cnt) := rdQueue0.io.deq.bits.data
-            .asTypeOf(Vec(DIM, inputType))
-          rdQueue0.io.deq.ready := true.B
+          op1Buf(xpose_row_cnt) := Mux(
+            op1TailZero,
+            0.U.asTypeOf(Vec(DIM, inputType)),
+            rdQueue0.io.deq.bits.data.asTypeOf(Vec(DIM, inputType))
+          )
+          rdQueue0.io.deq.ready := !op1TailZero
         }
         when(op2FromBuf && !zero_op2) {
           op2Buf(xpose_row_cnt) := rdQueue1.io.deq.bits.data
@@ -62,7 +65,8 @@ trait GemminiExCtrlComputeFeedState { this: GemminiExCtrl =>
     }
 
     when(req_sent && (!needXpose || xpose_ready) && feed_row_cnt < total_rows) {
-      val op1Zero = zero_op1_tail && feed_row_cnt =/= 0.U
+      // A buffered op1 is fed by columns: its zero rows are already in op1Buf.
+      val op1Zero = zero_op1_tail && feed_row_cnt =/= 0.U && !op1FromBuf
       when(
         (op1Zero || op1FromBuf || rdQueue0.io.deq.valid) && (zero_op2 || op2FromBuf || rdQueue1.io.deq.valid)
       ) {
@@ -87,17 +91,19 @@ trait GemminiExCtrlComputeFeedState { this: GemminiExCtrl =>
           mesh.io.d.valid := true.B
           mesh.io.d.bits  := 0.U.asTypeOf(mesh.io.d.bits)
         }.otherwise {
-          // WS: stream A/D, B comes from preloaded weights
+          // WS: C = A W + D. The weights W are the ones PRELOAD fed through d;
+          // D (op2, zeroed by zero_op2) enters each column through b as the
+          // partial sum the PEs add their products to. d carries no weights.
           mesh.io.b.valid := true.B
-          mesh.io.b.bits  := 0.U.asTypeOf(mesh.io.b.bits)
-          mesh.io.d.valid := true.B
-          mesh.io.d.bits  := Mux(
+          mesh.io.b.bits  := Mux(
             zero_op2,
-            0.U.asTypeOf(mesh.io.d.bits),
+            0.U.asTypeOf(mesh.io.b.bits),
             VecInit(
               x_row.grouped(config.tileColumns).map(g => VecInit(g)).toSeq
             )
           )
+          mesh.io.d.valid := true.B
+          mesh.io.d.bits  := 0.U.asTypeOf(mesh.io.d.bits)
         }
         when(mesh.io.a.ready && mesh.io.b.ready && mesh.io.d.ready) {
           rdQueue0.io.deq.ready := !op1Zero && !op1FromBuf

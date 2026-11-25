@@ -182,17 +182,25 @@ def run_suite(repo, design, selected, name, ctx, do_run):
     )
     directory.mkdir(parents=True)
     records = []
+    failures = []
     for profile in selected:
-        records.append(
-            run_profile(
-                repo,
-                design,
-                profile,
-                directory / profile["ip"] / profile["profile"],
-                do_run,
-                ctx,
-            )
-        )
+        profile_dir = directory / profile["ip"] / profile["profile"]
+        try:
+            record = run_profile(repo, design, profile, profile_dir, do_run, ctx)
+        except VerificationFailure as error:
+            failures.append(str(error))
+            record = {
+                "ip": profile["ip"],
+                "profile": profile["profile"],
+                "configuration": profile["config_path"],
+                "status": "failure",
+                "error": str(error),
+                "tests": [
+                    json.loads(path.read_text())
+                    for path in sorted(profile_dir.glob("*/result.json"))
+                ],
+            }
+        records.append(record)
     planned = [
         f"{profile['scope']}/{profile['ip']}/{profile['profile']}/{test['name']}"
         for profile in selected
@@ -202,7 +210,7 @@ def run_suite(repo, design, selected, name, ctx, do_run):
         "design": design,
         "operation": "run" if do_run else "build",
         "planned_tests": planned,
-        "status": "pass",
+        "status": "failure" if failures else "pass",
         "profiles": records,
         "log": str(directory),
     }
@@ -210,9 +218,9 @@ def run_suite(repo, design, selected, name, ctx, do_run):
     path.write_text(json.dumps(report, indent=2) + "\n")
     return {
         "design": design,
-        "success": True,
+        "success": not failures,
         "results": records,
-        "failures": [],
+        "failures": failures,
         "report_path": str(path),
         "log": str(directory),
     }

@@ -1,0 +1,2 @@
+# Illegal-input tests: the RTL assertion each must end on.
+smatmul_m24_test = "SMATMUL_OS M must be one or a positive multiple of tileRows"

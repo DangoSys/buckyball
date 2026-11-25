@@ -1,6 +1,8 @@
-# The action thread's MXINT8 matrix product: a 4x16 array, short along M for
-# the ~50-row denoising steps.
+# The action thread's MXINT8 matrix product: a 16x16 array. A block of a
+# tile reads two B rows a column on one port (2 x 16 cycles), so 16 rows of A
+# use each weight row four times as often as 4 rows did: the ~50-row denoising
+# steps take 4 tiles, not 13, in the same B time.
 include = "../../../balls/mxint8mm/configs/default.toml"
 
-rows = 4
+rows = 16
 cols = 16

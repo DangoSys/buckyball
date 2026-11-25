@@ -74,39 +74,27 @@ jobs:
           nix develop -c bbdev config --install
 
   design-check:
-    name: ${{ matrix.design }}
+    name: ${{ matrix.device }}
     needs: pre-commit
     runs-on: check
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - design: toy
-            config: ToyVerilatorConfig
-            run_bemu_tests: true
-            run_verilator_tests: true
-          - design: pebble
-            config: PebbleVerilatorConfig
-            run_bemu_tests: true
-            run_verilator_tests: true
-          - design: goban
-            config: GobanVerilatorConfig
-            run_bemu_tests: true
-            run_verilator_tests: true
-          - design: poly
-            config: PolyVerilatorConfig
-            run_bemu_tests: true
-            run_verilator_tests: true
-          - design: multi-rocket
-            config: MultiRocketVerilatorConfig
-            run_bemu_tests: true
-            run_verilator_tests: true
+        device:
+          - toy
+          - pebble
+          - goban
+          - poly
+          - multi-rocket
+          - gemmini
+          - magia
+          - piplus
     env:
       BB_ROOT: ~/Code/buckyball
     steps:
       - name: Print information
         run: |
-          echo "design=${{ matrix.design }}"
+          echo "device=${{ matrix.device }}"
           echo "event=${{ github.event_name }}"
           echo "sha=${CHECKOUT_SHA}"
           echo "ref=${CHECKOUT_REF}"
@@ -136,47 +124,47 @@ jobs:
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          nix develop -c bbdev stack --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
-          nix develop -c bbdev workload --clean '--design ${{ matrix.design }} --device ${{ matrix.config }}'
-          nix develop -c bbdev workload --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
+          nix develop -c bbdev stack --build '--device ${{ matrix.device }}'
+          nix develop -c bbdev workload --clean '--device ${{ matrix.device }}'
+          nix develop -c bbdev workload --build '--device ${{ matrix.device }}'
 
       - name: bemu tests
-        if: matrix.run_bemu_tests
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          # Other design jobs share this checkout; drop only this config's old batch runs.
-          rm -rf "${root}"/log/*-${{ matrix.design }}-bebop-bemu-device-${{ matrix.config }}-*(N)
-          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test bare-tests --jobs 16"
-          nix develop -c bbdev kernel --build '--design ${{ matrix.design }} --device ${{ matrix.config }}'
-          nix develop -c bbdev bebop-bemu --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test linux-tests --jobs 16"
+          # Other device jobs share this checkout; drop only this device's old batch runs.
+          rm -rf "${root}"/log/*-${{ matrix.device }}-bebop-bemu-device-${{ matrix.device }}-*(N)
+          nix develop -c bbdev bebop-bemu --batch "--device ${{ matrix.device }} --test bare-tests --jobs 16"
+          nix develop -c bbdev image --build '--device ${{ matrix.device }}'
+          nix develop -c bbdev bebop-bemu --batch "--device ${{ matrix.device }} --test linux-tests --jobs 16"
 
       - name: verilator tests
-        if: matrix.run_verilator_tests
+        # piplus's bare-tests take hours on Verilator; bbbench's verilator-workload covers them.
+        if: matrix.device != 'piplus'
         shell: zsh {0}
         run: |
           set -euo pipefail
           root="${BB_ROOT/#\~/$HOME}"
           cd "${root}"
-          rm -rf "${root}"/log/*-${{ matrix.design }}-bebop-verilator-device-${{ matrix.config }}-*(N)
-          nix develop -c bbdev bebop-verilator --clean '--design ${{ matrix.design }} --device ${{ matrix.config }}'
-          nix develop -c bbdev bebop-verilator --verilog '--design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
-          nix develop -c bbdev bebop-verilator --build '--jobs 100 --design ${{ matrix.design }} --device ${{ matrix.config }} --diff'
-          nix develop -c bbdev bebop-verilator --batch "--design ${{ matrix.design }} --device ${{ matrix.config }} --test bare-tests --diff --jobs 16"
+          rm -rf "${root}"/log/*-${{ matrix.device }}-bebop-verilator-device-${{ matrix.device }}-*(N)
+          nix develop -c bbdev bebop-verilator --clean '--device ${{ matrix.device }}'
+          nix develop -c bbdev bebop-verilator --verilog '--device ${{ matrix.device }} --diff'
+          nix develop -c bbdev bebop-verilator --build '--jobs 100 --device ${{ matrix.device }} --diff'
+          nix develop -c bbdev bebop-verilator --batch "--device ${{ matrix.device }} --test bare-tests --diff --jobs 16"
 
       - name: Publish bebop test report
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
+        if: always()
         uses: mikepenz/action-junit-report@v4
         with:
-          report_paths: "${{ env.BB_ROOT }}/log/*-${{ matrix.design }}-bebop-*-device-${{ matrix.config }}-*/junit.xml"
-          check_name: "bebop regression (${{ matrix.design }})"
+          report_paths: "${{ env.BB_ROOT }}/log/*-${{ matrix.device }}-bebop-*-device-${{ matrix.device }}-*/junit.xml"
+          check_name: "bebop tests (${{ matrix.device }})"
           detailed_summary: true
           include_passed: true
 
       - name: Upload bebop JUnit artifacts
-        if: always() && (matrix.run_bemu_tests || matrix.run_verilator_tests)
+        if: always()
         uses: actions/upload-artifact@v4
         # The runner host has no DNS of its own; uploads go through the proxy.
         env:
@@ -184,8 +172,8 @@ jobs:
           HTTPS_PROXY: http://127.0.0.1:7890
           NO_PROXY: localhost,127.0.0.1,::1
         with:
-          name: bebop-junit-${{ matrix.design }}
-          path: "${{ env.BB_ROOT }}/log/*-${{ matrix.design }}-bebop-*-device-${{ matrix.config }}-*/junit.xml"
+          name: bebop-junit-${{ matrix.device }}
+          path: "${{ env.BB_ROOT }}/log/*-${{ matrix.device }}-bebop-*-device-${{ matrix.device }}-*/junit.xml"
           if-no-files-found: error
 
       - name: Exit repo lock

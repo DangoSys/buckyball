@@ -90,7 +90,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             1,
             continue_run=False,
             extra_fields={
-                "error": "invalid_regression",
+                "error": str(e),
                 "test": test_type,
                 "design": design,
             },
@@ -100,7 +100,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ctx.logger.info(f"Running {test_type} with workload config: {workload_toml}")
     target = bebop_target_dir(bbdir, design, "bemu", selection=input_data["target"])
     build_cmd = (
-        "nix develop -c cargo build --manifest-path"
+        "nix develop -c cargo build --release --manifest-path"
         f" {shlex.quote(str(bemu_cargo_manifest))} --target-dir {shlex.quote(target)}"
         " --features bemu --tests --bin bebop-bemu"
     )
@@ -142,9 +142,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "--jobs",
         str(input_data.get("jobs", 1)),
     ]
+    if input_data.get("all-trace", False):
+        harness_args.append("--all-trace")
     harness = shlex.join(harness_args)
     test_cmd = (
-        "nix develop -c cargo test --manifest-path"
+        "nix develop -c cargo test --release --manifest-path"
         f" {shlex.quote(str(bemu_cargo_manifest))} --target-dir {shlex.quote(target)}"
         f" --features bemu --test test_bemu {harness}"
     )

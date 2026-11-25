@@ -1,12 +1,13 @@
 use crate::model;
 
 pub const MAX_INPUT_WORDS: usize = 128;
-pub const MAX_DST: usize = 64;
-pub const NUM_CASES: u32 = 11;
+pub const MAX_DST: usize = 256;
+pub const NUM_CASES: u32 = 16;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MaxPoolCmd {
+    pub is_topk: u32,
     pub iter: u32,
     pub op1_bank: u32,
     pub wr_bank: u32,
@@ -114,9 +115,9 @@ fn validate_cmd(op1_bank: u32, wr_bank: u32, iter: u32, rs2: u64) {
 }
 
 fn ctest_tile(geo: &model::Geo) -> Vec<u8> {
-    let core = geo.input_side * geo.input_side;
-    let mut bytes = vec![0u8; core * model::BANK_ROW_BYTES];
-    for position in 0..core {
+    let hart = geo.input_side * geo.input_side;
+    let mut bytes = vec![0u8; hart * model::BANK_ROW_BYTES];
+    for position in 0..hart {
         for channel in 0..model::BANK_ROW_BYTES {
             bytes[position * model::BANK_ROW_BYTES + channel] =
                 (((position * 37 + channel * 19) & 255) as i32 - 128) as u8;
@@ -126,9 +127,9 @@ fn ctest_tile(geo: &model::Geo) -> Vec<u8> {
 }
 
 fn seeded_tile(geo: &model::Geo, seed: u32) -> Vec<u8> {
-    let core = geo.input_side * geo.input_side;
-    let mut bytes = vec![0u8; core * model::BANK_ROW_BYTES];
-    for position in 0..core {
+    let hart = geo.input_side * geo.input_side;
+    let mut bytes = vec![0u8; hart * model::BANK_ROW_BYTES];
+    for position in 0..hart {
         for channel in 0..model::BANK_ROW_BYTES {
             let mix = seed
                 .wrapping_mul(0x9E37_79B9)
@@ -216,7 +217,10 @@ fn build_case(spec: CaseSpec) -> MaxPoolCase {
     }
 
     if dst_addrs.len() as u32 != iter * spec.groups {
-        panic!("maxpool: gold rows {} != iter {iter} x groups", dst_addrs.len());
+        panic!(
+            "maxpool: gold rows {} != iter {iter} x groups",
+            dst_addrs.len()
+        );
     }
 
     let rs2 = encode_rs2(&spec.geo);
@@ -226,6 +230,7 @@ fn build_case(spec: CaseSpec) -> MaxPoolCase {
 
     MaxPoolCase {
         cmd: MaxPoolCmd {
+            is_topk: 0,
             iter,
             op1_bank: spec.op1_bank,
             wr_bank: spec.wr_bank,
@@ -491,5 +496,127 @@ pub fn gen_case(index: u32) -> MaxPoolCase {
     if index >= NUM_CASES {
         panic!("maxpool: unsupported directed case {index}");
     }
-    build_case(spec_for(index))
+    if index < 11 {
+        build_case(spec_for(index))
+    } else {
+        build_topk(index - 11)
+    }
+}
+
+fn build_topk(index: u32) -> MaxPoolCase {
+    let (rows, groups, n, k) = match index {
+        0 => (5, 2, 37, 9),
+        1 => (2, 1, 7, 7),
+        2 => (2, 3, 19, 1),
+        3 => (76, 1, 304, 300),
+        4 => (16, 2, 127, 32),
+        _ => panic!("unknown Top-K case {index}"),
+    };
+    let mut keys = vec![u32::MAX; rows * groups * 4];
+    for (i, key) in keys.iter_mut().take(n).enumerate() {
+        *key = match index {
+            0 => match i % 5 {
+                0 => u32::MAX,
+                1 => 0x8000_0000,
+                3 => 0,
+                _ => 17,
+            },
+            1 | 3 => 0,
+            2 => 0x8000_0000 + i as u32,
+            4 => (i as u32).wrapping_mul(0x9e37_79b9) ^ 0x6a09_e667,
+            _ => unreachable!(),
+        };
+    }
+    let mut input_words = [0u128; MAX_INPUT_WORDS];
+    let mut input_addr = [0u32; MAX_INPUT_WORDS];
+    let mut input_group = [0u32; MAX_INPUT_WORDS];
+    for row in 0..rows {
+        for group in 0..groups {
+            let word = row * groups + group;
+            for lane in 0..4 {
+                input_words[word] |= (keys[word * 4 + lane] as u128) << (lane * 32);
+            }
+            input_addr[word] = row as u32;
+            input_group[word] = group as u32;
+        }
+    }
+    // Independent selection reference: mark chosen positions, keeping the
+    // first index on a tie. The BEMU model uses a full lexicographic sort.
+    let mut used = vec![false; n];
+    let mut dst_words = [0u128; MAX_DST];
+    let mut dst_addr = [0u32; MAX_DST];
+    for rank in 0..k {
+        let mut best = None;
+        for at in 0..n {
+            if !used[at] && best.is_none_or(|old| keys[at] > keys[old]) {
+                best = Some(at);
+            }
+        }
+        let at = best.unwrap();
+        used[at] = true;
+        let pair = keys[at] as u128 | ((at as u128) << 32);
+        dst_words[rank / 2] |= pair << ((rank % 2) * 64);
+        dst_addr[rank / 2] = (rank / 2) as u32;
+    }
+    MaxPoolCase {
+        cmd: MaxPoolCmd {
+            is_topk: 1,
+            iter: rows as u32,
+            op1_bank: 0,
+            wr_bank: 1,
+            op1_group: index % 3,
+            wr_group: (index + 1) % 4,
+            op1_col: groups as u32,
+            wr_col: 1,
+            rob_id: index + 2,
+            rs2_lo: n as u32,
+            rs2_hi: k as u32,
+            input_base: 0,
+            output_base: 0,
+            output_stride: 0,
+            input_side: 0,
+            output_side: 0,
+            kernel: 0,
+            stride: 0,
+            padding: 0,
+            start_row: 0,
+            start_col: 0,
+            num_input_words: (rows * groups) as u32,
+            num_dst_words: k.div_ceil(2) as u32,
+        },
+        input_words,
+        input_addr,
+        input_group,
+        dst_words,
+        dst_addr,
+        dst_group: [0; MAX_DST],
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gen_case;
+
+    #[test]
+    fn topk_matches_c_vectors_and_crosses_eight_bit_rank() {
+        let case = gen_case(11);
+        for rank in 0..9usize {
+            let pair = case.dst_words[rank / 2] >> ((rank % 2) * 64);
+            assert_eq!(pair as u32, if rank < 8 { u32::MAX } else { 0x8000_0000 });
+            assert_eq!(
+                (pair >> 32) as u32,
+                if rank < 8 { rank as u32 * 5 } else { 1 }
+            );
+        }
+        assert_eq!(case.dst_words[4] >> 64, 0);
+        let large = gen_case(14);
+        assert_eq!(large.cmd.rs2_hi, 300);
+        assert_eq!(large.cmd.num_dst_words, 150);
+        assert_eq!(large.dst_words[149], (298u128 << 32) | (299u128 << 96));
+        for index in 0..super::NUM_CASES {
+            let case = gen_case(index);
+            assert!(case.cmd.num_input_words as usize <= super::MAX_INPUT_WORDS);
+            assert!(case.cmd.num_dst_words as usize <= super::MAX_DST);
+        }
+    }
 }

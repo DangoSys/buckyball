@@ -1,5 +1,7 @@
 add_subdirectory(CTest)
 add_subdirectory(SocTest)
+# The benchmarks, built only by `bbdev bench --build`.
+add_subdirectory(benchmark)
 
 # ===============================================================
 # Design-specific workloads: the workload entry of the simulation.

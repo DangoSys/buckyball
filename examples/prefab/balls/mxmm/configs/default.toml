@@ -1,2 +1,14 @@
 tileRows = 16
 tileCols = 16
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXMM_MXFP8", funct7 = 71 },
+  { mnemonic = "MXMM_MXFP8_WINDOW", funct7 = 75 },
+]
+
+# The BallDomain that holds this Ball alone (--ball mxmm).
+[host]
+include = "default"

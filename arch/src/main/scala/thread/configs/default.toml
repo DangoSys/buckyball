@@ -1,0 +1,32 @@
+# The default host of a thread alone: the placement a hart gives its one
+# thread (HartPlacement fields ThreadParam reads, and PmpParams), without
+# shared banks. The values are those of goban, whose hart hosts matmul.
+
+# The command width of the thread's RoCC interface: the XLEN of the hart.
+xLen = 64
+virtualBankCount = 64
+
+# The thread shared store the hart gives the thread.
+[tss]
+base = 0x20000
+bytes = 0x4000
+dataBits = 128
+
+[pmp]
+addressBits = 36
+entries = 16
+
+# The ideal memory of the virtual environment, behind the thread's DMA: it
+# holds the thread's program image and the data of its workloads.
+[memory]
+base = 0x80000000
+bytes = 0x10000000
+
+# The simulation hardware (SimParam).
+[sims]
+diffTest = false
+verilatorThreads = 4
+
+[sims.memory]
+lineBytes = 64
+clockHz = 1000000000

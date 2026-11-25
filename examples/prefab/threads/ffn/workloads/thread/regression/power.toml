@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the ffn thread's power
+# (bbdev bench --prefab "--thread ffn --power", as bbdev dc --power --workload).
+[power]
+workload = "ffn-thread-transpose_i8_16x16-baremetal"

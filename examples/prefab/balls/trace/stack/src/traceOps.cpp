@@ -8,7 +8,7 @@
 #include "traceOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 #include "mlir/Dialect/Arith/IR/Arith.h"
 
@@ -52,8 +52,7 @@ static LogicalResult counter(Operation *op, OpBuilder &builder,
     rs2 = arith::OrIOp::create(
         builder, loc, rs2,
         arith::ShLIOp::create(builder, loc, tag, constantI64(builder, loc, 8)));
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("BDB_COUNTER"),
+  emitInstruction(builder, loc, target::getFunct7("BDB_COUNTER"),
                   constantI64(builder, loc, 0), rs2);
   return success();
 }

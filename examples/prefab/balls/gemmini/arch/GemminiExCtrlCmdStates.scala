@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 import gemmini._
@@ -21,6 +17,10 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
 
   protected def handleIdleState(): Unit = {
     io.cmdReq.ready := true.B
+    // rs2[4] zeroes the bias D, op2 of a WS compute. In OS (and so in every
+    // COMPUTE_ACCUMULATED) op2 is B and is always read.
+    val zeroBias = io.cmdReq.bits.rs2(4) && cfg_dataflow === Dataflow.WS.id.U &&
+      sub_cmd =/= GemminiSubCmd.COMPUTE_ACCUMULATED
     when(io.cmdReq.fire) {
       rob_id_reg       := io.cmdReq.bits.rob_id
       op1_bank         := io.cmdReq.bits.op1_bank
@@ -39,7 +39,7 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
         DIM.U,
         io.cmdReq.bits.iter
       )
-      zero_op2         := io.cmdReq.bits.rs2(4)
+      zero_op2         := zeroBias
       zero_op1_tail    := io.cmdReq.bits.rs2(5)
       accumulated_cmd  := sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
       reset_acc_mesh   := sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
@@ -66,10 +66,10 @@ trait GemminiExCtrlCmdStates { this: GemminiExCtrl =>
       }.elsewhen(
         sub_cmd === GemminiSubCmd.COMPUTE_PRELOADED || sub_cmd === GemminiSubCmd.COMPUTE_ACCUMULATED
       ) {
-        // A zeroed op2 (rs2[4]) reads no bank, so its group is not checked.
+        // A zeroed bias reads no bank, so its group is not checked.
         assert(
           io.cmdReq.bits.rs2(41, 36) < io.cmdReq.bits.op1_col &&
-            (io.cmdReq.bits.rs2(4) || io.cmdReq.bits.rs2(47, 42) < io.cmdReq.bits.op2_col),
+            (zeroBias || io.cmdReq.bits.rs2(47, 42) < io.cmdReq.bits.op2_col),
           "Gemmini compute operand group outside the bank"
         )
         read_row_cnt        := 0.U

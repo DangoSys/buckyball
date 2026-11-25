@@ -1,12 +1,12 @@
 import mill._
 import mill.scalalib._
-import $file.^.arch.src.main.scala.framework.{build => framework_build}
+import $file.^.arch.src.main.scala.{build => framework_build}
 import $file.^.arch.thirdparty.{build => thirdparty_build}
 import $file.prefab.balls.{build => ball_components}
 import $file.prefab.threads.{build => thread_components}
 
-import $file.^.arch.src.main.scala.framework.acc.balldomain.src.main.scala.bbus.{build => bbus_build}
-import $file.^.arch.src.main.scala.framework.core.tbus.{build => tbus_build}
+import $file.^.arch.src.main.scala.ball.src.main.scala.bbus.{build => bbus_build}
+import $file.^.arch.src.main.scala.thread.tbus.{build => tbus_build}
 
 val examplesRoot: os.Path = millSourcePath
 
@@ -34,7 +34,12 @@ object library extends SbtModule {
 
   override def generatedSources = T {
     bbus_build.registry(ball_components.sources(), examplesRoot / "prefab" / "balls", T.dest) ++
-      tbus_build.registry(thread_components.sources(), examplesRoot / "prefab" / "threads", T.dest)
+      tbus_build.registry(
+        thread_components.sources(),
+        examplesRoot / "prefab" / "threads",
+        T.dest,
+        "framework.thread.tbus.generated"
+      )
   }
 
   override def sources =

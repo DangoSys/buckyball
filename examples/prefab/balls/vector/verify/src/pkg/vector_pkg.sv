@@ -8,6 +8,9 @@ package vector_pkg;
   `include "seq/vector_sequences.svh"
   `include "cov/vector_cov.svh"
   `include "env/vector_scoreboard.svh"
+  `include "env/vector_cycles.svh"
   `include "env/vector_env.svh"
   `include "tests/vector_test.svh"
+  `include "tests/vector_throughput_test.svh"
+  `include "tests/vector_latency_test.svh"
 endpackage

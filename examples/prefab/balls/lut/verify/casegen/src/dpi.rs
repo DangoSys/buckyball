@@ -67,3 +67,9 @@ pub extern "C" fn lut_case_dst_word_lo(word_index: u32) -> u64 {
 pub extern "C" fn lut_case_dst_word_hi(word_index: u32) -> u64 {
     current_case(|case| case.dst_hi(src_index(word_index, case.cmd.num_dst_words, "dst_word_hi")))
 }
+
+/// The cycles BEMU models for a LUT (iter, rs2).
+#[no_mangle]
+pub extern "C" fn lut_bemu_cycles(iter: u64, rs2: u64) -> u64 {
+    crate::latency::cycles(iter, rs2)
+}

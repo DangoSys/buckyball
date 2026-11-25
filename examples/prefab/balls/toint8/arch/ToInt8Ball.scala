@@ -1,30 +1,28 @@
 package examples.balls.toint8
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import buckyball.balls.toint8.{Params => ParametersProto}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.ball.bbus.{BallFactory, BallPorts}
+import buckyball.balls.toint8.{Params => ParametersProto}
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import hardfloat.{recFNFromFN, INToRecFN, RecFNToIN}
 import hardfloat.consts.{round_near_even, tininess_afterRounding}
-import framework.lib.arith.Fma
+import framework.generic.arith.Fma
 
-import framework.acc.balldomain.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
 
 @instantiable
 class ToInt8Ball(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
@@ -34,9 +32,9 @@ class ToInt8Ball(
   val i32Funct = ball.instructions
     .find(_.mnemonic == "QUANT_I32_TO_I8").get.funct7
 
-  require(mp.bankWidth == 128, "ToInt8Ball requires 128-bit bank rows")
+  require(link.bankWidth == 128, "ToInt8Ball requires 128-bit bank rows")
   require(
-    mp.bankEntries >= 4,
+    link.bankEntries >= 4,
     "ToInt8Ball requires at least four bank rows"
   )
   require(ball.inBW == 1, "ToInt8Ball requires inBW=1")
@@ -45,26 +43,26 @@ class ToInt8Ball(
   require((i32Funct >> 4) == 4, "QUANT_I32_TO_I8 must encode two reads and one write")
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val idle :: scaleReq :: scaleResp :: inputReq :: inputResp :: pack :: packDrain :: writeReq :: writeResp :: complete :: Nil =
     Enum(10)
   val state                                                                                                                   = RegInit(idle)
 
-  val robIdReg     = RegInit(0.U(log2Up(fp.rob_entries).W))
-  val inputBank    = RegInit(0.U(fp.bank_id_len.W))
-  val scaleBank    = RegInit(0.U(fp.bank_id_len.W))
-  val outputBank   = RegInit(0.U(fp.bank_id_len.W))
-  val bases        = Reg(Vec(3, UInt(mp.groupIdWidth.W)))
+  val robIdReg     = RegInit(0.U(link.robIdBits.W))
+  val inputBank    = RegInit(0.U(link.bankIdBits.W))
+  val scaleBank    = RegInit(0.U(link.bankIdBits.W))
+  val outputBank   = RegInit(0.U(link.bankIdBits.W))
+  val bases        = Reg(Vec(3, UInt(link.groupIdBits.W)))
   // Every group of a virtual bank is one 16-channel block with the same rows.
-  val groups       = RegInit(0.U(log2Up(mp.bankNum + 1).W))
-  val group        = RegInit(0.U(log2Up(mp.bankNum + 1).W))
-  val outputBase   = RegInit(0.U(log2Ceil(mp.bankEntries).W))
-  val iterReg      = RegInit(0.U(fp.iter_len.W))
-  val inputBaseReg = RegInit(0.U(log2Ceil(mp.bankEntries).W))
+  val groups       = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val group        = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val outputBase   = RegInit(0.U(log2Ceil(link.bankEntries).W))
+  val iterReg      = RegInit(0.U(link.iterBits.W))
+  val inputBaseReg = RegInit(0.U(log2Ceil(link.bankEntries).W))
   // Relative row within the command.  inputBaseReg is the absolute bank row.
-  val relativeRow  = RegInit(0.U(log2Ceil(mp.bankEntries).W))
-  val outputRow    = RegInit(0.U(log2Ceil(mp.bankEntries).W))
+  val relativeRow  = RegInit(0.U(log2Ceil(link.bankEntries).W))
+  val outputRow    = RegInit(0.U(log2Ceil(link.bankEntries).W))
   val outputWidth  = RegInit(0.U(7.W))
   val outputStride = RegInit(0.U(7.W))
   val outputColumn = RegInit(0.U(7.W))
@@ -158,7 +156,7 @@ class ToInt8Ball(
   blink.bankWrite(0).io.req.bits.addr := outputRow
   blink.bankWrite(0).io.req.bits.data := writeData
   blink.bankWrite(0).io.req.bits.mask := VecInit(
-    Seq.fill(mp.bankMaskLen)(true.B)
+    Seq.fill(link.bankMaskLen)(true.B)
   )
   blink.bankWrite(0).io.resp.ready    := false.B
 
@@ -172,11 +170,11 @@ class ToInt8Ball(
         assert(isF32 || isI32, "ToInt8Ball received an unknown funct7")
         assert(cmd.iter > 0.U && cmd.iter(1, 0) === 0.U, "ToInt8Ball iter must be a positive multiple of four")
         assert(
-          cmd.iter <= mp.bankEntries.U,
+          cmd.iter <= link.bankEntries.U,
           "ToInt8Ball input exceeds bank depth"
         )
         assert(
-          cmd.op1_col =/= 0.U && cmd.op1_col === cmd.wr_col && cmd.op1_col <= mp.bankNum.U,
+          cmd.op1_col =/= 0.U && cmd.op1_col === cmd.wr_col && cmd.op1_col <= link.bankNum.U,
           "ToInt8Ball input and output must have the same channel groups"
         )
         assert(
@@ -184,7 +182,7 @@ class ToInt8Ball(
           "ToInt8Ball input, scale, and output banks must differ"
         )
         assert(
-          cmd.op2_col === 1.U && (cmd.op1_col << 2) <= mp.bankEntries.U,
+          cmd.op2_col === 1.U && (cmd.op1_col << 2) <= link.bankEntries.U,
           "ToInt8Ball scales must be one group of four rows per channel group"
         )
         when(isF32) {
@@ -201,11 +199,11 @@ class ToInt8Ball(
           assert(width > 0.U && height > 0.U && stride >= width, "QUANT_I32_TO_I8 output geometry is invalid")
           assert(width * height === outputRows, "QUANT_I32_TO_I8 iter does not match output geometry")
           assert(
-            outputEnd <= mp.bankEntries.U,
+            outputEnd <= link.bankEntries.U,
             "QUANT_I32_TO_I8 output exceeds bank depth"
           )
           assert(
-            inputBase +& cmd.iter <= mp.bankEntries.U,
+            inputBase +& cmd.iter <= link.bankEntries.U,
             "QUANT_I32_TO_I8 input exceeds bank depth"
           )
         }
@@ -352,11 +350,10 @@ class ToInt8Ball(
 object ToInt8Ball extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new ToInt8Ball(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new ToInt8Ball(link, route)).blink, None)
 
 }

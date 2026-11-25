@@ -1,0 +1,5 @@
+# The workload whose gate-level activity measures the softmax thread's power
+# (bbdev bench --prefab "--thread poly/threads/softmax --power", as bbdev dc
+# --power --workload).
+[power]
+workload = "softmax-thread-mxint8matmul_small-baremetal"

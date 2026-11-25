@@ -8,7 +8,7 @@
 #include "mxint8quantizeOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::mxint8quantize_ball;
@@ -57,7 +57,7 @@ LogicalResult QuantMxint8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), k = getK(), input = getInput(),
           output = getOutput();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   int64_t packed = k / 16 + (k + 511) / 512;
   if (target.bankWidthBits != 128 || rows <= 0 || k <= 0 || k % 32 ||
       k >= 65536 || rows * k / 4 > target.bankDepth ||
@@ -67,7 +67,7 @@ LogicalResult QuantMxint8Op::lowerToInstructions(OpBuilder &builder) {
     return emitOpError("quant_mxint8 requires distinct input and output banks");
   // The rows start at bank row 0 of input and output.
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("MXINT8QUANT"),
+      builder, loc, target::getFunct7("MXINT8QUANT"),
       constantI64(builder, loc, bankFields({input}, output, false, rows)),
       constantI64(builder, loc, field(k, 0, 15)));
   return success();

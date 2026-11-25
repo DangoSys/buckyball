@@ -1,28 +1,28 @@
 package examples.balls.vector
 
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+
+import framework.generic.contract.blink.BallResponse
+
 import chisel3.experimental.hierarchy.public
 
 import chisel3.experimental.hierarchy.instantiable
 
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import examples.balls.vector.configs.VectorBallParam
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class VecMat16(
-  frontendParam: FrontendParam,
-  memParam:      MemDomainParam,
-  routingParam:  BallDomainParam,
+  link:          BlinkParam,
   val inBW:      Int,
   val outBW:     Int,
   val inW:       Int,
@@ -30,7 +30,7 @@ class VecMat16(
   lane:          Int,
   val ballParam: VectorBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
 
   require(lane == 16, "VecMat16 requires lane=16")
   require(inW == 8, "VecMat16 requires int8 inputs")
@@ -41,23 +41,21 @@ class VecMat16(
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -68,29 +66,29 @@ class VecMat16(
     Enum(6)
   val state                                                                = RegInit(sIdle)
 
-  val robIdReg   = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
-  val op1Bank    = RegInit(0.U(frontendParam.bank_id_len.W))
-  val op2Bank    = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wrBank     = RegInit(0.U(frontendParam.bank_id_len.W))
+  val robIdReg   = RegInit(0.U(link.robIdBits.W))
+  val op1Bank    = RegInit(0.U(link.bankIdBits.W))
+  val op2Bank    = RegInit(0.U(link.bankIdBits.W))
+  val wrBank     = RegInit(0.U(link.bankIdBits.W))
   // Renamed bank holding the old C, which the instruction accumulates into.
-  val wrReadBank = RegInit(0.U(frontendParam.bank_id_len.W))
+  val wrReadBank = RegInit(0.U(link.bankIdBits.W))
   // Group bases of each operand; the old C shares the destination layout.
-  val op1Group   = RegInit(0.U(memParam.groupIdWidth.W))
-  val op2Group   = RegInit(0.U(memParam.groupIdWidth.W))
-  val wrGroup    = RegInit(0.U(memParam.groupIdWidth.W))
-  val iterReg    = RegInit(0.U(frontendParam.iter_len.W))
-  val readRow    = RegInit(0.U(frontendParam.iter_len.W))
+  val op1Group   = RegInit(0.U(link.groupIdBits.W))
+  val op2Group   = RegInit(0.U(link.groupIdBits.W))
+  val wrGroup    = RegInit(0.U(link.groupIdBits.W))
+  val iterReg    = RegInit(0.U(link.iterBits.W))
+  val readRow    = RegInit(0.U(link.iterBits.W))
   val aReqDone   = RegInit(false.B)
   val bReqDone   = RegInit(false.B)
   val aRespDone  = RegInit(false.B)
   val bRespDone  = RegInit(false.B)
-  val aWord      = RegInit(0.U(memParam.bankWidth.W))
-  val bWord      = RegInit(0.U(memParam.bankWidth.W))
+  val aWord      = RegInit(0.U(link.bankWidth.W))
+  val bWord      = RegInit(0.U(link.bankWidth.W))
   val acc        = Reg(Vec(lane, Vec(lane, UInt(accW.W))))
 
-  val accLoad = Instantiate(new VecMat16AccLoad(frontendParam, memParam, routingParam, accW, lane, ballParam))
+  val accLoad = Instantiate(new VecMat16AccLoad(link, accW, lane, ballParam))
 
-  val store = Instantiate(new VecMat16Store(frontendParam, memParam, routingParam, accW, lane, ballParam))
+  val store = Instantiate(new VecMat16Store(link, accW, lane, ballParam))
 
   accLoad.io.start   := false.B
   accLoad.io.wrBank  := wrReadBank
@@ -118,7 +116,7 @@ class VecMat16(
   io.status.idle         := state === sIdle
   io.status.running      := state =/= sIdle && state =/= sDone
   VecMat16Tie.offRead(io.bankRead, robIdReg)
-  VecMat16Tie.offWrite(io.bankWrite, robIdReg, wrBank, wrGroup, memParam)
+  VecMat16Tie.offWrite(io.bankWrite, robIdReg, wrBank, wrGroup, link)
 
   switch(state) {
     is(sIdle) {
@@ -139,7 +137,7 @@ class VecMat16(
         aRespDone        := false.B
         bRespDone        := false.B
         assert(
-          cmd.iter =/= 0.U && cmd.iter <= memParam.bankEntries.U,
+          cmd.iter =/= 0.U && cmd.iter <= link.bankEntries.U,
           "VecMat16 iter must be 1..bank depth"
         )
         assert(cmd.rs2 === 0.U, "VecMat16 rs2 is reserved")

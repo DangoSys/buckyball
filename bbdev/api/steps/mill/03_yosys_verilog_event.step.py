@@ -20,6 +20,7 @@ from utils.path import get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.path import rtl_out
 from steps.mill.scripts.mill import elaborate_cmd
+from steps.dc.scripts.tapeout import get_tapeout_contract
 from utils.event_common import check_result, get_origin_trace_id
 
 config = {
@@ -188,7 +189,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             bbdir,
             design,
             "synth",
-            input_data.get("output_dir"),
             selection=input_data["target"],
         )
         if os.path.exists(build_dir):
@@ -230,7 +230,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
     yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg["top"]
+    if input_data["target"].startswith("ball/"):
+        # A Ball alone is synthesized as its tapeout entry.
+        top_module = get_tapeout_contract(
+            bbdir, design, input_data.get("top"), selection=input_data["target"]
+        ).top_module
+    else:
+        top_module = input_data.get("top") or yosys_cfg["top"]
     yosys_log_dir = log_dir(
         bbdir,
         design,
@@ -238,7 +244,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         datetime.now().strftime("%Y-%m-%d-%H-%M"),
         "yosys",
         top_module,
-        input_data.get("output_dir"),
         selection=input_data["target"],
     )
     ctx.logger.info(f"Yosys log dir: {yosys_log_dir}")

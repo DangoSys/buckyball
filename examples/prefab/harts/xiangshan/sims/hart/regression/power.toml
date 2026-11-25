@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the xiangshan hart's power
+# (bbdev dc --power --workload).
+[power]
+workload = "xiangshan-hart0-ctest-cpu_arithmetic-baremetal"

@@ -16,8 +16,17 @@
 # Input groups are 16-channel blocks; one bank row is one spatial position.
 
 inputWidth = 8
-# Resident Conv lowering can request a 4x4 output core from a stride-2,
+# Resident Conv lowering can request a 4x4 output hart from a stride-2,
 # kernel-7 producer, which needs a 13x13 local input.
 maxIter = 16
 maxKSize = 7
 maxPadding = 7
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "IM2COL", funct7 = 48 }]
+
+# The BallDomain that holds this Ball alone (--ball im2col).
+[host]
+include = "default"

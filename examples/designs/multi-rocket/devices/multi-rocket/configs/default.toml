@@ -1,0 +1,518 @@
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+trace = "default"
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 0
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 1
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 2
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 1
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 3
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 4
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 2
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 5
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 6
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 3
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 7
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 8
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 4
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 9
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 10
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 5
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 11
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 12
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 6
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 13
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 14
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 7
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 15
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 16
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 8
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 17
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 18
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 9
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 19
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 20
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 10
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 21
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 22
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 11
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 23
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 24
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 12
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 25
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 26
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 13
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 27
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 28
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 14
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 29
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 30
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 15
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 31
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 32
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 16
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 33
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 34
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 17
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 35
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 36
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 18
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 37
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 38
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 19
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 39
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 40
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 20
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 41
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 42
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 21
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 43
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 44
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 22
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 45
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 46
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 23
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 47
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 48
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 24
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 49
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 50
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 25
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 51
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 52
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 26
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 53
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 54
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 27
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 55
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 56
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 28
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 57
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 58
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 29
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 59
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 60
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 30
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 61
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 62
+
+[[harts]]
+include = "../../../harts/rocket/configs/default.toml"
+hartId = 31
+
+[harts.memory]
+
+[harts.memory.icache]
+include = "../../../harts/rocket/configs/memory/icache/shared.toml"
+nodeId = 63
+
+[harts.memory.dcache]
+
+[harts.memory.dcache.cache]
+include = "../../../harts/rocket/configs/memory/dcache/shared.toml"
+nodeId = 64

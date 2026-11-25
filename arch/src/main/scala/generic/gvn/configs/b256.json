@@ -1,0 +1,7 @@
+{
+  "buckets": 256,
+  "entries": 16,
+  "addressBits": 44,
+  "dataBits": 128,
+  "idBits": 4
+}

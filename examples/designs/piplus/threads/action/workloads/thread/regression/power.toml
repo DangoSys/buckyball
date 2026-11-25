@@ -1,0 +1,5 @@
+# The workload whose gate-level activity measures the action thread's power
+# (bbdev bench --prefab "--thread piplus/threads/action --power", as bbdev dc
+# --power --workload).
+[power]
+workload = "action-thread-mxint8mm_small-baremetal"

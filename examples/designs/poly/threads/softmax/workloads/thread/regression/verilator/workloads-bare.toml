@@ -1,0 +1,11 @@
+# The tests of the softmax thread alone
+# (bbdev bebop-* --batch "--thread poly/threads/softmax").
+[workloads]
+tests = [
+  "softmax-thread-dma_roundtrip-baremetal",
+  "softmax-thread-transpose_i8_16x16-baremetal",
+  "softmax-thread-mxint8quantize_edges-baremetal",
+  "softmax-thread-mxint8matmul_small-baremetal",
+  "softmax-thread-mxint8act_relu-baremetal",
+  "softmax-thread-intsoftmax_rows-baremetal",
+]

@@ -1,0 +1,5 @@
+# Memory of every poly hart; the device assigns the cache node IDs.
+uncached = "default"
+access = "access/hart.toml"
+dcache = "dcache/hart.toml"
+home = "home/hart.toml"

@@ -1,0 +1,19 @@
+/dts-v1/;
+/plugin/;
+
+&{/} {
+    #address-cells = <2>;
+    #size-cells = <2>;
+    reserved-memory {
+        #address-cells = <2>;
+        #size-cells = <2>;
+        ranges;
+        /* What the mesh has of the DDR under Linux (the hart's
+           stack/runtime/mesh/linux.c): 16 MiB of L2 for the firmware of the
+           tiles and its job, then the pool of the matrices of a product. */
+        mesh@cc000000 {
+            reg = <0 0xcc000000 0 0x5000000>;
+            no-map;
+        };
+    };
+};

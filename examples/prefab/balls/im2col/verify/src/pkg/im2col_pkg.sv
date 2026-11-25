@@ -8,6 +8,9 @@ package im2col_pkg;
   `include "seq/im2col_sequences.svh"
   `include "cov/im2col_cov.svh"
   `include "env/im2col_scoreboard.svh"
+  `include "env/im2col_cycles.svh"
   `include "env/im2col_env.svh"
   `include "tests/im2col_test.svh"
+  `include "tests/im2col_throughput_test.svh"
+  `include "tests/im2col_latency_test.svh"
 endpackage

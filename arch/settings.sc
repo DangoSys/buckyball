@@ -19,8 +19,8 @@ trait IpModule extends FrameworkModule {
   override def sources    = T.sources(Seq(PathRef(moduleRoot / "src" / "main" / "scala" / "Emit.scala")))
 }
 
-object lib extends FrameworkModule {
-  override def moduleRoot = archRoot / "src" / "main" / "scala" / "framework" / "lib"
+object generic extends FrameworkModule {
+  override def moduleRoot = archRoot / "src" / "main" / "scala" / "generic"
 
   override def sources    = T.sources {
     Seq(

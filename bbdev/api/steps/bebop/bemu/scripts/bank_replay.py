@@ -305,9 +305,9 @@ if __name__ == "__main__":
     )
     design = load(args.design_pb)
     thread = design.threads[args.thread_index]
-    core = next(t for t in design.device.cores if args.thread_index in t.thread_indices)
+    hart = next(t for t in design.device.harts if args.thread_index in t.thread_indices)
     model = Replay(
-        thread, core.virtual_bank_count, json.loads(args.calibration.read_text())
+        thread, hart.virtual_bank_count, json.loads(args.calibration.read_text())
     )
     started = time.monotonic()
     first_cycle = None

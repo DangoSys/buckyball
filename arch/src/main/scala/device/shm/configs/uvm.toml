@@ -1,0 +1,10 @@
+[parameters]
+capacity = "32768"
+bankBytes = 16384
+harts = 2
+clients = 2
+addressBits = 44
+dataBits = 128
+idBits = 4
+
+[defines]

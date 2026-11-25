@@ -358,10 +358,10 @@ if __name__ == "__main__":
     )
     design = load(args.design_pb)
     thread = design.threads[args.thread_index]
-    core = next(t for t in design.device.cores if args.thread_index in t.thread_indices)
+    hart = next(t for t in design.device.harts if args.thread_index in t.thread_indices)
     capacity = thread.mem.bank.num
     depth = thread.frontend.rob_entries
-    alias_base = core.virtual_bank_count + (2 if thread.gpdomain.enable else 0)
+    alias_base = hart.virtual_bank_count + (2 if thread.gpdomain.enable else 0)
     assert capacity < 256 and depth < 64 and alias_base < 64
     calibration = json.loads(args.calibration.read_text())
     bids = np.full(128, -1, np.int64)

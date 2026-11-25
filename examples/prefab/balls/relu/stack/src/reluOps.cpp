@@ -8,7 +8,7 @@
 #include "reluOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::relu_ball;
@@ -52,14 +52,14 @@ int64_t ReluI32Op::getDestinationBank() { return getBank(); }
 LogicalResult ReluI32Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), bank = getBank();
-  int64_t depth = buckyball_target::getBuckyballTarget().bankDepth;
+  int64_t depth = target::getTarget().bankDepth;
   if (rows <= 0 || rows > depth || depth % 16)
     return emitOpError("relu_i32 rows exceed the bank");
   // Group 0 of the bank in the bank1 field; bit 63 marks the in-place
   // update. rs2 is the segment stride.
   uint64_t rs1 =
       bankFields({bank}, bank, false, (rows + 15) / 16 * 16) | (1ULL << 63);
-  emitInstruction(builder, loc, buckyball_target::getBuckyballFunct7("RELU"),
+  emitInstruction(builder, loc, target::getFunct7("RELU"),
                   constantI64(builder, loc, rs1),
                   constantI64(builder, loc, depth));
   return success();

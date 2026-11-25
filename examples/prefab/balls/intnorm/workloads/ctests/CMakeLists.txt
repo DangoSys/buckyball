@@ -1,0 +1,5 @@
+add_ctest(intnorm_signed.cpp)
+add_ctest(intnorm_zero.cpp)
+add_ctest(intnorm_round.cpp)
+add_ctest(intnorm_wide.cpp)
+add_ctest(intnorm_extreme.cpp)

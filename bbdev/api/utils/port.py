@@ -41,7 +41,8 @@ def reserve_port(
     for port in _port_order(start_port, end_port, preferred_port):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
-            sock.bind(("127.0.0.1", port))
+            # The engine listens on all interfaces, including non-loopback ones.
+            sock.bind(("0.0.0.0", port))
             return port, sock
         except OSError:
             sock.close()

@@ -1,10 +1,7 @@
-pub(crate) use bebop_bemu::{
-    ball as instruction,
-    thread::{bank_matrix, instructions::decode},
-};
+pub(crate) use bebop_bemu::{ball as instruction, ball::blink as bank_matrix, ball::blink as decode};
 
-#[path = "64_vecmat16.rs"]
-mod f64_vecmat16;
+mod vecmat16;
 
 mod ball;
 mod dispatch;
+mod latency;

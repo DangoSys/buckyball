@@ -1,0 +1,8 @@
+# The tests of the matmul thread alone (bbdev bebop-* --batch "--thread matmul").
+[workloads]
+tests = [
+  "matmul-thread-dma_roundtrip-baremetal",
+  "matmul-thread-smatmul_16x16-baremetal",
+  "matmul-thread-transpose_i8_16x16-baremetal",
+  "matmul-thread-int2fp_scale-baremetal",
+]

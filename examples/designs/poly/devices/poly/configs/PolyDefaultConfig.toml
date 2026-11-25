@@ -1,0 +1,111 @@
+include = "design.toml"
+# PolyDefaultConfig: the full nine-hart design (nine CPUs, forty Ants, two 16KiB instruction banks per Mixed) that the models run on; BEMU, Verilator, P2E, VCS, DC and tapeout.
+
+[[device.harts]]
+include = "../../../harts/reduce-unpack/configs/default.toml"
+hartId = 0
+nodeId = 1
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 1
+nodeId = 2
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 3 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 4 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 2
+nodeId = 3
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 5 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 6 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 3
+nodeId = 4
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 7 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 8 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 4
+nodeId = 5
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 9 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 10 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 5
+nodeId = 6
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 11 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 12 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 6
+nodeId = 7
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 13 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 14 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 7
+nodeId = 8
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 15 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 16 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]
+
+[[device.harts]]
+include = "../../../harts/poly/configs/default.toml"
+hartId = 8
+nodeId = 9
+memory = { icache = { include = "../../../harts/poly/configs/memory/icache/hart.toml", nodeId = 17 }, dcache = { cache = { include = "../../../harts/poly/configs/memory/cache.toml", nodeId = 18 } } }
+threads = [
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 0, name = "attention0", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/mixed5/configs/attention.toml", id = 1, name = "attention1", cpu = "../../../threads/mixed5/configs/cpu32.toml", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 2, name = "ffn0", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 3, name = "ffn1", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+  { include = "../../../threads/ffn5/configs/ffn.toml", id = 4, name = "ffn2", memdomain = { bank = { num = 16, entries = 1024 }, mmio = { bankEntries = 1024 } }, gpdomain = { eLen = 64, iBufWords = 4096 } },
+]

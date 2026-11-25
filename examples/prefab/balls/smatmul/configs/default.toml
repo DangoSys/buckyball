@@ -2,3 +2,15 @@
 
 tileRows = 16
 tileCols = 16
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SMATMUL_OS", funct7 = 65 },
+  { mnemonic = "SMATMUL_BIAS", funct7 = 17 },
+]
+
+# The BallDomain that holds this Ball alone (--ball smatmul).
+[host]
+include = "default"

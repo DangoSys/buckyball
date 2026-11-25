@@ -58,7 +58,7 @@ fn build_case(
     assert!(matches!(blocks, 1 | 2));
     assert!(rows * model::RESULT_WORDS <= model::BANK_DEPTH);
     let mut rng = Rng::new(seed, rows as u32 ^ blocks as u32);
-    let bias_values: Vec<i32> = (0..model::CORE).map(|_| rng.value() as i32).collect();
+    let bias_values: Vec<i32> = (0..model::HART).map(|_| rng.value() as i32).collect();
     let mut bias = Vec::with_capacity(4 * model::ROW_BYTES);
     for chunk in bias_values.chunks(4) {
         for value in chunk {
@@ -86,8 +86,8 @@ fn build_case(
     for block in 0..blocks {
         let a_bank = 1 + 2 * block as u32;
         let b_bank = 2 + 2 * block as u32;
-        let a_values: Vec<i8> = (0..rows * model::CORE).map(|_| rng.value()).collect();
-        let b_values: Vec<i8> = (0..model::CORE * model::CORE)
+        let a_values: Vec<i8> = (0..rows * model::HART).map(|_| rng.value()).collect();
+        let b_values: Vec<i8> = (0..model::HART * model::HART)
             .map(|_| rng.value())
             .collect();
         let a_packed = model::pack_a(&a_values, rows);
@@ -95,16 +95,16 @@ fn build_case(
         a.push(a_packed);
         b.push(b_packed);
         for row in 0..rows {
-            for column in 0..model::CORE {
-                for k in 0..model::CORE {
+            for column in 0..model::HART {
+                for k in 0..model::HART {
                     result[row][column] = result[row][column].wrapping_add(
-                        a_values[row * model::CORE + k] as i32
-                            * b_values[k * model::CORE + column] as i32,
+                        a_values[row * model::HART + k] as i32
+                            * b_values[k * model::HART + column] as i32,
                     );
                 }
             }
         }
-        let rs1 = model::encode_rs1(a_bank, b_bank, C_BANK, model::CORE as u64);
+        let rs1 = model::encode_rs1(a_bank, b_bank, C_BANK, model::HART as u64);
         let rs2 = model::encode_rs2(rows, block == 0, block + 1 == blocks, 0);
         let op1_group = group(&mut rng);
         let op2_group = group(&mut rng);
@@ -116,7 +116,7 @@ fn build_case(
             op2_group,
             wr_group,
             op1_words: rows as u32,
-            op2_words: (model::CORE * rows.div_ceil(tile_rows)) as u32,
+            op2_words: (model::HART * rows.div_ceil(tile_rows)) as u32,
             k_groups: 1,
             wr_col: 1,
             rs1_lo: rs1 as u32,
@@ -156,9 +156,9 @@ fn bias_rows(values: &[i32]) -> Vec<u8> {
 // K block g (16 per group), at nonzero group bases.
 fn three_k_groups(seed: u32, tile_rows: usize) -> MatrixCase {
     let mut rng = Rng::new(seed, 11);
-    let bias: Vec<i32> = (0..model::CORE).map(|_| rng.value() as i32).collect();
+    let bias: Vec<i32> = (0..model::HART).map(|_| rng.value() as i32).collect();
     let a_values: Vec<i8> = (0..16 * 48).map(|_| rng.value()).collect();
-    let b_values: Vec<i8> = (0..48 * model::CORE).map(|_| rng.value()).collect();
+    let b_values: Vec<i8> = (0..48 * model::HART).map(|_| rng.value()).collect();
     // Group g of A is A[:, 16g..16g+16] row-major; group g of B is rows 16g...
     let mut a = Vec::new();
     for group in 0..3 {
@@ -171,10 +171,10 @@ fn three_k_groups(seed: u32, tile_rows: usize) -> MatrixCase {
     let b: Vec<u8> = b_values.iter().map(|value| *value as u8).collect();
     let mut result = vec![bias.clone(); 16];
     for row in 0..16 {
-        for column in 0..model::CORE {
+        for column in 0..model::HART {
             for k in 0..48 {
                 result[row][column] = result[row][column].wrapping_add(
-                    a_values[row * 48 + k] as i32 * b_values[k * model::CORE + column] as i32,
+                    a_values[row * 48 + k] as i32 * b_values[k * model::HART + column] as i32,
                 );
             }
         }
@@ -191,7 +191,7 @@ fn three_k_groups(seed: u32, tile_rows: usize) -> MatrixCase {
                 op2_group: 2,
                 wr_group: 3,
                 op1_words: 16,
-                op2_words: (model::CORE * 16_usize.div_ceil(tile_rows)) as u32,
+                op2_words: (model::HART * 16_usize.div_ceil(tile_rows)) as u32,
                 k_groups: 3,
                 wr_col: 1,
                 rs1_lo: rs1 as u32,
@@ -211,9 +211,9 @@ fn three_k_groups(seed: u32, tile_rows: usize) -> MatrixCase {
 // C group 0 into group 1 on 512-line banks.
 fn c_crosses_groups(seed: u32, tile_rows: usize) -> MatrixCase {
     let mut rng = Rng::new(seed, 12);
-    let bias: Vec<i32> = (0..model::CORE).map(|_| rng.value() as i32).collect();
+    let bias: Vec<i32> = (0..model::HART).map(|_| rng.value() as i32).collect();
     let a_values: Vec<i8> = (0..128 * 32).map(|_| rng.value()).collect();
-    let b_values: Vec<i8> = (0..32 * model::CORE).map(|_| rng.value()).collect();
+    let b_values: Vec<i8> = (0..32 * model::HART).map(|_| rng.value()).collect();
     let mut a = Vec::new();
     for group in 0..2 {
         for row in 0..128 {
@@ -225,10 +225,10 @@ fn c_crosses_groups(seed: u32, tile_rows: usize) -> MatrixCase {
     let b: Vec<u8> = b_values.iter().map(|value| *value as u8).collect();
     let mut result = vec![bias.clone(); 128];
     for row in 0..128 {
-        for column in 0..model::CORE {
+        for column in 0..model::HART {
             for k in 0..32 {
                 result[row][column] = result[row][column].wrapping_add(
-                    a_values[row * 32 + k] as i32 * b_values[k * model::CORE + column] as i32,
+                    a_values[row * 32 + k] as i32 * b_values[k * model::HART + column] as i32,
                 );
             }
         }
@@ -245,7 +245,7 @@ fn c_crosses_groups(seed: u32, tile_rows: usize) -> MatrixCase {
                 op2_group: 0,
                 wr_group: 0,
                 op1_words: 128,
-                op2_words: (model::CORE * 128_usize.div_ceil(tile_rows)) as u32,
+                op2_words: (model::HART * 128_usize.div_ceil(tile_rows)) as u32,
                 k_groups: 2,
                 wr_col: 2,
                 rs1_lo: rs1 as u32,

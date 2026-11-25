@@ -1,0 +1,4 @@
+# The benchmarks (bb-tests/workloads/src/benchmark) this device runs in
+# `bench-device --bemu-bench`, bare metal and under Linux.
+[bench]
+benches = ["coremark", "embench"]

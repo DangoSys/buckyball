@@ -15,6 +15,7 @@ from utils.event_common import require_design
 from utils.path import rtl_dir, get_buckyball_path, log_dir
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id
+from steps.dc.scripts.tapeout import clock_period_ns, get_tapeout_contract
 
 config = {
     "name": "yosys synth",
@@ -78,9 +79,24 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             bbdir,
             design,
             "synth",
-            input_data.get("output_dir"),
             selection=input_data["target"],
         )
+        yosys_cfg = load_yosys_config()
+        if input_data["target"].startswith("ball/"):
+            # A Ball alone is synthesized as its tapeout entry: its top and the
+            # Liberty source of the DC target library.
+            contract = get_tapeout_contract(
+                bbdir, design, input_data.get("top"), selection=input_data["target"]
+            )
+            top_module = contract.top_module
+            clock_period = clock_period_ns(contract)
+            liberty = contract.target_library.removesuffix(".db") + ".lib"
+            if not os.path.isfile(liberty):
+                raise ValueError(f"no Liberty source of {contract.target_library}")
+        else:
+            top_module = input_data.get("top") or yosys_cfg["top"]
+            clock_period = yosys_cfg.get("clock_period", 10.0)
+            liberty = yosys_cfg.get("liberty")
     except ValueError as exc:
         await check_result(
             ctx,
@@ -91,9 +107,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
 
-    yosys_cfg = load_yosys_config()
-    top_module = input_data.get("top") or yosys_cfg["top"]
-    liberty = yosys_cfg.get("liberty")
     if isinstance(liberty, str):
         liberty = os.path.expandvars(os.path.expanduser(liberty))
 
@@ -132,7 +145,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         stamp,
         "yosys",
         top_module,
-        input_data.get("output_dir"),
         selection=input_data["target"],
     )
     os.makedirs(yosys_output_dir, exist_ok=True)
@@ -198,7 +210,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         and os.path.exists(netlist_file)
         and result.returncode == 0
     ):
-        clock_period = yosys_cfg.get("clock_period", 10.0)
         clock_name = yosys_cfg.get("clock_name", "clock")
         vcd = input_data.get("vcd") or yosys_cfg.get("vcd")
         if isinstance(vcd, str):

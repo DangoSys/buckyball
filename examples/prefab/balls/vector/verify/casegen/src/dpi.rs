@@ -77,3 +77,9 @@ pub extern "C" fn vector_case_c_new_word_lo(index: u32) -> u64 {
 pub extern "C" fn vector_case_c_new_word_hi(index: u32) -> u64 {
     current_case(|case| (word(&case.c_new, index, "c_new_word_hi") >> 64) as u64)
 }
+
+/// The cycles BEMU models for a VECMAT16 instruction of `iter` rows.
+#[no_mangle]
+pub extern "C" fn vector_bemu_cycles(iter: u64) -> u64 {
+    crate::latency::cycles(iter)
+}

@@ -1,0 +1,14 @@
+# Every bare workload, as on Verilator.
+[workloads]
+tests = [
+  "magia-hart0-ctest-fsync_test_mm-baremetal",
+  "magia-hart0-ctest-redmule_test_mm-baremetal",
+  "magia-hart0-ctest-redmule_small_mm-baremetal",
+  "magia-hart0-ctest-gemm_columns_mm-baremetal",
+  "magia-hart0-ctest-half_convert-baremetal",
+  "magia-hart0-ctest-gemm_service-baremetal",
+  "magia-hart0-ctest-gemm_one_row-baremetal",
+  "magia-hart0-ctest-gemm_two_columns-baremetal",
+  "magia-hart0-ctest-gemm_one_column-baremetal",
+  "magia-hart0-ctest-gemm_few_columns-baremetal",
+]

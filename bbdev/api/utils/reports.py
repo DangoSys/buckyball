@@ -25,7 +25,8 @@ def source_context(repo, design, selection):
         "repository": "DangoSys/buckyball",
         "branch": git("branch", "--show-current") or git("rev-parse", "HEAD"),
         "commit": git("rev-parse", "HEAD"),
-        "design": design,
+        # A component alone is named by its last path component, as its logs.
+        "design": design.rsplit("/", 1)[-1],
         "config_hash": hashlib.sha256(config).hexdigest(),
         "provenance": {
             "source_dirty": bool(

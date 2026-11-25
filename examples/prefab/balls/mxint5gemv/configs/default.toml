@@ -1,0 +1,10 @@
+
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 5, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT5GEMV", funct7 = 65 }]
+
+# The BallDomain that holds this Ball alone (--ball mxint5gemv).
+[host]
+include = "default"

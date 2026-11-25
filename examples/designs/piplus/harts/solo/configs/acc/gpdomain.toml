@@ -1,0 +1,13 @@
+# The GP domain of the solo hart: the RVV operators of the FP32 work around
+# the products (norms, softmax, activations, residuals).
+enable = true
+laneNumber = 32
+# The operators move, merge, mask, shift, add and compare integers; they do not
+# multiply or divide them and use no fixed point, so the lanes have no
+# multiplier, divider or rounding path.
+baseInteger = true
+fp64 = true
+vLen = 1024
+eLen = 32
+iBufWords = 4096
+memoryPorts = 4

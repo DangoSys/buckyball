@@ -15,7 +15,7 @@ from utils.event_common import require_design
 from utils.path import get_buckyball_path, log_dir, rtl_dir
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
-from utils.event_common import check_result, get_origin_trace_id
+from utils.event_common import check_result, get_origin_trace_id, require_product
 
 config = {
     "name": "verilator-sim",
@@ -99,16 +99,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     ctx.logger.info(f"Using build directory: {build_dir}")
     timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-    binary_name = input_data.get("binary", "")
-    if not binary_name:
-        await check_result(
-            ctx,
-            1,
-            continue_run=False,
-            extra_fields={"error": "binary_required"},
-            trace_id=origin_tid,
-        )
-        return
+    binary_name = require_product(input_data)
     coverage = input_data.get("coverage", False)
     workload_root = str(
         Path(design_output_root(bbdir, design, selection=input_data["target"]))

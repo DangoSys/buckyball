@@ -4,7 +4,7 @@ import chisel3.experimental.hierarchy.{instantiable, public}
 
 import chisel3._
 import chisel3.util._
-import framework.lib.dpi.DpiGuard
+import framework.generic.dpi.DpiGuard
 
 @instantiable
 class CTraceDPI extends BlackBox with HasBlackBoxInline {

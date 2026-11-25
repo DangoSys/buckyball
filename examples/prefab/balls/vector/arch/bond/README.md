@@ -12,7 +12,7 @@ bond/
 └── vvv.scala           - VVV binding implementation
 ```
 
-## Core Components
+## Hart Components
 
 ### VVV - Vector-to-Vector Binding
 

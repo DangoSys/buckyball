@@ -1,6 +1,9 @@
 #include "monitor/trace.h"
 #include "monitor/trace_cfg.h"
 #include "utils/debug.h"
+#include <cassert>
+#include <cstdlib>
+#include <filesystem>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -85,4 +88,23 @@ extern "C" void dpi_btrace(unsigned int inst_id_lo, unsigned int inst_id_hi,
             w0_vbank, w0_hash);
     fflush(ctrace_fp);
   }
+}
+
+// The MMIO trace peripheral shares its decoder with BEMU and Bebop RTL runners.
+extern "C" void *buckyball_trace_create(const char *directory);
+extern "C" void buckyball_trace_write(void *trace, uint32_t channel,
+                                      uint32_t word, uint64_t value);
+extern "C" void buckyball_trace_finish(void *trace);
+static void *cycle_trace = nullptr;
+
+extern "C" void dpi_trace_write(unsigned int channel, unsigned int word,
+                                unsigned int lo, unsigned int hi) {
+  if (cycle_trace == nullptr) {
+    assert(log_path != nullptr);
+    cycle_trace = buckyball_trace_create(
+        std::filesystem::path(log_path).parent_path().c_str());
+    std::atexit([] { buckyball_trace_finish(cycle_trace); });
+  }
+  buckyball_trace_write(cycle_trace, channel, word,
+                        (static_cast<uint64_t>(hi) << 32) | lo);
 }

@@ -1,4 +1,0 @@
-[workloads]
-tests = [
-  "fw_payload-linux.hex",
-]

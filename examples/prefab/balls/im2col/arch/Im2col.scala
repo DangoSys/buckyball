@@ -1,18 +1,26 @@
 package examples.balls.im2col
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
+import framework.generic.queue.Queue
 import examples.balls.im2col.configs.Im2colBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
+
+class Im2colRow(addressWidth: Int, groupWidth: Int) extends Bundle {
+  val data    = UInt(128.W)
+  val address = UInt(addressWidth.W)
+  val group   = UInt(groupWidth.W)
+  val last    = Bool()
+}
 
 /**
  * Im2col over channel-block groups.
@@ -26,44 +34,42 @@ import examples.balls.im2col.configs.Im2colBallParam
  */
 @instantiable
 class Im2col(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     Im2colBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: Im2colBallParam)
     extends Module {
   val maxIter      = ballParam.maxIter
   val maxKSize     = ballParam.maxKSize
   val maxPad       = ballParam.maxPadding
-  val addressWidth = log2Ceil(memParam.bankEntries)
-  val groupWidth   = log2Up(memParam.bankNum + 1)
+  val addressWidth = log2Ceil(link.bankEntries)
+  val groupWidth   = log2Up(link.bankNum + 1)
 
   require(instance.inBW == 1, "Im2colBall requires inBW=1")
   require(instance.outBW == 1, "Im2colBall requires outBW=1")
-  require(memParam.bankWidth == 128, "Im2colBall requires 128-bit bank rows")
+  require(link.bankWidth == 128, "Im2colBall requires 128-bit bank rows")
   require(ballParam.inputWidth == 8, "Im2colBall moves 16 INT8 channels per row")
-  require(isPow2(memParam.bankEntries), "Im2colBall requires power-of-two bank depth")
+  require(isPow2(link.bankEntries), "Im2colBall requires power-of-two bank depth")
   require(maxIter + 2 * maxPad <= 255, "Im2colBall dimensions must fit the divider")
   require(maxKSize <= 15 && maxPad <= 15, "Im2colBall kernel and padding fields are four bits")
 
   @public
   val io = IO(new Bundle {
-    val cmdReq    = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
-    val cmdResp   = Decoupled(new BallResponse(frontendParam))
-    val bankRead  = Vec(1, Flipped(new BankRead(frontendParam, memParam)))
-    val bankWrite = Vec(1, Flipped(new BankWrite(frontendParam, memParam)))
+    val cmdReq    = Flipped(Decoupled(new BallCommand(link)))
+    val cmdResp   = Decoupled(new BallResponse(link))
+    val bankRead  = Vec(1, Flipped(new BankRead(link)))
+    val bankWrite = Vec(1, Flipped(new BankWrite(link)))
     val status    = new BallStatus
   })
 
-  val idle :: divRows :: divCols :: divStart :: divTiles :: check :: select :: readReq :: readResp :: writeReq :: writeResp :: complete :: Nil =
-    Enum(12)
-  val state                                                                                                                                    = RegInit(idle)
+  val idle :: divRows :: divCols :: divStart :: divTiles :: check :: select :: readResp :: drain :: complete :: Nil =
+    Enum(10)
+  val state                                                                                                         = RegInit(idle)
 
-  val robId       = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
-  val inBank      = RegInit(0.U(frontendParam.bank_id_len.W))
-  val outBank     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val inBase      = RegInit(0.U(memParam.groupIdWidth.W))
-  val outBase     = RegInit(0.U(memParam.groupIdWidth.W))
+  val robId       = RegInit(0.U(link.robIdBits.W))
+  val inBank      = RegInit(0.U(link.bankIdBits.W))
+  val outBank     = RegInit(0.U(link.bankIdBits.W))
+  val inBase      = RegInit(0.U(link.groupIdBits.W))
+  val outBase     = RegInit(0.U(link.groupIdBits.W))
   val inGroups    = RegInit(0.U(groupWidth.W))
   val outGroups   = RegInit(0.U(groupWidth.W))
   val size        = RegInit(0.U(8.W))
@@ -91,7 +97,15 @@ class Im2col(
   val window    = RegInit(0.U(11.W))
   val windowRow = RegInit(0.U(16.W))
   val windowCol = RegInit(0.U(16.W))
-  val rowData   = Reg(UInt(128.W))
+
+  val pendingRows = Instantiate(new Queue(
+    new Im2colRow(addressWidth, groupWidth),
+    2,
+    false,
+    false
+  ))
+
+  val writePending = RegInit(false.B)
 
   val div = Instantiate(new RestoringDiv(16, 8, ballParam))
   div.io.start := false.B
@@ -119,18 +133,31 @@ class Im2col(
   io.bankRead(0).rob_id           := robId
   io.bankRead(0).bank_id          := inBank
   io.bankRead(0).group_id         := inBase + inGroup
-  io.bankRead(0).io.req.valid     := state === readReq
+  io.bankRead(0).io.req.valid     := state === select && window < windowCount && inBounds
   io.bankRead(0).io.req.bits.addr := sourceLine(addressWidth - 1, 0)
-  io.bankRead(0).io.resp.ready    := state === readResp
+  io.bankRead(0).io.resp.ready    := state === readResp && pendingRows.io.enq.ready
 
-  io.bankWrite(0).rob_id           := robId
-  io.bankWrite(0).bank_id          := outBank
-  io.bankWrite(0).group_id         := outBase + outGroup
-  io.bankWrite(0).io.req.valid     := state === writeReq
-  io.bankWrite(0).io.req.bits.addr := outputLine(addressWidth - 1, 0)
-  io.bankWrite(0).io.req.bits.data := rowData
-  io.bankWrite(0).io.req.bits.mask := VecInit(Seq.fill(memParam.bankMaskLen)(true.B))
-  io.bankWrite(0).io.resp.ready    := state === writeResp
+  pendingRows.io.enq.valid        := (state === select && !(window < windowCount && inBounds)) ||
+    (state === readResp && io.bankRead(0).io.resp.valid)
+  pendingRows.io.enq.bits.data    := Mux(state === readResp, io.bankRead(0).io.resp.bits.data, 0.U)
+  pendingRows.io.enq.bits.address := outputLine(addressWidth - 1, 0)
+  pendingRows.io.enq.bits.group   := outGroup
+  pendingRows.io.enq.bits.last    := lastTile && window +& 1.U === paddedWindows
+
+  io.bankWrite(0).rob_id                         := robId
+  io.bankWrite(0).bank_id                        := outBank
+  io.bankWrite(0).group_id                       := outBase + pendingRows.io.deq.bits.group
+  io.bankWrite(0).io.req.valid                   := pendingRows.io.deq.valid && !writePending
+  io.bankWrite(0).io.req.bits.addr               := pendingRows.io.deq.bits.address
+  io.bankWrite(0).io.req.bits.data               := pendingRows.io.deq.bits.data
+  io.bankWrite(0).io.req.bits.mask               := VecInit(Seq.fill(link.bankMaskLen)(true.B))
+  io.bankWrite(0).io.resp.ready                  := writePending
+  pendingRows.io.deq.ready                       := io.bankWrite(0).io.resp.fire
+  when(io.bankWrite(0).io.req.fire)(writePending := true.B)
+  when(io.bankWrite(0).io.resp.fire) {
+    writePending                             := false.B
+    when(pendingRows.io.deq.bits.last)(state := complete)
+  }
 
   switch(state) {
     is(idle) {
@@ -155,12 +182,12 @@ class Im2col(
         assert(cmd.rs2(45, 36) =/= 0.U, "IM2COL window count must be positive")
         assert(PopCount(tileValue) === 1.U && tileValue <= 16.U, "IM2COL tile rows must be 1, 2, 4, 8, or 16")
         assert(
-          cmd.rs2(25, 20) +& cmd.iter * cmd.iter <= memParam.bankEntries.U,
+          cmd.rs2(25, 20) +& cmd.iter * cmd.iter <= link.bankEntries.U,
           "IM2COL input footprint exceeds bank depth"
         )
         assert(
           cmd.op1_col =/= 0.U && cmd.op2_col === 0.U && cmd.wr_col =/= 0.U &&
-            cmd.op1_col <= memParam.bankNum.U && cmd.wr_col <= memParam.bankNum.U,
+            cmd.op1_col <= link.bankNum.U && cmd.wr_col <= link.bankNum.U,
           "IM2COL requires input and output groups"
         )
         assert(cmd.op1_bank =/= cmd.wr_bank, "IM2COL input and output banks must differ")
@@ -241,7 +268,7 @@ class Im2col(
         "IM2COL selected window range exceeds the output shape"
       )
       assert(
-        paddedWindows * groupTiles <= memParam.bankEntries.U,
+        paddedWindows * groupTiles <= link.bankEntries.U,
         "IM2COL output footprint exceeds bank depth"
       )
       kernelRow := 0.U
@@ -258,76 +285,52 @@ class Im2col(
     // The current output row is an input row, or zero for padding and for
     // windows past windowCount.
     is(select) {
-      when(window < windowCount && inBounds) {
-        state := readReq
-      }.otherwise {
-        rowData := 0.U
-        state   := writeReq
-      }
-    }
-
-    is(readReq) {
       when(io.bankRead(0).io.req.fire) {
         state := readResp
       }
     }
-
-    is(readResp) {
-      when(io.bankRead(0).io.resp.fire) {
-        rowData := io.bankRead(0).io.resp.bits.data
-        state   := writeReq
-      }
-    }
-
-    is(writeReq) {
-      when(io.bankWrite(0).io.req.fire) {
-        state := writeResp
-      }
-    }
-
-    is(writeResp) {
-      when(io.bankWrite(0).io.resp.fire) {
-        when(window +& 1.U =/= paddedWindows) {
-          window := window + 1.U
-          when(windowCol +& 1.U === outCols) {
-            windowCol := 0.U
-            windowRow := windowRow + 1.U
-          }.otherwise {
-            windowCol := windowCol + 1.U
-          }
-          state  := select
-        }.elsewhen(lastTile) {
-          state := complete
-        }.otherwise {
-          window    := 0.U
-          windowRow := firstRow
-          windowCol := firstCol
-          when(inGroup +& 1.U === inGroups) {
-            inGroup := 0.U
-            when(kernelCol +& 1.U === kernel) {
-              kernelCol := 0.U
-              kernelRow := kernelRow + 1.U
-            }.otherwise {
-              kernelCol := kernelCol + 1.U
-            }
-          }.otherwise {
-            inGroup := inGroup + 1.U
-          }
-          when(localTile +& 1.U === groupTiles) {
-            localTile := 0.U
-            outGroup  := outGroup + 1.U
-          }.otherwise {
-            localTile := localTile + 1.U
-          }
-          state     := select
-        }
-      }
-    }
-
     is(complete) {
       when(io.cmdResp.fire) {
         state := idle
       }
+    }
+  }
+
+  // Reading the next row overlaps the previous acknowledged write.
+  when(pendingRows.io.enq.fire) {
+    when(window +& 1.U =/= paddedWindows) {
+      window := window + 1.U
+      when(windowCol +& 1.U === outCols) {
+        windowCol := 0.U
+        windowRow := windowRow + 1.U
+      }.otherwise {
+        windowCol := windowCol + 1.U
+      }
+      state  := select
+    }.elsewhen(lastTile) {
+      state := drain
+    }.otherwise {
+      window    := 0.U
+      windowRow := firstRow
+      windowCol := firstCol
+      when(inGroup +& 1.U === inGroups) {
+        inGroup := 0.U
+        when(kernelCol +& 1.U === kernel) {
+          kernelCol := 0.U
+          kernelRow := kernelRow + 1.U
+        }.otherwise {
+          kernelCol := kernelCol + 1.U
+        }
+      }.otherwise {
+        inGroup := inGroup + 1.U
+      }
+      when(localTile +& 1.U === groupTiles) {
+        localTile := 0.U
+        outGroup  := outGroup + 1.U
+      }.otherwise {
+        localTile := localTile + 1.U
+      }
+      state     := select
     }
   }
 }

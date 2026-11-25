@@ -21,15 +21,13 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
-    if set(body) - {"design", "device", "core"}:
+    if set(body) - {"design", "config", "device", "hart", "thread", "ball"}:
         raise ValueError(
-            "stack build takes --design and --device <config> or --core <entry>"
+            "stack build takes --config <config> and one of --device, --hart, --thread, --ball"
         )
-    if not isinstance(body.get("design"), str):
-        raise ValueError("--design requires a design name")
     await ctx.enqueue(
         {
             "topic": "stack.build",

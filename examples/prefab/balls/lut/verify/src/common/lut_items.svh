@@ -25,10 +25,10 @@ class lut_cmd_item extends bb_blink_cmd_item;
     end
     lut_case_cmd(cmd);
 
-    // bb_lut: input/table/output banks and iter come from rs1; rs2 is reserved zero.
+    // The command carries the lookup mode and the Q16 normalization multiplier.
     rob_id        = cmd.rob_id[BB_BLINK_ROB_ID_W-1:0];
     funct         = LUT_THREAD_FUNCT7[6:0];
-    rs2           = 64'd0;
+    rs2           = {cmd.multiplier, 30'd0, cmd.mode[1:0]};
     iter          = cmd.iter;
     op1_bank      = cmd.op1_bank;
     op2_bank      = cmd.op2_bank;
@@ -45,8 +45,8 @@ class lut_cmd_item extends bb_blink_cmd_item;
     num_lut_words = cmd.num_lut_words;
     num_dst_words = cmd.num_dst_words;
 
-    if (iter != 1 && iter != 4 && iter != 8)
-      `uvm_fatal("CASE", $sformatf("LUT iter %0d is not in {1,4,8}", iter))
+    if (iter != 1 && iter != 2 && iter != 3 && iter != 4 && iter != 8)
+      `uvm_fatal("CASE", $sformatf("LUT iter %0d is not in {1,2,3,4,8}", iter))
     if (op1_col != 1 || (op2_col != 1 && op2_col != 4) || wr_col != 1)
       `uvm_fatal("CASE", "LUT requires col=1 input/output and col=1 or col=4 table")
     if (op1_bank == op2_bank || op1_bank == wr_bank || op2_bank == wr_bank)
@@ -55,7 +55,7 @@ class lut_cmd_item extends bb_blink_cmd_item;
       `uvm_fatal("CASE", $sformatf("num_src_words %0d != iter %0d", num_src_words, iter))
     if (num_dst_words != iter)
       `uvm_fatal("CASE", $sformatf("num_dst_words %0d != iter %0d", num_dst_words, iter))
-    if (num_lut_words != (op2_col == 4 ? LUT_LANE_TABLE_ROWS : LUT_SHARED_TABLE_ROWS))
+    if (num_lut_words != (cmd.mode != 0 || op2_col == 4 ? LUT_LANE_TABLE_ROWS : LUT_SHARED_TABLE_ROWS))
       `uvm_fatal("CASE", $sformatf(
                  "num_lut_words %0d does not match col %0d", num_lut_words, op2_col))
 

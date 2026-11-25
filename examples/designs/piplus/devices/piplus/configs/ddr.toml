@@ -1,0 +1,16 @@
+clients = 1
+slotsPerClient = 16
+dataBits = 128
+beatRows = 8
+idBits = 4
+idBase = 0
+base = 0x80000000
+bytes = 0x400000000
+# The model region: 11 GiB at the top of the DDR (pi0-FAST is 10.8 GiB, pi0.5
+# and pi0 7.4 GiB each); 5 GiB below it for Linux, which pi0.5 needs.
+model = 0x2C0000000
+
+[line]
+nodeIdBits = 7
+addressBits = 44
+dataBits = 256

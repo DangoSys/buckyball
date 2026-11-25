@@ -8,7 +8,9 @@
 #include "mxint8matmulOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
+#include "mlir/Dialect/Arith/IR/Arith.h"
+#include "mlir/Dialect/Utils/StaticValueUtils.h"
 
 using namespace mlir;
 using namespace ::buddy::mxint8matmul_ball;
@@ -56,23 +58,28 @@ SmallVector<int64_t, 2> MatmulMxint8Op::getSourceBanks() {
 int64_t MatmulMxint8Op::getDestinationBank() { return getC(); }
 LogicalResult MatmulMxint8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
-  int64_t a = getA(), b = getB(), c = getC(), m = getM(), n = getN(),
-          k = getK();
+  int64_t a = getA(), b = getB(), c = getC(), n = getN(), k = getK();
   bool accumulate = getAccumulate();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   int64_t packed = k / 16 + (k + 511) / 512;
-  if (target.bankWidthBits != 128 || m <= 0 || m >= 1024 || n <= 0 ||
-      n >= 1024 || n % 4 || k <= 0 || k % 32 || m * packed > target.bankDepth ||
-      n * packed > target.bankDepth || m * n / 4 > target.bankDepth)
+  if (target.bankWidthBits != 128 || n <= 0 || n >= 1024 || n % 4 || k <= 0 ||
+      k % 32 || n * packed > target.bankDepth)
+    return emitOpError("matmul_mxint8 exceeds the bank");
+  if (auto m = getConstantIntValue(getM());
+      m && (*m <= 0 || *m >= 1024 || *m * packed > target.bankDepth ||
+            *m * n / 4 > target.bankDepth))
     return emitOpError("matmul_mxint8 exceeds the bank");
   if (a == b || a == c || b == c)
     return emitOpError("matmul_mxint8 requires distinct banks");
   // A, B and C start at bank row 0 of their banks.
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("MXINT8MM"),
+      builder, loc, target::getFunct7("MXINT8MM"),
       constantI64(builder, loc, bankFields({a, b}, c, accumulate, k)),
-      constantI64(builder, loc,
-                  field(m, 0, 9) | field(n, 10, 19) |
-                      field(accumulate, 62, 62)));
+      arith::AddIOp::create(
+          builder, loc,
+          arith::IndexCastOp::create(builder, loc, builder.getI64Type(),
+                                     getM()),
+          constantI64(builder, loc,
+                      field(n, 10, 19) | field(accumulate, 62, 62))));
   return success();
 }

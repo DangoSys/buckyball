@@ -12,7 +12,7 @@ op/
 └── mul.scala       - Multiplication operation
 ```
 
-## Core Components
+## Hart Components
 
 ### CascadeOp - Cascade Addition Operation
 

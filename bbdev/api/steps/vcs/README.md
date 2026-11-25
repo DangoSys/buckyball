@@ -16,6 +16,6 @@ which owns the SystemVerilog testbench, DPI shim, build and execution.  The shim
 SCU exit callbacks without linking the Verilator-specific BBSim C++ main.
 
 The VCS flow is intended for RTL functional simulation.  Gate-level power
-simulation remains design-owned under `examples/designs/<design>/sims/<entry>/tapeout/`, because
+simulation remains design-owned under `examples/designs/<design>/devices/<device>/sims/<entry>/tapeout/`, because
 that flow must define the design's workload, reset/boot skip interval, and SDF
 policy.

@@ -1,2 +1,3 @@
 [defines]
 SMATMUL_TILE_ROWS = "tileRows"
+SMATMUL_TILE_COLS = "tileCols"

@@ -1,0 +1,2 @@
+# PebbleDefaultConfig: the pebble design as configured, with no overrides.
+include = "design.toml"

@@ -8,6 +8,8 @@ import "DPI-C" function int unsigned trace_case_load(input int unsigned index);
 import "DPI-C" function void trace_case_cmd(input int unsigned index, output trace_cmd_dpi_t cmd);
 import "DPI-C" function int trace_case_records();
 
+import "DPI-C" function longint unsigned trace_bemu_cycles();
+
 `ifndef BDB_COUNTER_FUNCT7
 `error "BDB_COUNTER_FUNCT7 must be provided by the selected ballISA"
 `endif

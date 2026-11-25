@@ -3,7 +3,4 @@
 push/PR 到 `main` 会自动触发 `check.yaml`：
 
 1. **pre-commit**：拉代码, 并校验格式
-2. **design-check**：通过后，matrix 并行跑各 design（共享同一个 `~/Code/buckyball` 环境，基于 `ci_repo_lock.sh` 协调）
-
-`regression.yml` 是 reviewer 的可选测试。注意：Environment `regression` 必须在仓库 Settings → Environments 里打开 Required reviewers，否则会直接跑。
-也可以在 Actions → regression → Run workflow 中选择任意分支手动启动，测试触发时该分支的最新 commit。
+2. **design-check**：通过后，matrix 并行跑各 device 的正确性测试（BEMU bare/Linux、Verilator DiffTest）；性能由 bbbench 评估（共享同一个 `~/Code/buckyball` 环境，基于 `ci_repo_lock.sh` 协调）

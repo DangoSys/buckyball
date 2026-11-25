@@ -8,7 +8,13 @@ from motia import FlowContext, queue
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
-from utils.path import design_output_root, get_buckyball_path, workload_build_dir
+from utils.path import (
+    design_output_root,
+    design_pb_path,
+    get_buckyball_path,
+    owner_root,
+    workload_build_dir,
+)
 from utils.event_common import check_result, get_origin_trace_id
 
 _stack_build_path = os.path.join(
@@ -31,12 +37,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     allowed = {
         "target",
+        "config",
         "device",
-        "core",
+        "hart",
+        "thread",
+        "ball",
         "design",
         "ctest",
         "mlirtest",
         "soctest",
+        "bench",
         "_trace_id",
     }
     unknown = sorted((k for k in input_data if k not in allowed))
@@ -50,6 +60,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
+    if input_data["target"].startswith("thread/"):
+        await build_thread(ctx, bbdir, input_data, origin_tid)
+        return
     design = input_data.get("design")
     if not design:
         ctx.logger.error("Missing required parameter: design must be specified")
@@ -61,7 +74,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    if not isinstance(design, str) or not re.fullmatch("[A-Za-z0-9_-]+", design):
+    # A design, or a component alone: its directory relative to examples.
+    if not isinstance(design, str) or not re.fullmatch(
+        "[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", design
+    ):
         ctx.logger.error(f"Invalid design: {design}")
         await check_result(
             ctx,
@@ -71,7 +87,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             trace_id=origin_tid,
         )
         return
-    design_dir = Path(bbdir) / "examples" / "designs" / design
+    design_dir = Path(owner_root(bbdir, design))
     if not design_dir.is_dir():
         ctx.logger.error(f"Workload design does not exist: {design}")
         await check_result(
@@ -160,13 +176,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             task_scope=origin_tid,
             output_prefix="workload configure",
         )
+        # A benchmark (bench --build) is no workload: its own target.
+        bench = input_data.get("bench")
         target = (
-            "sync-ctest-bin"
-            if ctest
+            f"sync-bench-{bench}"
+            if bench
             else (
-                "sync-mlirtest-bin"
-                if mlirtest
-                else "sync-soctest-bin" if soctest else "sync-bin"
+                "sync-ctest-bin"
+                if ctest
+                else (
+                    "sync-mlirtest-bin"
+                    if mlirtest
+                    else "sync-soctest-bin" if soctest else "sync-bin"
+                )
             )
         )
         stack_build.run(
@@ -203,3 +225,59 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         trace_id=origin_tid,
     )
     return
+
+
+async def build_thread(ctx, bbdir: str, input_data: dict, origin_tid: str) -> None:
+    """The workloads of a thread alone: freestanding programs of its virtual
+    environment, built by the workload top of its entry from design.cmake."""
+    sys.path.insert(0, bbdir)
+    from stack.scripts import design as design_config
+
+    design = input_data["design"]
+    selection = input_data["target"]
+    design_pb = design_pb_path(bbdir, design, selection=selection)
+    config = design_config.load(design_pb)
+    generated = design_config.stack_build(config) / "generated"
+    build = workload_build_dir(bbdir, design, selection=selection)
+    try:
+        design_config.generate(design_pb, generated)
+        stack_build.run(
+            [
+                "cmake",
+                "-G",
+                "Ninja",
+                "-S",
+                os.path.join(bbdir, config.simulation.workloads),
+                "-B",
+                build,
+                f"-DDESIGN_CMAKE={generated / 'design.cmake'}",
+            ],
+            repo=Path(bbdir),
+            logger=ctx.logger,
+            task_scope=origin_tid,
+            output_prefix="workload configure",
+        )
+        stack_build.run(
+            ["ninja", "-C", build],
+            repo=Path(bbdir),
+            logger=ctx.logger,
+            task_scope=origin_tid,
+            output_prefix="workload build",
+        )
+    except RuntimeError as error:
+        ctx.logger.error(str(error))
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "error": "workload_build_failed",
+                "design": design,
+                "detail": str(error),
+            },
+            trace_id=origin_tid,
+        )
+        return
+    await check_result(
+        ctx, 0, continue_run=False, extra_fields={"design": design}, trace_id=origin_tid
+    )

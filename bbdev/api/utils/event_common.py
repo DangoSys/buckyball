@@ -2,50 +2,128 @@
 Common utility functions for all event steps.
 """
 
+import importlib.util
 import re
 
-from utils.path import design_pb_path, get_buckyball_path
+from pathlib import Path
+
+import iii.iii
+
+from utils.path import get_buckyball_path
 from utils.process_registry import set_current_task_scope
 
-
-def require_design(data: dict) -> str:
-    design = data.get("design")
-    if not isinstance(design, str) or not design:
-        raise ValueError("Missing required parameter: --design")
-    extra = data.get("config")
-    if isinstance(extra, str) and extra and extra != "None":
-        raise ValueError(
-            "do not pass --config; mill class comes from design config sims"
-        )
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", design):
-        raise ValueError(f"invalid design: {design}")
-    return design
+# The local iii engine answers state and queue calls slowly when the host is
+# loaded and its disk busy. The client's 30 s default failed hour-long runs on
+# one slow write (a step's final state never recorded, its waiter waiting on);
+# a call that never returns still fails, after 10 minutes.
+iii.iii.III.call.__defaults__ = (600.0,)
 
 
-def require_target(data: dict, kinds=("device", "core")) -> str:
-    """The selection of a request: device/<Config> for `--device <Config>`, a
-    config registered by the design's sims config, or core/<entry>."""
-    selected = [kind for kind in ("device", "core", "ip", "ball") if kind in data]
+def require_target(data: dict, kinds=("device", "hart")) -> str:
+    """The selection of a request, <level>/<name>/<config name>, with its
+    design.pb installed: `--config <design>/.../<Name>.toml` is a config TOML
+    Top under examples/designs, and exactly one of --device, --hart, --thread,
+    --ball names the component of it to simulate. The design, the first
+    directory of the config, is written to data["design"]. --device without
+    --config is the device from its design's one <Design>DefaultConfig.toml,
+    written to data["config"]. --ball without
+    --config is the Ball alone from its default config: a name is a prefab
+    Ball, a path <design>/balls/<ball> a design's; data["design"] is then the
+    Ball's directory relative to examples. --thread and --hart without --config
+    are the same for a thread or a hart."""
+    selected = [kind for kind in ("device", "hart", "thread", "ball") if kind in data]
     if len(selected) != 1:
         raise ValueError(
-            "Specify exactly one of --device <config>, --core <entry>, --ip <name>, --ball <name> after --design"
+            "Specify exactly one of --device <device>, --hart <hart>,"
+            " --thread <thread>, --ball <ball>, and --config <config TOML> for a"
+            " config other than the default"
         )
     kind = selected[0]
     if kind not in kinds:
         raise ValueError(f"--{kind} is not supported by this operation")
-    value = data[kind]
-    if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
+    if not isinstance(data[kind], str) or not re.fullmatch(
+        r"[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", data[kind]
+    ):
         raise ValueError(f"--{kind} requires a name")
-    if kind != "device":
-        return f"{kind}/{value}"
-    design = require_design(data)
-    pb = design_pb_path(get_buckyball_path(), design, selection=f"device/{value}")
-    if not pb.is_file():
-        raise ValueError(
-            f"design {design!r} registers no device config {value!r}"
-            " (run bbdev config --install after editing its sims config)"
+    config = data.get("config")
+    if kind == "device" and config is None:
+        # A device alone, from its design's one default config.
+        repo = Path(get_buckyball_path())
+        found = sorted(
+            (repo / "examples/designs").glob(
+                f"*/devices/{data[kind]}/configs/*DefaultConfig.toml"
+            )
         )
-    return f"device/{value}"
+        if len(found) != 1:
+            raise ValueError(
+                f"--device {data[kind]} needs exactly one"
+                f" examples/designs/*/devices/{data[kind]}/configs/*DefaultConfig.toml,"
+                f" found {len(found)}"
+            )
+        config = str(found[0].relative_to(repo / "examples/designs"))
+        data["config"] = config
+    if kind in ("ball", "thread", "hart") and config is None:
+        # A Ball, a thread or a hart alone, from its own default config.
+        repo = Path(get_buckyball_path())
+        spec = importlib.util.spec_from_file_location(
+            "config_install", repo / "bbdev/api/steps/config/scripts/install.py"
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        selection = module.install(repo, "", kind, data[kind])
+        root = {
+            "ball": module.ball_root,
+            "thread": module.thread_root,
+            "hart": module.hart_root,
+        }[kind](repo, data[kind])
+        data["design"] = str(root.relative_to(repo / "examples"))
+        return selection
+    if "/" in data[kind]:
+        raise ValueError(f"--{kind} with --config requires a name")
+    if not isinstance(config, str) or not re.fullmatch(
+        r"[A-Za-z0-9_-]+(/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*\.toml", config
+    ):
+        raise ValueError("--config requires a TOML path relative to examples/designs")
+    repo = Path(get_buckyball_path())
+    spec = importlib.util.spec_from_file_location(
+        "config_install", repo / "bbdev/api/steps/config/scripts/install.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    selection = module.install(repo, config, kind, data[kind])
+    data["design"] = Path(config).parts[0]
+    return selection
+
+
+def require_design(data: dict) -> str:
+    """The design of a request, set by require_target."""
+    return data["design"]
+
+
+def require_product(data: dict) -> str:
+    """The workload a simulation runs, by the name of what it loads into the
+    DDR: `--model <model> --os (baremetal | linux)` is the model's
+    <design>-<model>-<os>, `--bench <bench> --os (baremetal | linux)` a
+    benchmark's <design>-<bench>-<os> (embench, spec), `--test <name>` a test
+    by its whole name (a baremetal test, or the Linux regression image
+    <design>-test-linux). Call after require_target, which sets
+    data["design"]."""
+    given = [kind for kind in ("model", "bench", "test") if kind in data]
+    if len(given) != 1:
+        raise ValueError(
+            "Specify exactly one of --model <model> --os (baremetal | linux),"
+            " --bench <bench> --os (baremetal | linux), --test <name>"
+        )
+    (kind,) = given
+    if kind == "test":
+        if "os" in data:
+            raise ValueError(
+                "--os goes with --model or --bench; a test's name carries its OS"
+            )
+        return data["test"]
+    if data.get("os") not in ("baremetal", "linux"):
+        raise ValueError(f"--{kind} needs --os (baremetal | linux)")
+    return f"{data['design']}-{data[kind]}-{data['os']}"
 
 
 def get_origin_trace_id(input_data, ctx):

@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 import gemmini._

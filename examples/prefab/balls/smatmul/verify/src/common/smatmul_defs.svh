@@ -17,6 +17,9 @@ typedef struct {
 `ifndef SMATMUL_TILE_ROWS
 `error "SMATMUL_TILE_ROWS must be provided from the Ball configuration"
 `endif
+`ifndef SMATMUL_TILE_COLS
+`error "SMATMUL_TILE_COLS must be provided from the Ball configuration"
+`endif
 
 import "DPI-C" function void smatmul_case_load(
   input int unsigned seed,
@@ -37,6 +40,14 @@ import "DPI-C" function longint unsigned smatmul_case_a_word_lo(input int unsign
 import "DPI-C" function longint unsigned smatmul_case_a_word_hi(input int unsigned block, input int unsigned index);
 import "DPI-C" function longint unsigned smatmul_case_b_word_lo(input int unsigned block, input int unsigned index);
 import "DPI-C" function longint unsigned smatmul_case_b_word_hi(input int unsigned block, input int unsigned index);
+import "DPI-C" function longint unsigned smatmul_bemu_cycles(
+    input int unsigned bias,
+    input longint unsigned iter,
+    input longint unsigned rs2,
+    input longint unsigned k_groups,
+    input longint unsigned tile_rows,
+    input longint unsigned tile_cols
+);
 import "DPI-C" function int unsigned smatmul_case_num_writes();
 import "DPI-C" function int unsigned smatmul_case_write_addr(input int unsigned index);
 import "DPI-C" function longint unsigned smatmul_case_write_data_lo(input int unsigned index);

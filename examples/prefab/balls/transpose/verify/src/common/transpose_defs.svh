@@ -12,6 +12,8 @@ typedef struct {
   int unsigned num_dst_words;
 } transpose_cmd_dpi_t;
 
+import "DPI-C" function longint unsigned transpose_bemu_cycles(
+    input longint unsigned iter, input longint unsigned rs2, input longint unsigned cols);
 import "DPI-C" function int transpose_case_load(
   input int unsigned seed,
   input int unsigned index

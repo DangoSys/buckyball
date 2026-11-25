@@ -1,115 +1,41 @@
+import fcntl
 import os
 import re
 import shlex
+import shutil
 import sys
 import tomllib
 from datetime import datetime
 from pathlib import Path
-from utils.path import design_arch_root, log_dir
-from steps.mill.scripts.mill import mill_cmd
+from utils.path import design_output_root, load_design_config, log_dir, rtl_dir
+from steps.mill.scripts.mill import elaborate_cmd
 from utils.stream_run import stream_run_logger
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "config/scripts"))
 
 
-def load_design(bbdir: str, design: str, selection: str):
-    from utils.path import load_design_config
-
+def load_ball(bbdir: str, design: str, selection: str):
+    """The host and the one Ball of the design.pb of a Ball alone."""
     msg = load_design_config(bbdir, design, selection=selection)
-    if not msg.name or not msg.device.cores:
-        raise ValueError(f"empty design.pb of {design} {selection}")
-    return msg
+    if not msg.HasField("ball"):
+        raise ValueError(f"design.pb of {design} {selection} is not a Ball alone")
+    balls = msg.ball.balldomain.balls
+    if len(balls) != 1:
+        raise ValueError(f"design.pb of {design} {selection} holds {len(balls)} Balls")
+    return msg.ball.host, balls[0]
 
 
-def ball_domain(design, ball: str | None = None):
-    domains = [
-        core.accelerator.balldomain
-        for core in design.device.cores
-        if core.HasField("accelerator")
-    ]
-    domains.extend(thread.balldomain for thread in design.threads)
-    domains = [domain for domain in domains if domain.balls]
-    if not domains:
-        raise ValueError("design.pb has no BallDomain instances")
-    if ball is None:
-        domain = domains[0]
-        if any(other.balls != domain.balls for other in domains[1:]):
-            raise ValueError(
-                "design.pb has different BallDomains; select a Ball explicitly"
-            )
-        return domain
-    matches = [
-        (domain, mapping)
-        for domain in domains
-        for mapping in domain.balls
-        if mapping.component == ball
-    ]
-    if not matches:
-        raise ValueError(f"ball {ball!r} not in design.pb")
-    domain, mapping = matches[0]
-    if any(other != mapping for _, other in matches[1:]):
-        raise ValueError(f"ball {ball!r} has different instance definitions")
-    return domain
-
-
-def selected_mappings(domain, ball: str | None):
-    if ball is None:
-        return list(domain.balls)
-    for m in domain.balls:
-        if m.component == ball:
-            return [m]
-    raise ValueError(f"ball {ball!r} not in design.pb")
-
-
-def ball_owner(design, ball):
-    owners = []
-    for core in design.device.cores:
-        accelerators = [core.accelerator] if core.HasField("accelerator") else []
-        accelerators.extend(design.threads[index] for index in core.thread_indices)
-        owners.extend(
-            (acc, core)
-            for acc in accelerators
-            if any(item.component == ball for item in acc.balldomain.balls)
-        )
-    if not owners:
-        raise ValueError(f"ball {ball!r} not in design.pb")
-    # The first owner elaborates the unsuffixed Ball module that tb_top
-    # instantiates. Owners may differ only in bank count, which changes the
-    # group and column port widths of their own module copies.
-    accelerator, core = owners[0]
-    for other, owner in owners[1:]:
-        if (
-            other.mem.bank.entries != accelerator.mem.bank.entries
-            or other.mem.bank.width != accelerator.mem.bank.width
-            or other.mem.bank.mask_len != accelerator.mem.bank.mask_len
-            or other.frontend.rob_entries != accelerator.frontend.rob_entries
-            or other.frontend.sub_rob_depth != accelerator.frontend.sub_rob_depth
-            or owner.shared_mem != core.shared_mem
-            or owner.virtual_bank_count != core.virtual_bank_count
-        ):
-            raise ValueError(
-                f"ball {ball!r} has different verification interfaces across instances"
-            )
-    return accelerator, core
-
-
-def vcs_defines(domain, mapping, thread, core, parameters):
-    shared_bank_num = (
-        core.shared_mem.entries // core.shared_mem.bank_entries
-        if core.shared_mem.enable
-        else 0
-    )
-    max_group_count = max(thread.mem.bank.num, shared_bank_num)
+def vcs_defines(host, mapping, parameters):
     defs = [
         f"+define+BB_IN_BW={mapping.in_bw}",
         f"+define+BB_OUT_BW={mapping.out_bw}",
         f"+define+BB_MMIO_READ_BW={mapping.mmio_read_bw}",
         f"+define+BB_MMIO_WRITE_BW={mapping.mmio_write_bw}",
-        f"+define+BB_BANK_ID_W={thread.frontend.bank_id_len}",
-        f"+define+BB_GROUP_COUNT_W={max_group_count.bit_length()}",
-        f"+define+BB_GROUP_ID_W={(max_group_count - 1).bit_length()}",
-        f"+define+BB_BANK_ADDR_W={(thread.mem.bank.entries - 1).bit_length()}",
-        f"+define+BB_ROB_ID_W={(thread.frontend.rob_entries - 1).bit_length()}",
+        f"+define+BB_BANK_ID_W={host.bank_id_bits}",
+        f"+define+BB_GROUP_COUNT_W={host.bank_num.bit_length()}",
+        f"+define+BB_GROUP_ID_W={(host.bank_num - 1).bit_length()}",
+        f"+define+BB_BANK_ADDR_W={(host.bank_entries - 1).bit_length()}",
+        f"+define+BB_ROB_ID_W={(host.rob_entries - 1).bit_length()}",
     ]
     for e in mapping.instructions:
         defs.append(f"+define+{e.mnemonic}_FUNCT7={e.funct7}")
@@ -122,40 +48,39 @@ def vcs_defines(domain, mapping, thread, core, parameters):
 
 
 def _filelist(
-    verify_dir: Path,
-    ball_dir: str,
-    uvm_rel: str,
-    rtl_dir: Path,
-    sim_dir: Path,
+    verify_dir: Path, ball_dir: str, uvm_dir: Path, rtl_dir: Path, sim_dir: Path
 ) -> str:
+    """The Ball's filelist with every path absolute, so that tools run in
+    `sim_dir` and leave nothing in the Ball's source directory."""
     src = verify_dir / "filelists" / f"{ball_dir}_ball.f"
     dst = sim_dir / f"{ball_dir}_ball.f"
     sim_dir.mkdir(parents=True, exist_ok=True)
-    text = src.read_text()
-    dst.write_text(
-        text.replace("@UVM@", uvm_rel).replace("@RTL@", str(rtl_dir.resolve()))
+    text = (
+        src.read_text()
+        .replace("@UVM@", str(uvm_dir))
+        .replace("@RTL@", str(rtl_dir.resolve()))
     )
+    lines = []
+    for line in text.splitlines():
+        entry = line.strip()
+        if entry.startswith("+incdir+"):
+            line = "+incdir+" + str(verify_dir / entry.removeprefix("+incdir+"))
+        elif entry and not entry.startswith(("+", "-", "//")):
+            line = str(verify_dir / entry)
+        lines.append(line)
+    dst.write_text("\n".join(lines) + "\n")
     return str(dst)
 
 
-def check_uvm_result(
-    result, target: str, expected_assertion: str | None = None
-) -> None:
+def check_uvm_result(result, target: str) -> None:
     output = result.stdout + result.stderr
-    if expected_assertion is not None:
-        assertions = re.findall(r"Assertion failed: ([^\r\n]+)", output)
-        failure_counts = re.findall(r"UVM_(?:ERROR|FATAL)\s*:\s*(\d+)", output)
-        if (
-            not assertions
-            or set(assertions) != {expected_assertion}
-            or "Fatal:" not in output
-            or any(int(count) for count in failure_counts)
-            or result.returncode < 0
-        ):
-            raise RuntimeError(
-                f"Expected RTL assertion did not terminate {target}: {expected_assertion}"
-            )
-        return
+    # An RTL assertion that fails without ending the run (a third-party
+    # `[ASSERT FAILED]` print, a concurrent SVA's `Offending`) fails the test.
+    failed = re.findall(r"^.*(?:\[ASSERT FAILED\]|Offending ').*$", output, re.M)
+    if failed:
+        raise RuntimeError(
+            f"RTL assertion failed in {target} ({len(failed)}): {failed[0].strip()}"
+        )
     if result.returncode != 0:
         raise RuntimeError(f"UVM failed for {target}")
     counts = dict(re.findall(r"UVM_(ERROR|FATAL)\s*:\s*(\d+)", output))
@@ -167,20 +92,43 @@ def check_uvm_result(
         )
 
 
-def build_ball(
-    bbdir: str, design_name: str, selection: str, mill_cfg: str, domain, mapping, ctx
-) -> None:
+def check_illegal_result(result, target: str, message: str) -> None:
+    """An illegal-input test passes when the RTL rejects the command: exactly
+    the assertion `message` fails and ends the run, nothing else fails."""
+    output = result.stdout + result.stderr
+    failed = re.findall(r"Assertion failed: ([^\r\n]+)", output)
+    if failed != [message]:
+        raise RuntimeError(
+            f"{target}: expected the assertion {message!r}, got {failed}"
+        )
+    if "$finish called" not in output:
+        raise RuntimeError(f"{target}: the assertion did not end the run")
+    if re.search(r"\[ASSERT FAILED\]|Offending '|UVM_FATAL @", output):
+        raise RuntimeError(f"{target}: another check failed besides {message!r}")
+
+
+def build_ball(bbdir: str, design: str, selection: str, ctx) -> Path:
+    """Elaborate the BallDomain of the Ball alone into arch/uvm, compile its
+    case generator and its testbench; return the simulation directory."""
+    host, mapping = load_ball(bbdir, design, selection)
     ball = mapping.component
     verify_dir = Path(bbdir) / mapping.source_path / "verify"
     casegen = verify_dir / "casegen" / "Cargo.toml"
-    rtl_dir = Path(design_arch_root(bbdir, design_name, selection=selection)) / (
-        f"verilog/{mill_cfg}"
+    rtl = Path(rtl_dir(bbdir, design, "uvm", selection=selection))
+    if rtl.exists():
+        shutil.rmtree(rtl)
+    rtl.mkdir(parents=True)
+    r = stream_run_logger(
+        cmd=elaborate_cmd(design, selection, "verilog", str(rtl)),
+        logger=ctx.logger,
+        cwd=bbdir,
+        stdout_prefix="uvm verilog",
+        stderr_prefix="uvm verilog",
     )
-    design = load_design(bbdir, design_name, selection)
-    thread, core = ball_owner(design, ball)
-    sim_dir = verify_dir.parent / "output" / "uvm" / design_name / selection
-    uvm_rel = os.path.relpath(Path(bbdir) / "verify" / "uvm", verify_dir)
-    flist = _filelist(verify_dir, ball, uvm_rel, rtl_dir, sim_dir)
+    if r.returncode != 0:
+        raise RuntimeError(f"elaboration failed for {ball}")
+    sim_dir = Path(design_output_root(bbdir, design, selection=selection)) / "uvm"
+    flist = _filelist(verify_dir, ball, Path(bbdir) / "verify" / "uvm", rtl, sim_dir)
     parameters_path = verify_dir / "parameters.toml"
     parameters = (
         tomllib.loads(parameters_path.read_text())["defines"]
@@ -201,25 +149,19 @@ def build_ball(
     )
     if r.returncode != 0:
         raise RuntimeError(f"cargo build failed for {ball}")
-    crate = tomllib.loads(casegen.read_text()).get("package", {}).get("name")
-    if not crate:
-        raise ValueError(f"package.name missing in {casegen}")
     simv = sim_dir / "simv"
     csrc = sim_dir / "csrc"
     hier = sim_dir / "cm_hier.cfg"
-    sim_dir.mkdir(parents=True, exist_ok=True)
     hier.write_text("+tree tb_top.dut\n")
     script = (
-        f"cd {shlex.quote(str(verify_dir))} && "
-        f"rm -rf {shlex.quote(str(csrc))} {shlex.quote(str(simv))} {shlex.quote(str(simv))}.daidir && "
-        f"mkdir -p {shlex.quote(str(sim_dir))} {shlex.quote(str(csrc))} && "
+        f"cd {shlex.quote(str(sim_dir))} && "
+        f"rm -rf {shlex.quote(str(csrc))} {shlex.quote(str(simv))} "
+        f"{shlex.quote(str(simv))}.daidir {shlex.quote(str(simv))}.vdb && "
+        f"mkdir -p {shlex.quote(str(csrc))} && "
         "vcs -full64 -sverilog -timescale=1ns/1ps -debug_access+all -top tb_top "
         "${=VCS_UVM_ARGS} "
-        + " ".join(
-            shlex.quote(d)
-            for d in vcs_defines(domain, mapping, thread, core, parameters)
-        )
-        + f" -cm line+cond+tgl+assert -cm_hier {shlex.quote(str(hier))} "
+        + " ".join(shlex.quote(d) for d in vcs_defines(host, mapping, parameters))
+        + f" -cm line+cond+tgl+assert -cm_libs yv -cm_hier {shlex.quote(str(hier))} "
         f"-Mdir={shlex.quote(str(csrc))} -o {shlex.quote(str(simv))} "
         f"-f {shlex.quote(flist)}"
     )
@@ -233,22 +175,17 @@ def build_ball(
     )
     if r.returncode != 0:
         raise RuntimeError(f"vcs failed for {ball}")
+    return sim_dir
 
 
-def run_ball(
-    bbdir: str,
-    design_name: str,
-    selection: str,
-    mill_cfg: str,
-    domain,
-    mapping,
-    ctx,
-    cov_dir: str,
-) -> None:
-    ball = mapping.component
+def ball_sim(bbdir: str, design: str, selection: str, ctx):
+    """Build the simulation of a Ball alone; return its mapping, its verify/
+    directory, its simulation directory and `run(test, prefix, extra)`, which
+    runs one UVM test on it and returns the result."""
+    sim_dir = build_ball(bbdir, design, selection, ctx)
+    host, mapping = load_ball(bbdir, design, selection)
     verify_dir = Path(bbdir) / mapping.source_path / "verify"
-    simv = verify_dir.parent / "output" / "uvm" / design_name / selection / "simv"
-    build_ball(bbdir, design_name, selection, mill_cfg, domain, mapping, ctx)
+    simv_q = shlex.quote(str(sim_dir / "simv"))
     crate = tomllib.loads((verify_dir / "casegen" / "Cargo.toml").read_text())[
         "package"
     ]["name"]
@@ -259,54 +196,119 @@ def run_ball(
         / "debug"
         / f"lib{crate.replace('-', '_')}"
     )
-    test = f"{ball}_ball_test"
-    verify_config = (
-        verify_dir.parent
-        / "output"
-        / "uvm"
-        / design_name
-        / selection
-        / "verify_config.env"
-    )
-    design = load_design(bbdir, design_name, selection)
-    thread, _ = ball_owner(design, ball)
+    verify_config = sim_dir / "verify_config.env"
     verify_config.write_text(
-        f"bank_entries={thread.mem.bank.entries}\nball_id={mapping.id}\n"
+        f"bank_entries={host.bank_entries}\nball_id={mapping.id}\n"
     )
-    simv_q = shlex.quote(str(simv))
-    script = (
-        f"cd {shlex.quote(str(verify_dir))} && "
-        f'loader="$(patchelf --print-interpreter {simv_q})"; '
-        f'library_path="$(patchelf --print-rpath {simv_q})"; '
-        f"BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} "
-        f'"$loader" --library-path "$library_path" {simv_q} -no_save '
-        f"-sv_lib {shlex.quote(str(dpi))} "
-        f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.id} "
-        f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}"
+
+    def run(test: str, prefix: str, extra: str):
+        script = (
+            f"cd {shlex.quote(str(sim_dir))} && "
+            f'loader="$(patchelf --print-interpreter {simv_q})"; '
+            f'library_path="$(patchelf --print-rpath {simv_q})"; '
+            f"BB_VERIFY_CONFIG={shlex.quote(str(verify_config))} "
+            f'"$loader" --library-path "$library_path" {simv_q} -no_save '
+            f"-sv_lib {shlex.quote(str(dpi))} "
+            f"+UVM_TESTNAME={shlex.quote(test)} +BID={mapping.id} "
+            f"-cm line+cond+tgl+assert -cm_name {shlex.quote(test)}{extra}"
+        )
+        cmd = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -ic {shlex.quote(script)}"
+        return stream_run_logger(
+            cmd=cmd,
+            logger=ctx.logger,
+            cwd=bbdir,
+            stdout_prefix=prefix,
+            stderr_prefix=prefix,
+        )
+
+    return mapping, verify_dir, sim_dir, run
+
+
+def run_ball(bbdir: str, design: str, selection: str, ctx, run_root: str) -> Path:
+    """Run the functional test and the illegal-input tests; write coverage/
+    and the switching activity of the functional test, activity.saif, under
+    `run_root`; return the SAIF. Every instruction of the functional test is
+    checked against the Ball's BEMU cycle model by bb_blink_cycles."""
+    mapping, verify_dir, sim_dir, run = ball_sim(bbdir, design, selection, ctx)
+    ball = mapping.component
+    activity = Path(run_root) / "activity.saif"
+    activity.parent.mkdir(parents=True, exist_ok=True)
+    # UVM's $finish would end the run before the report: hold it with
+    # endofsim noexit (needs -ucli2Proc), then write the SAIF of the Ball.
+    power_tcl = sim_dir / "activity.tcl"
+    power_tcl.write_text(
+        "config endofsim noexit\n"
+        # rtl_on also records reg variables (the registers PrimeTime matches
+        # by name); the default records nets only.
+        "power -gate_level rtl_on\n"
+        "power tb_top.dut\n"
+        "power -enable\n"
+        "run\n"
+        "power -disable\n"
+        f"power -report {activity} 1e-09 tb_top.dut\n"
+        "quit\n"
     )
-    cmd = f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command zsh -ic {shlex.quote(script)}"
-    r = stream_run_logger(
-        cmd=cmd,
-        logger=ctx.logger,
-        cwd=bbdir,
-        stdout_prefix="uvm run",
-        stderr_prefix="uvm run",
-    )
+    test = f"{ball}_ball_test"
+    r = run(test, "uvm run", f" -ucli -ucli2Proc -do {shlex.quote(str(power_tcl))}")
     check_uvm_result(r, f"{ball} test={test}")
-    Path(cov_dir).mkdir(parents=True, exist_ok=True)
+    if not activity.is_file():
+        raise RuntimeError(f"simv wrote no {activity}")
+    # Illegal-input tests: each must end on exactly the RTL assertion that
+    # verify/illegal.toml names for it.
+    illegal = verify_dir / "illegal.toml"
+    for test, message in (
+        tomllib.loads(illegal.read_text()).items() if illegal.is_file() else ()
+    ):
+        r = run(test, "uvm illegal", "")
+        check_illegal_result(r, f"{ball} test={test}", message)
+    cov_dir = Path(run_root) / "coverage"
+    cov_dir.mkdir(parents=True, exist_ok=True)
     urg = (
         f"nix develop {shlex.quote(str(Path(bbdir) / 'verify'))} --command "
-        f"urg -dir {shlex.quote(str(simv))}.vdb -format text -report {shlex.quote(cov_dir)}"
+        # urg1 races its two threads and crashes at random while writing the
+        # toggle report; on one CPU the threads never run at once.
+        f"taskset -c {min(os.sched_getaffinity(0))} urg -full64 -dir {shlex.quote(str(sim_dir / 'simv'))}.vdb "
+        f"-format text -report {shlex.quote(str(cov_dir))}"
     )
     r = stream_run_logger(
         cmd=urg,
         logger=ctx.logger,
-        cwd=str(verify_dir),
+        cwd=str(sim_dir),
         stdout_prefix="uvm urg",
         stderr_prefix="uvm urg",
     )
     if r.returncode != 0:
         raise RuntimeError(f"urg failed for {ball}")
+    return activity
+
+
+def run_performance(bbdir: str, design: str, selection: str, ctx) -> dict:
+    """Build a Ball alone and run its throughput and latency tests: one
+    instruction each against the ideal bank model, at the workloads that set
+    each timing path's rate and its shortest latency. A test fails unless the
+    cycles from its command handshake to its response equal those of the
+    Ball's BEMU cycle model (emu/src/latency.rs); return the cycles they print."""
+    _, mapping = load_ball(bbdir, design, selection)
+    lock = Path(design_output_root(bbdir, design, selection=selection)) / "uvm.lock"
+    with open(lock, "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        _, _, _, run = ball_sim(bbdir, design, selection, ctx)
+        performance = {}
+        for kind in ("throughput", "latency"):
+            test = f"{mapping.component}_{kind}_test"
+            r = run(test, f"uvm {kind}", "")
+            check_uvm_result(r, f"{mapping.component} test={test}")
+            measured = {
+                (instruction, int(rows)): int(cycles)
+                for instruction, rows, cycles in re.findall(
+                    r"BBPERF (\S+) (\d+) (\d+)", r.stdout
+                )
+            }
+            performance[kind] = [
+                {"instruction": instruction, "iter": rows, "cycles": cycles}
+                for (instruction, rows), cycles in sorted(measured.items())
+            ]
+    return {"design": design, "ball": mapping.component, "performance": performance}
 
 
 def dashboard_summary(cov_dir: str) -> dict[str, str]:
@@ -329,53 +331,29 @@ def dashboard_summary(cov_dir: str) -> dict[str, str]:
     return dict(zip(keys, vals))
 
 
-def run_design(
-    bbdir: str, design: str, selection: str, ball: str | None, ctx, do_run: bool
-) -> dict:
-    msg = load_design(bbdir, design, selection)
-    domain = ball_domain(msg, ball)
-    mill_cfg = msg.simulation.top
-    if not mill_cfg:
-        raise ValueError(f"design {design!r} has no sims.verilator for UVM")
-    maps = selected_mappings(domain, ball)
-    ran = []
-    covs = []
-    run_root = None
-    if do_run:
-        stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
-        run_name = "all" if ball is None else maps[0].component
+def run_design(bbdir: str, design: str, selection: str, ctx, do_run: bool) -> dict:
+    """Build, and with `do_run` run, the UVM test of a Ball alone. Runs of one
+    Ball share its RTL and simulation directories, so they take turns."""
+    _, mapping = load_ball(bbdir, design, selection)
+    ball = mapping.component
+    lock = Path(design_output_root(bbdir, design, selection=selection)) / "uvm.lock"
+    with open(lock, "w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        if not do_run:
+            build_ball(bbdir, design, selection, ctx)
+            return {"design": design, "ball": ball}
+        stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         run_root = log_dir(
-            bbdir, design, "verilog", stamp, "uvm", run_name, selection=selection
+            bbdir, design, "verilog", stamp, "uvm", ball, selection=selection
         )
-    for m in maps:
-        if do_run:
-            cov = (
-                os.path.join(run_root, m.component, "coverage")
-                if ball is None
-                else os.path.join(run_root, "coverage")
-            )
-            run_ball(bbdir, design, selection, mill_cfg, domain, m, ctx, cov)
-            if not (Path(cov) / "dashboard.txt").is_file():
-                raise RuntimeError(f"urg wrote no dashboard.txt under {cov}")
-            covs.append((m.component, cov))
-        else:
-            build_ball(bbdir, design, selection, mill_cfg, domain, m, ctx)
-        ran.append(m.component)
-    info = {"design": design, "mill": mill_cfg, "balls": ran}
-    if do_run and ball is None:
-        index_dir = Path(run_root) / "coverage"
-        index_dir.mkdir(parents=True, exist_ok=True)
-        body = ["ball_dir score line cond toggle assert group result"]
-        for b, p in covs:
-            s = dashboard_summary(p)
-            body.append(
-                f"{b} {s['SCORE']} {s['LINE']} {s['COND']} {s['TOGGLE']} "
-                f"{s.get('ASSERT', '--')} {s.get('GROUP', '--')} pass"
-            )
-        index = index_dir / "index.txt"
-        index.write_text("\n".join(body) + "\n")
-        info["index"] = str(index)
-        info["log"] = run_root
-    elif do_run:
-        info["log"] = run_root
-    return info
+        cov = os.path.join(run_root, "coverage")
+        activity = run_ball(bbdir, design, selection, ctx, run_root)
+    if not (Path(cov) / "dashboard.txt").is_file():
+        raise RuntimeError(f"urg wrote no dashboard.txt under {cov}")
+    return {
+        "design": design,
+        "ball": ball,
+        "log": run_root,
+        "coverage": dashboard_summary(cov),
+        "activity": str(activity),
+    }

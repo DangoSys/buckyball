@@ -1,0 +1,31 @@
+include = "../../../../../prefab/harts/magia/configs/default.toml"
+implementation = "magia.toml"
+threads = []
+hartId = 0
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "memory/hart.toml"
+fetch = "default"
+fpu = "fpu.toml"
+interconnect = "interconnect/hart.toml"
+service = false
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 16
+latency = 10
+bankEntries = 1024
+bankWidth = 128

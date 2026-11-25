@@ -1,0 +1,3 @@
+# The xiangshan hart component: a XiangShan core whose caches are one
+# coherent CHI requester of an external Home, on 48-bit physical addresses.
+component = "xiangshan"

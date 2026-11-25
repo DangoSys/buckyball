@@ -8,7 +8,7 @@
 #include "f32addOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::f32add_ball;
@@ -56,12 +56,12 @@ int64_t AddF32Op::getDestinationBank() { return getC(); }
 LogicalResult AddF32Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), a = getA(), b = getB(), c = getC();
-  if (rows <= 0 || rows > buckyball_target::getBuckyballTarget().bankDepth ||
-      a == b || a == c || b == c)
+  if (rows <= 0 || rows > target::getTarget().bankDepth || a == b || a == c ||
+      b == c)
     return emitOpError(
         "add_f32 requires distinct A, B and C banks and rows within a bank");
   // rs2: group 0 in [4:0]; bit 5 clear reads B.
-  emitInstruction(builder, loc, buckyball_target::getBuckyballFunct7("F32ADD"),
+  emitInstruction(builder, loc, target::getFunct7("F32ADD"),
                   constantI64(builder, loc, bankFields({a, b}, c, false, rows)),
                   constantI64(builder, loc, 0));
   return success();

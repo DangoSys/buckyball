@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 
@@ -37,7 +33,7 @@ trait GemminiExCtrlDefaults { this: GemminiExCtrl =>
       bw.req.valid     := false.B
       bw.req.bits.addr := 0.U
       bw.req.bits.data := 0.U
-      bw.req.bits.mask := VecInit(Seq.fill(memParam.bankMaskLen)(false.B))
+      bw.req.bits.mask := VecInit(Seq.fill(link.bankMaskLen)(false.B))
       bw.resp.ready    := true.B
     }
   }

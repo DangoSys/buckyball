@@ -18,11 +18,8 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
-@RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
-@RTL@/RoundRawFNToRecFN_e8_s24.sv
-@RTL@/AddRawFN.sv
-@RTL@/AddRecFN.sv
-@RTL@/F32AddRow.sv
+-y @RTL@
++libext+.sv
 @RTL@/F32AddBall.sv
 
 src/pkg/f32add_pkg.sv

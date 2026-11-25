@@ -32,18 +32,18 @@ class Mxint8matmulBall_Op<string mnemonic, list<Trait> traits = []>
 def BankMatmulMxint8Op : Mxint8matmulBall_Op<"bank_matmul_mxint8",
     [DeclareOpInterfaceMethods<BankSSALowering>]> {
   let summary = "matmul_mxint8 on virtual banks";
-  let arguments = (ins I64:$a, I64:$b, I64:$c, I64Attr:$m, I64Attr:$n,
+  let arguments = (ins I64:$a, I64:$b, I64:$c, Index:$m, I64Attr:$n,
                    I64Attr:$k, BoolAttr:$accumulate);
   let results = (outs I64:$cOut);
-  let assemblyFormat = "$a `,` $b `->` $c prop-dict attr-dict";
+  let assemblyFormat = "$a `,` $b `->` $c `rows` $m prop-dict attr-dict";
 }
 
 def MatmulMxint8Op : Mxint8matmulBall_Op<"matmul_mxint8",
     [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
   let summary = "matmul_mxint8 on physical banks";
-  let arguments = (ins I64Attr:$a, I64Attr:$b, I64Attr:$c, I64Attr:$m,
+  let arguments = (ins I64Attr:$a, I64Attr:$b, I64Attr:$c, Index:$m,
                    I64Attr:$n, I64Attr:$k, BoolAttr:$accumulate);
-  let assemblyFormat = "prop-dict attr-dict";
+  let assemblyFormat = "`rows` $m prop-dict attr-dict";
 }
 
 #endif // MXINT8MATMUL_OPS

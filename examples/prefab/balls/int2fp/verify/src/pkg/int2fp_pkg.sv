@@ -8,6 +8,9 @@ package int2fp_pkg;
   `include "seq/int2fp_sequences.svh"
   `include "cov/int2fp_cov.svh"
   `include "env/int2fp_scoreboard.svh"
+  `include "env/int2fp_cycles.svh"
   `include "env/int2fp_env.svh"
   `include "tests/int2fp_test.svh"
+  `include "tests/int2fp_throughput_test.svh"
+  `include "tests/int2fp_latency_test.svh"
 endpackage

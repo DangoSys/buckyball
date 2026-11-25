@@ -1,0 +1,2 @@
+# GemminiDefaultConfig uses the design parameters without overrides.
+include = "design.toml"

@@ -19,7 +19,7 @@ vector/
 └── warp/                 - Thread warp management
 ```
 
-## Core Components
+## Hart Components
 
 ### VecUnit - Vector Processing Unit Top Level
 

@@ -11,7 +11,7 @@ if utils_path not in sys.path:
 
 from utils.event_common import require_design
 from utils.event_common import check_result, get_origin_trace_id
-from utils.path import get_buckyball_path, workload_tests_root
+from utils.path import get_buckyball_path, design_output_root
 from utils.stream_run import stream_run_logger_async
 
 config = {
@@ -40,8 +40,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
 
     script = f"{bbdir}/bbdev/api/steps/workload/scripts/elf2hex.py"
-    search_root = Path(
-        workload_tests_root(bbdir, design, selection=input_data["target"])
+    search_root = (
+        Path(design_output_root(bbdir, design, selection=input_data["target"]))
+        / "workloads"
     )
 
     ctx.logger.info("Search root", {"path": str(search_root)})

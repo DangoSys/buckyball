@@ -1,1 +1,10 @@
 lanes = 8
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "REDMULE_F16", funct7 = 68 }]
+
+# The BallDomain that holds this Ball alone (--ball redmule).
+[host]
+include = "default"

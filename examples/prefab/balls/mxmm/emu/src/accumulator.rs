@@ -1,10 +1,7 @@
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Format {
     Mxfp8,
     Mxfp8Window,
-    Fma32,
-    F32,
 }
 
 pub(crate) struct Chain {

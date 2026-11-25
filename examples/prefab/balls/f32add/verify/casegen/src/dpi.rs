@@ -67,3 +67,9 @@ pub extern "C" fn f32add_case_c_word_lo(index: u32) -> u64 {
 pub extern "C" fn f32add_case_c_word_hi(index: u32) -> u64 {
     current_case(|case| (case.c[idx(index, case, "c_word_hi")] >> 64) as u64)
 }
+
+/// The cycles BEMU models for an F32ADD instruction of `iter` rows.
+#[no_mangle]
+pub extern "C" fn f32add_bemu_cycles(iter: u64) -> u64 {
+    crate::latency::cycles(iter)
+}

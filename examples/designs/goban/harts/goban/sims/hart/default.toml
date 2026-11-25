@@ -1,0 +1,17 @@
+# The goban hart alone: the one instance of the single-hart system of this
+# entry, with the goban device's DDR (its model region and its regions reach
+# 16 GiB) and its threads as the goban Verilator config gives them: sixteen
+# vector lanes and a 4096-word instruction buffer, which the RVV programs of
+# its workloads need.
+include = "../../configs/default.toml"
+hartId = 0
+threads = [
+  { include = "../../../../../../prefab/threads/matmul/configs/default.toml", id = 0, name = "matmul0", component = "matmul", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "../../../../../../prefab/threads/matmul/configs/default.toml", id = 1, name = "matmul1", component = "matmul", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "../../../../../../prefab/threads/matmul/configs/default.toml", id = 2, name = "matmul2", component = "matmul", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "../../../../../../prefab/threads/matmul/configs/default.toml", id = 3, name = "matmul3", component = "matmul", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+]
+
+[host.device.ddr]
+bytes = 0x400000000
+model = 0x40000000

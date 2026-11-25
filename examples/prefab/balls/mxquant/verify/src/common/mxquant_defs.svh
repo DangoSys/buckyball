@@ -15,6 +15,7 @@ typedef struct {
 } mxquant_cmd_dpi_t;
 
 import "DPI-C" function int unsigned mxquant_num_cases();
+import "DPI-C" function longint unsigned mxquant_bemu_cycles(input longint unsigned iter);
 import "DPI-C" function int unsigned mxquant_case_load(input int unsigned index);
 import "DPI-C" function void mxquant_case_cmd(input int unsigned step, output mxquant_cmd_dpi_t cmd);
 import "DPI-C" function int unsigned mxquant_case_preload_count(input int unsigned step);

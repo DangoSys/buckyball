@@ -1,31 +1,29 @@
 package examples.balls.transpose
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
 import examples.balls.transpose.configs.TransposeBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class Transpose(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     TransposeBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: TransposeBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
   val ballConfig      = ballParam
-  val bankWidth       = memParam.bankWidth
+  val bankWidth       = link.bankWidth
   val rowBytes        = bankWidth / 8
 
   val ballMapping = instance
@@ -43,35 +41,33 @@ class Transpose(
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val status = new BallStatus
   })
 
-  val rob_id_reg = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val rob_id_reg = RegInit(0.U(link.robIdBits.W))
 
-  val rbank_reg = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wbank_reg = RegInit(0.U(frontendParam.bank_id_len.W))
-  val ncol_reg  = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
-  val iter_reg  = RegInit(0.U(frontendParam.iter_len.W))
+  val rbank_reg = RegInit(0.U(link.bankIdBits.W))
+  val wbank_reg = RegInit(0.U(link.bankIdBits.W))
+  val ncol_reg  = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val iter_reg  = RegInit(0.U(link.iterBits.W))
   val elem_reg  = RegInit(0.U(8.W))
 
   val idle :: sRead :: sWrite :: complete :: Nil = Enum(4)
@@ -80,21 +76,21 @@ class Transpose(
   // Walk destination dense index 0 .. iter*W-1, filling write beats.
   val pending  = RegInit(false.B)
   val wrBytes  = Reg(Vec(rowBytes, UInt(8.W)))
-  val wrMask   = RegInit(VecInit(Seq.fill(memParam.bankMaskLen)(0.U(1.W))))
-  val wrGroup  = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
-  val wrAddr   = RegInit(0.U(frontendParam.iter_len.W))
+  val wrMask   = RegInit(VecInit(Seq.fill(link.bankMaskLen)(0.U(1.W))))
+  val wrGroup  = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val wrAddr   = RegInit(0.U(link.iterBits.W))
   val wrValid  = RegInit(false.B)
   val beatFill = RegInit(0.U(8.W))
 
   val cached     = RegInit(false.B)
-  val cacheAddr  = RegInit(0.U(frontendParam.iter_len.W))
-  val cacheGroup = RegInit(0.U(log2Up(memParam.bankNum + 1).W))
-  val bases      = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
+  val cacheAddr  = RegInit(0.U(link.iterBits.W))
+  val cacheGroup = RegInit(0.U(log2Up(link.bankNum + 1).W))
+  val bases      = Reg(Vec(3, UInt(link.groupIdBits.W)))
   val cacheData  = RegInit(0.U(bankWidth.W))
 
-  val srcR         = RegInit(0.U(frontendParam.iter_len.W))
+  val srcR         = RegInit(0.U(link.iterBits.W))
   val srcC         = RegInit(0.U(32.W))
-  val dstVirtRow   = RegInit(0.U(frontendParam.iter_len.W))
+  val dstVirtRow   = RegInit(0.U(link.iterBits.W))
   val dstVirtCol   = RegInit(0.U(32.W))
   val epgReg       = RegInit(0.U(8.W))
   val wElemsReg    = RegInit(0.U(32.W))
@@ -117,7 +113,7 @@ class Transpose(
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
     io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(memParam.bankMaskLen)(0.U(1.W))
+      Seq.fill(link.bankMaskLen)(0.U(1.W))
     )
     io.bankWrite(i).io.resp.ready    := (state =/= idle)
   }
@@ -134,11 +130,11 @@ class Transpose(
   val isI8     = elemBytesReg === 1.U
   val srcLane  = Mux(isI8, srcC(laneBitsI8 - 1, 0), srcC(laneBitsI32 - 1, 0))
   val srcGroup = Mux(isI8, srcC >> laneBitsI8.U, srcC >> laneBitsI32.U)
-    .asTypeOf(UInt(log2Up(memParam.bankNum + 1).W))
+    .asTypeOf(UInt(log2Up(link.bankNum + 1).W))
   val srcAddr  = srcR
 
   val dstGroup = Mux(isI8, dstVirtCol >> laneBitsI8.U, dstVirtCol >> laneBitsI32.U)
-    .asTypeOf(UInt(log2Up(memParam.bankNum + 1).W))
+    .asTypeOf(UInt(log2Up(link.bankNum + 1).W))
   val bytes    = cacheData.asTypeOf(Vec(rowBytes, UInt(8.W)))
   val words    = cacheData.asTypeOf(Vec(rowBytes / 4, UInt(32.W)))
 

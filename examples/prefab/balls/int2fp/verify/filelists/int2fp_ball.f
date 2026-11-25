@@ -18,8 +18,11 @@
 @UVM@/src/ball/bb_blink_if.sv
 @UVM@/src/ball/bb_uvm_pkg.sv
 
-@RTL@/ShiftAddMul.sv
-@RTL@/Fp32Mul.sv
+@RTL@/RoundAnyRawFNToRecFN_ie8_is26_oe8_os24.sv
+@RTL@/MulAddRecFNToRaw_preMul_e8_s24.sv
+@RTL@/MulAddRecFNToRaw_postMul_e8_s24.sv
+@RTL@/Fma_l3_e8_s24.sv
+@RTL@/RoundRawFNToRecFN_e8_s24.sv
 @RTL@/Int2Fp.sv
 @RTL@/Int2FpBall.sv
 

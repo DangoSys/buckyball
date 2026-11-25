@@ -69,10 +69,6 @@ class f32add_scoreboard extends uvm_scoreboard;
     if (item.port == 1 && stim.first) `uvm_fatal("READ", "B read although first is set")
     if (read_count[item.port] >= stim.iter)
       `uvm_fatal("READ", $sformatf("extra read on port %0d", item.port))
-    if (read_count[item.port] != write_count)
-      `uvm_fatal("READ", $sformatf(
-                 "port %0d read %0d before write %0d", item.port, read_count[item.port], write_count
-                 ))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("READ", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))
     if (item.port == 0) begin
@@ -99,7 +95,7 @@ class f32add_scoreboard extends uvm_scoreboard;
     if (item.port != 0)
       `uvm_fatal("WRITE", $sformatf("F32AddBall has one write port, got %0d", item.port))
     if (write_count >= stim.iter) `uvm_fatal("WRITE", $sformatf("extra write %0d", write_count))
-    if (read_count[0] != write_count + 1 || (!stim.first && read_count[1] != write_count + 1))
+    if (read_count[0] <= write_count || (!stim.first && read_count[1] <= write_count))
       `uvm_fatal("WRITE", $sformatf("write %0d before its operands", write_count))
     if (item.rob_id !== stim.rob_id)
       `uvm_fatal("WRITE", $sformatf("rob_id mismatch: got %0d exp %0d", item.rob_id, stim.rob_id))

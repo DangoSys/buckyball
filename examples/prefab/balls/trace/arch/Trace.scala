@@ -1,19 +1,19 @@
 package examples.balls.trace
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
+
+import framework.generic.contract.blink.BallResponse
 
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 /**
  * Trace — TraceBall inner processing unit.
@@ -22,40 +22,36 @@ import framework.acc.memdomain.{BankRead, BankWrite}
  */
 @instantiable
 class Trace(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam)
+  link:     BlinkParam,
+  instance: BallRouteParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
 
   val ballMapping = instance
 
   val inBW  = ballMapping.inBW
   val outBW = ballMapping.outBW
 
-  val bankWidth = memParam.bankWidth
+  val bankWidth = link.bankWidth
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -80,7 +76,7 @@ class Trace(
   // ============================================================
   // Registers
   // ============================================================
-  val rob_id_reg = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val rob_id_reg = RegInit(0.U(link.robIdBits.W))
 
   // Counter-specific registers
   val subcmd_reg  = RegInit(0.U(4.W))
@@ -128,7 +124,7 @@ class Trace(
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
     io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(memParam.bankMaskLen)(0.U(1.W))
+      Seq.fill(link.bankMaskLen)(0.U(1.W))
     )
     io.bankWrite(i).io.resp.ready    := false.B
   }

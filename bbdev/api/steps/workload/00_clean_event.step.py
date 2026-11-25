@@ -23,7 +23,16 @@ config = {
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     origin_tid = get_origin_trace_id(input_data, ctx)
-    allowed = {"device", "core", "target", "design", "_trace_id"}
+    allowed = {
+        "config",
+        "device",
+        "hart",
+        "thread",
+        "ball",
+        "target",
+        "design",
+        "_trace_id",
+    }
     unknown = sorted(k for k in input_data if k not in allowed)
     if unknown:
         ctx.logger.error(f"Unknown workload clean parameter(s): {', '.join(unknown)}")

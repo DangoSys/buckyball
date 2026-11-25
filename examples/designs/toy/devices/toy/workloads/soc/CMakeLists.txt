@@ -1,0 +1,6 @@
+add_ctest(scu_uart_rx_echo_test.c)
+ctest_instances(INSTANCES)
+foreach(INSTANCE IN LISTS INSTANCES)
+    ctest_name(TEST ${INSTANCE} scu_uart_rx_echo_test)
+    add_dependencies(soctests-build ${TEST}-baremetal-build)
+endforeach()

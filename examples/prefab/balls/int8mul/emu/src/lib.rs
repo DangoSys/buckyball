@@ -1,6 +1,7 @@
-pub(crate) use bebop_bemu::{ball as instruction, thread::instructions::decode};
+pub(crate) use bebop_bemu::{ball as instruction, ball::blink as decode};
 
 mod int8mul;
 
 mod ball;
 mod dispatch;
+mod latency;

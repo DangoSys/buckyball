@@ -9,24 +9,24 @@ def register(mcp):
 
     @mcp.tool()
     def bbdev_workload_build(
-        design: str,
         ctest: bool = False,
         mlirtest: bool = False,
+        config: str | None = None,
         device: str | None = None,
-        core: str | None = None,
+        hart: str | None = None,
     ) -> str:
         """Build workloads for a design. POST /workload/build."""
-        if e := need("design", design):
-            return err(e)
-        params: Dict[str, Any] = {"design": design}
+        params: Dict[str, Any] = {}
         if ctest and mlirtest:
             return err("ctest and mlirtest cannot be used together")
         if ctest:
             params["ctest"] = True
         if mlirtest:
             params["mlirtest"] = True
+        if config is not None:
+            params["config"] = config
         if device is not None:
             params["device"] = device
-        if core is not None:
-            params["core"] = core
+        if hart is not None:
+            params["hart"] = hart
         return fmt(submit("/workload/build", params))

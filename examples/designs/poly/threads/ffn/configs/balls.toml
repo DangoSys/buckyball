@@ -1,0 +1,39 @@
+[[balls]]
+id = 3
+name = "TransposeBall"
+component = "transpose"
+param = "../../../../../prefab/balls/transpose/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "TRANSPOSE", funct7 = 49 },
+]
+
+
+[[balls]]
+id = 5
+name = "Mxint8quantizeBall"
+component = "mxint8quantize"
+param = "../../../../../prefab/balls/mxint8quantize/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8QUANT", funct7 = 48 },
+]
+
+
+[[balls]]
+id = 6
+name = "Mxint8matmulBall"
+component = "mxint8matmul"
+param = "../../../../../prefab/balls/mxint8matmul/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8MM", funct7 = 64 },
+]
+
+[[balls]]
+id = 7
+name = "Mxint8actBall"
+component = "mxint8act"
+param = "../../../../../prefab/balls/mxint8act/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8ACT", funct7 = 78 }]

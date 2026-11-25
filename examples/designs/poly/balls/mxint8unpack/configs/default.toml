@@ -1,0 +1,10 @@
+# Integer packed-MXINT8 to IEEE32 bit expansion has no parameters.
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8UNPACK", funct7 = 50 }]
+
+# The BallDomain that holds this Ball alone (--ball poly/balls/mxint8unpack).
+[host]
+include = "default"

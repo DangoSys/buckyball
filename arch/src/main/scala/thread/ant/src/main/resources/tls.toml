@@ -1,0 +1,1 @@
+rtl_scopes = ["harts[0].dut", "harts[1].dut"]

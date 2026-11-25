@@ -107,7 +107,31 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             rpath_dirs.append(lib_dir)
     rpath_flags = " ".join(f"-Wl,-rpath,{lib_dir}" for lib_dir in rpath_dirs)
 
-    ldflags = f"-lreadline -ldramsim3 -lstdc++ -lz " f"-L{result_lib} {rpath_flags} "
+    trace_build = f"{build_dir}/trace"
+    result = await stream_run_logger_async(
+        cmd=(
+            f"nix develop -c cargo build --manifest-path {bbdir}/bebop/Cargo.toml "
+            f"--release -p bebop-cycle-trace --target-dir {trace_build}"
+        ),
+        logger=ctx.logger,
+        cwd=bbdir,
+        stdout_prefix="cycle trace build",
+        stderr_prefix="cycle trace build",
+    )
+    if result.returncode:
+        await check_result(
+            ctx,
+            result.returncode,
+            continue_run=False,
+            extra_fields={"task": "build"},
+            trace_id=origin_tid,
+        )
+        return
+    trace_library = f"{trace_build}/release/libbebop_cycle_trace.a"
+    ldflags = (
+        f"-lreadline -ldramsim3 -lstdc++ -lz "
+        f"-L{result_lib} {rpath_flags} {trace_library} "
+    )
 
     sources = " ".join(vsrcs + csrcs)
     jobs = input_data.get("jobs", "")

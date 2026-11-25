@@ -15,7 +15,7 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
 
@@ -27,7 +27,10 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             body={
                 "status": "error",
                 "message": str(e),
-                "example": 'bbdev verilator --verilog "--design toy"',
+                "example": (
+                    'bbdev verilator --verilog "--config toy/devices/toy/configs/ToyDefaultConfig.toml'
+                    ' --device toy"'
+                ),
             },
         )
 

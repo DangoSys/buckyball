@@ -1,20 +1,20 @@
 package examples.balls.mxmm
 
-import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.memdomain.configs.MemDomainParam
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 import examples.balls.mxmm.configs.MxmmBallParam
 
-import framework.ip.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
+import framework.generic.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
 
 import chisel3._
 import chisel3.util._
-import framework.ip.memory.bank.{SramReadReq, SramReadResp}
+import framework.generic.memory.bank.{SramReadReq, SramReadResp}
 
 @instantiable
-class InputWindow(memParam: MemDomainParam, val ballParam: MxmmBallParam) extends Module {
-  val addressWidth = log2Ceil(memParam.bankEntries)
+class InputWindow(link: BlinkParam, val ballParam: MxmmBallParam) extends Module {
+  val addressWidth = log2Ceil(link.bankEntries)
 
   @public
   val io = IO(new Bundle {
@@ -24,8 +24,8 @@ class InputWindow(memParam: MemDomainParam, val ballParam: MxmmBallParam) extend
     val count      = Input(UInt(34.W))
     val fullK      = Input(UInt(16.W))
     val startK     = Input(UInt(16.W))
-    val request    = Decoupled(new SramReadReq(memParam))
-    val response   = Flipped(Decoupled(new SramReadResp(memParam)))
+    val request    = Decoupled(new SramReadReq)
+    val response   = Flipped(Decoupled(new SramReadResp(link.bankWidth)))
     val done       = Output(Bool())
     val write      = Output(Bool())
     val scaleWrite = Output(Bool())

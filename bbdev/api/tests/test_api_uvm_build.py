@@ -1,3 +1,3 @@
 from _api_test_helper import run_bbdev_case
 
-run_bbdev_case("bbdev uvm --build '--design toy --ip axis'")
+run_bbdev_case("bbdev uvm --build '--device toy --ip axis'")

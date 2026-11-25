@@ -99,7 +99,7 @@ def _assert_workspace_workers() -> None:
     sys.path.insert(0, str(api_path()))
     from utils.workers import assert_sole_workspace_workers, read_server_ports
 
-    ports = read_server_ports(str(api_path()))
+    ports = read_server_ports(str(api_path()), _port)
     assert_sole_workspace_workers(int(ports["worker_port"]), str(ports["bb_root"]))
 
 
@@ -372,7 +372,8 @@ def _load_toml(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _balldomain_path(design: str, device: str, balldomain: Optional[str]) -> Path:
+def _balldomain_path(config: str, device: str, balldomain: Optional[str]) -> Path:
+    design = Path(config).parts[0]
     if balldomain:
         raw = Path(balldomain)
         if raw.is_absolute() or len(raw.parts) > 1:
@@ -384,6 +385,7 @@ def _balldomain_path(design: str, device: str, balldomain: Optional[str]) -> Pat
         / design
         / "output/sims/device"
         / device
+        / Path(config).stem
         / "generated/config/derived.json"
     )
     cfg = json.loads(derived.read_text(encoding="utf-8"))
@@ -423,8 +425,9 @@ def _validate_domain(path: Path, cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _validate_design(
-    design: str, device: str, balldomain: Optional[str]
+    config: str, device: str, balldomain: Optional[str]
 ) -> Dict[str, Any]:
+    design = Path(config).parts[0]
     scripts = repo_path() / "bbdev/api/steps/config/scripts"
     sys.path.insert(0, str(scripts))
     from ball_normalize import normalize_ball_domain
@@ -440,11 +443,12 @@ def _validate_design(
         / design
         / "output/sims/device"
         / device
+        / Path(config).stem
         / "generated/config/config.json"
     )
     config = json.loads(expanded.read_text(encoding="utf-8"))
     selected = (
-        _balldomain_path(design, device, balldomain) if balldomain is not None else None
+        _balldomain_path(config, device, balldomain) if balldomain is not None else None
     )
     results = []
     for index, thread in enumerate(topology.iter_threads(config["device"])):

@@ -8,20 +8,20 @@ from common import submit, err, fmt, need
 def register(mcp):
     @mcp.tool()
     def bbdev_verilator_build(
-        design: str,
         jobs: int = 16,
         coverage: bool = False,
+        config: str | None = None,
         device: str | None = None,
-        core: str | None = None,
+        hart: str | None = None,
     ) -> str:
         """Build non-bebop Verilator sim binary. POST /verilator/build."""
-        if e := need("design", design):
-            return err(e)
-        params = {"design": design, "jobs": jobs}
+        params = {"jobs": jobs}
         if coverage:
             params["coverage"] = True
+        if config is not None:
+            params["config"] = config
         if device is not None:
             params["device"] = device
-        if core is not None:
-            params["core"] = core
+        if hart is not None:
+            params["hart"] = hart
         return fmt(submit("/verilator/build", params))

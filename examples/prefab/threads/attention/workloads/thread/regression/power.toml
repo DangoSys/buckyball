@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the attention thread's power
+# (bbdev bench --prefab "--thread attention --power", as bbdev dc --power --workload).
+[power]
+workload = "attention-thread-transpose_i8_16x16-baremetal"

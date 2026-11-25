@@ -1,22 +1,19 @@
 package examples.balls.vector
 
-import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import chisel3.experimental.hierarchy.{instantiable, public}
 
 import examples.balls.vector.configs.VectorBallParam
 
 import chisel3._
 import chisel3.util._
-import framework.acc.memdomain.BankWrite
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class VecMat16Store(
-  frontendParam: FrontendParam,
-  memParam:      MemDomainParam,
-  routingParam:  BallDomainParam,
+  link:          BlinkParam,
   val accWidth:  Int,
   lane:          Int,
   val ballParam: VectorBallParam)
@@ -25,16 +22,15 @@ class VecMat16Store(
   @public
   val io = IO(new Bundle {
     val start   = Input(Bool())
-    val wrBank  = Input(UInt(frontendParam.bank_id_len.W))
-    val wrGroup = Input(UInt(memParam.groupIdWidth.W))
-    val robId   = Input(UInt(log2Up(frontendParam.rob_entries).W))
+    val wrBank  = Input(UInt(link.bankIdBits.W))
+    val wrGroup = Input(UInt(link.groupIdBits.W))
+    val robId   = Input(UInt(link.robIdBits.W))
     val acc     = Input(Vec(lane, Vec(lane, UInt(accWidth.W))))
 
     val bankWrite = Vec(
       4,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -68,7 +64,7 @@ class VecMat16Store(
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
     io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(memParam.bankMaskLen)(false.B)
+      Seq.fill(link.bankMaskLen)(false.B)
     )
     io.bankWrite(i).io.resp.ready    := false.B
   }
@@ -91,7 +87,7 @@ class VecMat16Store(
         io.bankWrite(g).io.req.bits.addr := writeRow
         io.bankWrite(g).io.req.bits.data := writeData(g)
         io.bankWrite(g).io.req.bits.mask := VecInit(
-          Seq.fill(memParam.bankMaskLen)(true.B)
+          Seq.fill(link.bankMaskLen)(true.B)
         )
         when(io.bankWrite(g).io.req.fire) {
           writeIssued(g) := true.B

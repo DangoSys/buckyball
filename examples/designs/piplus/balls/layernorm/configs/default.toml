@@ -1,0 +1,10 @@
+# The layer normalization of FP32 rows: no parameters.
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "LAYERNORM", funct7 = 65 }]
+
+# The BallDomain that holds this Ball alone (--ball piplus/balls/layernorm).
+[host]
+include = "default"

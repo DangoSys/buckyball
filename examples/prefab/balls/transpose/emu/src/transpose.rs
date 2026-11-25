@@ -1,6 +1,6 @@
 use super::decode::{pbank_group, rs1_b0, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
-use bebop_bemu::thread::banks::{bank_row_bytes, bank_size, bank_width};
+use bebop_bemu::ball::blink::{bank_row_bytes, bank_size, bank_width};
 
 pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
     assert!(
@@ -64,8 +64,7 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             let p = pbank_group(ctx, op1, g as u64);
             let bank_off = r * row_bytes;
             let flat_off = (r * w + g * epg) * elem_bytes;
-            src[flat_off..flat_off + row_bytes]
-                .copy_from_slice(&ctx.banks[p][bank_off..bank_off + row_bytes]);
+            src[flat_off..flat_off + row_bytes].copy_from_slice(&ctx.banks[p][bank_off..bank_off + row_bytes]);
         }
     }
 
@@ -89,19 +88,12 @@ pub(crate) fn exec_transpose(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         if bank_off + elem_bytes > bank_size() {
             panic!("transpose: dst bank range idx={idx}");
         }
-        ctx.banks[p][bank_off..bank_off + elem_bytes]
-            .copy_from_slice(&dst[byte_off..byte_off + elem_bytes]);
+        ctx.banks[p][bank_off..bank_off + elem_bytes].copy_from_slice(&dst[byte_off..byte_off + elem_bytes]);
     }
 
     0
 }
 
 pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
-    let rows = rs1_iter(xs1);
-    let groups = ctx.config(rs1_b0(xs1)).cols;
-    let elements = bank_width() as u64 / (xs2 & 255);
-    let count = rows * groups * elements;
-    // The destination-order walk caches only the last source row.
-    let reads = if rows == 1 { groups } else { count };
-    8 + 5 * reads + count + 4 * rows * groups
+    super::latency::cycles(rs1_iter(xs1), xs2 & 255, ctx.config(rs1_b0(xs1)).cols, bank_row_bytes() as u64)
 }

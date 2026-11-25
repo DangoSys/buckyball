@@ -1,1 +1,0 @@
-rtl_scopes = ["cores[0].dut", "cores[1].dut"]

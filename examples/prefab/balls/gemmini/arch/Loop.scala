@@ -1,36 +1,35 @@
 package examples.balls.gemmini
 
+import framework.generic.contract.ball.BallHostParam
+
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
 import examples.balls.gemmini.configs.GemminiBallParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.balldomain.sub_rob.{Expansion, HasExpansion}
-import framework.acc.frontend.decoder.DomainId
+import framework.ball.sub_rob.{Expansion, HasExpansion}
+import framework.generic.contract.configs.BallDomainParam
+import framework.generic.contract.frontend.decoder.DomainId
 
 /** Loop configuration lives in BallDomain's metadata SRAM, not in a second register file. */
 @instantiable
 class Loop(
-  f:       FrontendParam,
-  m:       MemDomainParam,
+  host:    BallHostParam,
   routing: BallDomainParam,
   id:      Int)
     extends Module
     with HasExpansion {
   val ball = routing.balls.find(_.id == id).get
   val p    = GemminiBallParam.fromProto(ball.parameters.unpack(classOf[buckyball.balls.gemmini.Params]))
-  require(m.mmioTotalBytes >= 136)
+  require(host.link.mmioBytes >= 136)
   def funct(name: String): UInt = ball.instructions.find(_.mnemonic == name).get.funct7.U(7.W)
   val ws                                                                                    = Seq("BOUNDS", "ADDR_A", "ADDR_B", "ADDR_D", "ADDR_C", "STRIDES_AB", "STRIDES_DC")
     .map(n => funct("GEMMINI_LOOP_WS_CONFIG_" + n))
   val conv                                                                                  = (1 to 9).map(n => funct(s"GEMMINI_LOOP_CONV_WS_CONFIG_$n"))
   @public
-  val expansion                                                                             = IO(new Expansion(f, m, routing))
+  val expansion                                                                             = IO(new Expansion(host, routing))
   val idle :: storing :: configured :: reading :: receiving :: starting :: streaming :: Nil = Enum(7)
   val state                                                                                 = RegInit(idle)
-  val master                                                                                = Reg(UInt(log2Ceil(f.rob_entries).W))
+  val master                                                                                = Reg(UInt(host.link.robIdBits.W))
   val operand                                                                               = Reg(UInt(64.W))
   val byte                                                                                  = RegInit(0.U(7.W))
   val base                                                                                  = Reg(UInt(8.W))
@@ -77,8 +76,8 @@ class Loop(
     byte          := byte + 1.U
     state         := Mux(byte === Mux(convolution, 71.U, 55.U), starting, reading)
   }
-  val matmul: Instance[LoopMatmulUnroller] = Instantiate(new LoopMatmulUnroller(f, m, p))
-  val convolve: Instance[LoopConvUnroller] = Instantiate(new LoopConvUnroller(f, m, p))
+  val matmul: Instance[LoopMatmulUnroller] = Instantiate(new LoopMatmulUnroller(host, p))
+  val convolve: Instance[LoopConvUnroller] = Instantiate(new LoopConvUnroller(host, p))
   matmul.io.start.valid := state === starting && !convolution
   val mat = matmul.io.start.bits
   mat.max_i               := values(0)(47, 32); mat.max_j   := values(0)(31, 16); mat.max_k := values(0)(15, 0)
@@ -99,7 +98,7 @@ class Loop(
   cv.bank_input                                              := operand(9, 0); cv.bank_weight      := operand(19, 10); cv.bank_output     := operand(29, 20);
   cv.no_bias                                                 := operand(30)
   when(matmul.io.start.fire || convolve.io.start.fire)(state := streaming)
-  val commands = Wire(Decoupled(new LoopCmd(f, m, p)))
+  val commands = Wire(Decoupled(new LoopCmd(host, p)))
   commands.valid                                              := Mux(convolution, convolve.io.cmd.valid, matmul.io.cmd.valid)
   commands.bits                                               := Mux(convolution, convolve.io.cmd.bits, matmul.io.cmd.bits)
   matmul.io.cmd.ready                                         := !convolution && commands.ready

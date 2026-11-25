@@ -1,0 +1,26 @@
+//! The Ball's dispatch by mnemonic and its registration in BALLS.
+const BALL_CLASS: &str = "examples.designs.piplus.balls.layernorm.LayerNormBall";
+
+fn execute(ball_class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &mut bebop_bemu::ExecContext) -> Option<u64> {
+    if ball_class != BALL_CLASS {
+        return None;
+    }
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
+        Some("LAYERNORM") => Some(super::layernorm::execute(xs1, xs2, ctx)),
+        _ => None,
+    }
+}
+
+fn cycles(ball_class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &bebop_bemu::ExecContext) -> Option<u64> {
+    if ball_class != BALL_CLASS {
+        return None;
+    }
+    match bebop_bemu::ball::blink::mnemonic_for_funct(funct).as_deref() {
+        Some("LAYERNORM") => Some(super::layernorm::latency(xs1, xs2, ctx)),
+        _ => None,
+    }
+}
+
+#[bebop_bemu::ball::linkme::distributed_slice(bebop_bemu::BALLS)]
+#[linkme(crate = bebop_bemu::ball::linkme)]
+static BALL: bebop_bemu::Ball = bebop_bemu::Ball { execute, cycles };

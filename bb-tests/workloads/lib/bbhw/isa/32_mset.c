@@ -2,9 +2,6 @@
 #define _BB_MSET_H_
 
 #include "isa.h"
-#if defined(__linux__)
-#include <dma.h>
-#endif
 
 #define BB_MSET_CLEAR_BIT 11
 
@@ -14,28 +11,16 @@
 
 static inline void bb_mset(uint32_t bank_id, uint32_t alloc, uint32_t row,
                            uint32_t col) {
-#if defined(__linux__)
-  if (alloc)
-    dma_bank_allocate(bank_id, col);
-  else
-    dma_bank_set_cols(bank_id, 0);
-#endif
   BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(bank_id), BB_MSET_RS2(row, col, alloc, 0),
                             BB_MSET_FUNC7);
 }
 
 static inline void bb_mset_clear(uint32_t bank_id, uint32_t row, uint32_t col) {
-#if defined(__linux__)
-  dma_bank_allocate(bank_id, col);
-#endif
   BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(bank_id), BB_MSET_RS2(row, col, 1, 1),
                             BB_MSET_FUNC7);
 }
 
 static inline void bb_mem_transfer(uint32_t source, uint32_t target) {
-#if defined(__linux__)
-  dma_bank_transfer(source, target);
-#endif
   BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(source) | BB_BANK2(target),
                             UINT64_C(1) << 12, BB_MSET_FUNC7);
 }

@@ -33,34 +33,34 @@ def _require_id(obj: dict[str, Any], key: str, ctx: str) -> int:
     return val
 
 
-def _core_threads(core: dict[str, Any]) -> list[dict[str, Any]]:
-    threads = core["threads"]
+def _hart_threads(hart: dict[str, Any]) -> list[dict[str, Any]]:
+    threads = hart["threads"]
     if not isinstance(threads, list):
         _die("threads must be an explicit instance list")
     ids = [_require_id(thread, "id", "thread") for thread in threads]
     if len(set(ids)) != len(ids):
-        _die("duplicate thread ID within core")
+        _die("duplicate thread ID within hart")
     return threads
 
 
-def configured_cores(design: dict[str, Any]) -> list[dict[str, Any]]:
-    cores = design["cores"]
-    if not isinstance(cores, list):
-        _die("design cores must be an explicit instance list")
-    harts = [_require_id(core, "hartId", "core") for core in cores]
-    if len(set(harts)) != len(harts):
+def configured_harts(design: dict[str, Any]) -> list[dict[str, Any]]:
+    harts = design["harts"]
+    if not isinstance(harts, list):
+        _die("design harts must be an explicit instance list")
+    ids = [_require_id(hart, "hartId", "hart") for hart in harts]
+    if len(set(ids)) != len(ids):
         _die("duplicate hart ID")
-    for core in cores:
-        if "count" in core or "factory" in core:
+    for hart in harts:
+        if "count" in hart or "factory" in hart:
             _die(
-                "core instances must be declared directly; hardware is assembled by the design"
+                "hart instances must be declared directly; hardware is assembled by the design"
             )
-    return cores
+    return harts
 
 
 def iter_threads(topo: dict[str, Any]) -> Iterator[dict[str, Any]]:
-    for core in configured_cores(topo):
-        yield from _core_threads(core)
+    for hart in configured_harts(topo):
+        yield from _hart_threads(hart)
 
 
 def bank_params(thread: dict, pkg: str) -> tuple[int, int, int]:
@@ -191,26 +191,26 @@ def _validate_spm(config: dict[str, Any]) -> None:
         )
 
 
-def _derive_cores(
+def _derive_harts(
     repo: Path, topo: dict[str, Any], threads: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     placements: list[dict[str, Any]] = []
     offset = 0
-    for core in configured_cores(topo):
-        core_path = core.get("_file")
-        if not isinstance(core_path, str):
-            _die("core missing _file")
-        core_threads = _core_threads(core)
-        n = len(core_threads)
+    for hart in configured_harts(topo):
+        hart_path = hart.get("_file")
+        if not isinstance(hart_path, str):
+            _die("hart missing _file")
+        hart_threads = _hart_threads(hart)
+        n = len(hart_threads)
         ants = [
             thread
-            for thread in core_threads
+            for thread in hart_threads
             if "cpu" in thread and thread["cpu"]["kind"] == "ant"
         ]
         if ants:
-            shared_spm = core.get("tss")
+            shared_spm = hart.get("tss")
             if not isinstance(shared_spm, dict):
-                _die("Ant compute core requires explicit tss geometry")
+                _die("Ant compute hart requires explicit tss geometry")
             _validate_spm(shared_spm)
             for thread in ants:
                 params = thread["cpu"]["config"]
@@ -230,7 +230,7 @@ def _derive_cores(
                     _die("Ant TLS/TSS windows overlap")
                 if tls["dataBits"] != shared_spm["dataBits"]:
                     _die("Ant TLS/TSS access widths must match")
-        shared = core.get("sharedMem")
+        shared = hart.get("sharedMem")
         if isinstance(shared, dict):
             if shared["bankWidth"] != 128:
                 _die("sharedMem.bankWidth must be 128 bits")
@@ -245,10 +245,10 @@ def _derive_cores(
         indices = list(range(offset, offset + n))
         placements.append(
             {
-                "hart_id": core["hartId"],
-                "path": _repo_rel(repo, core_path),
+                "hart_id": hart["hartId"],
+                "path": _repo_rel(repo, hart_path),
                 "thread_indices": indices,
-                "threads_per_core": n,
+                "threads_per_hart": n,
                 "virtual_bank_count": vbc,
             }
         )
@@ -264,12 +264,7 @@ def _bemu_balls(repo: Path, profiles: list[dict[str, Any]]) -> list[dict[str, st
         if not isinstance(bd, dict):
             continue
         for ball in bd["balls"]:
-            instructions = ball["instructions"]
-            if any(entry["funct7"] == 0 for entry in instructions):
-                _die("funct7 zero is not a Buckyball instruction")
-            if not any(
-                entry["funct7"] not in {1, 16, 32, 33, 34, 35} for entry in instructions
-            ):
+            if not ball["instructions"]:
                 continue
             root = ball_root(ball)
             emu_class = f"{ball_class(root)[0]}.{ball['name']}"
@@ -304,8 +299,8 @@ def _ball_ctest_dirs(repo: Path, thread: dict[str, Any]) -> list[str]:
 
 def compiler_profiles(device: dict[str, Any]) -> list[dict[str, Any]]:
     profiles = []
-    for core in configured_cores(device):
-        for thread in core["threads"]:
+    for hart in configured_harts(device):
+        for thread in hart["threads"]:
             declaration = thread["compiler"]
             profiles.append(
                 {
@@ -314,14 +309,14 @@ def compiler_profiles(device: dict[str, Any]) -> list[dict[str, Any]]:
                     "config": thread,
                 }
             )
-    for core in configured_cores(device):
-        if "accelerator" in core:
-            declaration = core["compiler"]
+    for hart in configured_harts(device):
+        if "accelerator" in hart:
+            declaration = hart["compiler"]
             profiles.append(
                 {
                     "name": declaration["name"],
                     "component": declaration["component"],
-                    "config": core["accelerator"],
+                    "config": hart["accelerator"],
                 }
             )
     return profiles
@@ -353,12 +348,6 @@ def _derive_targets(
     return targets
 
 
-def _derive_harts(
-    cores: list[dict[str, Any]], threads: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    return [{"hart_id": core["hart_id"]} for core in cores]
-
-
 def derive(data: dict[str, Any], repo: Path, design: str) -> dict[str, Any]:
     repo = repo.resolve()
     topo = data.get("device")
@@ -377,25 +366,31 @@ def derive(data: dict[str, Any], repo: Path, design: str) -> dict[str, Any]:
         _die(f"{design}: includes must be a list")
 
     threads = _derive_threads(repo, topo)
-    cores = _derive_cores(repo, topo, threads)
+    harts = _derive_harts(repo, topo, threads)
     profiles = compiler_profiles(topo)
     targets = _derive_targets(repo, profiles)
-    harts = _derive_harts(cores, threads)
     if sorted(hart["hart_id"] for hart in harts) != list(range(len(harts))):
         _die("complete design hart IDs must be contiguous from zero")
-    n_cores = len(configured_cores(topo))
+    n_harts = len(configured_harts(topo))
 
     return {
         "design": design,
-        "name": Path(root_file).parent.parent.name,
+        # A config TOML Top is <design>/devices/<device>/configs/<X>.toml and a
+        # design's hart alone <design>/harts/<hart>/configs/default.toml: both
+        # are named by the design. A prefab hart alone, prefab/harts/<hart>/
+        # configs/default.toml, is named by the hart.
+        "name": (
+            Path(root_file).parents[1].name
+            if Path(root_file).parents[3].name == "prefab"
+            else Path(root_file).parents[3].name
+        ),
         "path": _repo_rel(repo, root_file),
-        "core_config_path": _repo_rel(repo, design_file),
+        "hart_config_path": _repo_rel(repo, design_file),
         "includes": [_repo_rel(repo, p) for p in includes_raw],
-        "n_cores": n_cores,
+        "n_harts": n_harts,
         "targets": targets,
-        "harts": harts,
         "threads": threads,
-        "cores": cores,
+        "harts": harts,
         "bemu": {
             "balls": _bemu_balls(repo, profiles),
         },

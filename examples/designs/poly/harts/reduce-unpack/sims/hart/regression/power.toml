@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the poly reduce-unpack hart's power
+# (bbdev dc --power --workload).
+[power]
+workload = "poly-hart0-ctest-f32add_groups-baremetal"

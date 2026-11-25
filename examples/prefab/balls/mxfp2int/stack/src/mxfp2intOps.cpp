@@ -8,7 +8,7 @@
 #include "mxfp2intOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::mxfp2int_ball;
@@ -57,14 +57,13 @@ LogicalResult Mxfp4I8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t rows = getRows(), data = getData(), scales = getScales(),
           output = getOutput();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   if (target.bankWidthBits != 128 || rows <= 0 || rows * 2 > target.bankDepth)
     return emitOpError("mxfp4_i8 rows exceed half the bank");
   if (data == scales || data == output || scales == output)
     return emitOpError(
         "mxfp4_i8 requires distinct data, scale and output banks");
-  emitInstruction(builder, loc,
-                  buckyball_target::getBuckyballFunct7("MXFP2INT"),
+  emitInstruction(builder, loc, target::getFunct7("MXFP2INT"),
                   constantI64(builder, loc,
                               bankFields({data, scales}, output, false, rows)),
                   constantI64(builder, loc, 0));

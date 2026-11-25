@@ -73,5 +73,5 @@ cm.log
 tr_db.log
 waste/
 
-# Iteration logs
 *ITERATIONS.md
+_tmp*

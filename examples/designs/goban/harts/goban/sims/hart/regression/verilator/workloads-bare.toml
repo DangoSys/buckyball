@@ -1,0 +1,35 @@
+# The bare-metal regression of the goban hart alone: the goban device's
+# regression (the device is this one hart) and the SoC tests of the
+# single-hart system.
+[workloads]
+tests = [
+  "goban-hart0-ctest-rvv_stride-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_slice_pair-baremetal",
+  "goban-hart0-mlirtest-compiler_transpose_blocks-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_exp-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_strided-baremetal",
+  "goban-hart0-mlirtest-compiler_exp_underflow-baremetal",
+  "goban-hart0-mlirtest-compiler_padded_copy-baremetal",
+  "goban-hart0-ctest-rvv_multiply-baremetal",
+  "goban-hart0-ctest-rvv_gather-baremetal",
+  "goban-matmul-ctest-design-copy_overlap_small-baremetal",
+  "goban-matmul-ctest-design-gp_scalar_fmul-baremetal",
+  "goban-matmul-ctest-design-matmul_threads-baremetal",
+  "goban-matmul-ctest-design-dataflow-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_rows-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_norm-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_erf-baremetal",
+  "goban-hart0-mlirtest-compiler_transpose_f32-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_reduce-baremetal",
+  "goban-hart0-mlirtest-compiler_rvv_max-baremetal",
+  "goban-hart0-mlirtest-compiler_matmul_rows-baremetal",
+  "goban-hart0-mlirtest-compiler_quantized_rows-baremetal",
+  "goban-hart0-soctest-clint_timer_interrupt-baremetal",
+  "goban-hart0-soctest-clint_software_interrupt-baremetal",
+  "goban-hart0-soctest-plic_register_access-baremetal",
+  "goban-hart0-soctest-clint_supervisor_timer-baremetal",
+  "goban-hart0-soctest-lrsc_word-baremetal",
+  "goban-hart0-soctest-time_csr_clock-baremetal",
+  "goban-hart0-soctest-time_csr_permissions-baremetal",
+  "goban-hart0-soctest-trace_events-baremetal",
+]

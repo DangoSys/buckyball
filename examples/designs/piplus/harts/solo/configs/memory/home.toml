@@ -1,0 +1,15 @@
+# The device Home: agents counts every coherent requester of the device
+# (one node per hart).
+agents = 5
+mshrEntries = 8
+nodeId = 64
+requesters = "default"
+
+[cache]
+addressBits = 44
+lineBytes = 64
+sets = 64
+ways = 4
+idBits = 8
+metadataBits = 4
+responseDepth = 2

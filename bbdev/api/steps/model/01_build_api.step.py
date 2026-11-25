@@ -14,8 +14,10 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        design = require_design(body)
         selection = require_target(body, ("device",))
+        design = require_design(body)
+        if not body.get("model"):
+            raise ValueError("--model <name> or --model all is required")
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue(

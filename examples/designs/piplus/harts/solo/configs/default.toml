@@ -1,0 +1,36 @@
+# The solo hart: one hart, no threads, the dense thread's accelerator on its RoCC
+# port, for work and tuning on a single hart. It is not part of the device.
+component = "solo"
+accelerator = "acc/default.toml"
+threads = []
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "memory/hart.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "interconnect.toml"
+service = false
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 40
+latency = 10
+bankEntries = 2048
+bankWidth = 128
+
+[compiler]
+name = "solo"
+component = "solo"

@@ -14,11 +14,11 @@ int main() {
   asm volatile("csrr %0, frm" : "=r"(rounding)::"memory");
   rvv_load(image, sizeof(image));
   bb_mvin_group((uintptr_t)input, RVV_READ_BANK, 0, 10, 1);
-  kernel_launch call{rvv_image_word(image, 2),
-                     rvv_image_word(image, 1),
-                     RVV_STACK,
-                     {UINT64_C(3) << 32, 0, 37, RVV_FLAGS, rounding << 5},
-                     0};
+  operator_launch call{rvv_image_word(image, 2),
+                       rvv_image_word(image, 1),
+                       RVV_STACK,
+                       {UINT64_C(3) << 32, 0, 37, RVV_FLAGS, rounding << 5},
+                       0};
   rvv_run(&call, sizeof(call));
   bb_mvout_group((uintptr_t)output, RVV_WRITE_BANK, 1, 10, 1);
   rvv_release();

@@ -18,6 +18,7 @@ class maxpool_env extends bb_blink_env #(`BB_IN_BW, `BB_OUT_BW);
     super.connect_phase(phase);
     scb.mem_model = mem_model;
     cmd_agent.stim_ap.connect(scb.stim_imp);
+    cmd_agent.stim_ap.connect(mcov.stim_imp);
     cmd_agent.cmd_ap.connect(scb.cmd_imp);
     cmd_agent.cmd_ap.connect(mcov.cmd_imp);
     read_mon.read_ap.connect(scb.read_imp);

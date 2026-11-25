@@ -1,0 +1,37 @@
+# The Balls of the reduce hart: prefab Balls only (FP32 add, MXINT8 quantize,
+# integer norm, MXINT8 activation).
+[[balls]]
+id = 0
+name = "F32AddBall"
+component = "f32add"
+param = "../../../../../balls/f32add/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "F32ADD", funct7 = 76 },
+]
+
+[[balls]]
+id = 1
+name = "Mxint8quantizeBall"
+component = "mxint8quantize"
+param = "../../../../../balls/mxint8quantize/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8QUANT", funct7 = 48 },
+]
+
+[[balls]]
+id = 2
+name = "IntnormBall"
+component = "intnorm"
+param = "../../../../../balls/intnorm/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "INTNORM", funct7 = 77 }]
+
+[[balls]]
+id = 3
+name = "Mxint8actBall"
+component = "mxint8act"
+param = "../../../../../balls/mxint8act/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8ACT", funct7 = 78 }]

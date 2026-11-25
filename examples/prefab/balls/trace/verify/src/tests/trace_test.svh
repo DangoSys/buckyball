@@ -14,6 +14,7 @@ class trace_ball_test extends uvm_test;
     if (!uvm_config_db#(vif_t)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "bb_blink_if not found")
     bb_blink_cov#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(trace_blink_cov::get_type());
+    bb_blink_cycles#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(trace_cycles::get_type());
     env = trace_env::type_id::create("env", this);
   endfunction
 

@@ -1,7 +1,7 @@
 use super::decode;
-use super::f21_gemmini_preload::GemminiPreload;
-use super::f66_gemmini_compute_preloaded::GemminiComputePreloaded;
-use super::f67_gemmini_compute_accumulated::GemminiComputeAccumulated;
+use super::gemmini_preload::GemminiPreload;
+use super::gemmini_compute_preloaded::GemminiComputePreloaded;
+use super::gemmini_compute_accumulated::GemminiComputeAccumulated;
 use super::instruction::{BallModel, ExecContext};
 
 const FUNCT_MVOUT: u32 = 16;

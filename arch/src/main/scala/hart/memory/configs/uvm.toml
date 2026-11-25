@@ -1,0 +1,11 @@
+[parameters]
+rows=1
+cols=4
+entriesPerBank=1024
+dataBits=128
+tagBits=8
+banksPerNode=1
+maxInFlight=4
+slots=16
+threads=[{bank=0,ports=2},{bank=1,ports=2}]
+[defines]

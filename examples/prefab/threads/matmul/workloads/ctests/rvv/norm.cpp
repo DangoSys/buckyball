@@ -35,12 +35,12 @@ int main() {
   rvv_load(image, sizeof(image));
   bb_mvin_group((uintptr_t)input, RVV_READ_BANK, 0, 16, 1);
   bb_mvin_group((uintptr_t)weights, RVV_READ_BANK, 1, 16, 1);
-  kernel_launch call{rvv_image_word(image, 2),
-                     rvv_image_word(image, 1),
-                     RVV_STACK,
-                     {UINT64_C(3) << 32, 0, UINT64_C(1) << 32, WIDTH, meanBits,
-                      epsilonBits, RVV_FLAGS, 0},
-                     0};
+  operator_launch call{rvv_image_word(image, 2),
+                       rvv_image_word(image, 1),
+                       RVV_STACK,
+                       {UINT64_C(3) << 32, 0, UINT64_C(1) << 32, WIDTH,
+                        meanBits, epsilonBits, RVV_FLAGS, 0},
+                       0};
   rvv_run(&call, sizeof(call));
   bb_mvout_group((uintptr_t)output, RVV_WRITE_BANK, 1, 16, 1);
   uint64_t flags = rvv_flags();

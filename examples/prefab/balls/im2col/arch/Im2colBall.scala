@@ -1,18 +1,18 @@
 package examples.balls.im2col
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import buckyball.balls.im2col.{Params => ParametersProto}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.ball.bbus.{BallFactory, BallPorts}
+import buckyball.balls.im2col.{Params => ParametersProto}
 
 import examples.balls.im2col.configs.Im2colBallParam
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 import examples.balls.im2col.Im2col
 
 /**
@@ -20,13 +20,11 @@ import examples.balls.im2col.Im2col
  */
 @instantiable
 class Im2colBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val ballParam = Im2colBallParam.fromProto(ball.parameters.unpack(classOf[ParametersProto]))
 
@@ -36,11 +34,11 @@ class Im2colBall(
   val outBW = ballCommonConfig.outBW
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   // Instantiate Im2col
   val im2colUnit: Instance[Im2col] =
-    Instantiate(new Im2col(fp, mp, bp, ball, ballParam))
+    Instantiate(new Im2col(link, ball, ballParam))
 
   // Connect command interface
   im2colUnit.io.cmdReq <> blink.cmdReq
@@ -64,11 +62,10 @@ class Im2colBall(
 object Im2colBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new Im2colBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new Im2colBall(link, route)).blink, None)
 
 }

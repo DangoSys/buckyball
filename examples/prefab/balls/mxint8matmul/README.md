@@ -85,12 +85,12 @@ geometry.
 
 ## Tests
 
-`workloads/ctests/vectors.py` writes `vectors.h` offline: A and B packed by
-`quantize_mxint8` of `quant.py`, C by the loop above (`mm_small`: bases
-1/2/3; `mm_accumulate`: onto an old C, tiles with remainders; `mm_extremes`:
-subnormal and zero terms, cancelling blocks, terms near the top of FP32, a
-block of `-128` codes with `p = 2^19`; `mm_long`: k = 544, two exponent rows,
-bases 3/1/2, onto an old C). `mm_<case>.c` are the thread programs; a design
-runs them and compares the C window with `<case>_expected` bit for bit.
+The C tests in `workloads/ctests` are self-contained; each runs through its
+hart's thread and checks C bit for bit against values exact by construction
+(codes and block exponents chosen so every block term and every sum is exact
+in FP32): `mm_small` (bases 1/2/3), `mm_accumulate` (onto an old C),
+`mm_extremes` (zero terms, cancelling blocks, large terms) and `mm_long`
+(k = 544, two exponent rows, bases 3/1/2, onto an old C). The BEMU model is
+the bit-exact reference.
 `workloads/mlir_tests` holds the instruction encoding (`ball/`) and the
 `mm_accumulate` case through the bank operation (`bank/`).

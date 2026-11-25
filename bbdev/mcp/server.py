@@ -9,9 +9,10 @@ from tools import register_all
 mcp = FastMCP(
     "buckyball-dev",
     instructions=(
-        "`device` names a device config registered in the design's"
-        " configs/sims/default.toml [targets.device.configs], e.g."
-        " PolyVerilatorConfig; `core` names a core simulation entry."
+        "Exactly one of `device`, `hart`, `thread`, `ball` names the component to"
+        " simulate, from its default config (a device: the one <Design>DefaultConfig.toml"
+        " of its design). `config` picks another config: a config TOML Top relative to"
+        " examples/designs, e.g. toy/devices/toy/configs/ToyGemvConfig.toml."
     ),
 )
 register_all(mcp)

@@ -1,33 +1,37 @@
 package examples.threads.ffn
 
-import framework.thread.ant.Ant
-import framework.core.tbus.ThreadFactory
-import framework.core.configs.CoreParam
-import sims.configs.SimParam
-import framework.core.memory.access.preflight.configs.PmpParams
+import framework.thread.ant.configs.AntParam
+
+import framework.thread.tbus.ThreadFactory
+
 import framework.thread.configs.ThreadParam
 
-import framework.acc.debug.Debug
+import framework.thread.ant.Ant
+
+import framework.thread.acc.debug.{Debug, DebugIds}
 
 import chisel3.experimental.hierarchy.Instance
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
 import framework.thread.tlink.{HasTLink, TLinkIO}
+import framework.generic.contract.sims.configs.SimParam
+import framework.generic.contract.memory.access.preflight.configs.PmpParams
 
 @instantiable
 class FfnThread(
-  threadp:       ThreadParam,
-  permissionp:   PmpParams,
-  simp:          SimParam,
-  traceId:       Int,
-  sharedOwnerId: Int)
+  threadp:     ThreadParam,
+  permissionp: PmpParams,
+  simp:        SimParam)
     extends Module
     with HasTLink {
+  // Who the thread is, strapped where it is instantiated: every thread of a hart shares one module.
+  @public
+  val ids         = IO(Input(new DebugIds))
   val sharedPorts = threadp.acc.get.memDomain.sharedPorts
   val diffTest    = simp.diffTest
   val accp        = threadp.acc.get
-  val antp        = threadp.ant.get
+  val antp        = AntParam.fromLink(threadp.link)
 
   val ant: Instance[Ant] =
     Instantiate(new Ant(antp, permissionp))
@@ -35,13 +39,15 @@ class FfnThread(
   val acc: Instance[Acc] = Instantiate(new Acc(accp, permissionp, simp))
 
   val debug: Instance[Debug] =
-    Instantiate(new Debug(accp.frontend, accp.memDomain, accp.gpDomain, accp.ballDomain, simp, traceId, sharedOwnerId))
+    Instantiate(new Debug(accp.frontend, accp.memDomain, accp.gpDomain, accp.ballDomain, simp))
 
-  debug.io.ant := ant.io.trace
+  debug.io.ant   := ant.io.trace
   debug.io.acc <> acc.io.debug
+  debug.io.ids   := ids
+  acc.io.ownerId := ids.owner
 
   @public
-  val tlink = IO(new TLinkIO(threadp, permissionp))
+  val tlink = IO(new TLinkIO(threadp.link, permissionp))
 
   ant.io.task <> tlink.task
   tlink.tss <> ant.io.shared
@@ -53,17 +59,17 @@ class FfnThread(
 object FfnThread extends ThreadFactory {
 
   def instantiate(
-    corep:   CoreParam,
-    threadp: ThreadParam,
-    simp:    SimParam,
-    traceId: Int
-  ): TLinkIO =
-    Instantiate(new FfnThread(
-      threadp,
-      corep.privileged.permission,
-      simp,
-      traceId,
-      corep.hartId
-    )).tlink
+    threadp:    ThreadParam,
+    permission: PmpParams,
+    hartId:     Int,
+    simp:       SimParam,
+    traceId:    Int
+  ): TLinkIO = {
+    val thread = Instantiate(new FfnThread(threadp, permission, simp))
+    thread.ids.trace       := traceId.U
+    thread.ids.owner       := threadp.id.U
+    thread.ids.sharedOwner := hartId.U
+    thread.tlink
+  }
 
 }

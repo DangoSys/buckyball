@@ -61,7 +61,12 @@ repos:
         entry: verible-verilog-format
         language: system
         files: \.(v|vh|sv|svh)$
-        exclude: verify/src/common/.*_defs\.svh$
+        # Verible's standalone parser cannot expand these macro-dependent sources.
+        exclude: >-
+          (?x)(
+            verify/src/common/.*_defs\.svh$
+            |^examples/prefab/harts/magia/arch/(Mesh|Tile|tile/RedmuleStreamer)\.sv$
+          )
         args:
           - --inplace
           - --failsafe_success=false

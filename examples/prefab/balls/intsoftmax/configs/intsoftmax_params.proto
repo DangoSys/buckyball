@@ -1,0 +1,5 @@
+syntax = "proto3";
+package buckyball.balls.intsoftmax;
+option java_package = "buckyball.balls.intsoftmax";
+option java_multiple_files = true;
+message Params {}

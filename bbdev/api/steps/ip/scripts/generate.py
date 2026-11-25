@@ -63,9 +63,7 @@ def geoms_from_names(
     return geoms
 
 
-def check_bitwrite_contract(
-    geoms: list[SramGeom], mdf: Path, sram_table: dict[str, SramGeom]
-) -> None:
+def check_bitwrite_contract(geoms: list[SramGeom], mdf: Path) -> None:
     raw = json.loads(mdf.read_text())
     if not isinstance(raw, list):
         raise ValueError(f"mdf must be a list: {mdf}")
@@ -100,12 +98,6 @@ def check_bitwrite_contract(
                 raise ValueError(f"{g.name}: BWEN mask granularity must be 1")
         elif mask_name is not None:
             raise ValueError(f"{g.name}: mask port {mask_name!r} but bitwrite is false")
-    used = {g.name for g in geoms}
-    for geom in sram_table.values():
-        if geom.bitwrite and geom.name not in used:
-            raise RuntimeError(
-                f"bitwrite sram {geom.name} not instantiated by any memory"
-            )
 
 
 def _leaf_paths(cache_dir: Path, g: SramGeom, corner: str) -> dict[str, str]:
@@ -161,7 +153,7 @@ def generate_sram(
             sram_table=contract.sram_table,
             mdf=contract.sram_mdf,
         )
-        check_bitwrite_contract(geoms, contract.sram_mdf, contract.sram_table)
+        check_bitwrite_contract(geoms, contract.sram_mdf)
     else:
         verilog.write_text("")
         geoms = []

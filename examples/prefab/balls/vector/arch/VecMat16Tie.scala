@@ -1,10 +1,11 @@
 package examples.balls.vector
 
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BlinkParam
 
 import chisel3._
 import chisel3.util._
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 object VecMat16Tie {
 
@@ -20,11 +21,11 @@ object VecMat16Tie {
   }
 
   def offWrite(
-    ports:    Vec[BankWrite],
-    robId:    UInt,
-    wrBank:   UInt,
-    wrGroup:  UInt,
-    memParam: MemDomainParam
+    ports:   Vec[BankWrite],
+    robId:   UInt,
+    wrBank:  UInt,
+    wrGroup: UInt,
+    link:    BlinkParam
   ): Unit = {
     for ((p, i) <- ports.zipWithIndex) {
       p.rob_id           := robId
@@ -33,7 +34,7 @@ object VecMat16Tie {
       p.io.req.valid     := false.B
       p.io.req.bits.addr := 0.U
       p.io.req.bits.data := 0.U
-      p.io.req.bits.mask := VecInit(Seq.fill(memParam.bankMaskLen)(false.B))
+      p.io.req.bits.mask := VecInit(Seq.fill(link.bankMaskLen)(false.B))
       p.io.resp.ready    := false.B
     }
   }

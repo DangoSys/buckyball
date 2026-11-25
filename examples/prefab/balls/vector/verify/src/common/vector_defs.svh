@@ -21,6 +21,8 @@ import "DPI-C" function longint unsigned vector_case_c_old_word_hi(input int uns
 import "DPI-C" function longint unsigned vector_case_c_new_word_lo(input int unsigned word_index);
 import "DPI-C" function longint unsigned vector_case_c_new_word_hi(input int unsigned word_index);
 
+import "DPI-C" function longint unsigned vector_bemu_cycles(input longint unsigned iter);
+
 `ifndef VECMAT16_FUNCT7
 `error "VECMAT16_FUNCT7 must be provided by the selected ballISA"
 `endif

@@ -1,0 +1,17 @@
+# The bare-metal regression of the rocket hart alone: its self-checking
+# programs (exit code 0 = pass) and the SoC tests of the single-hart system.
+[workloads]
+tests = [
+  "rocket-hart0-ctest-cpu_arithmetic-baremetal",
+  "rocket-hart0-ctest-fpu-baremetal",
+  "rocket-hart0-ctest-atomics-baremetal",
+  "rocket-hart0-ctest-memory-baremetal",
+  "rocket-hart0-soctest-clint_software_interrupt-baremetal",
+  "rocket-hart0-soctest-clint_supervisor_timer-baremetal",
+  "rocket-hart0-soctest-clint_timer_interrupt-baremetal",
+  "rocket-hart0-soctest-lrsc_word-baremetal",
+  "rocket-hart0-soctest-plic_register_access-baremetal",
+  "rocket-hart0-soctest-time_csr_clock-baremetal",
+  "rocket-hart0-soctest-time_csr_permissions-baremetal",
+  "rocket-hart0-soctest-trace_events-baremetal",
+]

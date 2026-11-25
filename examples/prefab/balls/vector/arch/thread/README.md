@@ -13,7 +13,7 @@ thread/
 └── MulThread.scala     - Multiplication operation thread
 ```
 
-## Core Components
+## Hart Components
 
 ### BaseThread - Thread Base Class
 

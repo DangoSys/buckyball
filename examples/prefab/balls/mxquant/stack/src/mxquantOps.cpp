@@ -8,7 +8,7 @@
 #include "mxquantOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::mxquant_ball;
@@ -55,14 +55,14 @@ int64_t QuantMxfp8Op::getDestinationBank() { return getOutput(); }
 LogicalResult QuantMxfp8Op::lowerToInstructions(OpBuilder &builder) {
   Location loc = getLoc();
   int64_t count = getCount(), input = getInput(), output = getOutput();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   if (target.bankWidthBits != 128 || count <= 0 || count % 32 ||
       count > target.bankDepth * 4)
     return emitOpError("quant_mxfp8 count exceeds the bank");
   if (input == output)
     return emitOpError("quant_mxfp8 requires distinct input and output banks");
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("MXQUANT"),
+      builder, loc, target::getFunct7("MXQUANT"),
       constantI64(builder, loc, bankFields({input}, output, false, count)),
       constantI64(builder, loc, 0));
   return success();

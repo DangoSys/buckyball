@@ -1,6 +1,5 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <dma.h>
 #include <isa/quant.h>
 #include <isa/smatmul.h>
 #include <isa/transpose.h>
@@ -12,11 +11,11 @@
 #endif
 
 enum { DIM = 16 };
-static int8_t input[BB_NUM_CORES][DIM * DIM] __attribute__((aligned(64)));
-static int8_t weight[BB_NUM_CORES][DIM * DIM] __attribute__((aligned(64)));
-static int32_t bias[BB_NUM_CORES][DIM] __attribute__((aligned(64)));
-static float scale[BB_NUM_CORES][DIM] __attribute__((aligned(64)));
-static int8_t output[BB_NUM_CORES][DIM * DIM] __attribute__((aligned(64)));
+static int8_t input[BB_NUM_HARTS][DIM * DIM] __attribute__((aligned(64)));
+static int8_t weight[BB_NUM_HARTS][DIM * DIM] __attribute__((aligned(64)));
+static int32_t bias[BB_NUM_HARTS][DIM] __attribute__((aligned(64)));
+static float scale[BB_NUM_HARTS][DIM] __attribute__((aligned(64)));
+static int8_t output[BB_NUM_HARTS][DIM * DIM] __attribute__((aligned(64)));
 
 #ifdef __cplusplus
 extern "C"

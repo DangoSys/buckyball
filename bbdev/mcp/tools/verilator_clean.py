@@ -8,14 +8,14 @@ from common import submit, err, fmt, need
 def register(mcp):
     @mcp.tool()
     def bbdev_verilator_clean(
-        design: str, device: str | None = None, core: str | None = None
+        config: str | None = None, device: str | None = None, hart: str | None = None
     ) -> str:
         """Clean non-bebop Verilator build. POST /verilator/clean."""
-        if e := need("design", design):
-            return err(e)
-        request = {"design": design}
+        request = {}
+        if config is not None:
+            request["config"] = config
         if device is not None:
             request["device"] = device
-        if core is not None:
-            request["core"] = core
+        if hart is not None:
+            request["hart"] = hart
         return fmt(submit("/verilator/clean", request))

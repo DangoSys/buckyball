@@ -8,6 +8,9 @@ package toint8_pkg;
   `include "seq/toint8_sequences.svh"
   `include "cov/toint8_cov.svh"
   `include "env/toint8_scoreboard.svh"
+  `include "env/toint8_cycles.svh"
   `include "env/toint8_env.svh"
   `include "tests/toint8_test.svh"
+  `include "tests/toint8_throughput_test.svh"
+  `include "tests/toint8_latency_test.svh"
 endpackage

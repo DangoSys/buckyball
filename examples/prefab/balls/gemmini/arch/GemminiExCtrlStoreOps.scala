@@ -1,9 +1,5 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
 import chisel3._
 import chisel3.util._
 import gemmini._
@@ -62,8 +58,12 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
           outBufCollected    := outBufCollected + 1.U
         }
       }.otherwise {
-        outBuf(outBufRows) := widenMeshToAcc(mesh.io.resp.bits.data)
-        outBufRows         := outBufRows + 1.U
+        // Only this compute's own rows, tagged by its preload: the rows of an
+        // earlier preload still leaving the mesh carry a garbage tag.
+        when(mesh.io.resp.bits.tag.rob =/= 0xff.U && mesh.io.resp.bits.total_rows === total_rows) {
+          outBuf(outBufRows) := widenMeshToAcc(mesh.io.resp.bits.data)
+          outBufRows         := outBufRows + 1.U
+        }
       }
     }
 
@@ -99,7 +99,7 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
           .reverse
       )
 
-      val bitsPerPort = memParam.bankWidth
+      val bitsPerPort = link.bankWidth
 
       for (i <- 0 until outBW) {
         when(!port_written(i)) {
@@ -108,7 +108,7 @@ trait GemminiExCtrlStoreOps { this: GemminiExCtrl =>
           io.bankWrite(i).req.bits.addr := wr_base + store_row_cnt
           io.bankWrite(i).req.bits.data := slice
           io.bankWrite(i).req.bits.mask := VecInit(
-            Seq.fill(memParam.bankMaskLen)(true.B)
+            Seq.fill(link.bankMaskLen)(true.B)
           )
           when(io.bankWrite(i).req.ready) {
             port_written(i) := true.B

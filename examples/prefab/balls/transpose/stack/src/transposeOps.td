@@ -39,4 +39,20 @@ def TransposeI8Op : TransposeBall_Op<"transpose_i8",
   let assemblyFormat = "prop-dict attr-dict";
 }
 
+def BankTransposeF32Op : TransposeBall_Op<"bank_transpose_f32",
+    [DeclareOpInterfaceMethods<BankSSALowering>]> {
+  let summary = "transpose_f32 on virtual banks";
+  let arguments = (ins I64:$input, I64:$output, I64Attr:$rows, I64Attr:$cols);
+  let results = (outs I64:$outputOut);
+  let assemblyFormat = "$input `->` $output prop-dict attr-dict";
+}
+
+def TransposeF32Op : TransposeBall_Op<"transpose_f32",
+    [DeclareOpInterfaceMethods<PhysicalBankAssignment>]> {
+  let summary = "transpose_f32 on physical banks";
+  let arguments = (ins I64Attr:$input, I64Attr:$output, I64Attr:$rows,
+                       I64Attr:$cols);
+  let assemblyFormat = "prop-dict attr-dict";
+}
+
 #endif // TRANSPOSE_OPS

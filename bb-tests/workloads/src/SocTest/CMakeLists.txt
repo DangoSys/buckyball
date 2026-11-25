@@ -20,7 +20,7 @@ set(BUCKYBALL_SOCTEST_TARGET ${BUCKYBALL_CONTROL_TARGET})
 
 add_custom_target(soctests-build)
 
-function(add_buckyball_soctest SOURCE_FILE)
+function(add_soctest SOURCE_FILE)
     get_filename_component(_stem ${SOURCE_FILE} NAME_WE)
     set(TEST_NAME
         "${DESIGN_NAME}-${BUCKYBALL_SOCTEST_TARGET}-soctest-${_stem}"
@@ -43,7 +43,7 @@ function(add_buckyball_soctest SOURCE_FILE)
             $<TARGET_PROPERTY:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal,INTERFACE_LINK_OPTIONS>
             -o ${EXECUTABLE} $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
             $<TARGET_OBJECTS:bbsw-syscalls-baremetal> ${SOURCE}
-            -DCORE_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART} ${DESIGN_DEFINES}
+            -DHART_HART_ID=${DESIGN_WORKLOAD_CONTROL_HART} ${DESIGN_DEFINES}
             -DTRACE_BASE=${DESIGN_DEVICE_TRACE_BASE}ULL
             -DTRACE_STRIDE=${DESIGN_DEVICE_TRACE_STRIDE}ULL
             -I${CMAKE_CURRENT_SOURCE_DIR}
@@ -66,15 +66,15 @@ function(add_buckyball_soctest SOURCE_FILE)
     add_dependencies(soctests-build ${TEST_NAME}-baremetal-build)
 endfunction()
 
-add_buckyball_soctest(clint_timer_interrupt.c)
-add_buckyball_soctest(clint_software_interrupt.c)
-add_buckyball_soctest(clint_supervisor_timer.c)
-add_buckyball_soctest(time_csr_clock.c)
-add_buckyball_soctest(time_csr_permissions.c)
-add_buckyball_soctest(lrsc_word.c)
-add_buckyball_soctest(lrsc_translated.c)
-add_buckyball_soctest(plic_register_access.c)
-add_buckyball_soctest(trace_events.c)
+add_soctest(clint_timer_interrupt.c)
+add_soctest(clint_software_interrupt.c)
+add_soctest(clint_supervisor_timer.c)
+add_soctest(time_csr_clock.c)
+add_soctest(time_csr_permissions.c)
+add_soctest(lrsc_word.c)
+add_soctest(lrsc_translated.c)
+add_soctest(plic_register_access.c)
+add_soctest(trace_events.c)
 
 add_custom_target(
     sync-soctest-bin

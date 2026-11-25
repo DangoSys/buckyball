@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the magia hart's power
+# (bbdev dc --power --workload).
+[power]
+workload = "magia-hart0-ctest-gemm_few_columns-baremetal"

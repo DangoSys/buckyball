@@ -7,8 +7,6 @@ port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
 instructions = [
   { mnemonic = "MXMM_MXFP8", funct7 = 71 },
   { mnemonic = "MXMM_MXFP8_WINDOW", funct7 = 75 },
-  { mnemonic = "MXMM_FMA32", funct7 = 72 },
-  { mnemonic = "MXMM_F32", funct7 = 73 },
 ]
 
 [[balls]]

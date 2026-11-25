@@ -44,8 +44,8 @@ Op1/wr base groups are nonzero in several cases.
 
 | Config | Plusarg |
 |--------|---------|
-| `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=2` |
-| `sims.verilator.BuckyballToyVerilatorConfig` | `+BID=3` |
+| `framework.device.sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=2` |
+| `framework.device.sims.verilator.BuckyballToyVerilatorConfig` | `+BID=3` |
 
 ```console
 ./simv +UVM_TESTNAME=im2col_ball_test +BID=2
@@ -84,5 +84,5 @@ Run:
 Or via bbdev:
 
 ```console
-bbdev uvm --run '--design pebble --ball im2col'
+bbdev uvm --run '--ball im2col'
 ```

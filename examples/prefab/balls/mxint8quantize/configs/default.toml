@@ -1,0 +1,10 @@
+
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "MXINT8QUANT", funct7 = 48 }]
+
+# The BallDomain that holds this Ball alone (--ball mxint8quantize).
+[host]
+include = "default"

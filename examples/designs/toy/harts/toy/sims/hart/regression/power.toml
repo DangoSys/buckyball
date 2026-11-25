@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the toy hart's power
+# (bbdev bench --prefab "--hart toy/harts/toy --power", as bbdev dc --power --workload).
+[power]
+workload = "toy-hart0-ctest-gemmini_accumulated_16x16_test-baremetal"

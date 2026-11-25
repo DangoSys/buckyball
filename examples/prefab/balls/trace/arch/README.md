@@ -14,7 +14,7 @@ ties those ports idle and never issues a bank request.
 
 ## Instruction: `bdb_counter`
 
-The selected Core's `ballISA` assigns the `funct7` of `BDB_COUNTER`.
+The selected Hart's `ballISA` assigns the `funct7` of `BDB_COUNTER`.
 Cycle counter control; completes in one cycle after acceptance.
 
 rs1 is unused and zero.

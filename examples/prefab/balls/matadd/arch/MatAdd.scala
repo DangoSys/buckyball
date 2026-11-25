@@ -1,60 +1,56 @@
 package examples.balls.matadd
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.experimental.hierarchy.{instantiable, public}
 import chisel3.util._
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 @instantiable
 class MatAdd(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam)
+  link:     BlinkParam,
+  instance: BallRouteParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
-  val addressWidth    = log2Up(memParam.bankEntries)
-  val countWidth      = log2Up(memParam.bankEntries + 1)
-  val bankIdWidth     = frontendParam.bank_id_len
+  val commandDataBits = link.dataBits
+  val addressWidth    = log2Up(link.bankEntries)
+  val countWidth      = log2Up(link.bankEntries + 1)
+  val bankIdWidth     = link.bankIdBits
 
   val mapping = instance
 
   require(mapping.inBW == 2, "MatAddBall requires two SRAM read ports")
   require(mapping.outBW == 1, "MatAddBall requires one SRAM write port")
-  require(memParam.bankWidth == 128, "MatAddBall requires 128-bit SRAM rows")
+  require(link.bankWidth == 128, "MatAddBall requires 128-bit SRAM rows")
   require(
-    memParam.bankMaskLen == 16,
+    link.bankMaskLen == 16,
     "MatAddBall requires sixteen byte enables"
   )
 
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       2,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       1,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -64,13 +60,13 @@ class MatAdd(
   val Seq(idle, waitForChannels, readRequest, readResponse, writeRequest, writeResponse, complete) = Enum(7)
   val state                                                                                        = RegInit(idle)
 
-  val robId        = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val robId        = RegInit(0.U(link.robIdBits.W))
   val aBank        = RegInit(0.U(bankIdWidth.W))
   val bBank        = RegInit(0.U(bankIdWidth.W))
   val cBank        = RegInit(0.U(bankIdWidth.W))
   val groups       = RegInit(0.U(5.W))
   val group        = RegInit(0.U(5.W))
-  val bases        = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
+  val bases        = Reg(Vec(3, UInt(link.groupIdBits.W)))
   val iter         = RegInit(0.U(countWidth.W))
   val line         = RegInit(0.U(addressWidth.W))
   val aWord        = Reg(UInt(128.W))
@@ -124,11 +120,11 @@ class MatAdd(
           "MatAddBall bank groups must match"
         )
         assert(
-          command.op1_col <= memParam.bankNum.U,
+          command.op1_col <= link.bankNum.U,
           "MatAddBall bank groups must fit in physical banks"
         )
         assert(
-          command.iter =/= 0.U && command.iter <= memParam.bankEntries.U,
+          command.iter =/= 0.U && command.iter <= link.bankEntries.U,
           "MatAddBall iter must fit in one physical bank"
         )
         assert(command.rs2 === 0.U, "MatAddBall reserves rs2")

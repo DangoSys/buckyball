@@ -1,0 +1,5 @@
+# Ball parameters the testbench's coverage bins and cycle model follow.
+[defines]
+MXINT8MM_ROWS = "rows"
+MXINT8MM_COLS = "cols"
+MXINT8MM_LANES = "lanes"

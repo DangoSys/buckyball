@@ -4,10 +4,12 @@ class lut_cov extends uvm_component;
   uvm_analysis_imp_cmd #(bb_blink_cmd_item, lut_cov) cmd_imp;
 
   int unsigned cur_iter;
+  int unsigned cur_mode;
   int unsigned cur_lut_cols;
 
   covergroup cmd_cg;
-    coverpoint cur_iter {bins i1 = {1}; bins i4 = {4}; bins i8 = {8};}
+    coverpoint cur_mode {bins byte_lookup = {0}; bins word_lookup = {1}; bins normalized = {2};}
+    coverpoint cur_iter {bins i1 = {1}; bins i2 = {2}; bins i3 = {3}; bins i4 = {4}; bins i8 = {8};}
     coverpoint cur_lut_cols {bins shared = {1}; bins lane = {4};}
   endgroup
 
@@ -23,6 +25,7 @@ class lut_cov extends uvm_component;
     if (item.funct != LUT_THREAD_FUNCT7[6:0])
       `uvm_fatal("COV", $sformatf("unexpected funct %0d", item.funct))
     cur_iter = item.iter;
+    cur_mode = item.rs2[1:0];
     cur_lut_cols = item.op2_col;
     cmd_count++;
     cmd_cg.sample();

@@ -10,6 +10,8 @@ typedef struct {
 } relu_cmd_dpi_t;
 
 import "DPI-C" function int unsigned relu_bank_entries();
+import "DPI-C" function longint unsigned relu_bemu_cycles(
+    input longint unsigned iter, input longint unsigned rs2, input longint unsigned bank_entries);
 import "DPI-C" function int relu_case_load(input int unsigned index);
 import "DPI-C" function void relu_case_cmd(output relu_cmd_dpi_t cmd);
 import "DPI-C" function int unsigned relu_case_row(input int unsigned word_index);

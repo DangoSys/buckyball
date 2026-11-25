@@ -1,19 +1,19 @@
 package examples.balls.mxfp2int
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BallResponse
 
 import chisel3._
-import framework.acc.balldomain.ball.blink.{BallCommand, BallResponse}
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
 
-import framework.acc.balldomain.ball.blink.BallStatus
-import framework.acc.memdomain.{BankRead, BankWrite}
+import framework.ball.blink.BallStatus
 import examples.balls.mxfp2int.configs.Mxfp2IntBallParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.generic.contract.blink.BallCommand
+import framework.generic.contract.memdomain.BankRead
+import framework.generic.contract.memdomain.BankWrite
 
 /**
  * PipelinedMxfp2Int - MXFP to INT8 dequantizer with a per-block scale bank.
@@ -41,18 +41,16 @@ import examples.balls.mxfp2int.configs.Mxfp2IntBallParam
  */
 @instantiable
 class PipelinedMxfp2Int(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     Mxfp2IntBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: Mxfp2IntBallParam)
     extends Module {
-  val commandDataBits = frontendParam.commandDataBits
+  val commandDataBits = link.dataBits
   val ballConfig      = ballParam
   val decoder         = MxfpDecoder.fromFormat(ballConfig.mxfpFormat)
   val elemBits        = decoder.elemBits
 
-  val bankWidth = memParam.bankWidth
+  val bankWidth = link.bankWidth
   require(
     bankWidth == 128,
     s"Mxfp2IntBall requires bankWidth = 128, got $bankWidth"
@@ -81,23 +79,21 @@ class PipelinedMxfp2Int(
   @public
   val io = IO(new Bundle {
 
-    val cmdReq = Flipped(Decoupled(new BallCommand(frontendParam, memParam)))
+    val cmdReq = Flipped(Decoupled(new BallCommand(link)))
 
-    val cmdResp = Decoupled(new BallResponse(frontendParam))
+    val cmdResp = Decoupled(new BallResponse(link))
 
     val bankRead = Vec(
       inBW,
       Flipped(new BankRead(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
     val bankWrite = Vec(
       outBW,
       Flipped(new BankWrite(
-        frontendParam,
-        memParam
+        link
       ))
     )
 
@@ -105,7 +101,7 @@ class PipelinedMxfp2Int(
   })
 
   // ROB bookkeeping
-  val rob_id_reg = RegInit(0.U(log2Up(frontendParam.rob_entries).W))
+  val rob_id_reg = RegInit(0.U(link.robIdBits.W))
 
   when(io.cmdReq.fire) {
     rob_id_reg := io.cmdReq.bits.rob_id
@@ -117,14 +113,14 @@ class PipelinedMxfp2Int(
   val state                                                                                                                                      = RegInit(idle)
 
   // Per-instruction registers
-  val raddr_reg     = RegInit(0.U(frontendParam.iter_len.W))
-  val waddr_reg     = RegInit(0.U(frontendParam.iter_len.W))
-  val rbank_reg     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val sbank_reg     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val wbank_reg     = RegInit(0.U(frontendParam.bank_id_len.W))
-  val bases         = Reg(Vec(3, UInt(memParam.groupIdWidth.W)))
-  val iter_reg      = RegInit(0.U(frontendParam.iter_len.W))
-  val block_idx_reg = RegInit(0.U(frontendParam.iter_len.W))
+  val raddr_reg     = RegInit(0.U(link.iterBits.W))
+  val waddr_reg     = RegInit(0.U(link.iterBits.W))
+  val rbank_reg     = RegInit(0.U(link.bankIdBits.W))
+  val sbank_reg     = RegInit(0.U(link.bankIdBits.W))
+  val wbank_reg     = RegInit(0.U(link.bankIdBits.W))
+  val bases         = Reg(Vec(3, UInt(link.groupIdBits.W)))
+  val iter_reg      = RegInit(0.U(link.iterBits.W))
+  val block_idx_reg = RegInit(0.U(link.iterBits.W))
   val word_idx_reg  = RegInit(0.U(2.W)) // 0..wordsPerBlock-1
 
   val inputWordsReg = RegInit(
@@ -177,7 +173,7 @@ class PipelinedMxfp2Int(
     io.bankWrite(i).io.req.bits.addr := 0.U
     io.bankWrite(i).io.req.bits.data := 0.U
     io.bankWrite(i).io.req.bits.mask := VecInit(
-      Seq.fill(memParam.bankMaskLen)(0.U(1.W))
+      Seq.fill(link.bankMaskLen)(0.U(1.W))
     )
     io.bankWrite(i).io.resp.ready    := false.B
     io.bankWrite(i).rob_id           := rob_id_reg
@@ -259,7 +255,7 @@ class PipelinedMxfp2Int(
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1)
       io.bankWrite(0).io.req.bits.data := outWordLo
       io.bankWrite(0).io.req.bits.mask := VecInit(
-        Seq.fill(memParam.bankMaskLen)(1.U(1.W))
+        Seq.fill(link.bankMaskLen)(1.U(1.W))
       )
       when(io.bankWrite(0).io.req.fire) {
         state := sWriteLoResp
@@ -278,7 +274,7 @@ class PipelinedMxfp2Int(
       io.bankWrite(0).io.req.bits.addr := waddr_reg + (block_idx_reg << 1) + 1.U
       io.bankWrite(0).io.req.bits.data := outWordHi
       io.bankWrite(0).io.req.bits.mask := VecInit(
-        Seq.fill(memParam.bankMaskLen)(1.U(1.W))
+        Seq.fill(link.bankMaskLen)(1.U(1.W))
       )
       when(io.bankWrite(0).io.req.fire) {
         state := sWriteHiResp

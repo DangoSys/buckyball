@@ -1,4 +1,4 @@
-pub const CORE: usize = 16;
+pub const HART: usize = 16;
 pub const ROW_BYTES: usize = 16;
 pub const RESULT_WORDS: usize = 4;
 pub const BANK_DEPTH: usize = 64;
@@ -10,12 +10,12 @@ pub struct WriteExp {
 }
 
 pub fn pack_a(src: &[i8], rows: usize) -> Vec<u8> {
-    assert_eq!(src.len(), rows * CORE);
+    assert_eq!(src.len(), rows * HART);
     src.iter().map(|value| *value as u8).collect()
 }
 
 pub fn pack_b(src: &[i8]) -> Vec<u8> {
-    assert_eq!(src.len(), CORE * CORE);
+    assert_eq!(src.len(), HART * HART);
     src.iter().map(|value| *value as u8).collect()
 }
 
@@ -23,7 +23,7 @@ pub fn pack_b(src: &[i8]) -> Vec<u8> {
 pub fn emit_writes(c: &[Vec<i32>], output_base: usize) -> Vec<WriteExp> {
     let mut writes = Vec::with_capacity(c.len() * RESULT_WORDS);
     for (row, values) in c.iter().enumerate() {
-        assert_eq!(values.len(), CORE);
+        assert_eq!(values.len(), HART);
         for word in 0..RESULT_WORDS {
             let mut data = [0; ROW_BYTES];
             for lane in 0..4 {
@@ -53,7 +53,7 @@ pub fn encode_rs1(op1: u32, op2: u32, wr: u32, iter: u64) -> u64 {
 pub fn encode_rs2(rows: usize, first: bool, last: bool, output_base: usize) -> u64 {
     assert!(matches!(rows, 16 | 32 | 64 | 128) && output_base < 64);
     rows as u64
-        | ((CORE as u64) << 12)
+        | ((HART as u64) << 12)
         | ((first as u64) << 24)
         | ((last as u64) << 25)
         | ((output_base as u64) << 26)

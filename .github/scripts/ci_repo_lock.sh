@@ -41,8 +41,8 @@ repo_reset() {
   git submodule update --init --force
 
   # submodules in submodules we used need update by hands
-  git -C examples/prefab/cores/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
-  git -C examples/prefab/cores/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
+  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
+  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
 
   git -C stack submodule sync
   git -C stack submodule update --init --force -- os/linux thirdparty/buddy-mlir

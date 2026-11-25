@@ -103,3 +103,10 @@ pub extern "C" fn int2fp_case_dst_word_hi(word_index: u32) -> u64 {
         case.dst_hi(i)
     })
 }
+
+/// The cycles BEMU models for an INT32_TO_FP32 instruction of `iter` rows in
+/// `cols` channel groups.
+#[no_mangle]
+pub extern "C" fn int2fp_bemu_cycles(iter: u64, cols: u64) -> u64 {
+    crate::latency::cycles(iter, cols)
+}

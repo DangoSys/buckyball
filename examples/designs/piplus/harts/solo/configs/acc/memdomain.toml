@@ -1,0 +1,21 @@
+# The memory domain of the solo hart: 16 banks of 2048 rows (512 KiB),
+# the bank of the whole design.
+addrLen = 39
+
+[bank]
+layoutEnable = true
+num = 16
+width = 128
+entries = 2048
+maskLen = 16
+requestPorts = 13
+
+[dma]
+busWidth = 128
+
+[mmio]
+enable = false
+bankNum = 5
+bankEntries = 1024
+bankWidth = 8
+readWidth = 8

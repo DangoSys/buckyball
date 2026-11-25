@@ -107,3 +107,18 @@ pub extern "C" fn redmule_case_word(bank: u32, row: u32, half: u32) -> u64 {
         word
     })
 }
+
+/// The cycles BEMU models for a REDMULE_F16 instruction: M = rs2[11:0],
+/// K = iter, the A/B/C row bases rs2[21:12], rs2[31:22], rs2[41:32] and
+/// first = rs2[42].
+#[no_mangle]
+pub extern "C" fn redmule_bemu_cycles(iter: u64, rs2: u64) -> u64 {
+    crate::latency::cycles(
+        rs2 & 4095,
+        iter,
+        (rs2 >> 12) & 1023,
+        (rs2 >> 22) & 1023,
+        (rs2 >> 32) & 1023,
+        rs2 & (1 << 42) != 0,
+    )
+}

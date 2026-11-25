@@ -13,6 +13,7 @@ from utils.path import runner_manifest
 import os
 import shlex
 import sys
+import tomllib
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -77,7 +78,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             1,
             continue_run=False,
             extra_fields={
-                "error": "invalid_regression",
+                "error": str(e),
                 "test": test_type,
                 "design": design,
             },
@@ -104,6 +105,18 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         test_type,
         selection=input_data["target"],
     )
+    if "limit" in input_data:
+        # A measurement runs the head of the list, not the regression.
+        with open(workload_toml, "rb") as source:
+            (tests,) = tomllib.load(source)["workloads"].values()
+        os.makedirs(run_log)
+        workload_toml = os.path.join(run_log, "workloads.toml")
+        with open(workload_toml, "w") as head:
+            head.write(
+                "[workloads]\ntests = [\n"
+                + "".join(f'  "{test}",\n' for test in tests[: input_data["limit"]])
+                + "]\n"
+            )
     harness_args = [
         "--",
         "--workload-toml",
@@ -119,6 +132,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     ]
     if diff:
         harness_args.append("--diff")
+    if input_data.get("all-trace", False):
+        harness_args.append("--all-trace")
     harness = shlex.join(harness_args)
     test_cmd = (
         "nix develop -c cargo test --release --target-dir"
@@ -145,6 +160,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "vsrc_dir": vsrc_dir,
             "test_type": test_type,
             "diff": diff,
+            "all-trace": input_data.get("all-trace", False),
             "workload_toml": workload_toml,
             "log_dir": run_log,
             "junit": os.path.join(run_log, "junit.xml"),

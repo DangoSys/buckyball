@@ -1,28 +1,26 @@
 package examples.balls.smatmul
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
-import buckyball.balls.smatmul.{Params => ParametersProto}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.ball.bbus.{BallFactory, BallPorts}
+import buckyball.balls.smatmul.{Params => ParametersProto}
 
 import examples.balls.smatmul.configs.SMatMulBallParam
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public, Instance, Instantiate}
-import framework.acc.balldomain.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
 
 @instantiable
 class SMatMulBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   val ballParam = SMatMulBallParam.fromProto(ball.parameters.unpack(classOf[ParametersProto]))
 
@@ -32,10 +30,10 @@ class SMatMulBall(
   val outBW = ballCommonConfig.outBW
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val smatmulArrayUnit: Instance[SMatMulUnit] =
-    Instantiate(new SMatMulUnit(fp, mp, bp, ball, ballParam))
+    Instantiate(new SMatMulUnit(link, ball, ballParam))
 
   smatmulArrayUnit.io.cmdReq <> blink.cmdReq
   smatmulArrayUnit.io.cmdResp <> blink.cmdResp
@@ -56,11 +54,10 @@ class SMatMulBall(
 object SMatMulBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new SMatMulBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new SMatMulBall(link, route)).blink, None)
 
 }

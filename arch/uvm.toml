@@ -1,268 +1,310 @@
 [paths]
-core_shm="arch/src/main/scala/framework/core/shm"
-device_shm="arch/src/main/scala/framework/device/shm"
-tbus_router="arch/src/main/scala/framework/core/tbus/src/main/scala/router"
-core_cache="arch/src/main/scala/framework/core/memory/access/src/main/scala/cache"
-home="arch/src/main/scala/framework/core/memory/home"
-admission="arch/src/main/scala/framework/core/controller/admission"
-tol1 = "arch/src/main/scala/framework/acc/memdomain/src/main/scala/tomem/src/main/scala/tol1"
-toddr = "arch/src/main/scala/framework/acc/memdomain/src/main/scala/tomem/src/main/scala/toddr"
-tomem = "arch/src/main/scala/framework/acc/memdomain/src/main/scala/tomem"
-prm = "arch/src/main/scala/framework/acc/memdomain/src/main/scala/prm"
-bank_router = "arch/src/main/scala/framework/acc/memdomain/src/main/scala/bank_router"
-global_rob = "arch/src/main/scala/framework/acc/frontend/src/main/scala/scheduler/src/main/scala/rob/global"
-boot = "arch/src/main/scala/framework/acc/frontend/src/main/scala/boot"
-bat = "arch/src/main/scala/framework/acc/frontend/src/main/scala/scheduler/src/main/scala/bat"
-scoreboard = "arch/src/main/scala/framework/acc/frontend/src/main/scala/scheduler/src/main/scala/scoreboard"
-tss = "arch/src/main/scala/framework/core/tss"
-ant = "arch/src/main/scala/framework/thread/ant"
-preflight = "arch/src/main/scala/framework/core/memory/access/src/main/scala/preflight"
-ddr = "arch/src/main/scala/framework/device/ddr"
-interlock = "arch/src/main/scala/framework/ip/interlock"
-axis = "arch/src/main/scala/framework/ip/axis"
-axi4 = "arch/src/main/scala/framework/ip/axi4"
-bank = "arch/src/main/scala/framework/ip/bank"
-spm = "arch/src/main/scala/framework/ip/spm"
-cache = "arch/src/main/scala/framework/ip/cache"
-coherence = "arch/src/main/scala/framework/ip/coherence"
-chi = "arch/src/main/scala/framework/ip/chi"
-mem_access = "arch/src/main/scala/framework/core/memory/access"
-mmu = "arch/src/main/scala/framework/core/memory/access/src/main/scala/mmu"
-fetch = "arch/src/main/scala/framework/core/execution/fetch"
+thread_boot = "arch/src/main/scala/thread/acc/frontend/src/main/scala/boot"
+thread_global_rob = "arch/src/main/scala/thread/acc/frontend/src/main/scala/scheduler/src/main/scala/rob/global"
+thread_bat = "arch/src/main/scala/thread/acc/frontend/src/main/scala/scheduler/src/main/scala/bat"
+thread_scoreboard = "arch/src/main/scala/thread/acc/frontend/src/main/scala/scheduler/src/main/scala/scoreboard"
+thread_bank_router = "arch/src/main/scala/thread/acc/memdomain/src/main/scala/bank_router"
+thread_prm = "arch/src/main/scala/thread/acc/memdomain/src/main/scala/prm"
+hart_dataflow="arch/src/main/scala/hart/memory"
+hart_shm="arch/src/main/scala/tlp/shm"
+device_shm="arch/src/main/scala/device/shm"
+tbus_router="arch/src/main/scala/tlp/tbus/src/main/scala/router"
+hart_cache="arch/src/main/scala/hart/memory/access/src/main/scala/cache"
+home="arch/src/main/scala/hart/memory/home"
+admission="arch/src/main/scala/tlp/controller/admission"
+tol1 = "arch/src/main/scala/custom/memdomain/src/main/scala/tomem/src/main/scala/tol1"
+toddr = "arch/src/main/scala/custom/memdomain/src/main/scala/tomem/src/main/scala/toddr"
+tomem = "arch/src/main/scala/custom/memdomain/src/main/scala/tomem"
+prm = "arch/src/main/scala/custom/memdomain/src/main/scala/prm"
+bank_router = "arch/src/main/scala/custom/memdomain/src/main/scala/bank_router"
+global_rob = "arch/src/main/scala/custom/frontend/src/main/scala/scheduler/src/main/scala/rob/global"
+boot = "arch/src/main/scala/custom/frontend/src/main/scala/boot"
+bat = "arch/src/main/scala/custom/frontend/src/main/scala/scheduler/src/main/scala/bat"
+scoreboard = "arch/src/main/scala/custom/frontend/src/main/scala/scheduler/src/main/scala/scoreboard"
+tss = "arch/src/main/scala/tlp/tss"
+ant = "arch/src/main/scala/thread/ant"
+preflight = "arch/src/main/scala/hart/memory/access/src/main/scala/preflight"
+ddr = "arch/src/main/scala/generic/ddr"
+interlock = "arch/src/main/scala/generic/interlock"
+axis = "arch/src/main/scala/generic/axis"
+axi4 = "arch/src/main/scala/generic/axi4"
+bank = "arch/src/main/scala/generic/bank"
+spm = "arch/src/main/scala/generic/spm"
+cache = "arch/src/main/scala/generic/cache"
+coherence = "arch/src/main/scala/generic/coherence"
+chi = "arch/src/main/scala/generic/chi"
+mem_access = "arch/src/main/scala/hart/memory/access"
+mmu = "arch/src/main/scala/hart/memory/access/src/main/scala/mmu"
+fetch = "arch/src/main/scala/mlp/fetch"
 
 
-instruction = "arch/src/main/scala/framework/core/execution/instruction"
-fpu = "arch/src/main/scala/framework/core/execution/fpu"
-muldiv = "arch/src/main/scala/framework/core/execution/muldiv"
-privileged = "arch/src/main/scala/framework/core/execution/privileged"
-integer = "arch/src/main/scala/framework/core/execution/integer"
-register_file = "arch/src/main/scala/framework/core/execution/register_file"
+instruction = "arch/src/main/scala/hart/execution/instruction"
+fpu = "arch/src/main/scala/hart/execution/fpu"
+muldiv = "arch/src/main/scala/hart/execution/muldiv"
+privileged = "arch/src/main/scala/hart/execution/privileged"
+integer = "arch/src/main/scala/hart/execution/integer"
+register_file = "arch/src/main/scala/hart/execution/register_file"
 
 [build.ant]
-directory = "arch/src/main/scala/framework"
+directory = "arch/src/main/scala"
 module = "thread.ant"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.tss]
-directory = "arch/src/main/scala/framework"
-module = "core.tss"
+directory = "arch/src/main/scala"
+module = "tlp.tss"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
-[build.core_shm]
-directory = "arch/src/main/scala/framework/core/shm"
+[build.hart_shm]
+directory = "arch/src/main/scala/tlp/shm"
 module = "emit"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.device_shm]
-directory = "arch/src/main/scala/framework/device/shm"
+directory = "arch/src/main/scala/device/shm"
 module = "emit"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.global_rob]
-directory = "arch/src/main/scala/framework"
-module = "acc.frontend.scheduler.rob.global"
+directory = "arch/src/main/scala"
+module = "custom.frontend.scheduler.rob.global"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 
 [build.boot]
-directory = "arch/src/main/scala/framework"
-module = "acc.frontend.boot"
+directory = "arch/src/main/scala"
+module = "custom.frontend.boot"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 
 [build.bank_router]
-directory = "arch/src/main/scala/framework"
-module = "acc.memdomain.bank_router"
+directory = "arch/src/main/scala"
+module = "custom.memdomain.bank_router"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.axis]
-directory = "arch/src/main/scala/framework"
-module = "ip.axis"
+directory = "arch/src/main/scala"
+module = "generic.axis"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.axi4]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.axi4"
+directory = "arch/src/main/scala"
+module = "generic.axi4"
 
 [build.chi]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.chi"
+directory = "arch/src/main/scala"
+module = "generic.chi"
 
 [build.bank]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.bank"
+directory = "arch/src/main/scala"
+module = "generic.bank"
 
 [build.cache]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.cache"
+directory = "arch/src/main/scala"
+module = "generic.cache"
 
 [build.coherence]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.coherence"
+directory = "arch/src/main/scala"
+module = "generic.coherence"
 
 [build.interlock]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.interlock"
+directory = "arch/src/main/scala"
+module = "generic.interlock"
 
 [build.spm]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "ip.spm"
+directory = "arch/src/main/scala"
+module = "generic.spm"
 
 [build.ddr]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "device.ddr"
+directory = "arch/src/main/scala"
+module = "generic.ddr"
 
 [build.mmu]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "core.memory.access.mmu"
+directory = "arch/src/main/scala"
+module = "hart.memory.access.mmu"
 
 [build.fetch]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.fetch"
+directory = "arch/src/main/scala"
+module = "mlp.fetch"
 
 [build.mem_access]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "core.memory.access"
+directory = "arch/src/main/scala"
+module = "hart.memory.access"
 
 [build.preflight]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "core.memory.access.preflight"
+directory = "arch/src/main/scala"
+module = "hart.memory.access.preflight"
 
 
 [build.bat]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "acc.frontend.scheduler.bat"
+directory = "arch/src/main/scala"
+module = "custom.frontend.scheduler.bat"
 
 [build.scoreboard]
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
-directory = "arch/src/main/scala/framework"
-module = "acc.frontend.scheduler.scoreboard"
+directory = "arch/src/main/scala"
+module = "custom.frontend.scheduler.scoreboard"
 
 
 [build.instruction]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.instruction"
+directory = "arch/src/main/scala"
+module = "hart.execution.instruction"
 arguments = ["--config", "{config}"]
 
 [build.fpu]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.fpu"
+directory = "arch/src/main/scala"
+module = "hart.execution.fpu"
 arguments = ["--config", "{config}"]
 
 [build.muldiv]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.muldiv"
+directory = "arch/src/main/scala"
+module = "hart.execution.muldiv"
 arguments = ["--config", "{config}"]
 
 [build.privileged]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.privileged"
+directory = "arch/src/main/scala"
+module = "hart.execution.privileged"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.integer]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.integer"
+directory = "arch/src/main/scala"
+module = "hart.execution.integer"
 arguments = ["--config", "{config}"]
 
 [build.register_file]
-directory = "arch/src/main/scala/framework"
-module = "core.execution.register_file"
+directory = "arch/src/main/scala"
+module = "hart.execution.register_file"
 arguments = ["--config", "{config}"]
 
 [modules.frontend]
 level = "domain"
-path = "arch/src/main/scala/framework/acc/frontend"
+path = "arch/src/main/scala/custom/frontend"
 
 [modules.frontend.build]
-directory = "arch/src/main/scala/framework"
-module = "acc.frontend"
+directory = "arch/src/main/scala"
+module = "custom.frontend"
 arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
 [modules.memdomain]
 level = "domain"
-path = "arch/src/main/scala/framework/acc/memdomain"
+path = "arch/src/main/scala/custom/memdomain"
 
 [modules.memdomain.build]
-directory = "arch/src/main/scala/framework"
-module = "acc.memdomain"
+directory = "arch/src/main/scala"
+module = "custom.memdomain"
 arguments = ["--design", "{design}"]
 
 [modules.gpdomain]
 level = "domain"
-path = "arch/src/main/scala/framework/acc/gpdomain"
+path = "arch/src/main/scala/custom/gpdomain"
 
 [modules.gpdomain.build]
-directory = "arch/src/main/scala/framework"
-module = "acc.gpdomain"
+directory = "arch/src/main/scala"
+module = "custom.gpdomain"
 arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
 [modules.balldomain]
 level = "domain"
-path = "arch/src/main/scala/framework/acc/balldomain"
+path = "arch/src/main/scala/ball"
 
 [modules.balldomain.build]
 runtime = [{ directory = "examples", module = "library" }]
-directory = "arch/src/main/scala/framework"
-module = "acc.balldomain"
+directory = "arch/src/main/scala"
+module = "ball"
 arguments = ["--config", "{repo}/examples/designs/{design}/output/sims/device/generated/design.pb"]
 
-[modules.core_shm]
+[modules.hart_shm]
 level = "subsystem"
-path = "arch/src/main/scala/framework/core/shm"
+path = "arch/src/main/scala/tlp/shm"
 
-[modules.core_shm.build]
-directory = "arch/src/main/scala/framework"
-module = "core.shm"
+[modules.hart_shm.build]
+directory = "arch/src/main/scala"
+module = "tlp.shm"
 
 [build.prm]
-directory = "arch/src/main/scala/framework"
-module = "acc.memdomain.prm"
+directory = "arch/src/main/scala"
+module = "custom.memdomain.prm"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.tol1]
-directory = "arch/src/main/scala/framework"
-module = "acc.memdomain.tomem.tol1"
+directory = "arch/src/main/scala"
+module = "custom.memdomain.tomem.tol1"
 arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.toddr]
-directory="arch/src/main/scala/framework"
-module="acc.memdomain.tomem.toddr"
+directory="arch/src/main/scala"
+module="custom.memdomain.tomem.toddr"
 arguments=["--config","{config}","--output-dir","{rtl}"]
 
 [build.tomem]
-directory="arch/src/main/scala/framework"
-module="acc.memdomain.tomem"
+directory="arch/src/main/scala"
+module="custom.memdomain.tomem"
 arguments=["--config","{config}","--output-dir","{rtl}"]
 
 [build.admission]
-directory="arch/src/main/scala/framework"
-module="core.controller.admission"
+directory="arch/src/main/scala"
+module="tlp.controller.admission"
 arguments=["--config","{config}","--output-dir","{rtl}"]
 
 [build.home]
-directory="arch/src/main/scala/framework"
-module="core.memory.home"
+directory="arch/src/main/scala"
+module="hart.memory.home"
 arguments=["--config","{config}","--output-dir","{rtl}"]
 
-[build.core_cache]
-directory="arch/src/main/scala/framework"
-module="core.memory.access.cache"
+[build.hart_cache]
+directory="arch/src/main/scala"
+module="hart.memory.access.cache"
 arguments=["--config","{config}","--output-dir","{rtl}"]
 
 [build.tbus_router]
-directory="arch/src/main/scala/framework"
-module="core.tbus.router"
+directory="arch/src/main/scala"
+module="tlp.tbus.router"
 arguments=["--config","{config}","--output-dir","{rtl}"]
+
+[build.hart_dataflow]
+directory="arch/src/main/scala"
+module="hart.memory"
+arguments=["--config","{config}","--output-dir","{rtl}"]
+
+[build.thread_boot]
+directory = "arch/src/main/scala"
+module = "thread.acc.frontend.boot"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.thread_global_rob]
+directory = "arch/src/main/scala"
+module = "thread.acc.frontend.scheduler.rob.global"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.thread_bat]
+directory = "arch/src/main/scala"
+module = "thread.acc.frontend.scheduler.bat"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.thread_scoreboard]
+directory = "arch/src/main/scala"
+module = "thread.acc.frontend.scheduler.scoreboard"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.thread_bank_router]
+directory = "arch/src/main/scala"
+module = "thread.acc.memdomain.bank_router"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.thread_prm]
+directory = "arch/src/main/scala"
+module = "thread.acc.memdomain.prm"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]

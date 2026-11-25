@@ -1,0 +1,10 @@
+[workloads]
+tests = [
+  "poly-main-ctest-ant_coherence-multicore-baremetal",
+  "poly-main-ctest-design-physical_threads-multicore-baremetal",
+  "poly-hart1-mlirtest-compiler_native_edges-baremetal",
+  "poly-main-ctest-design-dataflow-multicore-baremetal",
+  "poly-main-ctest-design-dataflow_serial-multicore-baremetal",
+  "poly-hart0-ctest-device_storage-baremetal",
+  "poly-main-ctest-device_transfer-multicore-baremetal",
+]

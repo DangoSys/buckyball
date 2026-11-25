@@ -13,12 +13,14 @@ typedef int32_t result_t;
 // bb_isa.h next to this header; Ball-specific ISA macros live under
 // <ball>/workloads/isa/ of each Ball component.
 #include "01_barrier.c"
-#include "12_kernel.c"
+#include "12_operator.c"
 #include "13_mvover.c"
 #include "16_mvout.c"
 #include "32_mset.c"
 #include "33_mvin.c"
 #include "34_mvin_2d.c"
 #include "35_mvin_mmio.c"
+#include "dma_blocks.h"
+#include "dma_strided.h"
 
 #endif // BUCKYBALL_ISA_H

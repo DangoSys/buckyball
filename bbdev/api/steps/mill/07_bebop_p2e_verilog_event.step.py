@@ -35,7 +35,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             bbdir,
             design,
             "p2e",
-            input_data.get("output_dir"),
             selection=input_data["target"],
         )
         shutil.rmtree(build_dir, ignore_errors=True)

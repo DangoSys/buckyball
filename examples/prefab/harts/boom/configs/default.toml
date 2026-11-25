@@ -1,0 +1,3 @@
+# The boom hart component: a SmallBoomV4 BOOM core behind AXI, its caches
+# inside the native core.
+component = "boom"

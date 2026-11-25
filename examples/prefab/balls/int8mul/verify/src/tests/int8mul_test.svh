@@ -13,6 +13,7 @@ class int8mul_ball_test extends uvm_test;
     super.build_phase(phase);
     if (!uvm_config_db#(vif_t)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "bb_blink_if not found")
+    bb_blink_cycles#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(int8mul_cycles::get_type());
     env = int8mul_env::type_id::create("env", this);
   endfunction
 

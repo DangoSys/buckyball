@@ -1,45 +1,42 @@
 package examples.balls.redmule
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.redmule.{Params => ParametersProto}
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
-
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
 
 import chisel3._
 import chisel3.util._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.acc.balldomain.ball.blink.{BallCommand, BallStatus, BlinkIO, HasBlink}
+import framework.ball.blink.{BallStatus, BlinkIO, HasBlink}
+import framework.generic.contract.blink.BallCommand
 
 @instantiable
 class RedmuleBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
   require(ball.inBW == 2 && ball.outBW == 1)
   require(
-    mp.bankWidth == 128 && mp.bankMaskLen == 16
+    link.bankWidth == 128 && link.bankMaskLen == 16
   )
-  require(
-    mp.bankEntries <= 65535 && mp.sharedBankEntries <= 65535
-  )
+  require(link.bankEntries <= 65535)
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val Seq(idle, channels, configure, controlReply, running, complete) = Enum(6)
   val state                                                           = RegInit(idle)
 
-  val issue = Reg(new BallCommand(fp, mp))
+  val issue = Reg(new BallCommand(link))
 
   val controlStep = RegInit(0.U(4.W))
   val finished    = RegInit(false.B)
@@ -48,18 +45,31 @@ class RedmuleBall(
   val bBase       = issue.rs2(31, 22)
   val cBase       = issue.rs2(41, 32)
   val first       = issue.rs2(42)
+  // One native job per row tile of Width = 8 C rows: every job starts from
+  // the same native state, so the bus timing of a tile does not depend on
+  // its neighbours, and the native memory scheduler never sees more than
+  // one tile per job.
+  val tile        = RegInit(0.U(9.W))
+  val left        = rows - (tile << 3)
+  val tileRows    = Mux(left > 8.U, 8.U, left)
+  val tileA       = aBase +& tile * issue.iter(15, 0)
+  val tileC       = cBase +& (tile << 3)
   val native      = Instantiate(new RedmuleNative)
   native.io.clk_i       := clock
   native.io.rst_ni      := !reset.asBool
   native.io.ctrl_req_i  := state === configure
-  native.io.ctrl_wen_i  := controlStep === 0.U
-  native.io.ctrl_addr_i := VecInit(Seq(4, 44, 48, 52, 32, 36, 40, 60, 0).map(_.U(32.W)))(controlStep)
+  // Step 0 soft-clears the engine state (SOFT_CLEAR bit 1 = 0, bit 0 = 1 keeps
+  // the registers): every job, also every tile, starts with the same native
+  // state, the round-robin counter of its memory mux included.
+  native.io.ctrl_wen_i  := controlStep === 1.U
+  native.io.ctrl_addr_i := VecInit(Seq(20, 4, 44, 48, 52, 32, 36, 40, 60, 0).map(_.U(32.W)))(controlStep)
   native.io.ctrl_data_i := VecInit(Seq(
+    1.U(32.W),
     0.U(32.W),
-    16777216.U | (aBase << 4),
+    16777216.U | (tileA << 4),
     33554432.U | (bBase << 4),
-    50331648.U | (cBase << 4),
-    (8.U(32.W) << 16) | rows,
+    50331648.U | (tileC << 4),
+    (8.U(32.W) << 16) | tileRows,
     41943040.U(32.W) | ((!first).asUInt << 20) | issue.iter(15, 0),
     0.U(32.W),
     0.U(32.W),
@@ -77,8 +87,8 @@ class RedmuleBall(
   val responseData                                                                             = Reg(UInt(256.W))
   val region                                                                                   = address(25, 24)
   val bankRow                                                                                  = address(23, 4) +& half
-  val startRow                                                                                 = Mux(region === 1.U, aBase, Mux(region === 2.U, bBase, cBase))
-  val span                                                                                     = Mux(region === 1.U, rows * (issue.iter(15, 0) >> 3), Mux(region === 2.U, issue.iter(15, 0), rows))
+  val startRow                                                                                 = Mux(region === 1.U, tileA, Mux(region === 2.U, bBase, tileC))
+  val span                                                                                     = Mux(region === 1.U, tileRows * (issue.iter(15, 0) >> 3), Mux(region === 2.U, issue.iter(15, 0), tileRows))
   val inWindow                                                                                 = bankRow >= startRow && bankRow < (startRow +& span)
   val readPort                                                                                 = Mux(region === 2.U, 1.U, 0.U)
 
@@ -166,11 +176,11 @@ class RedmuleBall(
   }
   when(busState === response && native.io.mem_ready_o)(busState             := busIdle)
 
-  blink.cmdReq.ready                                                                     := state === idle
-  blink.cmdResp.valid                                                                    := state === complete
-  blink.cmdResp.bits.rob_id                                                              := issue.rob_id
-  blink.status.idle                                                                      := state === idle
-  blink.status.running                                                                   := state =/= idle
+  blink.cmdReq.ready                                      := state === idle
+  blink.cmdResp.valid                                     := state === complete
+  blink.cmdResp.bits.rob_id                               := issue.rob_id
+  blink.status.idle                                       := state === idle
+  blink.status.running                                    := state =/= idle
   when(blink.cmdReq.fire) {
     val cmd = blink.cmdReq.bits
     val m   = cmd.rs2(11, 0)
@@ -187,49 +197,50 @@ class RedmuleBall(
       "REDMULE_F16 banks must differ"
     )
     for (
-      (bank, footprint) <- Seq(
-                             (cmd.op1_bank, cmd.rs2(21, 12) +& m * (cmd.iter >> 3)),
-                             (cmd.op2_bank, cmd.rs2(31, 22) +& cmd.iter),
-                             (cmd.wr_bank, cmd.rs2(41, 32) +& m)
-                           )
+      footprint <- Seq(
+                     cmd.rs2(21, 12) +& m * (cmd.iter >> 3),
+                     cmd.rs2(31, 22) +& cmd.iter,
+                     cmd.rs2(41, 32) +& m
+                   )
     ) {
-      val shared   = bank >= fp.shared_vbank_base.U
-      val capacity = Mux(
-        shared,
-        mp.sharedBankEntries.U,
-        mp.bankEntries.U
-      )
-      assert(footprint <= capacity, "REDMULE_F16 bank window exceeds capacity")
+      assert(footprint <= link.bankEntries.U, "REDMULE_F16 bank window exceeds capacity")
     }
-    issue := blink.cmdReq.bits
+    issue       := blink.cmdReq.bits
     finished    := false.B
     controlStep := 0.U
+    tile        := 0.U
     state       := channels
   }
-  when(state === channels)(state                                                         := configure)
-  when(state === configure && native.io.ctrl_gnt_o)(state                                := controlReply)
+  when(state === channels)(state                          := configure)
+  when(state === configure && native.io.ctrl_gnt_o)(state := controlReply)
   when(state === controlReply && native.io.ctrl_valid_o) {
-    when(controlStep === 0.U) {
+    when(controlStep === 1.U) {
       assert(native.io.ctrl_data_o =/= "hffffffff".U, "RedMulE has no free job context")
     }
-    when(controlStep === 8.U)(state := running).otherwise {
+    when(controlStep === 9.U)(state := running).otherwise {
       controlStep := controlStep + 1.U
       state       := configure
     }
   }
-  when(state === running && native.io.evt_o)(finished                                    := true.B)
-  when(state === running && finished && !native.io.busy_o && busState === busIdle)(state := complete)
-  when(blink.cmdResp.fire)(state                                                         := idle)
+  when(state === running && native.io.evt_o)(finished     := true.B)
+  when(state === running && finished && !native.io.busy_o && busState === busIdle) {
+    when(left > 8.U) {
+      tile        := tile + 1.U
+      finished    := false.B
+      controlStep := 0.U
+      state       := configure
+    }.otherwise(state := complete)
+  }
+  when(blink.cmdResp.fire)(state                          := idle)
 }
 
 object RedmuleBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new RedmuleBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new RedmuleBall(link, route)).blink, None)
 
 }

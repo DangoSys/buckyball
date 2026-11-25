@@ -14,6 +14,8 @@ class transpose_ball_test extends uvm_test;
     if (!uvm_config_db#(vif_t)::get(this, "", "vif", vif)) begin
       `uvm_fatal("NOVIF", "bb_blink_if not found")
     end
+    bb_blink_cycles#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(
+        transpose_cycles::get_type());
     env = transpose_env::type_id::create("env", this);
   endfunction
 

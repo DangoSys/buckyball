@@ -17,7 +17,7 @@ int main() {
   rvv_load(image, sizeof(image));
   bb_mvin_group((uintptr_t)gate, RVV_READ_BANK, 0, 10, 1);
   bb_mvin_group((uintptr_t)up, RVV_READ_BANK, 1, 10, 1);
-  kernel_launch call{
+  operator_launch call{
       rvv_image_word(image, 2),
       rvv_image_word(image, 1),
       RVV_STACK,

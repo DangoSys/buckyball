@@ -10,7 +10,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from utils.event_common import require_design
+from utils.event_common import require_design, require_product
 from utils.path import get_buckyball_path
 from utils.search_workload import search_workload
 
@@ -26,24 +26,14 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     try:
         design = require_design(body)
+        binary = require_product(body)
     except ValueError as e:
         return ApiResponse(status=400, body={"error": str(e)})
-    binary = body.get("binary", "")
-    if not binary:
-        return ApiResponse(
-            status=400,
-            body={
-                "success": False,
-                "failure": True,
-                "returncode": 400,
-                "message": "binary parameter is required",
-            },
-        )
 
     search_dir = str(
         Path(
@@ -68,7 +58,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
 
     data = {
         "design": design,
-        "binary": binary,
+        **{key: body[key] for key in ("model", "bench", "os", "test") if key in body},
         "jobs": body.get("jobs", "16"),
         "batch": body.get("batch", False),
         "coverage": body.get("coverage", False),

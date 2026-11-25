@@ -26,7 +26,7 @@ The test names are:
 - `toint8_rows_test`: two-row scan and packed output traversal with per-channel scales
 - `toint8_scale_rows_test`: maximum value is in the second row
 - case 8: QUANT_F32_TO_I8 over two channel groups (group g of input/output = channel block g, its scales in rows 4g..4g+3 of the one scale group)
-- case 9: QUANT_I32_TO_I8 over three channel groups with per-channel scales in one scale group, input_base 3, and a 2x2 output core
+- case 9: QUANT_I32_TO_I8 over three channel groups with per-channel scales in one scale group, input_base 3, and a 2x2 output hart
 
 Each case: reset, preload src words into `mem_model` (INT8 uses `group_id` 0..3),
 drive one command, wait for `scb.done()` or timeout at 400 cycles. Scoreboard
@@ -36,14 +36,11 @@ INT8 layout and one-row iteration bin, else `check_phase` fatal.
 ## BID (required)
 
 `+BID=<n>` is mandatory. Missing it fatals at test start. No default bid.
-
-| Config | Plusarg |
-|--------|---------|
-| `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=3` |
-| `sims.verilator.BuckyballToyVerilatorConfig` (full.toml) | `+BID=5` |
+The Ball runs alone from `configs/default.toml`, where its id is 0; bbdev
+passes `+BID=0`.
 
 ```console
-./simv +UVM_TESTNAME=toint8_scale_rows_test +BID=3
+./simv +UVM_TESTNAME=toint8_scale_rows_test +BID=0
 ```
 
 ## Build
@@ -72,16 +69,14 @@ vcs -full64 -sverilog -timescale=1ns/1ps \
 Run:
 
 ```console
-./simv +UVM_TESTNAME=toint8_scale_rows_test +BID=3
+./simv +UVM_TESTNAME=toint8_scale_rows_test +BID=0
 ```
 
 Or via bbdev:
 
 ```console
-bbdev uvm --build '--ball=toint8' \
-  --config sims.verilator.BuckyballPebbleVerilatorConfig \
-  --core-config examples/cores/pebble/configs/default.toml
-bbdev uvm --run '--ball=toint8 --plusargs +BID=3'
+bbdev uvm --build '--ball toint8'
+bbdev uvm --run '--ball toint8'
 ```
 
 ## Acceptance (2026-08-04)
@@ -91,5 +86,4 @@ bbdev uvm --run '--ball=toint8 --plusargs +BID=3'
 - [x] directed online INT8 scoreboard pass
 - [x] signed, zero, rounding, and row-traversal directed cases pass
 - [x] protocol + semantic cover enforced (`check_phase` fatal)
-- [x] pebble: `+BID=3` config `sims.verilator.BuckyballPebbleVerilatorConfig`
-- [ ] toy full: `+BID=5` config `sims.verilator.BuckyballToyVerilatorConfig`
+- [x] runs alone from `configs/default.toml` (`bbdev uvm --run '--ball toint8'`)

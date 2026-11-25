@@ -29,12 +29,7 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
             },
         )
 
-    design = body.get("design")
-    if not design:
-        return ApiResponse(
-            status=400,
-            body={"error": "Missing required parameter: --design must be specified"},
-        )
+    design = body["design"]
 
     test_type = body.get("test")
     if not test_type:

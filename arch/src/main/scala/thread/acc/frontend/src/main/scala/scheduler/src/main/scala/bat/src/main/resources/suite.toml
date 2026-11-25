@@ -1,0 +1,122 @@
+[model]
+manifest = ""
+library = ""
+
+[[tests]]
+name = "bat"
+top = "bat_tb"
+test = "protocol_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = ["bat_pkg::model::behavior"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""
+
+[[tests]]
+name = "bad_full"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=full"]
+assertion = "BAT allocation has no free virtual bank"
+
+[[tests]]
+name = "bad_reclaim"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=reclaim"]
+assertion = "BAT reclaim alias is outside the allocated namespace"
+
+[[tests]]
+name = "bad_read0"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=read0"]
+assertion = "BAT read bank is outside the architectural namespace"
+
+[[tests]]
+name = "bad_read1"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=read1"]
+assertion = "BAT second read bank is outside the architectural namespace"
+
+[[tests]]
+name = "bad_update"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=update"]
+assertion = "BAT update source is outside the architectural namespace"
+
+[[tests]]
+name = "bad_write"
+top = "bat_tb"
+test = "invalid_test"
+filelist = "filelist.f"
+timeout_ns = 300000
+wall_timeout_s = 120
+kind = "assertion"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = []
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = ["+CASE=write"]
+assertion = "BAT write bank is outside the architectural namespace"

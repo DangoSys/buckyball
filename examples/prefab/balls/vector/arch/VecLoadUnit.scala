@@ -1,46 +1,40 @@
 package examples.balls.vector
 
-import framework.acc.balldomain.configs.BallRouteParam
+import framework.generic.contract.blink.BlinkParam
 
-import framework.lib.queue.Queue
+import framework.generic.queue.Queue
 import chisel3.experimental.hierarchy.{Instance, Instantiate}
 
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-
-import framework.ip.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
+import framework.generic.memory.bank.{SramReadIO, SramReadReq, SramReadResp, SramWriteIO, SramWriteReq, SramWriteResp}
 
 import chisel3._
 import chisel3.util._
 import chisel3.stage._
 import chisel3.experimental.hierarchy.{instantiable, public}
-import framework.ip.memory.bank.{SramReadReq, SramReadResp}
+import framework.generic.memory.bank.{SramReadReq, SramReadResp}
 import examples.balls.vector.configs.VectorBallParam
+import framework.generic.contract.configs.BallRouteParam
 
-class ctrl_ld_req(frontendParam: FrontendParam, memParam: MemDomainParam, val ballParam: VectorBallParam)
-    extends Bundle {
-  val op1_bank      = UInt(frontendParam.bank_id_len.W)
-  val op1_bank_addr = UInt(log2Up(memParam.bankEntries).W)
-  val op2_bank      = UInt(frontendParam.bank_id_len.W)
-  val op2_bank_addr = UInt(log2Up(memParam.bankEntries).W)
-  val iter          = UInt(frontendParam.iter_len.W)
+class ctrl_ld_req(link: BlinkParam, val ballParam: VectorBallParam) extends Bundle {
+  val op1_bank      = UInt(link.bankIdBits.W)
+  val op1_bank_addr = UInt(log2Up(link.bankEntries).W)
+  val op2_bank      = UInt(link.bankIdBits.W)
+  val op2_bank_addr = UInt(log2Up(link.bankEntries).W)
+  val iter          = UInt(link.iterBits.W)
   val mode          = UInt(1.W)
 }
 
 @instantiable
 class VecLoadUnit(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     VectorBallParam)
+  link:          BlinkParam,
+  instance:      BallRouteParam,
+  val ballParam: VectorBallParam)
     extends Module {
   val config       = ballParam
   val InputNum     = config.lane
   val inputWidth   = config.inputWidth
-  val bankWidth    = memParam.bankWidth
-  val rob_id_width = log2Up(frontendParam.rob_entries)
+  val bankWidth    = link.bankWidth
+  val rob_id_width = link.robIdBits
 
   // Use this instance's configured bandwidth.
   val ballMapping = instance
@@ -49,41 +43,41 @@ class VecLoadUnit(
 
   @public
   val io = IO(new Bundle {
-    val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq(memParam)))
+    val bankReadReq  = Vec(inBW, Decoupled(new SramReadReq))
     val bankReadResp =
-      Vec(inBW, Flipped(Decoupled(new SramReadResp(memParam))))
-    val ctrl_ld_i    = Flipped(Decoupled(new ctrl_ld_req(frontendParam, memParam, ballParam)))
-    val ld_ex_o      = Decoupled(new ld_ex_req(frontendParam, ballParam))
-    val op1_bank_o   = Output(UInt(frontendParam.bank_id_len.W))
-    val op2_bank_o   = Output(UInt(frontendParam.bank_id_len.W))
+      Vec(inBW, Flipped(Decoupled(new SramReadResp(link.bankWidth))))
+    val ctrl_ld_i    = Flipped(Decoupled(new ctrl_ld_req(link, ballParam)))
+    val ld_ex_o      = Decoupled(new ld_ex_req(link, ballParam))
+    val op1_bank_o   = Output(UInt(link.bankIdBits.W))
+    val op2_bank_o   = Output(UInt(link.bankIdBits.W))
   })
 
-  val op1_bank            = RegInit(0.U(frontendParam.bank_id_len.W))
-  val op2_bank            = RegInit(0.U(frontendParam.bank_id_len.W))
-  val op1_addr            = RegInit(0.U(log2Up(memParam.bankEntries).W))
-  val op2_addr            = RegInit(0.U(log2Up(memParam.bankEntries).W))
-  val iter                = RegInit(0.U(frontendParam.iter_len.W))
-  val op1_iter_counter    = RegInit(0.U(frontendParam.iter_len.W))
-  val op2_iter_counter    = RegInit(0.U(frontendParam.iter_len.W))
+  val op1_bank            = RegInit(0.U(link.bankIdBits.W))
+  val op2_bank            = RegInit(0.U(link.bankIdBits.W))
+  val op1_addr            = RegInit(0.U(log2Up(link.bankEntries).W))
+  val op2_addr            = RegInit(0.U(log2Up(link.bankEntries).W))
+  val iter                = RegInit(0.U(link.iterBits.W))
+  val op1_iter_counter    = RegInit(0.U(link.iterBits.W))
+  val op2_iter_counter    = RegInit(0.U(link.iterBits.W))
   val idle :: busy :: Nil = Enum(2)
   val state               = RegInit(idle)
   val ld_ex_op1_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
   val ld_ex_op2_reg       = Reg(Vec(InputNum, UInt(inputWidth.W)))
-  val ld_ex_iter_reg      = RegInit(0.U(frontendParam.iter_len.W))
+  val ld_ex_iter_reg      = RegInit(0.U(link.iterBits.W))
   val wait1_reg           = RegInit(false.B)
   val wait2_reg           = RegInit(false.B)
   val wait1_cnt           = RegInit(0.U(7.W))
   val wait2_cnt           = RegInit(0.U(7.W))
 
   val bankRespQueue0 = Instantiate(new Queue(
-    new SramReadResp(memParam),
+    new SramReadResp(link.bankWidth),
     8,
     false,
     false
   ))
 
   val bankRespQueue1 = Instantiate(new Queue(
-    new SramReadResp(memParam),
+    new SramReadResp(link.bankWidth),
     8,
     false,
     false

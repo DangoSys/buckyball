@@ -1,0 +1,2 @@
+include = "../../../../../../arch/src/main/scala/thread/ant/configs/default.toml"
+codeBytes = 32768

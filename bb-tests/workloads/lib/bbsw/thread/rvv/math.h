@@ -1,4 +1,4 @@
-// RVV exp and sin for the GP domain's test kernels: vector adaptations of
+// RVV exp and sin for the GP domain's test operators: vector adaptations of
 // glibc 2.42 sysdeps/ieee754/flt-32/e_expf.c and s_sinf.c
 // (s_sincosf.h/sincosf_poly.h).
 // Copyright (C) 2017-2025 Free Software Foundation, Inc.

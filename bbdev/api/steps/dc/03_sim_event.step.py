@@ -1,3 +1,5 @@
+import asyncio
+import json
 from pathlib import Path
 from utils.path import design_output_root
 import os
@@ -18,6 +20,7 @@ from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path, workload_build_dir, workloads_output_root
 from utils.search_workload import search_workload
 from utils.stream_run import stream_run_logger_async
+from steps.uvm.scripts.ball import run_design
 from tapeout import get_tapeout_contract, resolve_power_window, write_run_env
 
 config = {
@@ -35,6 +38,59 @@ def _first(data: dict, *names: str):
         if value is not None and value != "":
             return value
     return None
+
+
+async def ball_activity(input_data: dict, ctx, origin_tid, contract) -> None:
+    """The switching activity of a Ball alone: the SAIF of its UVM test."""
+    try:
+        if contract.power_format != "saif":
+            raise ValueError(f"a Ball's activity is SAIF, not {contract.power_format}")
+        # The area run names the Ball's instance in the BallDomain netlist.
+        (own,) = json.loads(Path(input_data["report_path"]).read_text())["area"][
+            "balls"
+        ]
+        uvm = await asyncio.to_thread(
+            run_design,
+            get_buckyball_path(),
+            input_data["design"],
+            input_data["target"],
+            ctx,
+            True,
+        )
+    except Exception as error:
+        await check_result(
+            ctx,
+            1,
+            continue_run=False,
+            extra_fields={
+                "task": "sim",
+                "report_path": input_data["report_path"],
+                "error": str(error),
+            },
+            trace_id=origin_tid,
+        )
+        return
+    await check_result(
+        ctx,
+        0,
+        continue_run=True,
+        extra_fields={"task": "sim", "uvm": uvm},
+        trace_id=origin_tid,
+    )
+    await ctx.enqueue(
+        {
+            "topic": "pt.run",
+            "data": {
+                **input_data,
+                "activity": uvm["activity"],
+                "format": "saif",
+                "strip_path": contract.power_strip_path,
+                "instance": own["instance"],
+                "uvm": uvm,
+                "_trace_id": origin_tid,
+            },
+        }
+    )
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -68,6 +124,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             extra_fields={"task": "sim", "error": str(exc)},
             trace_id=origin_tid,
         )
+        return
+
+    if input_data["target"].startswith("ball/"):
+        await ball_activity(input_data, ctx, origin_tid, contract)
         return
 
     activity_format = str(_first(input_data, "format") or contract.power_format).lower()
@@ -257,7 +317,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     await check_result(
         ctx,
         result.returncode,
-        continue_run=False,
+        continue_run=True,
         extra_fields={
             "task": "sim",
             "design": contract.design,

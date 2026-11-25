@@ -8,6 +8,9 @@ package transpose_pkg;
   `include "seq/transpose_sequences.svh"
   `include "cov/transpose_cov.svh"
   `include "env/transpose_scoreboard.svh"
+  `include "env/transpose_cycles.svh"
   `include "env/transpose_env.svh"
   `include "tests/transpose_test.svh"
+  `include "tests/transpose_throughput_test.svh"
+  `include "tests/transpose_latency_test.svh"
 endpackage

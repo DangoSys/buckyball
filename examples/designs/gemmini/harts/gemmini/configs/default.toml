@@ -1,0 +1,38 @@
+include = "../../../../../prefab/harts/gemmini/configs/default.toml"
+implementation = "gemmini.toml"
+threads = []
+hartId = 0
+resetVector = 0x80000000
+mtimeAddress = 0x200bff8
+memory = "memory/hart.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "interconnect/hart.toml"
+service = false
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 48
+paddrBits = 44
+pgIdxBits = 12
+pgLevels = 4
+nPMPs = 8
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 16
+latency = 10
+bankEntries = 1024
+bankWidth = 128
+
+[compiler]
+name = "gemmini"
+component = "gemmini"
+
+[build]
+gemmini = "design"

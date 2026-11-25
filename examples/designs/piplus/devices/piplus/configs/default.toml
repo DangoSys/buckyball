@@ -1,0 +1,92 @@
+# The piplus device: one control hart, three dense harts (a camera each, then
+# the prefix on one of them) and one action hart. Classes and counts are this
+# list; each instance takes its hart and its coherence node IDs
+# (1..memory/home/hart.toml agents) here.
+ddr = "ddr.toml"
+bootrom = "default"
+clint = "clint.toml"
+plic = "plic.toml"
+scu = "default"
+trace = "default"
+
+# hart0: runtime, tokenization, Euler update and scheduling.
+[[harts]]
+include = "../../../harts/control/configs/default.toml"
+hartId = 0
+nodeId = 1
+
+[harts.memory.icache]
+include = "../../../harts/control/configs/memory/icache.toml"
+nodeId = 1
+
+[harts.memory.dcache.cache]
+include = "../../../harts/control/configs/memory/cache.toml"
+nodeId = 2
+
+# hart1..hart3: large-M dense matrix products (vision, prefix).
+[[harts]]
+include = "../../../harts/dense/configs/default.toml"
+hartId = 1
+nodeId = 2
+
+[harts.memory.icache]
+include = "../../../harts/dense/configs/memory/icache.toml"
+nodeId = 3
+
+[harts.memory.dcache.cache]
+include = "../../../harts/dense/configs/memory/cache.toml"
+nodeId = 4
+
+[[harts]]
+include = "../../../harts/dense/configs/default.toml"
+hartId = 2
+nodeId = 3
+
+[harts.memory.icache]
+include = "../../../harts/dense/configs/memory/icache.toml"
+nodeId = 5
+
+[harts.memory.dcache.cache]
+include = "../../../harts/dense/configs/memory/cache.toml"
+nodeId = 6
+
+[[harts]]
+include = "../../../harts/dense/configs/default.toml"
+hartId = 3
+nodeId = 4
+
+[harts.memory.icache]
+include = "../../../harts/dense/configs/memory/icache.toml"
+nodeId = 7
+
+[harts.memory.dcache.cache]
+include = "../../../harts/dense/configs/memory/cache.toml"
+nodeId = 8
+
+# hart4: the denoising steps of the action expert.
+[[harts]]
+include = "../../../harts/action/configs/default.toml"
+hartId = 4
+nodeId = 5
+
+[harts.memory.icache]
+include = "../../../harts/action/configs/memory/icache.toml"
+nodeId = 9
+
+[harts.memory.dcache.cache]
+include = "../../../harts/action/configs/memory/cache.toml"
+nodeId = 10
+
+# hart5: a second action hart, the denoising steps split over the two.
+[[harts]]
+include = "../../../harts/action/configs/default.toml"
+hartId = 5
+nodeId = 6
+
+[harts.memory.icache]
+include = "../../../harts/action/configs/memory/icache.toml"
+nodeId = 11
+
+[harts.memory.dcache.cache]
+include = "../../../harts/action/configs/memory/cache.toml"
+nodeId = 12

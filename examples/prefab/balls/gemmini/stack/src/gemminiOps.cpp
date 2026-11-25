@@ -8,7 +8,7 @@
 #include "gemminiOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::gemmini_ball;
@@ -64,11 +64,11 @@ LogicalResult MatmulI8TileOp::lowerToInstructions(OpBuilder &builder) {
         "matmul_i8_tile takes a shift exactly with read_destination");
   int64_t k = getK(), a = getA(), b = getB(), c = getC();
   int64_t shift = readDestination ? int64_t(*getShift()) : 0;
-  int64_t meshRows = buckyball_target::getBuckyballBallParam(
-      "GEMMINI_COMPUTE_PRELOADED", "meshRows");
-  int64_t meshColumns = buckyball_target::getBuckyballBallParam(
-      "GEMMINI_COMPUTE_PRELOADED", "meshColumns");
-  const auto &target = buckyball_target::getBuckyballTarget();
+  int64_t meshRows =
+      target::getBallParam("GEMMINI_COMPUTE_PRELOADED", "meshRows");
+  int64_t meshColumns =
+      target::getBallParam("GEMMINI_COMPUTE_PRELOADED", "meshColumns");
+  const auto &target = target::getTarget();
   if (target.bankWidthBits != 128 || meshRows != 16 || meshColumns != 16 ||
       target.bankDepth % 16 || target.bankDepth > 1024 || a == b || k <= 0 ||
       k % 16 || k > 64 * target.bankDepth || a == c || b == c)
@@ -83,9 +83,9 @@ LogicalResult MatmulI8TileOp::lowerToInstructions(OpBuilder &builder) {
     uint64_t word =
         field(accumulate, 4, 4) | field(step == steps - 1 ? shift : 0, 9, 40);
     if (word != config)
-      emitInstruction(
-          builder, loc, buckyball_target::getBuckyballFunct7("GEMMINI_CONFIG"),
-          constantI64(builder, loc, 0), constantI64(builder, loc, word));
+      emitInstruction(builder, loc, target::getFunct7("GEMMINI_CONFIG"),
+                      constantI64(builder, loc, 0),
+                      constantI64(builder, loc, word));
     config = word;
     // rs2: the subcommand in [3:0], the first and second source row bases in
     // [15:6] and [25:16], their groups in [41:36] and [47:42]; C is at row 0.
@@ -93,23 +93,20 @@ LogicalResult MatmulI8TileOp::lowerToInstructions(OpBuilder &builder) {
                      field(group, 36, 41) | field(group, 42, 47);
     if (accumulate) {
       emitInstruction(
-          builder, loc,
-          buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_ACCUMULATED"),
+          builder, loc, target::getFunct7("GEMMINI_COMPUTE_ACCUMULATED"),
           constantI64(builder, loc, bankFields({a, b}, c, true, 16)),
           constantI64(builder, loc, 3 | bases));
       continue;
     }
     // The output-stationary preload reads sixteen rows of B.
-    emitInstruction(builder, loc,
-                    buckyball_target::getBuckyballFunct7("GEMMINI_PRELOAD"),
+    emitInstruction(builder, loc, target::getFunct7("GEMMINI_PRELOAD"),
                     constantI64(builder, loc, bankFields({b}, c, false, 16)),
                     constantI64(builder, loc,
                                 1 | field(base, 6, 15) | field(group, 36, 41)));
-    emitInstruction(
-        builder, loc,
-        buckyball_target::getBuckyballFunct7("GEMMINI_COMPUTE_PRELOADED"),
-        constantI64(builder, loc, bankFields({a, b}, c, false, 16)),
-        constantI64(builder, loc, 2 | bases));
+    emitInstruction(builder, loc,
+                    target::getFunct7("GEMMINI_COMPUTE_PRELOADED"),
+                    constantI64(builder, loc, bankFields({a, b}, c, false, 16)),
+                    constantI64(builder, loc, 2 | bases));
   }
   return success();
 }

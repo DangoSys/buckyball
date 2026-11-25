@@ -4,7 +4,7 @@ config = {
     "name": "task-cancel-api",
     "description": "Cancel a queued or running bbdev task by trace_id",
     "flows": ["common"],
-    "triggers": [api("POST", "/task/{trace_id}/cancel")],
+    "triggers": [api("POST", "/task/:trace_id/cancel")],
     "enqueues": ["common.task.cancel"],
 }
 

@@ -56,6 +56,7 @@
               tools.espresso
               pkgs.zsh
               pkgs.gersemi
+              pkgs.bender
 
               pkgs.xorg-server
               pkgs.jdk8
@@ -143,6 +144,7 @@
               tools.opensta
               tools.lcov
               tools.verible
+              tools.gtkwave
 
               # RISC-V toolchain
               riscv.riscv-embedded-gcc
@@ -152,6 +154,7 @@
               python.python3Packages
               pkgs."pre-commit"
               pkgs.gersemi
+              pkgs.bender
               # clang-format for pre-commit (language: system)
               pkgs.clang-tools
               (pkgs.runCommand "clang-kernel" {} ''
@@ -223,6 +226,7 @@
           };
 
           # nix develop
+          devShells.magia = import ./scripts/nix/magia.nix { inherit pkgs; };
           devShells.default = defaultShell;
 
           # default + EDA tools / sky130

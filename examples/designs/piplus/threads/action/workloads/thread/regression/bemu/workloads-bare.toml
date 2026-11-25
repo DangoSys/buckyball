@@ -1,0 +1,12 @@
+# The tests of the action thread alone
+# (bbdev bebop-* --batch "--thread piplus/threads/action").
+[workloads]
+tests = [
+  "action-thread-dma_roundtrip-baremetal",
+  "action-thread-mxint8mm_small-baremetal",
+  "action-thread-mxint8mm_bias-baremetal",
+  "action-thread-mxint8quant_rows-baremetal",
+  "action-thread-mxint8quant_columns-baremetal",
+  "action-thread-softmax_exact-baremetal",
+  "action-thread-layernorm_exact-baremetal",
+]

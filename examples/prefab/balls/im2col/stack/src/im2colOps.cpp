@@ -8,7 +8,7 @@
 #include "im2colOps.h"
 
 #include "Conversion/Buckyball.h"
-#include "Target/BuckyballTargetRegistry.h"
+#include "Target/TargetRegistry.h"
 
 using namespace mlir;
 using namespace ::buddy::im2col_ball;
@@ -59,16 +59,15 @@ LogicalResult Im2colI8Op::lowerToInstructions(OpBuilder &builder) {
     return emitOpError("im2col_i8 requires distinct input and output banks");
   int64_t side = getInputSide(), kernel = getKernel(), stride = getStride(),
           padding = getPadding(), tileRows = getTileRows();
-  const auto &target = buckyball_target::getBuckyballTarget();
+  const auto &target = target::getTarget();
   int64_t span = side + 2 * padding - kernel;
   if (target.bankWidthBits != 128 || side <= 0 ||
-      side > buckyball_target::getBuckyballBallParam("IM2COL", "maxIter") ||
+      side > target::getBallParam("IM2COL", "maxIter") ||
       side * side > target.bankDepth || kernel <= 0 ||
-      kernel > buckyball_target::getBuckyballBallParam("IM2COL", "maxKSize") ||
-      stride <= 0 || stride > 15 || padding < 0 ||
-      padding >
-          buckyball_target::getBuckyballBallParam("IM2COL", "maxPadding") ||
-      span < 0 || span % stride || tileRows <= 0 || tileRows > 16 ||
+      kernel > target::getBallParam("IM2COL", "maxKSize") || stride <= 0 ||
+      stride > 15 || padding < 0 ||
+      padding > target::getBallParam("IM2COL", "maxPadding") || span < 0 ||
+      span % stride || tileRows <= 0 || tileRows > 16 ||
       (tileRows & (tileRows - 1)))
     return emitOpError("im2col_i8 geometry exceeds the ISA field ranges");
   int64_t windows = (span / stride + 1) * (span / stride + 1);
@@ -78,7 +77,7 @@ LogicalResult Im2colI8Op::lowerToInstructions(OpBuilder &builder) {
                  field(padding, 8, 11) | field(windows, 36, 45) |
                  field(tileRows, 46, 50);
   emitInstruction(
-      builder, loc, buckyball_target::getBuckyballFunct7("IM2COL"),
+      builder, loc, target::getFunct7("IM2COL"),
       constantI64(builder, loc, bankFields({input}, output, false, side)),
       constantI64(builder, loc, rs2));
   return success();

@@ -14,7 +14,7 @@ config = {
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
     try:
-        selection = require_target(body, ("device", "core"))
+        selection = require_target(body, ("device", "hart", "thread"))
     except ValueError as error:
         return ApiResponse(status=400, body={"error": str(error)})
     try:

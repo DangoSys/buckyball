@@ -1,0 +1,11 @@
+# FP64 intermediates preserve the reference expf used by the Goban RVV erf lowering.
+# Sixteen vector lanes share four bank-memory request channels.
+include = "design.toml"
+[[device.harts]]
+include = "hart.toml"
+threads = [
+  { include = "matmul.toml", id = 0, name = "matmul0", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "matmul.toml", id = 1, name = "matmul1", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "matmul.toml", id = 2, name = "matmul2", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+  { include = "matmul.toml", id = 3, name = "matmul3", memdomain = { bank = { entries = 1024 } }, gpdomain = { laneNumber = 16, eLen = 64, iBufWords = 4096 } },
+]

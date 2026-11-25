@@ -7,6 +7,9 @@ package matadd_pkg;
   `include "common/matadd_items.svh"
   `include "seq/matadd_sequences.svh"
   `include "env/matadd_scoreboard.svh"
+  `include "env/matadd_cycles.svh"
   `include "env/matadd_env.svh"
   `include "tests/matadd_test.svh"
+  `include "tests/matadd_throughput_test.svh"
+  `include "tests/matadd_latency_test.svh"
 endpackage

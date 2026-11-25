@@ -1,0 +1,4 @@
+# The workload whose gate-level activity measures the multi-rocket rocket
+# hart's power (bbdev dc --power --workload).
+[power]
+workload = "multi-rocket-hart0-ctest-cpu_arithmetic-baremetal"

@@ -1,0 +1,23 @@
+# Toy ACC memory domain for the interconnect area experiment: 64 banks, 13 request ports.
+# Private (per-thread) memory parameters. Shared memory lives in the hart TOML.
+
+addrLen = 39
+
+[bank]
+layoutEnable = true
+num = 64
+width = 128
+entries = 1024
+maskLen = 16
+requestPorts = 13
+
+[dma]
+busWidth = 128
+
+[mmio]
+# No Ball of the experiment has MMIO ports.
+enable = false
+bankNum = 16
+bankEntries = 64
+bankWidth = 8
+readWidth = 8

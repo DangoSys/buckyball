@@ -3,10 +3,10 @@
 
 #include "isa.h"
 
-// rs1: write bank in BANK2 and core height; [19:0] reserved.
+// rs1: write bank in BANK2 and hart height; [19:0] reserved.
 // rs2: [35:0] address / 8, [42:36] physical pixel bytes / 8,
 //      [52:43] source width, [58:53] destination row base,
-//      [61:59] core width - 1, [62] valid bytes (0 = 16, 1 = 8).
+//      [61:59] hart width - 1, [62] valid bytes (0 = 16, 1 = 8).
 #define bb_mvin_2d(mem_addr, bank_id, height, pixel_bytes, source_width,       \
                    dst_base, core_width, valid_bytes)                          \
   do {                                                                         \

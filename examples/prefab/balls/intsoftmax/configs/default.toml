@@ -1,0 +1,10 @@
+
+
+# The Ball's interface: what every host wires.
+[ball]
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [{ mnemonic = "INTSOFTMAX", funct7 = 68 }]
+
+# The BallDomain that holds this Ball alone (--ball intsoftmax).
+[host]
+include = "default"

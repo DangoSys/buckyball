@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "pebble-test-linux-ddr.hex",
+]

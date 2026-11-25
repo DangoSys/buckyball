@@ -13,6 +13,7 @@ class mxmm_ball_test extends uvm_test;
     super.build_phase(phase);
     if (!uvm_config_db#(vif_t)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "bb_blink_if not found")
+    bb_blink_cycles#(`BB_IN_BW, `BB_OUT_BW)::type_id::set_type_override(mxmm_cycles::get_type());
     env = mxmm_env::type_id::create("env", this);
   endfunction
 
@@ -26,7 +27,8 @@ class mxmm_ball_test extends uvm_test;
   task run_case(int unsigned index);
     int unsigned steps;
     apply_reset();
-    steps = mxmm_case_load(index);
+    // BankSet requires power-of-two depth; the width comes from design.pb.
+    steps = mxmm_case_load(index, 1 << `BB_BANK_ADDR_W);
     for (int unsigned step = 0; step < steps; step++) run_step(index, step);
   endtask
 

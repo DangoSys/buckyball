@@ -115,3 +115,9 @@ pub extern "C" fn dpi_ctrace(
         }
     });
 }
+
+/// The cycles BEMU models for a BDB_COUNTER instruction.
+#[no_mangle]
+pub extern "C" fn trace_bemu_cycles() -> u64 {
+    crate::latency::cycles()
+}

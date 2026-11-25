@@ -1,0 +1,4 @@
+[workloads]
+tests = [
+  "toy-test-linux-ddr.hex",
+]

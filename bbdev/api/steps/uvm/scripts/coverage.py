@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 from pathlib import Path
@@ -49,9 +50,24 @@ def collect(repo, test, database, output, ctx, exclusions):
         "".join(f"+tree {test['top']}.{scope}\n" for scope in test["rtl_scopes"])
     )
     scope = ["-hier", hierarchy, "-metric", "+".join(test["metrics"])]
-    report = ["urg", "-dir", database, "-format", "text"]
+    # urg1 races its two threads and crashes at random while writing the
+    # toggle report; on one CPU the threads never run at once.
+    cpu = str(min(os.sched_getaffinity(0)))
+    report = [
+        "taskset",
+        "-c",
+        cpu,
+        "urg",
+        "-full64",
+        "-dir",
+        database,
+        "-format",
+        "text",
+    ]
+    # Only waiver validation consumes the full exclusion database.
+    dump = ["-dump", "full_exclusions"] if exclusions.is_file() else []
     commands = [
-        ([*report, "-dump", "full_exclusions", "-report", output / "all"], "all"),
+        ([*report, *dump, "-report", output / "all"], "all"),
         ([*report, *scope, "-report", output / "dut_raw"], "dut_raw"),
     ]
     if exclusions.is_file():

@@ -1,21 +1,21 @@
 use super::decode::{pbank_group, rs1_b0, rs1_b1, rs1_b2, rs1_iter, rs1_read_old};
 use super::instruction::ExecContext;
-use bebop_bemu::thread::banks::{bank_lines, bank_row_bytes};
+use bebop_bemu::ball::blink::{bank_lines, bank_row_bytes};
 
 fn max_iter(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+    bebop_bemu::ball::blink::parameters::<super::params::Params>("im2col", instance)
         .max_iter
         .expect("maxIter") as usize
 }
 
 fn max_kernel(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+    bebop_bemu::ball::blink::parameters::<super::params::Params>("im2col", instance)
         .max_k_size
         .expect("maxKSize") as usize
 }
 
 fn max_padding(instance: u32) -> usize {
-    bebop_bemu::configs::ball_domain::parameters::<super::params::Params>("im2col", instance)
+    bebop_bemu::ball::blink::parameters::<super::params::Params>("im2col", instance)
         .max_padding
         .expect("maxPadding") as usize
 }
@@ -90,7 +90,10 @@ fn output_cols(shape: Shape, instance: u32) -> usize {
 }
 
 pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
-    assert!(!rs1_read_old(xs1), "im2col: reads no old destination; rs1[29] must be clear");
+    assert!(
+        !rs1_read_old(xs1),
+        "im2col: reads no old destination; rs1[29] must be clear"
+    );
     let input_bank = rs1_b0(xs1);
     let output_bank = rs1_b2(xs1);
     if input_bank == output_bank {
@@ -127,8 +130,7 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         let po = pbank_group(ctx, output_bank, (tile / group_tiles) as u64);
         let (input, output) = ctx.banks.read_write(pi, po);
         for window in 0..padded_windows {
-            let line = ((window / shape.tile_rows) * group_tiles + tile % group_tiles)
-                * shape.tile_rows
+            let line = ((window / shape.tile_rows) * group_tiles + tile % group_tiles) * shape.tile_rows
                 + window % shape.tile_rows;
             let target = &mut output[line * row_bytes..(line + 1) * row_bytes];
             target.fill(0);
@@ -136,12 +138,10 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
                 continue;
             }
             let global = shape.window_start + window;
-            let source_row = (shape.start_row + global / output_cols * shape.stride + kernel_row)
-                as isize
-                - shape.padding as isize;
-            let source_col = (shape.start_col + global % output_cols * shape.stride + kernel_col)
-                as isize
-                - shape.padding as isize;
+            let source_row =
+                (shape.start_row + global / output_cols * shape.stride + kernel_row) as isize - shape.padding as isize;
+            let source_col =
+                (shape.start_col + global % output_cols * shape.stride + kernel_col) as isize - shape.padding as isize;
             if source_row < 0
                 || source_col < 0
                 || source_row >= shape.input_size as isize
@@ -149,20 +149,14 @@ pub(crate) fn exec_im2col(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             {
                 continue;
             }
-            let source =
-                shape.input_base + source_row as usize * shape.input_size + source_col as usize;
+            let source = shape.input_base + source_row as usize * shape.input_size + source_col as usize;
             target.copy_from_slice(&input[source * row_bytes..(source + 1) * row_bytes]);
         }
     }
     0
 }
 
-pub(crate) fn latency(xs1: u64, xs2: u64, instance: u32) -> u64 {
-    let shape = decode_shape(xs1, xs2);
-    output_cols(shape, instance);
-    (shape.window_count.div_ceil(shape.tile_rows)
-        * shape.tile_rows
-        * shape.kernel
-        * shape.kernel
-        * 2) as u64
+pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
+    output_cols(decode_shape(xs1, xs2), ctx.ball_id.expect("Ball instance"));
+    super::latency::cycles(rs1_iter(xs1), xs2, ctx.config(rs1_b0(xs1)).cols)
 }

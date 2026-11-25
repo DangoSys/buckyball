@@ -8,6 +8,9 @@ package trace_pkg;
   `include "seq/trace_sequences.svh"
   `include "cov/trace_cov.svh"
   `include "env/trace_scoreboard.svh"
+  `include "env/trace_cycles.svh"
   `include "env/trace_env.svh"
   `include "tests/trace_test.svh"
+  `include "tests/trace_throughput_test.svh"
+  `include "tests/trace_latency_test.svh"
 endpackage

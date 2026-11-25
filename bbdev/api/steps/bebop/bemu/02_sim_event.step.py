@@ -28,7 +28,7 @@ from utils.path import (
 )
 from utils.stream_run import stream_run_logger_async
 from utils.search_workload import search_workload
-from utils.event_common import check_result, get_origin_trace_id
+from utils.event_common import check_result, get_origin_trace_id, require_product
 from utils.process_registry import cancellation_requested
 from bemu_common import bemu_binary, bemu_manifest
 from steps.bebop.performance_report import performance_report
@@ -57,7 +57,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     bbdir = get_buckyball_path()
     design = input_data["design"]
     bemu_cargo_manifest = bemu_manifest(design, bbdir, selection=input_data["target"])
-    binary_name = input_data["binary"]
+    binary_name = require_product(input_data)
     binary_path = resolve_bemu_binary(bbdir, design, binary_name, input_data["target"])
     if binary_path is None:
         ctx.logger.error(f"binary not found: {binary_name}")
@@ -133,7 +133,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         shutil.copy2(target / "release/bebop-bemu", executable)
         os.replace(executable, installed)
     run_args = [str(installed), "--elf", binary_path, "--log-dir", run_log]
-    # `bbdev kernel --build` lays the kernel and the model into <name>-ddr.bin
+    # `bbdev image --build` lays the kernel and the model into <name>-ddr.bin
     # next to the firmware ELF.
     ddr_image = Path(binary_path).with_suffix("").as_posix() + "-ddr.bin"
     if os.path.isfile(ddr_image):
@@ -147,7 +147,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         run_args.append("--disasm")
     if input_data.get("tool-profile"):
         run_args.append("--tool-profile")
-    for trace_name in ("itrace", "mtrace", "ctrace"):
+    for trace_name in ("itrace", "mtrace", "ctrace", "banktrace"):
         if input_data.get(trace_name, False):
             run_args.append(f"--{trace_name}")
     inner_cmd = f"cd {shlex.quote(binary_dir)} && {shlex.join(run_args)}"

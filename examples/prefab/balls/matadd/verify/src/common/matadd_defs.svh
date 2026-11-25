@@ -1,3 +1,6 @@
+import "DPI-C" function longint unsigned matadd_bemu_cycles(input longint unsigned iter,
+                                                           input longint unsigned groups);
+
 `ifndef MATADD_FUNCT7
 `error "MATADD_FUNCT7 must be provided by the selected Thread ballISA"
 `endif

@@ -9,7 +9,7 @@ cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH LIB)
 add_compile_options(-O2 -g -march=rv64gc)
 
 # ===----------------------------------------------------------------------===
-# Thread: the instructions of each profile and the bank bookkeeping of its DMA.
+# Thread: the instructions of each profile.
 # ===----------------------------------------------------------------------===
 set(THREAD_LIBRARIES)
 foreach(PROFILE IN LISTS DESIGN_PROFILES)
@@ -20,12 +20,10 @@ foreach(PROFILE IN LISTS DESIGN_PROFILES)
       "${DESIGN_REPO}/${DESIGN_PROFILES_${PROFILE}_THREAD_BALLDOMAIN_BALLS_${BALL}_SOURCE_PATH}/workloads")
   endforeach()
   add_library(bbsw-thread-${PROFILE}-linux STATIC
-    "${LIB}/buckyball.c"
-    "${LIB}/bbhw/dma/dma.c")
+    "${LIB}/buckyball.c")
   target_include_directories(bbsw-thread-${PROFILE}-linux
     PUBLIC "${LIB}"
            "${LIB}/bbhw/isa"
-           "${LIB}/bbhw/dma"
            "${LIB}/bbsw/thread"
            ${BALL_WORKLOADS})
   target_compile_definitions(bbsw-thread-${PROFILE}-linux
@@ -34,14 +32,14 @@ foreach(PROFILE IN LISTS DESIGN_PROFILES)
 endforeach()
 
 # ===----------------------------------------------------------------------===
-# Core: CoreLink between cores.
+# Hart: HartLink between harts.
 # ===----------------------------------------------------------------------===
-add_library(bbsw-core-linux STATIC "${LIB}/bbsw/core/corelink.c")
-target_include_directories(bbsw-core-linux
-  PUBLIC "${LIB}/bbsw/core")
+add_library(bbsw-hart-linux STATIC "${LIB}/bbsw/hart/hartlink.c")
+target_include_directories(bbsw-hart-linux
+  PUBLIC "${LIB}/bbsw/hart")
 
 # ===----------------------------------------------------------------------===
-# Device: its cores and the workspace heap.
+# Device: its harts and the workspace heap.
 # ===----------------------------------------------------------------------===
 add_library(bbsw-device-linux STATIC "${LIB}/bbsw/device/workspace.c")
 target_include_directories(bbsw-device-linux
@@ -51,6 +49,6 @@ target_compile_definitions(bbsw-device-linux
 
 export(TARGETS
     ${THREAD_LIBRARIES}
-    bbsw-core-linux
+    bbsw-hart-linux
     bbsw-device-linux
   FILE "${CMAKE_BINARY_DIR}/bbsw-linux.cmake")

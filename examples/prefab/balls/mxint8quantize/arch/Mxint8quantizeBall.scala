@@ -1,11 +1,12 @@
 package examples.balls.mxint8quantize
 
-import framework.acc.balldomain.bbus.{BallFactory, BallPorts}
+import framework.generic.contract.blink.BlinkParam
+import framework.generic.contract.configs.BallRouteParam
+import framework.ball.sub_rob.ExpansionParam
+
+import framework.ball.bbus.{BallFactory, BallPorts}
 import buckyball.balls.mxint8quantize.{Params => ParametersProto}
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
-import framework.acc.balldomain.ball.blink.{BlinkIO, HasBlink}
+import framework.ball.blink.{BlinkIO, HasBlink}
 
 import chisel3._
 import chisel3.util._
@@ -17,37 +18,38 @@ import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
  */
 @instantiable
 class Mxint8quantizeBall(
-  fp: FrontendParam,
-  mp: MemDomainParam,
-  bp: BallDomainParam,
-  id: Int)
+  link:  BlinkParam,
+  route: BallRouteParam)
     extends Module
     with HasBlink {
-  val ball = bp.balls.find(_.id == id).get
+  val ball = route
 
   ball.parameters.unpack(classOf[ParametersProto])
 
-  require(mp.bankWidth == 128 && mp.bankMaskLen == 16, "Mxint8quantizeBall requires 128-bit bank rows and byte masks")
+  require(
+    link.bankWidth == 128 && link.bankMaskLen == 16,
+    "Mxint8quantizeBall requires 128-bit bank rows and byte masks"
+  )
   require(ball.inBW == 1 && ball.outBW == 1, "Mxint8quantizeBall requires one read and one write")
-  require(fp.commandDataBits == 64, "Mxint8quantizeBall decodes a 64-bit rs2")
+  require(link.dataBits == 64, "Mxint8quantizeBall decodes a 64-bit rs2")
 
   @public
-  val blink = IO(new BlinkIO(fp, mp, bp, id))
+  val blink = IO(new BlinkIO(link, route))
 
   val idle :: reading :: exponent :: writing :: complete :: Nil = Enum(5)
   val state                                                     = RegInit(idle)
 
-  val robId       = Reg(UInt(log2Up(fp.rob_entries).W))
-  val source      = Reg(UInt(fp.bank_id_len.W))
-  val destination = Reg(UInt(fp.bank_id_len.W))
-  val sourceGroup = Reg(UInt(mp.groupIdWidth.W))
-  val targetGroup = Reg(UInt(mp.groupIdWidth.W))
-  val rows        = Reg(UInt(fp.iter_len.W))
+  val robId       = Reg(UInt(link.robIdBits.W))
+  val source      = Reg(UInt(link.bankIdBits.W))
+  val destination = Reg(UInt(link.bankIdBits.W))
+  val sourceGroup = Reg(UInt(link.groupIdBits.W))
+  val targetGroup = Reg(UInt(link.groupIdBits.W))
+  val rows        = Reg(UInt(link.iterBits.W))
   val k           = Reg(UInt(16.W))
   val stride      = Reg(UInt(16.W))
   val inAddress   = Reg(UInt(32.W))
   val rowBase     = Reg(UInt(32.W))
-  val row         = Reg(UInt(fp.iter_len.W))
+  val row         = Reg(UInt(link.iterBits.W))
   val block       = Reg(UInt(16.W))
   val readIssued  = Reg(UInt(4.W))
   val readDone    = Reg(UInt(4.W))
@@ -122,8 +124,8 @@ class Mxint8quantizeBall(
         assert(count =/= 0.U && count(4, 0) === 0.U, "MXINT8QUANT K must be a positive multiple of 32")
         assert(cmd.op1_bank =/= cmd.wr_bank, "MXINT8QUANT input and output banks must differ")
         assert(cmd.op1_col === 1.U && cmd.wr_col === 1.U, "MXINT8QUANT banks must have one group")
-        assert(inBase +& cmd.iter * (count >> 2) <= mp.bankEntries.U, "MXINT8QUANT input exceeds capacity")
-        assert(outBase +& cmd.iter * packed <= mp.bankEntries.U, "MXINT8QUANT output exceeds capacity")
+        assert(inBase +& cmd.iter * (count >> 2) <= link.bankEntries.U, "MXINT8QUANT input exceeds capacity")
+        assert(outBase +& cmd.iter * packed <= link.bankEntries.U, "MXINT8QUANT output exceeds capacity")
         robId       := cmd.rob_id
         source      := cmd.op1_bank
         destination := cmd.wr_bank
@@ -187,11 +189,10 @@ class Mxint8quantizeBall(
 object Mxint8quantizeBall extends BallFactory {
 
   def instantiate(
-    fp: FrontendParam,
-    mp: MemDomainParam,
-    bp: BallDomainParam,
-    id: Int
+    link:      BlinkParam,
+    route:     BallRouteParam,
+    expansion: Option[ExpansionParam]
   ): BallPorts =
-    BallPorts(Instantiate(new Mxint8quantizeBall(fp, mp, bp, id)).blink, None)
+    BallPorts(Instantiate(new Mxint8quantizeBall(link, route)).blink, None)
 
 }

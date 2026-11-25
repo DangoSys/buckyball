@@ -11,6 +11,7 @@ import os
 import shlex
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from motia import FlowContext, queue
 
@@ -90,7 +91,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     )
     if build_result.returncode == 0:
         Path(bebop_bin).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(Path(target_dir) / "release/bebop-verilator", bebop_bin)
+        with tempfile.NamedTemporaryFile(
+            dir=Path(bebop_bin).parent, prefix=".bebop-verilator-", delete=False
+        ) as staged:
+            shutil.copy2(Path(target_dir) / "release/bebop-verilator", staged.name)
+        os.replace(staged.name, bebop_bin)
         write_build_marker(target_dir, design, vsrc_dir, bebop_bin, diff=diff)
     await check_result(
         ctx,

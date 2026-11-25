@@ -36,8 +36,8 @@ Each case: reset, preload A/B into mem model, drive one command, wait for
 
 | Config | Plusarg |
 |--------|---------|
-| `sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=1` |
-| `sims.verilator.BuckyballToyVerilatorConfig` | `+BID=4` |
+| `framework.device.sims.verilator.BuckyballPebbleVerilatorConfig` | `+BID=1` |
+| `framework.device.sims.verilator.BuckyballToyVerilatorConfig` | `+BID=4` |
 
 ```console
 ./simv +UVM_TESTNAME=smatmul_ball_test +BID=4
@@ -68,8 +68,8 @@ Run:
 Or via bbdev:
 
 ```console
-bbdev uvm --build '--ball=matrix'
-bbdev uvm --run '--ball=matrix' -- '+BID=4'
+bbdev uvm --build '--ball smatmul'
+bbdev uvm --run '--ball smatmul'
 ```
 
 ## Acceptance

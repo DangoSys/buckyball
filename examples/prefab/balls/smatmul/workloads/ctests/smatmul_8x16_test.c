@@ -1,6 +1,5 @@
 #include "buckyball.h"
 #include <bbhw/isa/isa.h>
-#include <dma.h>
 #include <isa/smatmul.h>
 #include <stdint.h>
 #include <stdio.h>

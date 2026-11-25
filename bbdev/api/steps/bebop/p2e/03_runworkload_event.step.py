@@ -2,7 +2,7 @@
 bebop p2e runworkload event handler
 
 Loads a kernel image into FPGA and runs the workload via bebop CLI:
-  1. Resolve image name to .hex file under the selected simulation's workloads
+  1. Resolve the workload (--model/--os or --test) to its .hex under the selected simulation's workloads
   2. Validate bitstream .bit file path
   3. Run bebop --image <image-path> --bitstream <bitstream> [--multi-fpga] [--wave] [--wave-start <cycle>]
 """
@@ -35,7 +35,7 @@ from utils.path import (
     log_dir,
 )
 from utils.stream_run import stream_run_logger_async
-from utils.event_common import check_result, get_origin_trace_id
+from utils.event_common import check_result, get_origin_trace_id, require_product
 from resolve_image import resolve_image
 from steps.bebop.p2e.scripts.runtime_case import trace_modes, validate_runtime_reuse
 from steps.bebop.performance_report import performance_report
@@ -81,14 +81,14 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     bbdir = get_buckyball_path()
     bebop_dir = f"{bbdir}/bebop"
-    image_name = input_data.get("image", "")
+    image_name = require_product(input_data)
     bitstream = input_data.get("bitstream", "")
     multi_fpga = bool(input_data.get("multi-fpga", False))
     fpga_location = (
         input_data.get("fpga-location") or input_data.get("fpga_location") or "0.A"
     )
     if not isinstance(fpga_location, str) or not re.fullmatch(
-        "[0-3]\\.[A-E]", fpga_location
+        "[0-9]+\\.[A-E]", fpga_location
     ):
         ctx.logger.error(f"invalid FPGA location: {fpga_location}")
         await check_result(
@@ -104,6 +104,19 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     wave = bool(input_data.get("wave", False))
     diff = bool(input_data.get("diff", False))
+    ddr_image = input_data.get("ddr-image")
+    if ddr_image is not None:
+        if not diff or not isinstance(ddr_image, str) or not os.path.isfile(ddr_image):
+            ctx.logger.error("ddr-image requires --diff and an existing DDR image file")
+            await check_result(
+                ctx,
+                1,
+                continue_run=False,
+                extra_fields={"error": "invalid_ddr_image"},
+                trace_id=origin_tid,
+            )
+            return
+        ddr_image = os.path.abspath(ddr_image)
     if "wave_start" in input_data:
         ctx.logger.error("invalid parameter: --wave_start (use --wave-start)")
         await check_result(
@@ -146,6 +159,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     try:
         image_path = resolve_image(bbdir, image_name, design, input_data["target"])
         image_base = os.path.splitext(image_path)[0]
+        if image_name + "-ddr.hex" == os.path.basename(image_path):
+            image_base = image_base.removesuffix("-ddr")
         elf_path = (
             f"{image_base}.elf" if os.path.isfile(f"{image_base}.elf") else image_base
         )
@@ -184,7 +199,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if not multi_fpga and case_uses_multi_fpga(build_dir):
         multi_fpga = True
         ctx.logger.info(f"Detected multi-FPGA P2E case: {build_dir}")
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
     run_log = log_dir(
         bbdir,
         design,
@@ -192,7 +207,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         timestamp,
         "p2e",
         image_name,
-        input_data.get("vsrc_dir"),
         selection=input_data["target"],
     )
     os.makedirs(run_log, exist_ok=True)
@@ -317,6 +331,16 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         fpga_location,
     ]
     run_args += ["--image", image_path]
+    if os.path.isfile(elf_path):
+        run_args += ["--image-elf", elf_path]
+    # A model image goes to its region of the DDR (bebop-p2e --model-image/--model-offset).
+    if "model-image" in input_data:
+        run_args += [
+            "--model-image",
+            os.path.abspath(input_data["model-image"]),
+            "--model-offset",
+            str(int(input_data["model-offset"], 0)),
+        ]
     run_cmd = f"cd {shlex.quote(bbdir)} && {shlex.join(run_args)}"
     report_context = source_context(bbdir, design, input_data["target"])
     with open(bitstream, "rb") as source:
@@ -335,7 +359,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if wave_start is not None:
         run_cmd += f' --wave-start="{wave_start}"'
     if diff:
-        run_cmd += f" --diff --image-elf={shlex.quote(elf_path)}"
+        run_cmd += " --diff"
+        if ddr_image is not None:
+            run_cmd += f" --ddr-image={shlex.quote(ddr_image)}"
     for trace_name in ("itrace", "mtrace", "pmctrace", "ctrace", "banktrace"):
         if input_data.get(trace_name, False):
             run_cmd += f" --{trace_name}"

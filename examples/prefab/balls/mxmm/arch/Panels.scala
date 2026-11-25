@@ -22,16 +22,14 @@ class Panels(val bankEntries: Int, val ballParam: MxmmBallParam) extends Module 
     val columnGroup = Input(UInt(12.W))
     val k           = Input(UInt(34.W))
     val reduction   = Input(UInt(34.W))
-    val mxfp8       = Input(Bool())
     val vector      = Input(Bool())
-    val a           = Output(Vec(16, UInt(32.W)))
-    val b           = Output(Vec(16, UInt(32.W)))
+    val a           = Output(Vec(16, new Mxfp8Value))
+    val b           = Output(Vec(16, new Mxfp8Value))
     val valid       = Output(Bool())
   })
 
-  val mxfp8  = RegNext(io.mxfp8)
   val vector = RegNext(io.vector)
-  val offset = RegNext(Mux(io.mxfp8, io.k(3, 0) << 3, io.k(1, 0) << 5))
+  val offset = RegNext(io.k(3, 0) << 3)
   io.valid := RegNext(io.read, false.B)
   for {
     operand <- 0 until 2
@@ -45,12 +43,12 @@ class Panels(val bankEntries: Int, val ballParam: MxmmBallParam) extends Module 
     when(codeWrite)(assert(io.address(operand) < depth.U))
     when(scaleWrite)(assert(io.address(operand) < (depth / 2).U))
     val group        = if (operand == 0) io.rowGroup else io.columnGroup
-    val rowWords     = Mux(io.mxfp8, io.reduction >> 4, io.reduction >> 2)
-    val codeAddress  = group * rowWords + Mux(io.mxfp8, io.k >> 4, io.k >> 2)
+    val rowWords     = io.reduction >> 4
+    val codeAddress  = group * rowWords + (io.k >> 4)
     val scaleAddress = group * (io.reduction >> 5) + (io.k >> 5)
     val active       = if (operand == 0 && lane > 0) !io.vector else true.B
     val codeRead     = io.read && active
-    val scaleRead    = codeRead && io.mxfp8
+    val scaleRead    = codeRead
     assert(!(codeRead && codeWrite))
     assert(!(scaleRead && scaleWrite))
     val word         = codes.readWrite(
@@ -68,12 +66,12 @@ class Panels(val bankEntries: Int, val ballParam: MxmmBallParam) extends Module 
     val decode       = Instantiate(new Mxfp8Decode)
     decode.io.code  := (word >> offset)(7, 0)
     decode.io.scale := scale
-    val value   = Mux(mxfp8, decode.io.out, (word >> offset)(31, 0))
+    val value   = decode.io.out
     val enabled = if (operand == 0 && lane > 0) !vector else true.B
     when(io.valid && enabled) {
-      assert(Mux(mxfp8, !decode.io.invalid, value(30, 23) =/= 255.U), "MATMUL operands must decode to finite FP32")
+      assert(!decode.io.invalid, "MATMUL operands must decode to finite FP32")
     }
-    if (operand == 0) io.a(lane) := Mux(enabled, value, 0.U)
+    if (operand == 0) io.a(lane) := Mux(enabled, value, 0.U.asTypeOf(new Mxfp8Value))
     else io.b(lane)              := value
   }
 }

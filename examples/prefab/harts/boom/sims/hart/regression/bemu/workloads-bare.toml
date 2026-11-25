@@ -1,0 +1,17 @@
+# The bare-metal regression of the boom hart alone: its self-checking programs
+# (exit code 0 = pass) and the SoC tests of the single-hart system.
+[workloads]
+tests = [
+  "boom-hart0-ctest-atomics-baremetal",
+  "boom-hart0-ctest-cpu_arithmetic-baremetal",
+  "boom-hart0-ctest-fpu-baremetal",
+  "boom-hart0-ctest-memory-baremetal",
+  "boom-hart0-soctest-clint_software_interrupt-baremetal",
+  "boom-hart0-soctest-clint_timer_interrupt-baremetal",
+  "boom-hart0-soctest-lrsc_word-baremetal",
+  "boom-hart0-soctest-plic_register_access-baremetal",
+  "boom-hart0-soctest-trace_events-baremetal",
+  "boom-hart0-soctest-time_csr_clock-baremetal",
+  "boom-hart0-soctest-time_csr_permissions-baremetal",
+  "boom-hart0-soctest-clint_supervisor_timer-baremetal",
+]

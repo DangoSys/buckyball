@@ -1,23 +1,18 @@
 package examples.balls.gemmini
 
-import framework.acc.balldomain.configs.BallRouteParam
-
-import framework.acc.balldomain.configs.BallDomainParam
-import framework.acc.frontend.configs.FrontendParam
-import framework.acc.memdomain.configs.MemDomainParam
+import framework.generic.contract.blink.BlinkParam
 
 import examples.balls.gemmini.configs.GemminiBallParam
 
 import chisel3._
 import chisel3.experimental.hierarchy.{instantiable, public}
+import framework.generic.contract.configs.BallRouteParam
 
 @instantiable
 class GemminiExCtrl(
-  val frontendParam: FrontendParam,
-  val memParam:      MemDomainParam,
-  val routingParam:  BallDomainParam,
-  val instance:      BallRouteParam,
-  val ballParam:     GemminiBallParam)
+  val link:      BlinkParam,
+  val instance:  BallRouteParam,
+  val ballParam: GemminiBallParam)
     extends Module
     with GemminiExCtrlDefs
     with GemminiExCtrlDefaults
@@ -28,7 +23,7 @@ class GemminiExCtrl(
     with GemminiExCtrlStoreOps
     with GemminiExCtrlAccumulateState
     with GemminiExCtrlFsm {
-  def commandDataBits: Int = frontendParam.commandDataBits
+  def commandDataBits: Int = link.dataBits
   @public
   val exio = io
 

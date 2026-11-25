@@ -1,0 +1,165 @@
+# Sixteen Balls for the bank-count interconnect area experiment (ToyBank*Config).
+# Ports and instruction classes as in the designs that use each Ball.
+
+[[balls]]
+id = 0
+name = "TransposeBall"
+component = "transpose"
+param = "../../../../../../../prefab/balls/transpose/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "TRANSPOSE", funct7 = 49 },
+]
+
+[[balls]]
+id = 1
+name = "ToInt8Ball"
+component = "toint8"
+param = "../../../../../../../prefab/balls/toint8/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "QUANT_F32_TO_I8", funct7 = 74 },
+  { mnemonic = "QUANT_I32_TO_I8", funct7 = 67 },
+]
+
+[[balls]]
+id = 2
+name = "Int2FpBall"
+component = "int2fp"
+param = "../../../../../../../prefab/balls/int2fp/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT32_TO_FP32", funct7 = 68 },
+]
+
+[[balls]]
+id = 3
+name = "LutBall"
+component = "lut"
+param = "../../../../../../../prefab/balls/lut/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "LUT", funct7 = 66 },
+]
+
+[[balls]]
+id = 4
+name = "MaxPoolBall"
+component = "maxpool"
+param = "../../../../../../../prefab/balls/maxpool/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MAXPOOL", funct7 = 50 },
+  { mnemonic = "TOPK_U32", funct7 = 51 },
+]
+
+[[balls]]
+id = 5
+name = "Int8AddBall"
+component = "int8add"
+param = "../../../../../../../prefab/balls/int8add/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT8ADD", funct7 = 69 },
+  { mnemonic = "INT8ADD_RELU", funct7 = 70 },
+]
+
+[[balls]]
+id = 6
+name = "Int8MulBall"
+component = "int8mul"
+param = "../../../../../../../prefab/balls/int8mul/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INT8MUL", funct7 = 71 },
+]
+
+[[balls]]
+id = 7
+name = "MatAddBall"
+component = "matadd"
+param = "../../../../../../../prefab/balls/matadd/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MATADD", funct7 = 72 },
+]
+
+[[balls]]
+id = 8
+name = "FixedBall"
+component = "fixed"
+param = "../../../../../../../prefab/balls/fixed/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "FIXED", funct7 = 75 },
+]
+
+[[balls]]
+id = 9
+name = "ReluBall"
+component = "relu"
+param = "../../../../../../../prefab/balls/relu/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "RELU", funct7 = 52 },
+]
+
+[[balls]]
+id = 10
+name = "TraceBall"
+component = "trace"
+param = "../../../../../../../prefab/balls/trace/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "BDB_COUNTER", funct7 = 4 },
+]
+
+[[balls]]
+id = 11
+name = "F32AddBall"
+component = "f32add"
+param = "../../../../../../../prefab/balls/f32add/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "F32ADD", funct7 = 76 },
+]
+
+[[balls]]
+id = 12
+name = "IntnormBall"
+component = "intnorm"
+param = "../../../../../../../prefab/balls/intnorm/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INTNORM", funct7 = 77 },
+]
+
+[[balls]]
+id = 13
+name = "Mxint8quantizeBall"
+component = "mxint8quantize"
+param = "../../../../../../../prefab/balls/mxint8quantize/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8QUANT", funct7 = 48 },
+]
+
+[[balls]]
+id = 14
+name = "Mxint8matmulBall"
+component = "mxint8matmul"
+param = "../../../../../../../prefab/balls/mxint8matmul/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "MXINT8MM", funct7 = 64 },
+]
+
+[[balls]]
+id = 15
+name = "IntSoftmaxBall"
+component = "intsoftmax"
+param = "../../../../../../../prefab/balls/intsoftmax/configs/default.toml"
+port = { inBW = 2, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "INTSOFTMAX", funct7 = 73 },
+]

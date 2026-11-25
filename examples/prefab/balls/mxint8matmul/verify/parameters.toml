@@ -1,0 +1,4 @@
+[defines]
+MXINT8MATMUL_ROWS = "rows"
+MXINT8MATMUL_COLS = "cols"
+MXINT8MATMUL_LANES = "lanes"

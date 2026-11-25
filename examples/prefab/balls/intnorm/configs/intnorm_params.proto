@@ -1,0 +1,6 @@
+syntax = "proto3";
+package buckyball.balls.intnorm;
+option java_package = "buckyball.balls.intnorm";
+option java_multiple_files = true;
+
+message Params {}

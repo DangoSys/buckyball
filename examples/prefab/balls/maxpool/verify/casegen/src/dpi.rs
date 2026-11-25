@@ -125,3 +125,15 @@ pub extern "C" fn maxpool_case_dst_group(word_index: u32) -> u32 {
         case.dst_group[i]
     })
 }
+
+/// The cycles BEMU models for a MAXPOOL (rs2, op1_col).
+#[no_mangle]
+pub extern "C" fn maxpool_bemu_cycles(rs2: u64, groups: u64) -> u64 {
+    crate::latency::maxpool_cycles(rs2, groups)
+}
+
+/// The cycles BEMU models for a TOPK_U32 (iter, op1_col, rs2).
+#[no_mangle]
+pub extern "C" fn topk_bemu_cycles(iter: u64, groups: u64, rs2: u64) -> u64 {
+    crate::latency::topk_cycles(iter, groups, (rs2 >> 32) & 0xffff)
+}
