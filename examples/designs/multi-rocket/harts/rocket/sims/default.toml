@@ -1,0 +1,13 @@
+# The multi-rocket rocket hart alone: the one instance of the single-hart
+# system of this entry, hart 0 with its coherence node IDs, as the device
+# places hart0.
+include = "../configs/default.toml"
+hartId = 0
+
+[memory.icache]
+include = "../configs/memory/icache/shared.toml"
+nodeId = 1
+
+[memory.dcache.cache]
+include = "../configs/memory/dcache/shared.toml"
+nodeId = 2

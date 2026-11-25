@@ -1,0 +1,37 @@
+# The xiangshan hart alone: the one instance of the single-hart system of this
+# entry, hart 0 as requester node 1 of the Home of the system, on 48-bit
+# physical addresses (its DDR line and AXI too).
+include = "../configs/default.toml"
+implementation = "../../configs/xiangshan.toml"
+threads = []
+hartId = 0
+resetVector = 0x80000000
+mtimeAddress = 0x200bff8
+memory = "../../configs/memory/hart.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "../../configs/interconnect/hart.toml"
+service = false
+controller = "default"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 48
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 64
+
+[sharedMem]
+enable = false
+entries = 16384
+inputChannels = 1
+defaultGroupCount = 1
+virtualBankCount = 16
+latency = 10
+bankEntries = 1024
+bankWidth = 128
+
+[host.device.ddr.line]
+addressBits = 48

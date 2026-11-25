@@ -23,7 +23,9 @@ static uint32_t scaled(int32_t value, int shift) {
     return 0;
   uint32_t sign = value < 0 ? 0x80000000u : 0;
   uint32_t magnitude = value < 0 ? -value : value;
-  int top = 31 - __builtin_clz(magnitude);
+  int top = 31;
+  while (!(magnitude >> top))
+    --top;
   return sign | (uint32_t)(127 + top + shift) << 23 |
          ((magnitude << (23 - top)) & 0x7fffff);
 }
@@ -48,7 +50,9 @@ static int32_t q8(uint32_t bits) {
 static uint32_t f32_q15(uint32_t value) {
   if (!value)
     return 0;
-  int highest = 31 - __builtin_clz(value);
+  int highest = 31;
+  while (!(value >> highest))
+    --highest;
   return (uint32_t)(highest + 112) << 23 |
          ((value << (23 - highest)) & 0x7fffff);
 }

@@ -303,17 +303,11 @@ def fill_design(
     target = b.simulation
     target.selection = config["sims"]["selection"]
     target.output = str(owner / "output/sims" / target.selection)
-    # A hart entry is under its hart class: harts/<class>/sims/hart.
+    # A hart entry is under its hart class: harts/<class>/sims.
     if name == "device":
         entry = root / "sims" / name
     elif name == "hart":
-        entry = (
-            root.parent.parent
-            / "harts"
-            / target.selection.split("/")[1]
-            / "sims"
-            / name
-        )
+        entry = root.parent.parent / "harts" / target.selection.split("/")[1] / "sims"
     else:
         raise ValueError(f"invalid simulation target: {name}")
     target.directory = str(entry)
@@ -603,19 +597,10 @@ def fill_ball_design(config: dict[str, Any], bbdir: Path) -> pb.Design:
     h.pmp_entries = host["pmp"]["entries"]
     _fill_ball(b.ball.balldomain, config["ball"]["balldomain"], bbdir)
 
-    # The entry of a Ball alone, whose classpath holds the Ball: the prefab
-    # one for a prefab Ball, its design's device's for a design's Ball,
-    # examples/designs/<design>/balls/<ball>. Its output is under the Ball's
-    # own directory.
+    # The entry of a Ball alone, <ball>/sims, whose classpath holds the
+    # Ball. Its output is under the Ball's own directory.
     root = _derive.ball_root(ball)
-    if root.is_relative_to(bbdir / "examples/prefab/balls"):
-        entry = Path("examples/prefab/sims/ball")
-    else:
-        design = root.relative_to(bbdir / "examples/designs").parts[0]
-        (device,) = (bbdir / "examples/designs" / design / "devices").iterdir()
-        entry = (
-            Path("examples/designs") / design / "devices" / device.name / "sims/ball"
-        )
+    entry = Path(_rel(bbdir, root)) / "sims"
     target = b.simulation
     target.selection = config["sims"]["selection"]
     target.output = str(Path(_rel(bbdir, root)) / "output/sims" / target.selection)
@@ -671,16 +656,10 @@ def fill_thread_design(config: dict[str, Any], bbdir: Path) -> pb.Design:
         e.component = ball["component"]
         e.emu_lib = ball["emu_lib"]
 
-    # The entry of a thread alone: its RTL, model and workload top. A prefab
-    # thread runs on the prefab entry, whose classpath holds every prefab
-    # thread; a design's thread on its own, <thread>/sims/thread, on the
-    # design's classpath. Its output is under the thread's own directory, and
-    # so are its tests and their regression lists (<thread>/workloads/thread).
-    entry = (
-        Path("examples/prefab/sims/thread")
-        if root.is_relative_to(bbdir / "examples/prefab/threads")
-        else Path(_rel(bbdir, root)) / "sims/thread"
-    )
+    # The entry of a thread alone, <thread>/sims: its RTL, model and
+    # workload top. Its output is under the thread's own directory, and so are
+    # its tests and their regression lists (<thread>/workloads/thread).
+    entry = Path(_rel(bbdir, root)) / "sims"
     target = b.simulation
     target.selection = config["sims"]["selection"]
     target.output = str(Path(_rel(bbdir, root)) / "output/sims" / target.selection)

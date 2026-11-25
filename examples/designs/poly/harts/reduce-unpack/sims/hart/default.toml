@@ -1,9 +1,0 @@
-# The reduce-unpack hart alone: the one instance of the single-hart system of
-# this entry, as the device places hart0, with the poly device's DDR.
-include = "../../configs/default.toml"
-nodeId = 1
-
-[host.device.ddr]
-beatRows = 4
-bytes = 0x400000000
-model = 0x340000000

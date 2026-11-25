@@ -13,16 +13,15 @@ def mill_cmd(
     directory = (repo / directory).resolve()
     designs = repo / "examples/designs"
     if directory.is_relative_to(designs):
-        # A simulation entry (devices/<device>/sims/<entry>/arch, harts/<hart>/
-        # sims/hart/arch) builds in the design's output/sims/<entry>/<name>/mill:
-        # each hart of a design has its own entry.
+        # A simulation entry builds in the design's output/sims/<entry>/<name>/
+        # mill: a device's entries are devices/<device>/sims/<entry>/arch, the
+        # one entry of a hart, thread or Ball is <kind>s/<name>/sims/arch.
         parts = directory.relative_to(designs).parts
         owner = designs / parts[0]
         if "sims" in parts:
             sims = parts.index("sims")
-            work = owner.joinpath(
-                "output/sims", *parts[sims + 1 : -1], parts[sims - 1], "mill"
-            )
+            entry = parts[sims + 1 : -1] or (parts[sims - 2].removesuffix("s"),)
+            work = owner.joinpath("output/sims", *entry, parts[sims - 1], "mill")
         else:
             work = owner / "output/mill"
     else:

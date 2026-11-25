@@ -8,22 +8,22 @@ clockHz = 1000000000
 [targets.device]
 config = "examples.designs.piplus.devices.piplus.sims.device.DeviceConfig"
 
-# The control hart alone (harts/control/sims/hart).
+# The control hart alone (harts/control/sims).
 [targets.hart.control]
-config = "examples.designs.piplus.harts.control.sims.hart.HartConfig"
+config = "examples.designs.piplus.harts.control.sims.HartConfig"
 
-# The solo hart and its accelerator alone (harts/solo/sims/hart), with
+# The solo hart and its accelerator alone (harts/solo/sims), with
 # PiplusSoloConfig: the device has no solo hart.
 [targets.hart.solo]
-config = "examples.designs.piplus.harts.solo.sims.hart.HartConfig"
+config = "examples.designs.piplus.harts.solo.sims.HartConfig"
 
-# The action hart and its threads alone (harts/action/sims/hart).
+# The action hart and its threads alone (harts/action/sims).
 [targets.hart.action]
-config = "examples.designs.piplus.harts.action.sims.hart.HartConfig"
+config = "examples.designs.piplus.harts.action.sims.HartConfig"
 
-# A dense hart and its twelve threads alone (harts/dense/sims/hart).
+# A dense hart and its twelve threads alone (harts/dense/sims).
 [targets.hart.dense]
-config = "examples.designs.piplus.harts.dense.sims.hart.HartConfig"
+config = "examples.designs.piplus.harts.dense.sims.HartConfig"
 
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

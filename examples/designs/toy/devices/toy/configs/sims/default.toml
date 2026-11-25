@@ -8,9 +8,9 @@ clockHz = 1000000000
 [targets.device]
 config = "examples.designs.toy.devices.toy.sims.device.DeviceConfig"
 
-# The toy hart and its accelerator alone (harts/toy/sims/hart).
+# The toy hart and its accelerator alone (harts/toy/sims).
 [targets.hart.toy]
-config = "examples.designs.toy.harts.toy.sims.hart.HartConfig"
+config = "examples.designs.toy.harts.toy.sims.HartConfig"
 
 [verification]
 registry = "../../sims/ip/uvm/registry.toml"

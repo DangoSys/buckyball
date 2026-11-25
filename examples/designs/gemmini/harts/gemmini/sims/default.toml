@@ -1,0 +1,3 @@
+# The gemmini design's gemmini hart alone: the one instance of the single-hart
+# system of this entry.
+include = "../configs/default.toml"

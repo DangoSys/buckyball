@@ -1,0 +1,77 @@
+proc run_synthesis {} {
+  global RUN_CONFIG target_library synthetic_library link_library search_path
+# Design-owned DC flow. Timing comes from constraints.sdc (RUN_SDC).
+# bbdev injects RUN_* via -x {set RUN_CONFIG <run.tcl>}.
+if {![info exists RUN_CONFIG] || $RUN_CONFIG eq ""} {
+  error "bbdev must pass -x {set RUN_CONFIG <run.tcl>}"
+}
+source [file normalize $RUN_CONFIG]
+
+proc bbdev_read_filelist {path} {
+  set fh [open $path r]
+  set files [list]
+  while {[gets $fh line] >= 0} {
+    set line [string trim $line]
+    if {$line eq "" || [string match "#*" $line]} { continue }
+    lappend files [file normalize $line]
+  }
+  close $fh
+  if {[llength $files] == 0} { error "empty DC source list: $path" }
+  return $files
+}
+
+set top $RUN_TOP
+set output_dir [file normalize $RUN_OUTPUT_DIR]
+set report_dir [file normalize $RUN_REPORT_DIR]
+file mkdir $output_dir $report_dir [file join $report_dir work]
+set target_library [list $RUN_TARGET_LIBRARY]
+set synthetic_library $RUN_SYNTHETIC_LIBRARY
+set link_library [concat [list *] $target_library $synthetic_library $RUN_LINK_LIBRARY]
+set_host_options -max_cores $RUN_MAX_THREADS
+define_design_lib WORK -path [file join $report_dir work]
+set search_path [list . [file dirname $RUN_SOURCE_LIST] [file dirname [file dirname $RUN_SOURCE_LIST]] [file dirname [file dirname [file dirname $RUN_SOURCE_LIST]]]]
+set_app_var verilogout_no_tri true
+set_app_var verilogout_equation false
+set_app_var compile_seqmap_propagate_constants false
+set_app_var hdlin_ff_always_sync_set_reset true
+# A source DC cannot read, or a module it cannot find, must stop the run, not
+# leave black boxes in the netlist.
+if {![analyze -format sverilog -define {SYNTHESIS DC_SYN} [bbdev_read_filelist $RUN_SOURCE_LIST]]} { error "DC could not read the RTL sources" }
+if {![elaborate $top]} { error "DC could not elaborate $top" }
+# Record RTL-to-gate names: PrimeTime maps the RTL simulation activity onto
+# the netlist with them (renamed registers, generate blocks).
+saif_map -start
+current_design $top
+if {![link]} { error "$top has unresolved references" }
+set sram_cells [get_cells -hierarchical -quiet -filter {ref_name =~ "chipyard_sram_*"}]
+if {[sizeof_collection $sram_cells] > 0} { set_dont_touch $sram_cells }
+set sram_designs [get_designs -quiet chipyard_sram_*]
+if {[sizeof_collection $sram_designs] > 0} {
+  set_dont_touch $sram_designs
+}
+source [file normalize $RUN_SDC]
+if {[sizeof_collection [all_clocks]] == 0} {
+  error "SDC created no clocks"
+}
+set_app_var compile_seqmap_honor_sync_set_reset true
+compile_ultra -area_high_effort_script -no_autoungroup -no_boundary_optimization
+# compile_ultra always ends with a max_leakage_power 0 pass that downsizes
+# cells after design rule fixing and reopens transition violations; fix the
+# design rules last.
+compile_ultra -incremental -only_design_rule -no_autoungroup -no_boundary_optimization
+change_names -hierarchy -rules verilog
+saif_map -type ptpx -write_map [file join $output_dir ${top}.saif_map.tcl]
+write -format ddc -hierarchy -output [file join $output_dir ${top}.ddc]
+write -format verilog -hierarchy -output [file join $output_dir ${top}.v]
+write_sdc [file join $output_dir ${top}.sdc]
+# Timing and design rules. This flow estimates area and hands no netlist to
+# place and route, so port nets are not fixed.
+report_constraint -all_violators -max_delay -min_delay -max_transition -max_capacitance -max_fanout > [file join $report_dir constraint.rpt]
+report_timing -delay max -max_paths 50 > [file join $report_dir timing_max.rpt]
+report_timing -delay min -max_paths 50 > [file join $report_dir timing_min.rpt]
+report_area -hierarchy > [file join $report_dir area.rpt]
+report_reference > [file join $report_dir reference.rpt]
+
+}
+if {[catch {run_synthesis} reason]} { puts stderr $reason; exit 1 }
+exit

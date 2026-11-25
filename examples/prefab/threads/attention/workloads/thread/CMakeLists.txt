@@ -1,7 +1,7 @@
 # ===----------------------------------------------------------------------===
 # The attention thread alone: its tests, programs of
 # the thread's virtual environment (bb-tests/workloads/lib/sims/thread),
-# built by examples/prefab/sims/thread/workloads. A program returns its
+# built by ../../sims/workloads. A program returns its
 # status in bits 31:0 of its completion value (0 passes). regression/<backend>
 # lists the tests (workloads-bare).
 # ===----------------------------------------------------------------------===

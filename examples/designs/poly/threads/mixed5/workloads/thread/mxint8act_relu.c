@@ -78,7 +78,10 @@ uint64_t entry(void) {
       }
       int out = 0;
       if (maximum) {
-        out = e + 63 - __builtin_clzll(maximum) - 22;
+        int msb = 63;
+        while (!(maximum >> msb))
+          --msb;
+        out = e + msb - 22;
         out = out < -127 ? -127 : out > 127 ? 127 : out;
       }
       for (int lane = 0; lane < 32; ++lane) {

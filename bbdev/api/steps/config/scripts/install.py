@@ -143,19 +143,19 @@ def hart_root(repo: Path, name: str) -> Path:
         if "/" not in name
         else repo / "examples/designs" / name
     )
-    if not (root / "sims/hart/default.toml").is_file():
-        raise FileNotFoundError(f"no hart {name!r}: {root}/sims/hart/default.toml")
+    if not (root / "sims/default.toml").is_file():
+        raise FileNotFoundError(f"no hart {name!r}: {root}/sims/default.toml")
     return root
 
 
 def install_hart(repo: Path, name: str) -> str:
-    """The design.pb of hart `name` alone, its instance <hart>/sims/hart/
+    """The design.pb of hart `name` alone, its instance <hart>/sims/
     default.toml on the framework's single-hart system, under <hart>/output/
     sims/<selection>; return the selection."""
     toml2json = _load_script("1_toml2json.py")
     derive = _load_script("2_parameter_derivation.py")
     root = hart_root(repo, name)
-    data = toml2json.hart2json(root / "sims/hart/default.toml")
+    data = toml2json.hart2json(root / "sims/default.toml")
     selection = data["sims"]["selection"]
     generated = root / "output/sims" / selection / "generated"
     config_json = generated / "config/config.json"

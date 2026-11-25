@@ -1,0 +1,44 @@
+# The reduce hart alone: the one instance of the single-hart system of this
+# entry, the reduce hart class with a prefab-only accelerator and shared banks,
+# hart 0 behind its Home as node 1, with a 16 GiB DDR.
+include = "../configs/default.toml"
+nodeId = 1
+accelerator = "../../configs/acc/default.toml"
+threads = []
+resetVector = 0x10000
+mtimeAddress = 0x200bff8
+memory = "../../configs/memory/hart.toml"
+fetch = "default"
+fpu = "default"
+interconnect = "../../configs/interconnect/hart.toml"
+service = true
+tbus = "../../configs/tbus/hart.toml"
+controller = "../../configs/controller/hart.toml"
+
+[param]
+threadDataBytes = 64
+xLen = 64
+vaddrBits = 39
+paddrBits = 36
+pgIdxBits = 12
+pgLevels = 3
+nPMPs = 16
+
+[sharedMem]
+bankWidth = 128
+bankEntries = 1024
+enable = true
+virtualBankCount = 40
+entries = 16384
+inputChannels = 9
+defaultGroupCount = 1
+latency = 10
+
+[compiler]
+name = "reduce"
+component = "reduce"
+
+[host.device.ddr]
+beatRows = 4
+bytes = 0x400000000
+model = 0x340000000

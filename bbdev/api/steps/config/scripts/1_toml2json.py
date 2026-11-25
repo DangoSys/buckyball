@@ -294,9 +294,9 @@ def _select_hart(data: dict[str, Any], name: str, path: Path) -> None:
 
 
 def hart2json(path: Path) -> dict[str, Any]:
-    """The config of a hart alone: `path`, <root>/sims/hart/default.toml, the
-    instance of the hart on the single-hart system of its entry <root>/sims/
-    hart (it includes the hart's config, <root>/configs/default.toml, and
+    """The config of a hart alone: `path`, <root>/sims/default.toml, the
+    instance of the hart on the single-hart system of its entry <root>/sims
+    (it includes the hart's config, <root>/configs/default.toml, and
     places the instance as a device does), on the framework's default host,
     the peripherals and simulation parameters of that system, whose values its
     [host] table replaces. The entry's
@@ -318,7 +318,7 @@ def hart2json(path: Path) -> dict[str, Any]:
     package = ".".join(part.replace("-", "") for part in entry.relative_to(repo).parts)
     # The hart directory of the entry owns the simulation, even when its config
     # includes another hart's (a design's copy of a prefab hart).
-    owner = str(entry.parents[1] / "configs/default.toml")
+    owner = str(entry.parent / "configs/default.toml")
     device = host["device"]
     device["_file"] = owner
     device["harts"] = [hart]
@@ -332,7 +332,7 @@ def hart2json(path: Path) -> dict[str, Any]:
         "workloads": host["workloads"],
     }
     _select_hart(data, hart["component"], path)
-    data["sims"]["selection"] = f"hart/{entry.parents[1].name}/{path.stem}"
+    data["sims"]["selection"] = f"hart/{entry.parent.name}/{path.stem}"
     return data
 
 

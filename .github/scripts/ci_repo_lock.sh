@@ -41,8 +41,11 @@ repo_reset() {
   git submodule update --init --force
 
   # submodules in submodules we used need update by hands
-  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule sync -- dependencies/cde
-  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule update --init --force -- dependencies/cde
+  # rocket builds on cde; gemmini builds on cde, diplomacy and hardfloat of the same rocket-chip.
+  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule sync -- \
+    dependencies/cde dependencies/diplomacy dependencies/hardfloat
+  git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule update --init --force -- \
+    dependencies/cde dependencies/diplomacy dependencies/hardfloat
 
   git -C stack submodule sync
   git -C stack submodule update --init --force -- os/linux thirdparty/buddy-mlir

@@ -76,7 +76,9 @@ uint64_t entry(void) {
   }
   int scale = maximum ? next : 0, exponent = 0;
   if (maximum) {
-    int top = 63 - __builtin_clzll(maximum);
+    int top = 63;
+    while (!(maximum >> top))
+      --top;
     exponent = top + scale - 28 - 6;
     exponent = exponent < -127 ? -127 : exponent > 127 ? 127 : exponent;
   }
