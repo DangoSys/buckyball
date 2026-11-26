@@ -1,0 +1,13 @@
+include = "design.toml"
+
+[[device.harts]]
+include = "../../../harts/toy/configs/default.toml"
+hartId = 0
+[device.harts.accelerator]
+include = "../../../harts/toy/configs/acc/default.toml"
+balldomain = "../../../harts/toy/configs/acc/balldomain/snn-pipeline.toml"
+frontend = "../../../harts/toy/configs/acc/frontend/no-subrob.toml"
+# The SNN uses local weight memories.
+[device.harts.accelerator.memdomain]
+include = "../../../harts/toy/configs/acc/memdomain/toy.toml"
+mmio.enable = false

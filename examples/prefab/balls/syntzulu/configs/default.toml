@@ -1,0 +1,11 @@
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SYNTZULU_WEIGHT", funct7 = 40 },
+  { mnemonic = "SYNTZULU_RUN", funct7 = 41 },
+  { mnemonic = "SYNTZULU_READ", funct7 = 42 },
+  { mnemonic = "SYNTZULU_RUN_BANK", funct7 = 53 },
+]
+
+[host]
+include = "default"
