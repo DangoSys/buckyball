@@ -206,6 +206,7 @@
 
               # Scala tools
               scala.mill
+              scala.firtool
               scala.scalafmt
               scala.coursier
 

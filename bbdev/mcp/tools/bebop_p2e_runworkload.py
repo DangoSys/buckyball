@@ -20,7 +20,6 @@ def register(mcp):
         pmctrace: bool = False,
         ctrace: bool = False,
         banktrace: bool = False,
-        reuse_runtime: bool = False,
         diff: bool = False,
         ddr_image: str | None = None,
         config: str | None = None,
@@ -46,8 +45,6 @@ def register(mcp):
             params["itrace"] = True
         if mtrace:
             params["mtrace"] = True
-        if reuse_runtime:
-            params["reuse-runtime"] = True
         if pmctrace:
             params["pmctrace"] = True
         if ctrace:

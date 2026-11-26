@@ -20,7 +20,7 @@ object Elaborate {
   def emit(target: SystemTarget, directory: String, firtoolOpts: Array[String]): Unit = {
     ChiselStage.emitSystemVerilogFile(
       new SystemHarness(target.b, target),
-      args = Array("--target-dir", directory, "--split-verilog"),
+      args = Array("--target-dir", directory, "--split-verilog", "--firtool-binary-path", "firtool"),
       firtoolOpts = firtoolOpts
     )
     if (target.hierBlocks.nonEmpty) {

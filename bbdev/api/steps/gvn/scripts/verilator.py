@@ -101,11 +101,25 @@ def measured_before(record, elf_digest):
             or (instance / "elf.sha256").read_text().strip() != elf_digest
         ):
             continue
+        # The slice ends its cycle trace before readback and simulator shutdown.
+        # A timeout during either can leave a positive span in an unfinished run.
+        log = instance / "run.log"
+        if not log.is_file() or not (instance / "rtl-trace-summary.json").is_file():
+            continue
+        output = log.read_text(errors="replace")
+        if (
+            not re.search(
+                r"^\[SCU\] sim_exit called: hart_id=\d+, exit_code=0$", output, re.M
+            )
+            or "Verilator timed out after" in output
+            or re.search(r"^Error:", output, re.M)
+        ):
+            continue
         for trace in instance.glob(
             "trace/controller-*/thread-*/cycle/trace-9223372036854775807.txt"
         ):
             cycles = re.findall(r"^elapsed (\d+)$", trace.read_text(), re.MULTILINE)
-            if cycles:
+            if len(cycles) == 1 and int(cycles[0]) > 0:
                 return int(cycles[0]), directory.name
     return None
 
@@ -163,12 +177,17 @@ def run(record):
             stream.write(f"\nVerilator timed out after {error.timeout}s\n".encode())
         elf.unlink()
         return record, -1, None
-    (log / "run.log").write_text(result.stdout + result.stderr)
-    measured.append((time.monotonic() - begin, record["cycles"]))
+    error = (
+        f"Error: Verilator exited with status {result.returncode}\n"
+        if result.returncode
+        else ""
+    )
+    (log / "run.log").write_text(error + result.stdout + result.stderr)
     # The ELF holds the slice's inputs, up to hundreds of MB.
     elf.unlink()
     if result.returncode:
         return record, result.returncode, None
+    measured.append((time.monotonic() - begin, record["cycles"]))
     # The slice's own span, trace id INT64_MAX (the readback ends it); the
     # graphs inside the slice trace under ids of their own. It is traced on
     # the controller and thread the slice runs on, which differ by design.

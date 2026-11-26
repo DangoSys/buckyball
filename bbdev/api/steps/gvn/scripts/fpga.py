@@ -1,13 +1,12 @@
 import asyncio
 import fcntl
 import json
-import os
 import re
 import tempfile
 import tomllib
 from pathlib import Path
 
-from steps.bebop.p2e.scripts.runtime_case import trace_modes, validate_runtime_reuse
+from steps.bebop.p2e.scripts.runtime_case import case_ready, trace_modes
 from steps.workload.scripts.elf2hex import elf_to_hex
 from utils.path import design_output_root, get_buckyball_path
 from utils.run_step import run
@@ -23,20 +22,19 @@ def bitstream_of(target, request):
     if "bitstream" in request:
         bit = (repo / request["bitstream"]).resolve()
     else:
-        # Case directory names are build timestamps. An interrupted build can
-        # publish a bitstream before it has finished installing its host runner.
         cases = sorted(
             p
             for p in (output / "p2e").glob("*/fpgaCompDir/bitstream.bit")
-            if os.access(p.parent.parent / "bebop-p2e", os.X_OK)
+            if case_ready(p)
         )
         if not cases:
             raise ValueError(f"No completed FPGA build under {output / 'p2e'}")
         bit = cases[-1].resolve()
     if not bit.is_relative_to(output.resolve() / "p2e"):
         raise ValueError(f"Bitstream must belong to {output}/p2e")
+    if not case_ready(bit):
+        raise ValueError(f"Incomplete FPGA case for {bit}")
     diff = bool(trace_modes(str(bit)) & {"btrace", "btrace_nb_v1"})
-    validate_runtime_reuse(str(bit), diff)
     if sum(part.is_dir() for part in bit.parent.glob("part_b*_f*")) > 1:
         raise ValueError("FPGA bench requires a single-FPGA case for the selected slot")
     return bit, diff
@@ -46,6 +44,10 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
     """FPGA GVN (fpga-gvn: each distinct slice's reference ELF, its cycles
     times its repeats; with debug, each one's check against BEMU, pass or
     fail) or whole models (fpga-model)."""
+    repo = Path(get_buckyball_path())
+    output = Path(
+        design_output_root(repo, target["design"], selection=target["target"])
+    )
     bit, diff = bitstream_of(target, request)
     board = request.get("fpga-location", "0.A")
     hardware = {
@@ -53,7 +55,6 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
         "bitstream": str(bit),
         "fpga-location": board,
         "diff": diff,
-        "reuse-runtime": True,
     }
     node.update(bitstream=str(bit), fpga_location=board, diff=diff)
     gvn = node["id"] == "fpga-gvn"
@@ -75,7 +76,6 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
         if elf is None:
             args = {**hardware, **product}
             if diff:
-                args["reuse-runtime"] = False
                 args["ddr-image"] = str(
                     output
                     / "workloads/image"

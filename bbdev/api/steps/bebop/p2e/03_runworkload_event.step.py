@@ -37,7 +37,7 @@ from utils.path import (
 from utils.stream_run import stream_run_logger_async
 from utils.event_common import check_result, get_origin_trace_id, require_product
 from resolve_image import resolve_image
-from steps.bebop.p2e.scripts.runtime_case import trace_modes, validate_runtime_reuse
+from steps.bebop.p2e.scripts.runtime_case import trace_modes
 from steps.bebop.performance_report import performance_report
 from utils.reports import source_context
 from pathlib import Path
@@ -233,83 +233,70 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     manifest = str(runner_manifest(bbdir, design, input_data["target"]))
     build_env = {**os.environ, "OUT_PATH": build_dir}
-    reuse_runtime = input_data.get("reuse-runtime", False)
-    if reuse_runtime:
-        validate_runtime_reuse(
-            bitstream,
-            diff,
-            bool(input_data.get("itrace", False)),
-            bool(input_data.get("mtrace", False)),
-        )
-        ctx.logger.info(
-            f"Reusing selected P2E runtime without rebuilding: {bebop_p2e_path}"
-        )
-    else:
-        modes = trace_modes(bitstream)
-        features = ["p2e"]
-        if modes & {"btrace", "btrace_nb_v1"}:
-            features.append("bemu")
-        for trace in ("itrace", "mtrace"):
-            if trace in modes:
-                features.append(f"bebop/p2e-{trace}")
-        build_cmd = shlex.join(
-            [
-                "nix",
-                "develop",
-                "--ignore-env",
-                "--keep-env-var",
-                "HOME",
-                "--keep-env-var",
-                "ALL_PROXY",
-                "--keep-env-var",
-                "OUT_PATH",
-                "-c",
-                "cargo",
-                "build",
-                "--release",
-                "--manifest-path",
-                manifest,
-                "--target-dir",
-                bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
-                "--bin",
-                "bebop-p2e",
-                "--features",
-                ",".join(features),
-            ]
-        )
-        ctx.logger.info("Building bebop p2e runtime for the selected case...")
-        build_result = await stream_run_logger_async(
-            cmd=build_cmd,
-            logger=ctx.logger,
-            cwd=bebop_dir,
-            stdout_prefix="bebop p2e runtime build",
-            stderr_prefix="bebop p2e runtime build",
-            env=build_env,
-        )
-        if build_result.returncode != 0:
-            await check_result(
-                ctx,
-                build_result.returncode,
-                continue_run=False,
-                extra_fields={"task": "runtime_build", "build_dir": build_dir},
-                trace_id=origin_tid,
-            )
-            return
-        target_release = os.path.join(
+    modes = trace_modes(bitstream)
+    features = ["p2e"]
+    if modes & {"btrace", "btrace_nb_v1"}:
+        features.append("bemu")
+    for trace in ("itrace", "mtrace"):
+        if trace in modes:
+            features.append(f"bebop/p2e-{trace}")
+    build_cmd = shlex.join(
+        [
+            "nix",
+            "develop",
+            "--ignore-env",
+            "--keep-env-var",
+            "HOME",
+            "--keep-env-var",
+            "ALL_PROXY",
+            "--keep-env-var",
+            "OUT_PATH",
+            "-c",
+            "cargo",
+            "build",
+            "--release",
+            "--manifest-path",
+            manifest,
+            "--target-dir",
             bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
-            "release",
+            "--bin",
+            "bebop-p2e",
+            "--features",
+            ",".join(features),
+        ]
+    )
+    ctx.logger.info("Building bebop p2e runtime for the selected case...")
+    build_result = await stream_run_logger_async(
+        cmd=build_cmd,
+        logger=ctx.logger,
+        cwd=bebop_dir,
+        stdout_prefix="bebop p2e runtime build",
+        stderr_prefix="bebop p2e runtime build",
+        env=build_env,
+    )
+    if build_result.returncode != 0:
+        await check_result(
+            ctx,
+            build_result.returncode,
+            continue_run=False,
+            extra_fields={"task": "runtime_build", "build_dir": build_dir},
+            trace_id=origin_tid,
         )
-        staged_runtime = f"{bebop_p2e_path}.new"
-        shutil.copy2(os.path.join(target_release, "bebop-p2e"), staged_runtime)
-        os.replace(staged_runtime, bebop_p2e_path)
-        rust_library = Path(target_release) / "deps/libbebop_p2e.so"
-        shutil.copy2(rust_library, Path(runtime_lib_dir) / "libbebop_p2e.so")
-        design_libraries = (
-            Path(design_output_root(bbdir, design, selection=input_data["target"]))
-            / "lib"
-        )
-        design_libraries.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(rust_library, design_libraries / "libbebop_p2e.so")
+        return
+    target_release = os.path.join(
+        bebop_target_dir(bbdir, design, "p2e", selection=input_data["target"]),
+        "release",
+    )
+    staged_runtime = f"{bebop_p2e_path}.new"
+    shutil.copy2(os.path.join(target_release, "bebop-p2e"), staged_runtime)
+    os.replace(staged_runtime, bebop_p2e_path)
+    rust_library = Path(target_release) / "deps/libbebop_p2e.so"
+    shutil.copy2(rust_library, Path(runtime_lib_dir) / "libbebop_p2e.so")
+    design_libraries = (
+        Path(design_output_root(bbdir, design, selection=input_data["target"])) / "lib"
+    )
+    design_libraries.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(rust_library, design_libraries / "libbebop_p2e.so")
     installed_runtime = Path(
         bebop_bin_path(bbdir, design, "p2e", selection=input_data["target"])
     )

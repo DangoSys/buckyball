@@ -1,5 +1,4 @@
 from pathlib import Path
-import os
 
 
 def trace_modes(bitstream: str) -> set[str]:
@@ -11,30 +10,15 @@ def trace_modes(bitstream: str) -> set[str]:
     return modes
 
 
-def validate_runtime_reuse(
-    bitstream: str, diff: bool, itrace: bool = False, mtrace: bool = False
-) -> Path:
-    bit = Path(bitstream).resolve()
+def case_ready(bit: Path) -> bool:
     case = bit.parent.parent
-    executable = case / "bebop-p2e"
-    files = [
-        bit,
-        executable,
-        case / "vvacDir/runtimeDir/rtcfg",
-        case / "vvacDir/runtimeDir/lib/lib_arm/libvCtb.so",
-        case / "p2e_trace_mode",
-    ]
-    missing = [str(path) for path in files if not path.is_file()]
-    if missing:
-        raise ValueError(f"Reusable P2E case is incomplete: {missing}")
-    if not os.access(executable, os.X_OK):
-        raise ValueError(f"Reusable P2E runtime is not executable: {executable}")
-    modes = trace_modes(bitstream)
-    if diff and not modes & {"btrace", "btrace_nb_v1"}:
-        raise ValueError("Reusable P2E case does not support diff")
-    for trace, requested in (("itrace", itrace), ("mtrace", mtrace)):
-        if requested and trace not in modes:
-            raise ValueError(
-                f"Reusable P2E case does not support {trace}; rebuild with --{trace}"
-            )
-    return executable
+    runtime = case / "vvacDir/runtimeDir"
+    return all(
+        path.is_file()
+        for path in (
+            bit,
+            case / "p2e_trace_mode",
+            runtime / "rtcfg",
+            runtime / "lib/lib_arm/libvCtb.so",
+        )
+    )
