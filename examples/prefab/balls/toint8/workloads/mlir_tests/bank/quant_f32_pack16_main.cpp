@@ -4,8 +4,7 @@
 extern "C" void check_result(int8_t *, int8_t *data, int64_t offset,
                              int64_t rows, int64_t lanes, int64_t stride,
                              int64_t lane_stride) {
-  constexpr int outputRows =
-      THREAD_MEM_BANK_ENTRIES / 4 < 127 ? THREAD_MEM_BANK_ENTRIES / 4 : 127;
+  constexpr int outputRows = THREAD_MEM_BANK_ENTRIES / 4;
   if (rows != outputRows || lanes != THREAD_MEM_BANK_WIDTH / 8 ||
       stride != lanes || lane_stride != 1)
     exit(1);
