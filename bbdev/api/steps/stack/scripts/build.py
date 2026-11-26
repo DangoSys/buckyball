@@ -80,6 +80,7 @@ def build_llvm(
         raise RuntimeError(f"missing LLVM source: {llvm_src}")
 
     python = compiler_python(root)
+    omp_headers = llvm_build / "lib/clang/$<TARGET_PROPERTY:clang,VERSION>/include"
     cmake = [
         "cmake",
         "-G",
@@ -90,6 +91,11 @@ def build_llvm(
         str(llvm_build),
         "-DLLVM_ENABLE_PROJECTS=mlir;clang",
         "-DLLVM_ENABLE_RUNTIMES=openmp",
+        # Use the host Nix toolchain and the OpenMP headers from this LLVM build.
+        "-DLLVM_EXTERNAL_PROJECT_PASSTHROUGH=CMAKE_C_COMPILER;CMAKE_CXX_COMPILER",
+        "-DRUNTIMES_CMAKE_ARGS=--fresh;"
+        f'-DCMAKE_C_FLAGS=-iquote "{omp_headers}";'
+        f'-DCMAKE_CXX_FLAGS=-iquote "{omp_headers}"',
         "-DLLVM_TARGETS_TO_BUILD=host;RISCV",
         "-DLLVM_ENABLE_ASSERTIONS=ON",
         "-DOPENMP_ENABLE_LIBOMPTARGET=OFF",
@@ -102,14 +108,13 @@ def build_llvm(
     llvm_build.mkdir(parents=True, exist_ok=True)
     with open(llvm_build / ".bbdev.lock", "a+b") as lockf:
         fcntl.flock(lockf.fileno(), fcntl.LOCK_EX)
-        if not (llvm_build / "build.ninja").is_file():
-            run(
-                cmake,
-                repo=root / "stack",
-                logger=logger,
-                task_scope=task_scope,
-                output_prefix="compiler llvm configure",
-            )
+        run(
+            cmake,
+            repo=root / "stack",
+            logger=logger,
+            task_scope=task_scope,
+            output_prefix="compiler llvm configure",
+        )
         run(
             ["ninja", "-C", str(llvm_build), "-j", str(os.cpu_count() or 1)],
             repo=root / "stack",
