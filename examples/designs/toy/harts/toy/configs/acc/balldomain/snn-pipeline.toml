@@ -1,0 +1,23 @@
+[[balls]]
+id = 0
+name = "SyntzuluBall"
+component = "syntzulu"
+param = "../../../../../../../prefab/balls/syntzulu/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SYNTZULU_WEIGHT", funct7 = 40 },
+  { mnemonic = "SYNTZULU_RUN", funct7 = 41 },
+  { mnemonic = "SYNTZULU_READ", funct7 = 42 },
+  { mnemonic = "SYNTZULU_RUN_BANK", funct7 = 53 },
+]
+
+[[balls]]
+id = 1
+name = "SpikeIoBall"
+component = "spikeio"
+param = "../../../../../../../prefab/balls/spikeio/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SPIKE_ENCODE", funct7 = 54 },
+  { mnemonic = "SPIKE_ARGMAX", funct7 = 55 },
+]

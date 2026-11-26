@@ -1,0 +1,6 @@
+if("examples/prefab/balls/syntzulu/workloads/ctests" IN_LIST DESIGN_PROFILES_${CTEST_PROFILE}_BALL_CTEST_DIRS)
+    add_ctest(snn_pipeline.c)
+    add_ctest(snn_host.c)
+    add_ctest(snn_bulk_host.c)
+    add_ctest(snn_pipeline_check.c)
+endif()

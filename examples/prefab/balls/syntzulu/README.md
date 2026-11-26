@@ -40,3 +40,36 @@ The same fixture passed against the unmodified upstream core after sv2v conversi
 ## RTL provenance
 
 The bundled source combines the required modules from [gianlucaleone/SYNtzulu at c9de580](https://github.com/gianlucaleone/SYNtzulu/tree/c9de5808376222c2de17e4f5771b4996b8b507fd/rtl/syntzulu). The compilation unit selects the upstream inferred BRAM implementation. Two clocked assignments use nonblocking updates in this port: the layer counter increment in `snn_lp` and the reset of `done` in `stack`. The original mixed blocking/nonblocking assignments made RTL simulation sensitive to scheduling across modules. The upstream license and third-party inventory accompany the RTL in `arch/src/main/resources/syntzulu`.
+
+## Bank-to-bank SNN pipeline
+
+`ToySnnPipelineConfig` adds a SpikeIoBall and enables `SYNTZULU_RUN_BANK` (funct7 53). One instruction reads a packed 16-bit frame from source row zero, advances SYNtzulu by one time step and stores eight signed output pairs in destination rows 0–7. Each 128-bit row holds one pair in its low 32 bits. The Ball reports completion after the eighth SRAM write acknowledgement.
+
+The cooperating workload allocates four distinct banks. Rocket issues the commands and retrieves the final index.
+
+| Producer | Operation | Consumer |
+| --- | --- | --- |
+| DMA | Store 16 signed int8 features in one 128-bit row | SpikeIoBall |
+| SpikeIoBall, funct7 54 | Compare each feature with a signed threshold and pack the 16 strict-greater-than results into one word | SyntzuluBall |
+| SyntzuluBall, funct7 53 | Process one frame using persistent membrane state and write 16 signed potentials | SpikeIoBall |
+| SpikeIoBall, funct7 55 | Select the lowest channel index attaining the maximum | Rocket, via one row DMA readback |
+
+The workload measures four frames from input in main memory to a class index available to Rocket. The reference uses the same Toy RTL and SYNtzulu core. Rocket encodes the frames, submits each using the original immediate command, reads eight output pairs individually and computes argmax. A second host baseline uses the same bank-input instruction as the pipeline. Rocket packs the input into memory, transfers it to the SNN, bulk-reads all eight output rows with one DMA command, and selects the winner on the CPU. Each workload starts from reset with the same weights. Cycle counts sum per-frame `rdcycle` intervals, including input handling, commands, fences and readback. They exclude boot, initial weight programming, UART and correctness checks.
+
+| RV64 bare-metal workload | Four-frame cycles in local Verilator + DRAMSim3 run |
+| --- | ---: |
+| snn_host | 7755 |
+| snn_bulk_host | 3918 |
+| snn_pipeline | 1937 |
+
+These measurements cover the provided synthetic data and driver implementations. A direct Rocket coprocessor, silicon power, and trained-model accuracy were outside this experiment. The local run used a lightweight monitor on macOS. To reproduce in the project devshell:
+
+```sh
+cfg=toy/devices/toy/configs/ToySnnPipelineConfig.toml
+bbdev workload --build "--config $cfg --device toy --ctest"
+for test in snn_host snn_bulk_host snn_pipeline snn_pipeline_check; do
+  bbdev verilator --run "--config $cfg --device toy --test toy-hart0-ctest-${test}-baremetal --batch"
+done
+```
+
+The check workload compares 32 output words covering all four frames with an integer neuron model. It also checks the packed input masks and tests signed argmax with tied negative scores. The three timed workloads each check the four winning indices.

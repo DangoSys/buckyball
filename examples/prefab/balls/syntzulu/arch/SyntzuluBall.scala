@@ -30,17 +30,20 @@ class SyntzuluBridge extends BlackBox with HasBlackBoxResource {
 class SyntzuluBall(link: BlinkParam, route: BallRouteParam) extends Module with HasBlink {
   route.parameters.unpack(classOf[ParametersProto])
   require(route.inBW == 1 && route.outBW == 1 && route.mmioReadBW == 0 && route.mmioWriteBW == 0)
-  require(link.dataBits >= 40 && link.bankWidth >= 32)
+  require(link.dataBits >= 40 && link.bankWidth >= 32 && link.bankEntries >= 8)
   private val operations = Seq("SYNTZULU_WEIGHT", "SYNTZULU_RUN", "SYNTZULU_READ")
   private val byName = route.instructions.map(i => i.mnemonic -> i.funct7).toMap
-  require(byName.keySet == operations.toSet && byName.values.forall(code => (code >> 4) == 2))
+  private val bankRunCode = byName.get("SYNTZULU_RUN_BANK")
+  require(operations.forall(n => byName.contains(n) && (byName(n) >> 4) == 2))
+  require(byName.keySet.subsetOf(operations.toSet + "SYNTZULU_RUN_BANK"))
+  require(bankRunCode.forall(code => (code >> 4) == 3))
 
   @public val blink = IO(new BlinkIO(link, route))
   val core = Module(new SyntzuluBridge)
   core.io.clock := clock
   core.io.reset := reset.asBool
 
-  val idle :: executing :: writing :: waiting :: completing :: Nil = Enum(5)
+  val idle :: fetch :: receive :: launch :: executing :: selectOutput :: collect :: writing :: waiting :: completing :: Nil = Enum(10)
   val state = RegInit(idle)
   val rob = Reg(UInt(link.robIdBits.W))
   val destination = Reg(UInt(link.bankIdBits.W))
@@ -49,38 +52,52 @@ class SyntzuluBall(link: BlinkParam, route: BallRouteParam) extends Module with 
 
   val command = blink.cmdReq
   val matches = VecInit(operations.map(name => command.bits.funct === byName(name).U))
+  val bankCommand = bankRunCode.map(code => command.bits.funct === code.U).getOrElse(false.B)
+  val fromBank = RegInit(false.B)
+  val source = Reg(UInt(link.bankIdBits.W))
+  val sourceGroup = Reg(UInt(link.groupIdBits.W))
+  val frame = Reg(UInt(16.W))
+  val pair = RegInit(0.U(3.W))
+
   command.ready := state === idle && core.io.cmd_ready
-  core.io.cmd_valid := state === idle && command.valid && matches.asUInt.orR
-  core.io.cmd_data := command.bits.rs2(39, 0)
-  core.io.cmd_op := OHToUInt(matches.asUInt)
-  core.io.rsp_ready := state === executing
+  core.io.cmd_valid := (state === idle && command.valid && matches.asUInt.orR) ||
+    state === launch || state === selectOutput
+  core.io.cmd_data := Mux(state === launch, frame, Mux(state === selectOutput, pair, command.bits.rs2(39, 0)))
+  core.io.cmd_op := Mux(state === launch, 1.U, Mux(state === selectOutput, 2.U, OHToUInt(matches.asUInt)))
+  core.io.rsp_ready := state === executing || state === collect
   when(command.fire) {
-    assert(matches.asUInt.orR && command.bits.iter === 1.U)
+    assert((matches.asUInt.orR || bankCommand) && command.bits.iter === 1.U)
     rob := command.bits.rob_id
     destination := command.bits.wr_bank
     group := command.bits.wr_group
-    state := executing
+    source := command.bits.op1_bank
+    sourceGroup := command.bits.op1_group
+    fromBank := bankCommand
+    pair := 0.U
+    state := Mux(bankCommand, fetch, executing)
   }
+  val read = blink.bankRead(0)
+  read.bank_id := source
+  read.group_id := sourceGroup
+  read.rob_id := rob
+  read.io.req.valid := state === fetch
+  read.io.req.bits.addr := 0.U
+  read.io.resp.ready := state === receive
+  when(read.io.req.fire) { state := receive }
+  when(read.io.resp.fire) { frame := read.io.resp.bits.data(15, 0); state := launch }
+  when(state === launch && core.io.cmd_ready) { state := executing }
+  when(state === selectOutput && core.io.cmd_ready) { state := collect }
   when(core.io.rsp_valid && core.io.rsp_ready) {
     result := core.io.rsp_data
-    state := writing
+    state := Mux(state === executing && fromBank, selectOutput, writing)
   }
-
-  // The current BBus requires at least one read port. This peripheral only writes.
-  val read = blink.bankRead(0)
-  read.bank_id := 0.U
-  read.group_id := 0.U
-  read.rob_id := 0.U
-  read.io.req.valid := false.B
-  read.io.req.bits.addr := 0.U
-  read.io.resp.ready := false.B
 
   val write = blink.bankWrite(0)
   write.bank_id := destination
   write.group_id := group
   write.rob_id := rob
   write.io.req.valid := state === writing
-  write.io.req.bits.addr := 0.U
+  write.io.req.bits.addr := pair
   write.io.req.bits.data := result
   write.io.req.bits.mask.foreach(_ := true.B)
   // Allow a same-cycle write acknowledgement without feeding request-ready back into BBus.
@@ -89,7 +106,10 @@ class SyntzuluBall(link: BlinkParam, route: BallRouteParam) extends Module with 
   when(write.io.resp.fire) {
     assert(state === waiting || write.io.req.fire)
     assert(write.io.resp.bits.ok)
-    state := completing
+    when(fromBank && pair =/= 7.U) {
+      pair := pair + 1.U
+      state := selectOutput
+    }.otherwise { state := completing }
   }
   blink.cmdResp.valid := state === completing
   blink.cmdResp.bits.rob_id := rob

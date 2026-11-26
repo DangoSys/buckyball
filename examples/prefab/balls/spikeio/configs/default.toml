@@ -1,0 +1,9 @@
+[ball]
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SPIKE_ENCODE", funct7 = 54 },
+  { mnemonic = "SPIKE_ARGMAX", funct7 = 55 },
+]
+
+[host]
+include = "default"
