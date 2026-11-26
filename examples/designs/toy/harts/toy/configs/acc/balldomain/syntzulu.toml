@@ -1,0 +1,11 @@
+[[balls]]
+id = 0
+name = "SyntzuluBall"
+component = "syntzulu"
+param = "../../../../../../../prefab/balls/syntzulu/configs/default.toml"
+port = { inBW = 1, outBW = 1, mmioReadBW = 0, mmioWriteBW = 0 }
+instructions = [
+  { mnemonic = "SYNTZULU_WEIGHT", funct7 = 40 },
+  { mnemonic = "SYNTZULU_RUN", funct7 = 41 },
+  { mnemonic = "SYNTZULU_READ", funct7 = 42 },
+]
