@@ -99,6 +99,14 @@ static int run_fixture(enum fixture_mode mode) {
     total += cycles() - start;
     if (label != labels[frame]) return 1 + frame;
     if (mode == CHECK && !check_potentials(masks[frame], previous)) return 9 + frame;
+    if (mode == CHECK) {
+      // Producer and consumer are ordered by the destination/source bank dependency.
+      syntzulu_store_spikes(POTENTIALS);
+      BUCKYBALL_INSTRUCTION_R_R(BB_BANK0(POTENTIALS) | BB_BANK2(LABEL) | BB_ITER(1) | BB_UPDATE_WR,
+                                 0, FUNCT7(spikeio, SPIKE_COUNT));
+      const unsigned expected_counts[] = {0,0,3,2};
+      if (read_row(LABEL) != expected_counts[frame]) return 30 + frame;
+    }
   }
   // Check the encoder separately, outside the measurement and after all four frames.
   if (mode >= PIPELINE) {

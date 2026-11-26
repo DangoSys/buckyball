@@ -367,6 +367,20 @@ output [DATA_WIDTH-1:0] DO
 `endif
     );
 
+// Reset invalidates membrane/current entries without resetting the SRAM array.
+reg [DEPTH-1:0] entry_valid;
+reg read_valid;
+wire [DATA_WIDTH-1:0] stored_value;
+always @(posedge clk) begin
+    if (rst) begin
+        entry_valid <= 0;
+        read_valid <= 0;
+    end else begin
+        if (wren) entry_valid[wr_cnt] <= 1'b1;
+        if (rden) read_valid <= entry_valid[rd_cnt];
+    end
+end
+assign DO = read_valid ? stored_value : {DATA_WIDTH{1'b0}};
 reg [clogb2(DEPTH-1)-1:0] rd_cnt;
 reg [clogb2(DEPTH-1)-1:0] wr_cnt;
 
@@ -415,7 +429,7 @@ fifo_ram
   .rst(rst),                       // Port A and B output reset (does not affect memory contents)
   .regceb(1'b1),                   // Port B output register enable
   
-  .doutb(DO)              // Port B RAM output data
+  .doutb(stored_value)              // Port B RAM output data
     );
 
 
@@ -756,6 +770,7 @@ module layer_lp
     parameter WEIGHT_DEPTH = 8192
     )
     (
+    input bank_weights_en, input [31:0] bank_weights,
     input clk, rst,
     input en,
     input [3:0] spike_in,
@@ -857,7 +872,7 @@ weight_mem_2
     );
 
 wire signed [31:0] weights;
-assign weights = {weights_out_1,weights_out_2};
+assign weights = bank_weights_en ? bank_weights : {weights_out_1,weights_out_2};
 
 ///////////////////////////////////////////////////////////
 //                            _       _   _              //
@@ -1117,6 +1132,7 @@ module snn_lp
 )
     (
     // input
+    input bank_weights_en, input [63:0] bank_weights, output [6:0] bank_word_addr,
     input clk, rst,
     input en,
     input [3:0] spike_in,
@@ -1232,6 +1248,7 @@ layer_lp
     )
 layer_lp_l1_i
     (
+    .bank_weights_en(bank_weights_en), .bank_weights({bank_weights[15:0],bank_weights[31:16]}),
     .clk(clk), .rst(rst),
     .en(layer_enable_dd),
     .spike_in(spike_mem_out),
@@ -1294,6 +1311,7 @@ layer_lp
     )
 layer_lp_l2_i
     (
+    .bank_weights_en(bank_weights_en), .bank_weights({bank_weights[47:32],bank_weights[63:48]}),
     .clk(clk), .rst(rst),
     .en(layer_enable_dd),
     .spike_in(spike_mem_out),
@@ -1547,8 +1565,10 @@ wire stream_out_1, stream_out_2;
 wire [clogb2(MAX_SYNAPSES/4-1)-1:0] words_to_read_1, words_to_read_2, words_to_read;
 wire empty, empty_1, empty_2;
 
+// Final-layer outputs leave the core. Feeding them into the input stack
+// contaminates the next frame and can overflow the active-group count.
 wire stack_en_1;
-assign stack_en_1 = (v1 && v2 && (ag1 || ag2) && layer_counter[0]) || (en & active_group_in);
+assign stack_en_1 = (v1 && v2 && (ag1 || ag2) && layer_counter[0] && layer_counter != LAYERS-1) || (en & active_group_in);
 assign stream_out_1 = (spike_written && ~spike_written_counter[0]) || (stream_out_done_1  && (neuron_cnt != NEURON));
 stack
 #(
@@ -1570,7 +1590,7 @@ stack_1
 );
 
 wire stack_en_2;
-assign stack_en_2 = v1 && v2 && (ag1 || ag2) && ~layer_counter[0];
+assign stack_en_2 = v1 && v2 && (ag1 || ag2) && ~layer_counter[0] && layer_counter != LAYERS-1;
 assign stream_out_2 = (spike_written && spike_written_counter[0]) || (stream_out_done_2 && (neuron_cnt != NEURON));
 stack
 #(
@@ -1678,6 +1698,7 @@ assign spike_mem_out = empty?4'b0:layer_counter[0]?spike_mem_out_2:spike_mem_out
 
 // weight_rd_addr concat neuron_cnt and spike_rd_addr 
 wire [WEIGHT_ADDRESS_SIZE-1:0] weight_rd_addr;
+assign bank_word_addr = weight_rd_addr;
 
 assign weight_rd_addr = (layer_counter == 0)?{layer_counter, {P1{1'b0}},
 											  neuron_cnt[clogb2(NEURON_1/2-1)-1:0], 

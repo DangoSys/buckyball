@@ -12,6 +12,11 @@ import buckyball.balls.syntzulu.{Params => ParametersProto}
 
 class SyntzuluBridge extends BlackBox with HasBlackBoxResource {
   val io = IO(new Bundle {
+    val bank_mode = Input(Bool())
+    val bank_hit = Input(Bool())
+    val bank_word = Input(UInt(64.W))
+    val weight_request = Output(Bool())
+    val weight_address = Output(UInt(7.W))
     val clock = Input(Clock())
     val reset = Input(Bool())
     val cmd_valid = Input(Bool())
@@ -57,12 +62,24 @@ class SyntzuluBall(link: BlinkParam, route: BallRouteParam) extends Module with 
   val source = Reg(UInt(link.bankIdBits.W))
   val sourceGroup = Reg(UInt(link.groupIdBits.W))
   val frame = Reg(UInt(16.W))
+  val delaySteps = Reg(UInt(2.W))
   val pair = RegInit(0.U(3.W))
 
+  val shared = RegInit(false.B)
+  val lineValid = RegInit(false.B)
+  val pending = RegInit(false.B)
+  val lineIndex = Reg(UInt(6.W))
+  val lineData = Reg(UInt(128.W))
+  val weightRow = core.io.weight_address(6, 1)
+  val hit = lineValid && lineIndex === weightRow
+  core.io.bank_mode := shared
+  core.io.bank_hit := hit
+  core.io.bank_word := Mux(core.io.weight_address(0), lineData(127,64), lineData(63,0))
+  val needLine = shared && state === executing && core.io.weight_request && !hit
   command.ready := state === idle && core.io.cmd_ready
   core.io.cmd_valid := (state === idle && command.valid && matches.asUInt.orR) ||
     state === launch || state === selectOutput
-  core.io.cmd_data := Mux(state === launch, frame, Mux(state === selectOutput, pair, command.bits.rs2(39, 0)))
+  core.io.cmd_data := Mux(state === launch, Cat(delaySteps, frame), Mux(state === selectOutput, pair, command.bits.rs2(39, 0)))
   core.io.cmd_op := Mux(state === launch, 1.U, Mux(state === selectOutput, 2.U, OHToUInt(matches.asUInt)))
   core.io.rsp_ready := state === executing || state === collect
   when(command.fire) {
@@ -72,19 +89,26 @@ class SyntzuluBall(link: BlinkParam, route: BallRouteParam) extends Module with 
     group := command.bits.wr_group
     source := command.bits.op1_bank
     sourceGroup := command.bits.op1_group
+    delaySteps := command.bits.rs2(1, 0)
+    shared := bankCommand && command.bits.rs2(2)
+    lineValid := false.B
+    pending := false.B
+    frame := command.bits.rs2(31,16)
     fromBank := bankCommand
     pair := 0.U
-    state := Mux(bankCommand, fetch, executing)
+    state := Mux(bankCommand, Mux(command.bits.rs2(2) || command.bits.rs2(3), launch, fetch), executing)
   }
   val read = blink.bankRead(0)
   read.bank_id := source
   read.group_id := sourceGroup
   read.rob_id := rob
-  read.io.req.valid := state === fetch
-  read.io.req.bits.addr := 0.U
-  read.io.resp.ready := state === receive
-  when(read.io.req.fire) { state := receive }
-  when(read.io.resp.fire) { frame := read.io.resp.bits.data(15, 0); state := launch }
+  read.io.req.valid := state === fetch || (needLine && !pending)
+  read.io.req.bits.addr := Mux(needLine, weightRow, 0.U)
+  read.io.resp.ready := state === receive || pending
+  when(read.io.req.fire && state === fetch) { state := receive }
+  when(read.io.req.fire && needLine) { pending := true.B; lineIndex := weightRow; lineValid := false.B }
+  when(read.io.resp.fire && pending) { lineData := read.io.resp.bits.data; lineValid := true.B; pending := false.B }
+  when(read.io.resp.fire && state === receive) { frame := read.io.resp.bits.data(15, 0); state := launch }
   when(state === launch && core.io.cmd_ready) { state := executing }
   when(state === selectOutput && core.io.cmd_ready) { state := collect }
   when(core.io.rsp_valid && core.io.rsp_ready) {

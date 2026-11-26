@@ -14,7 +14,7 @@ class SpikeIoBall(link: BlinkParam, route: BallRouteParam) extends Module with H
   route.parameters.unpack(classOf[buckyball.balls.spikeio.Params])
   require(link.bankWidth == 128 && link.bankEntries >= 8 && route.inBW == 1 && route.outBW == 1)
   val codes = route.instructions.map(i => i.mnemonic -> i.funct7).toMap
-  require(codes.keySet == Set("SPIKE_ARGMAX", "SPIKE_ENCODE") && codes.values.forall(_ >> 4 == 3))
+  require(Set("SPIKE_ARGMAX", "SPIKE_ENCODE").subsetOf(codes.keySet) && codes.keySet.subsetOf(Set("SPIKE_ARGMAX", "SPIKE_ENCODE", "SPIKE_COUNT")) && codes.values.forall(_ >> 4 == 3))
   @public val blink = IO(new BlinkIO(link, route))
   val idle :: reading :: receiving :: writing :: acknowledging :: complete :: Nil = Enum(6)
   val state = RegInit(idle)
@@ -23,6 +23,7 @@ class SpikeIoBall(link: BlinkParam, route: BallRouteParam) extends Module with H
   val best = Reg(SInt(16.W))
   val winner = Reg(UInt(4.W))
   val result = Reg(UInt(16.W))
+  val count = codes.get("SPIKE_COUNT").map(code => command.funct === code.U).getOrElse(false.B)
   val encode = command.funct === codes("SPIKE_ENCODE").U
   blink.cmdReq.ready := state === idle
   when(blink.cmdReq.fire) {
@@ -49,7 +50,10 @@ class SpikeIoBall(link: BlinkParam, route: BallRouteParam) extends Module with H
   val candidate = Mux(lane, hi, lo)
   val index = Cat(row, lane)
   when(read.io.resp.fire) {
-    when(encode) {
+    when(count) {
+      result := PopCount(data(15,0))
+      state := writing
+    }.elsewhen(encode) {
       result := spikes.asUInt
       state := writing
     }.otherwise {
