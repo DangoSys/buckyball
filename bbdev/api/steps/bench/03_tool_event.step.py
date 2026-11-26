@@ -15,7 +15,7 @@ utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")
 if utils_path not in sys.path:
     sys.path.insert(0, utils_path)
 
-from steps.bebop.p2e.scripts.runtime_case import trace_modes
+from steps.bebop.p2e.scripts.runtime_case import case_ready, trace_modes
 from utils.event_common import check_result, get_origin_trace_id, require_target
 from utils.verilator_turn import verilator_turn
 from utils.path import design_output_root, get_buckyball_path
@@ -222,7 +222,7 @@ async def p2e(
     cases = sorted(
         bit
         for bit in (output / "p2e").glob("*/fpgaCompDir/bitstream.bit")
-        if os.access(bit.parent.parent / "bebop-p2e", os.X_OK)
+        if case_ready(bit)
         and (
             trace_modes(str(bit)) & built
             if data["diff"]

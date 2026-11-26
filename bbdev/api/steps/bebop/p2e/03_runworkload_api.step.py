@@ -1,7 +1,6 @@
 from utils.event_common import require_product, require_target
 
 from motia import ApiRequest, ApiResponse, FlowContext, api
-from steps.bebop.p2e.scripts.runtime_case import validate_runtime_reuse
 
 config = {
     "name": "bebop-p2e-runworkload-api",
@@ -14,6 +13,35 @@ config = {
 
 async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
     body = request.body or {}
+    allowed = {
+        "config",
+        "device",
+        "hart",
+        "model",
+        "bench",
+        "test",
+        "os",
+        "bitstream",
+        "fpga-location",
+        "fpga_location",
+        "multi-fpga",
+        "wave",
+        "wave-start",
+        "diff",
+        "ddr-image",
+        "model-image",
+        "model-offset",
+        "itrace",
+        "mtrace",
+        "pmctrace",
+        "ctrace",
+        "banktrace",
+    }
+    if unknown := body.keys() - allowed:
+        return ApiResponse(
+            status=400,
+            body={"error": f"unknown parameter(s): {', '.join(sorted(unknown))}"},
+        )
     try:
         selection = require_target(body, ("device", "hart"))
         require_product(body)
@@ -23,17 +51,6 @@ async def handler(request: ApiRequest, ctx: FlowContext) -> ApiResponse:
         return ApiResponse(status=400, body={"error": "bitstream is required"})
     if body.get("ddr-image") is not None and not body.get("diff", False):
         return ApiResponse(status=400, body={"error": "ddr-image requires diff"})
-    bitstream = body["bitstream"]
-    if body.get("reuse-runtime", False):
-        try:
-            validate_runtime_reuse(
-                bitstream,
-                bool(body.get("diff", False)),
-                bool(body.get("itrace", False)),
-                bool(body.get("mtrace", False)),
-            )
-        except (ValueError, OSError) as error:
-            return ApiResponse(status=400, body={"error": str(error)})
     await ctx.enqueue(
         {
             "topic": "bebop.p2e.runworkload",

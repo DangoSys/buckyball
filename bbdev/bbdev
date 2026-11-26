@@ -220,7 +220,7 @@ WORKFLOW_COMMANDS = {
             " <hart>) ((--model <model> | --bench <bench>) --os (baremetal | linux) | --test <name>)"
             " --bitstream <path> [--fpga-location"
             " <N.X>] [--multi-fpga] [--wave] [--wave-start <cycle>] [--diff [--ddr-image <path>]] [--itrace]"
-            ' [--mtrace] [--pmctrace] [--ctrace] [--reuse-runtime]"'
+            ' [--mtrace] [--pmctrace] [--ctrace]"'
         ),
         "batch": (
             'Run Bebop P2E batch regression. Args: "[--config <config>] --device <device>'
