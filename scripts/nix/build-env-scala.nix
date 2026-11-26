@@ -31,6 +31,25 @@ in
   # Build tool for Scala, Java and more
   inherit mill;
 
+  # Chisel 6.7.0 uses CIRCT firtool 1.62.1.
+  firtool = pkgs.stdenv.mkDerivation rec {
+    pname = "firtool";
+    version = "1.62.1";
+    src = pkgs.fetchurl {
+      url = "https://repo.maven.apache.org/maven2/org/chipsalliance/llvm-firtool/${version}/llvm-firtool-${version}-linux-x64.jar";
+      hash = "sha256-Y6zctY7RLUwaoOze3G4kJaJS6U7vt135JTwRjX0iIDk=";
+    };
+    dontUnpack = true;
+    nativeBuildInputs = [ pkgs.unzip pkgs.autoPatchelfHook ];
+    buildInputs = [ pkgs.zlib pkgs.stdenv.cc.cc.lib ];
+    installPhase = ''
+      mkdir -p $out/bin
+      unzip -p "$src" org.chipsalliance/llvm-firtool/linux-x64/bin/firtool > $out/bin/firtool
+      chmod +x $out/bin/firtool
+    '';
+    meta.platforms = [ "x86_64-linux" ];
+  };
+
   # Scala formatter - use coursier to get 2.7.5
   scalafmt = pkgs.writeShellApplication {
     name = "scalafmt";
