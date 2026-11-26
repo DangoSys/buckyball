@@ -21,11 +21,31 @@ begin_step() {
 
 begin_step "0-2" "submodules init"
 cd "$BBDIR"
-git submodule sync --recursive
+git submodule sync
 git submodule update --init --progress
-git submodule foreach 'case "$sm_path" in
-  examples/prefab/*) git submodule update --init --recursive ;;
-esac'
+git -C examples/prefab/harts/rocket/thirdparty/rocket-chip submodule update --init --progress -- \
+  dependencies/cde \
+  dependencies/diplomacy \
+  dependencies/hardfloat
+git -C examples/prefab/harts/boom/thirdparty/rocket-chip submodule update --init --progress -- \
+  dependencies/cde \
+  dependencies/diplomacy \
+  dependencies/hardfloat
+
+git -C examples/prefab/harts/xiangshan/thirdparty/xiangshan submodule update --init --progress -- \
+  rocket-chip \
+  difftest \
+  utility \
+  huancun \
+  fudian \
+  yunsuan \
+  coupledL2 \
+  openLLC \
+  ChiselAIA \
+  ChiselIOPMP
+git -C examples/prefab/harts/xiangshan/thirdparty/xiangshan/rocket-chip submodule update --init --progress -- cde hardfloat
+git -C examples/prefab/harts/xiangshan/thirdparty/xiangshan/openLLC submodule update --init --progress -- openNCB
+
 git -C "$BBDIR/stack" submodule update --init --progress os/linux
 git -C "$BBDIR/stack" submodule update --init --depth 1 --single-branch --recommend-shallow --progress \
   os/thirdparty/linux \
