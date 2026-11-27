@@ -1,0 +1,10 @@
+[designs]
+include = "designs/spark.toml"
+
+[sims]
+verilator = "sims.verilator.BuckyballSparkVerilatorConfig"
+p2e = "sims.p2e.BuckyballSparkLinuxP2EConfig"
+
+[uvm]
+balls = ["smatmul", "toint8", "int2fp", "transpose"]
+ips = []
