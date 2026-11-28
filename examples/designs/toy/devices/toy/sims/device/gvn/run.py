@@ -21,7 +21,6 @@ compiled with the nv pipeline and run on the GPU.
 import csv
 import argparse
 import concurrent.futures
-import datetime
 import hashlib
 import math
 import mmap
@@ -282,19 +281,15 @@ def main():
     print(
         f"{len(instances)} instances: one of each of {len(patterns)} distinct slices of {len(slices)}"
     )
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     logs = Path(
         log_dir(
             repo,
             args.design,
-            "device",
-            stamp,
             "gvn",
             args.model,
             selection=f"device/{args.device}/{stem}",
         )
     )
-    logs.mkdir(parents=True, exist_ok=True)
     (logs / "slices.json").write_text(json.dumps(slices, indent=2) + "\n")
     bemu = config / "bin/bebop-bemu"
 

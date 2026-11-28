@@ -14,7 +14,7 @@ pub fn execute_known(ball_class: &str, funct: u32, xs1: u64, xs2: u64, ctx: &mut
         return None;
     }
     let mnemonic = bebop_bemu::ball::blink::mnemonic_for_funct(funct)?;
-    let result = match mnemonic.as_str() {
+    let result = match mnemonic {
         "GEMMINI_CONFIG" => gemmini_config::GemminiConfig::exec(xs1, xs2, ctx),
         "GEMMINI_FLUSH" => gemmini_flush::GemminiFlush::exec(xs1, xs2, ctx),
         "GEMMINI_PRELOAD" => gemmini_preload::GemminiPreload::exec(xs1, xs2, ctx),
@@ -44,7 +44,7 @@ pub fn cycles_after_issue(
         return None;
     }
     let mnemonic = bebop_bemu::ball::blink::mnemonic_for_funct(funct)?;
-    let latency = match mnemonic.as_str() {
+    let latency = match mnemonic {
         "GEMMINI_CONFIG" => gemmini_config::GemminiConfig::latency(xs1, xs2),
         "GEMMINI_FLUSH" => gemmini_flush::GemminiFlush::latency(xs1, xs2),
         // Their cycles follow the configuration the last GEMMINI_CONFIG set.

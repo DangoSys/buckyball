@@ -1,7 +1,10 @@
 import asyncio
 import fcntl
 import json
+import os
 import re
+import shutil
+import subprocess
 import tempfile
 import tomllib
 from pathlib import Path
@@ -44,6 +47,8 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
     """FPGA GVN (fpga-gvn: each distinct slice's reference ELF, its cycles
     times its repeats; with debug, each one's check against BEMU, pass or
     fail) or whole models (fpga-model)."""
+    if not selected:
+        return {"status": "skipped"}
     repo = Path(get_buckyball_path())
     output = Path(
         design_output_root(repo, target["design"], selection=target["target"])
@@ -93,9 +98,20 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
                     Path(directory) / (name + ".hex"),
                     "riscv64-unknown-elf-objcopy",
                 )
-                state, body = await run(
-                    ctx, "bebop.p2e.runworkload", {**hardware, "test": name}
-                )
+                args = {**hardware, "test": name}
+                # A model whose parameters lie in its model region has its
+                # DDR image beside its ELF, as BEMU loads it: the board takes
+                # the image from where its data starts.
+                ddr = elf.with_name(elf.name + "-ddr.bin")
+                if ddr.is_file():
+                    model = Path(directory) / "model.img"
+                    with ddr.open("rb") as source, model.open("wb") as image:
+                        start = os.lseek(source.fileno(), 0, os.SEEK_DATA)
+                        source.seek(start)
+                        shutil.copyfileobj(source, image, 1 << 24)
+                    args["model-image"] = str(model)
+                    args["model-offset"] = hex(start)
+                state, body = await run(ctx, "bebop.p2e.runworkload", args)
         if state != "success":
             raise RuntimeError(f"P2E {state}: {body}")
         log = Path(body["log_dir"])
@@ -125,7 +141,8 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
                     json.loads(line) for line in manifest.read_text().splitlines()
                 ]
                 if not records or any(
-                    rec["exit"] or rec["repeats"] <= 0 for rec in records
+                    rec["exit"] or rec["repeats"] <= 0 or rec["cycles"] <= 0
+                    for rec in records
                 ):
                     raise ValueError(f"Incomplete GVN references for {model}")
                 # debug: every distinct slice; perform: the heaviest ones
@@ -224,40 +241,55 @@ async def fpga_bench(ctx, target, node, request, selected, write, debug):
                     row = {"model": model, "os": os_name, "status": "running"}
                     rows.append(row)
                     write()
-                    product = {"model": model, "os": os_name}
-                    elf = None
-                    if os_name == "linux":
-                        state, body = await run(
-                            ctx, "image.build", {**target, "model": model}
-                        )
-                        if state != "success":
-                            raise RuntimeError(
-                                f"Linux image build failed for {model}: {body}"
+                    try:
+                        product = {"model": model, "os": os_name}
+                        elf = None
+                        if os_name == "linux":
+                            state, body = await run(
+                                ctx, "image.build", {**target, "model": model}
                             )
-                    else:
-                        elf = (
-                            output
-                            / "workloads/models"
-                            / f"{target['design']}-{model}-baremetal"
+                            if state != "success":
+                                raise RuntimeError(
+                                    f"Linux image build failed for {model}: {body}"
+                                )
+                        else:
+                            elf = (
+                                output
+                                / "workloads/models"
+                                / f"{target['design']}-{model}-baremetal"
+                            )
+                        log, seconds = await execute(product, elf)
+                        row["log"] = log.name
+                        uart = "\n".join(
+                            path.read_text()
+                            for path in sorted(log.glob("uart_hart_*.log"))
                         )
-                    log, seconds = await execute(product, elf)
-                    row["log"] = log.name
-                    uart = "\n".join(
-                        path.read_text() for path in sorted(log.glob("uart_hart_*.log"))
-                    )
-                    (cycles,) = re.findall(r"Inference cycles: (\d+)", uart)
-                    check = re.search(
-                        r"Output max diff: ([0-9.eE+-]+) \((\d+) elements, relative ([0-9.eE+-]+)\)",
-                        uart,
-                    )
-                    if check:
-                        row.update(
-                            max_diff=float(check[1]),
-                            elements=int(check[2]),
-                            relative=float(check[3]),
+                        spans = re.findall(r"Inference cycles: (\d+)", uart)
+                        if len(spans) != 1 or int(spans[0]) <= 0:
+                            raise ValueError(
+                                f"Expected one positive inference cycle count in {log}"
+                            )
+                        cycles = int(spans[0])
+                        check = re.search(
+                            r"Output max diff: ([0-9.eE+-]+) \((\d+) elements, relative ([0-9.eE+-]+)\)",
+                            uart,
                         )
-                    row.update(
-                        status="pass", cycles=int(cycles), elapsed_s=float(seconds)
-                    )
+                        if check:
+                            row.update(
+                                max_diff=float(check[1]),
+                                elements=int(check[2]),
+                                relative=float(check[3]),
+                            )
+                        row.update(status="pass", cycles=cycles, elapsed_s=seconds)
+                    except (
+                        ValueError,
+                        RuntimeError,
+                        OSError,
+                        KeyError,
+                        subprocess.SubprocessError,
+                    ) as error:
+                        row.update(status="failure", error=str(error))
                     write()
-    return {"status": "pass" if rows else "skipped"}
+    return {
+        "status": "pass" if all(row["status"] == "pass" for row in rows) else "failure"
+    }

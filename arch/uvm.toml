@@ -1,4 +1,13 @@
 [paths]
+hart_dma = "arch/src/main/scala/tlp/memory"
+thread_tomem = "arch/src/main/scala/thread/acc/memdomain/src/main/scala/tomem"
+gpdomain = "arch/src/main/scala/thread/acc/gpdomain"
+cbus = "arch/src/main/scala/hart/cbus"
+scu = "arch/src/main/scala/device/peripherals/scu"
+trace = "arch/src/main/scala/device/peripherals/trace"
+plic = "arch/src/main/scala/device/peripherals/plic"
+clint = "arch/src/main/scala/device/peripherals/clint"
+bootrom = "arch/src/main/scala/device/peripherals/bootrom"
 thread_boot = "arch/src/main/scala/thread/acc/frontend/src/main/scala/boot"
 thread_global_rob = "arch/src/main/scala/thread/acc/frontend/src/main/scala/scheduler/src/main/scala/rob/global"
 thread_bat = "arch/src/main/scala/thread/acc/frontend/src/main/scala/scheduler/src/main/scala/bat"
@@ -44,6 +53,51 @@ muldiv = "arch/src/main/scala/hart/execution/muldiv"
 privileged = "arch/src/main/scala/hart/execution/privileged"
 integer = "arch/src/main/scala/hart/execution/integer"
 register_file = "arch/src/main/scala/hart/execution/register_file"
+
+[build.clint]
+directory = "arch/src/main/scala"
+module = "device.clint"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.plic]
+directory = "arch/src/main/scala"
+module = "device.plic"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.trace]
+directory = "arch/src/main/scala"
+module = "device.trace"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.scu]
+directory = "arch/src/main/scala"
+module = "device.scu"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
+
+[build.gpdomain]
+directory = "arch/src/main/scala"
+module = "thread.acc.gpdomain"
+arguments = ["--config", "{config}", "--design-pb", "{design_pb}", "--output-dir", "{rtl}"]
+
+[build.thread_tomem]
+directory = "arch/src/main/scala"
+module = "thread.acc.memdomain.tomem"
+arguments = ["--design-pb", "{design_pb}", "--output-dir", "{rtl}"]
+
+[build.hart_dma]
+directory = "arch/src/main/scala"
+module = "tlp.memory"
+arguments = ["--design-pb", "{design_pb}", "--output-dir", "{rtl}"]
+
+[build.cbus]
+directory = "arch/src/main/scala"
+module = "hart.cbus"
+arguments = ["--config", "{config}", "--design-pb", "{design_pb}", "--output-dir", "{rtl}"]
+
+[build.bootrom]
+directory = "arch/src/main/scala"
+module = "device.bootrom"
+arguments = ["--config", "{config}", "--output-dir", "{rtl}"]
 
 [build.ant]
 directory = "arch/src/main/scala"

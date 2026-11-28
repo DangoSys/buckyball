@@ -4,7 +4,9 @@ entry, run by `bbdev gvn-bemu --debug`; this module builds the GVN plugins and
 runs commands.
 """
 
+import asyncio
 import fcntl
+import functools
 import re
 import struct
 import subprocess
@@ -14,6 +16,32 @@ from pathlib import Path
 repo = Path(__file__).resolve().parents[5]
 # bbdev's own modules (utils.path: log_dir), as its steps import them.
 sys.path.insert(0, str(repo / "bbdev/api"))
+
+from utils.path import design_output_root  # noqa: E402
+
+
+def model_turn(handler):
+    """Protect the model's generated MLIR, slice ELFs and manifest across workers."""
+
+    @functools.wraps(handler)
+    async def locked(data, ctx):
+        if "model" not in data:
+            return await handler(data, ctx)
+        output = Path(
+            design_output_root(repo, data["design"], selection=data["target"])
+        )
+        directory = output / "gvn"
+        directory.mkdir(parents=True, exist_ok=True)
+        with (directory / f".{Path(data['model']).name}.lock").open("a") as lock:
+            while True:
+                try:
+                    fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    await asyncio.sleep(1)
+            return await handler(data, ctx)
+
+    return locked
 
 
 def run(command, **options):
@@ -56,24 +84,28 @@ def bank_operations(text):
     return operations
 
 
-def table_offset(elf):
-    """The file offset of gvn_table in an ELF."""
-    image = elf.read_bytes()
+def symbol_offset(elf, symbol):
+    """Locate a file-backed RV64 word in the loadable ELF segments."""
     symbols = subprocess.check_output(
         [repo / "stack/result/bin/riscv64-unknown-elf-nm", "--defined-only", elf],
         text=True,
     )
-    (address,) = re.findall(r"^([0-9a-fA-F]+) \w gvn_table$", symbols, re.MULTILINE)
+    (address,) = re.findall(rf"^([0-9a-fA-F]+) \w {re.escape(symbol)}$", symbols, re.M)
     address = int(address, 16)
-    phoff = struct.unpack_from("<Q", image, 32)[0]
-    phentsize, phnum = struct.unpack_from("<HH", image, 54)
-    segments = [
-        struct.unpack_from("<IIQQQQQQ", image, phoff + i * phentsize)
-        for i in range(phnum)
-    ]
+    with elf.open("rb") as stream:
+        header = struct.unpack("<16sHHIQQQIHHHHHH", stream.read(64))
+        stream.seek(header[5])
+        segments = [
+            struct.unpack_from("<IIQQQQQQ", stream.read(header[9]))
+            for _ in range(header[10])
+        ]
     (segment,) = [
-        segment
-        for segment in segments
-        if segment[0] == 1 and segment[3] <= address < segment[3] + segment[5]
+        s
+        for s in segments
+        if s[0] == 1 and s[3] <= address and address + 8 <= s[3] + s[5]
     ]
     return segment[2] + address - segment[3]
+
+
+def table_offset(elf):
+    return symbol_offset(elf, "gvn_table")

@@ -3,7 +3,6 @@ import os
 import re
 import sys
 import yaml
-from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -137,12 +136,9 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return failure_result
 
-    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     yosys_output_dir = input_data.get("analysis_dir") or log_dir(
         bbdir,
         design,
-        "synth",
-        stamp,
         "yosys",
         top_module,
         selection=input_data["target"],

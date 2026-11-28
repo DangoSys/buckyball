@@ -1,4 +1,3 @@
-import datetime
 import os
 import shlex
 import sys
@@ -6,6 +5,7 @@ import sys
 from motia import FlowContext, queue
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from steps.gvn.scripts.gvn import model_turn
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import (
     load_design_config,
@@ -29,6 +29,7 @@ config = {
 own = {"config", "device", "design", "target", "_trace_id"}
 
 
+@model_turn
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     trace_id = get_origin_trace_id(input_data, ctx)
     repo = get_buckyball_path()
@@ -74,13 +75,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     logs = log_dir(
         repo,
         design,
-        "device",
-        datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
         "gvn-verilator-debug",
         input_data["model"],
         selection=selection,
     )
-    os.makedirs(logs)
     result = await stream_run_logger_async(
         cmd=shlex.join(
             [
@@ -94,7 +92,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 str(
                     max(
                         1,
-                        os.cpu_count()
+                        len(os.sched_getaffinity(0))
                         // load_design_config(
                             repo, design, selection=selection
                         ).sims.verilator_threads

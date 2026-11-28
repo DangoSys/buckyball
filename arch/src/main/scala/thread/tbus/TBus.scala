@@ -4,7 +4,8 @@ import framework.generic.contract.tlink.Task
 
 import chisel3._
 import chisel3.util._
-import chisel3.experimental.hierarchy.{instantiable, public}
+import chisel3.experimental.hierarchy.{instantiable, public, Instantiate}
+import framework.generic.clock.ClockGate
 import framework.thread.configs.ThreadParam
 import framework.generic.contract.memory.access.preflight.configs.PmpParams
 import framework.generic.contract.sims.configs.SimParam
@@ -33,12 +34,25 @@ class TBus(
   })
 
   require(generators.size == threads.size)
-  val endpoints = generators.map(_())
 
-  for ((link, index) <- endpoints.zipWithIndex) {
+  // A thread's clock runs while it works or anything reaches it: a task it runs or completes, a
+  // launch, transfer or cancel for it, its TSS and DMA traffic either way, and reset. An idle
+  // thread holds its state, and its outputs hold too, so a request that arrives is taken at the
+  // edge of the cycle it arrives in.
+  for ((generator, index) <- generators.zipWithIndex) {
+    val gate = Instantiate(new ClockGate)
+    gate.io.clock := clock
+    val link = withClock(gate.io.gated)(generator())
     io.control.get(index) <> link.task
     io.tss.get(index) <> link.tss
     io.dma(index) <> link.dma
+    val task = io.control.get(index)
+    val dma  = io.dma(index)
+    gate.io.enable := reset.asBool || link.task.running || link.task.storageBusy ||
+      link.task.result.valid || link.task.transferred.valid || task.transfer.valid ||
+      task.start.valid || task.cancel || link.tss.request.valid || io.tss.get(index).response.valid ||
+      link.dma.read.valid || link.dma.write.valid || link.dma.writeData.valid ||
+      dma.writeData.credit || dma.readData.valid || dma.completed.valid
   }
 }
 

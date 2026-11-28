@@ -2,6 +2,8 @@ import json
 import os
 import re
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 
@@ -140,17 +142,27 @@ def _log_part(value, what):
     return value
 
 
-def log_dir(bbdir, design, product, stamp, tool, name, *, selection=None):
+def log_dir(bbdir, design, tool, name, *, selection=None):
+    """Create a run directory and return its path, reserving the timestamp atomically."""
     # A component alone (its directory relative to examples) is named by its
     # design, or "prefab"; the selection names the component.
     parts = _design_name(design).split("/")
     design = _log_part(parts[1] if parts[0] == "designs" else parts[0], "design")
-    stamp = _log_part(stamp, "timestamp")
     tool = _log_part(tool, "tool")
     name = _log_part(os.path.basename(name), "name")
     if selection is not None:
         name = _log_part(selection.replace("/", "-"), "target") + "-" + name
-    return os.path.join(bbdir, "log", f"{stamp}-{design}-{tool}-{name}")
+    root = Path(bbdir) / "log"
+    root.mkdir(parents=True, exist_ok=True)
+    while True:
+        now = datetime.now()
+        path = root / f"{now:%Y-%m-%d-%H-%M-%S}-{design}-{tool}-{name}"
+        try:
+            path.mkdir()
+            return str(path)
+        except FileExistsError:
+            # The same design, tool and task are already using this second.
+            time.sleep(1 - now.microsecond / 1_000_000)
 
 
 def run_log_dir(bbdir, run):

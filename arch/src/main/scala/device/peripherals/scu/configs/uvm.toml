@@ -1,0 +1,11 @@
+[parameters]
+base = 1610612736
+stride = 262144
+bytes = 1048576
+maxHarts = 2
+tagBits = 6
+
+[defines]
+MMIO_BASE = "base"
+SCU_STRIDE = "stride"
+SCU_TAG_BITS = "tagBits"

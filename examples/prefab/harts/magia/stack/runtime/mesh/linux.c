@@ -48,8 +48,8 @@ static uint64_t place(uint64_t address, uint64_t bytes, uint64_t *used) {
   return MAGIA_L2 + offset;
 }
 
-void magia_gemm(uint64_t x, uint64_t w, uint64_t z, uint64_t m, uint64_t n,
-                uint64_t k) {
+void magia_gemm(uint64_t x, uint64_t w, uint64_t z, uint64_t batch, uint64_t m,
+                uint64_t n, uint64_t k) {
   if (!l2) {
     int memory = open("/dev/mem", O_RDWR);
     if (memory < 0)
@@ -61,10 +61,10 @@ void magia_gemm(uint64_t x, uint64_t w, uint64_t z, uint64_t m, uint64_t n,
     memcpy(l2, magia_firmware, magia_firmware_end - magia_firmware);
   }
   uint64_t used = 0;
-  uint64_t xs = place(x, m * n * 2, &used);
-  uint64_t ws = place(w, n * k * 2, &used);
-  uint64_t zs = place(z, m * k * 2, &used);
-  magia_jobs(l2, xs, ws, zs, m, n, k);
+  uint64_t xs = place(x, batch * m * n * 2, &used);
+  uint64_t ws = place(w, batch * n * k * 2, &used);
+  uint64_t zs = place(z, batch * m * k * 2, &used);
+  magia_jobs(l2, xs, ws, zs, batch, m, n, k);
   if (zs - MAGIA_L2 < MAGIA_RESERVED)
-    memcpy((void *)z, l2 + (zs - MAGIA_L2), m * k * 2);
+    memcpy((void *)z, l2 + (zs - MAGIA_L2), batch * m * k * 2);
 }

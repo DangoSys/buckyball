@@ -3,8 +3,7 @@ distinct slice of the debug run (one instance each, instances.jsonl of the
 design's driver) runs once, cold, on Verilator; the estimate is the sum of
 each slice's Verilator cycles times the times it runs in the whole model.
 Host CPU work between launches is not counted, nor slices that fail or run
-past thirty minutes on Verilator (listed with their exit, -1 for the time out,
--2 for one not run, which the slices that ran show would take that long).
+past thirty minutes on Verilator (listed with their exit, -1 for a timeout).
 
   python3 verilator.py <gvn output> <Verilator simulator> <log dir> <jobs> (turn|beside) (perform|debug)
 
@@ -34,6 +33,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from gvn import table_offset  # noqa: E402
+import bank_output  # noqa: E402
 from utils.verilator_turn import verilator_turn  # noqa: E402
 
 out, simulator, logs, jobs, turn, mode = (
@@ -51,10 +51,7 @@ if turn not in ("turn", "beside"):
 # exit), pass or fail.
 if mode not in ("perform", "debug"):
     sys.exit(f"the sixth argument is perform or debug, not {mode}")
-# Shortest first (by their cycles on BEMU). A slice the slices that ran show
-# would take past thirty minutes (their wall time per BEMU cycle, summed) is
-# not run (exit -2): it would only hold the host. A short slice that runs out
-# of time says nothing of the longer ones (it hangs).
+# Run the shortest BEMU slices first. Every selected slice gets an actual RTL measurement or exit.
 distinct = [
     json.loads(line) for line in (out / "instances.jsonl").read_text().splitlines()
 ]
@@ -74,7 +71,6 @@ else:
         covered += record["repeats"] * record["cycles"]
     rare = [record for record in distinct if record not in selected]
 records = sorted(selected, key=lambda record: record["cycles"])
-measured = []
 # The earlier estimates of this model (the same name after the time stamp),
 # newest first: a slice one of them measured on the same ELF (elf.sha256
 # beside its trace) is not simulated again.
@@ -89,7 +85,49 @@ earlier = sorted(
 
 
 def digest(path):
-    return hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+simulator_digest = digest(simulator)
+(logs / "simulator.sha256").write_text(simulator_digest + "\n")
+earlier = [
+    path
+    for path in earlier
+    if (path / "simulator.sha256").is_file()
+    and (path / "simulator.sha256").read_text().strip() == simulator_digest
+]
+debug_times = {}
+captures = []
+if mode == "debug":
+    for directory in earlier:
+        report = directory / "verilator-debug.json"
+        if report.is_file():
+            debug_times[directory] = {
+                r["instance"]: r["elapsed_s"]
+                for r in json.loads(report.read_text())["slices"]
+                if r["exit"] == 0 and "elapsed_s" in r
+            }
+    # A perf run of a capture ELF writes the entire RTL output into its
+    # reference ELF. An exact match with the checked BEMU ELF proves both
+    # program identity and output equality.
+    suffix = logs.name[20:]
+    if "-gvn-verilator-debug-" in suffix:
+        perf_suffix = suffix.replace("-gvn-verilator-debug-", "-gvn-verilator-", 1)
+        for directory in sorted(logs.parent.glob(f"*-{perf_suffix}"), reverse=True):
+            identity = directory / "simulator.sha256"
+            if identity.is_file() and identity.read_text().strip() == simulator_digest:
+                captures.append(directory)
+
+
+def terminal_cycles(log):
+    traces = list(
+        log.glob("trace/controller-*/thread-*/cycle/trace-9223372036854775807.txt")
+    )
+    if len(traces) != 1:
+        return None
+    spans = re.findall(r"^elapsed (\d+)$", traces[0].read_text(), re.M)
+    return int(spans[0]) if len(spans) == 1 and int(spans[0]) > 0 else None
 
 
 def measured_before(record, elf_digest):
@@ -115,12 +153,63 @@ def measured_before(record, elf_digest):
             or re.search(r"^Error:", output, re.M)
         ):
             continue
-        for trace in instance.glob(
-            "trace/controller-*/thread-*/cycle/trace-9223372036854775807.txt"
+        elapsed = None
+        if mode == "debug":
+            receipt = instance / "debug-receipt.json"
+            elapsed = (
+                json.loads(receipt.read_text())["elapsed_s"]
+                if receipt.is_file()
+                else debug_times.get(directory, {}).get(record["instance"])
+            )
+            if elapsed is None:
+                continue
+            proof = instance / "bank-output-check.json"
+            if proof.is_file():
+                check = json.loads(proof.read_text())
+                if not check["passed"] or check["bytes"] <= 0:
+                    continue
+            elif not re.search(
+                r"^Memory check passed: [1-9]\d* bytes at 0x[0-9a-fA-F]+$", output, re.M
+            ):
+                continue
+        cycles = terminal_cycles(instance)
+        if cycles is not None:
+            return cycles, directory.name, elapsed
+    for directory in captures:
+        instance = directory / record["instance"]
+        captured = instance / "reference.elf"
+        log = instance / "run.log"
+        if (
+            not captured.is_file()
+            or not log.is_file()
+            or not (instance / "rtl-trace-summary.json").is_file()
         ):
-            cycles = re.findall(r"^elapsed (\d+)$", trace.read_text(), re.MULTILINE)
-            if len(cycles) == 1 and int(cycles[0]) > 0:
-                return int(cycles[0]), directory.name
+            continue
+        output = log.read_text(errors="replace")
+        if (
+            "Verilator timed out after" in output
+            or re.search(r"^Error:", output, re.M)
+            or not re.search(
+                r"^\[SCU\] sim_exit called: hart_id=\d+, exit_code=0$", output, re.M
+            )
+            or not re.search(
+                r"^Memory reference captured: [1-9]\d* bytes at 0x[0-9a-fA-F]+$",
+                output,
+                re.M,
+            )
+            or digest(captured) != elf_digest
+        ):
+            continue
+        cycles = terminal_cycles(instance)
+        if cycles is not None:
+            record["verified_capture"] = str(captured)
+            receipt = instance / "timing.json"
+            elapsed = (
+                json.loads(receipt.read_text())["elapsed_s"]
+                if receipt.is_file()
+                else None
+            )
+            return cycles, directory.name, elapsed
     return None
 
 
@@ -131,17 +220,22 @@ def prepare(record):
     log = logs / record["instance"]
     log.mkdir(parents=True)
     elf = log / record["instance"]
-    shutil.copy2(record["elf" if mode == "perform" else "reference_elf"], elf)
+    source = record.get(
+        "verilator_reference_elf",
+        record["elf" if mode == "perform" else "reference_elf"],
+    )
+    shutil.copy2(source, elf)
     if record["iteration_slot"] >= 0:
         with elf.open("r+b") as stream:
             stream.seek(table_offset(elf) + record["iteration_slot"] * 8)
             stream.write(struct.pack("<q", 0))
     elf_digest = digest(elf)
     (log / "elf.sha256").write_text(elf_digest + "\n")
-    before = mode == "perform" and measured_before(record, elf_digest)
+    before = measured_before(record, elf_digest)
     if before:
         elf.unlink()
         record["reused"], record["reused_cycles"] = before[1], before[0]
+        record["elapsed_s"] = before[2]
 
 
 def run(record):
@@ -150,21 +244,20 @@ def run(record):
     elf = log / record["instance"]
     if "reused" in record:
         return record, 0, record["reused_cycles"]
-    if (
-        mode == "perform"
-        and measured
-        and record["cycles"] * sum(w for w, _ in measured) / sum(c for _, c in measured)
-        > 1800
-    ):
-        elf.unlink()
-        return record, -2, None
     begin = time.monotonic()
+    command = [simulator, f"--elf={elf}", f"--log-dir={log}", "--no-wave"]
+    reference = Path(record["reference_elf"]).parent if mode == "debug" else None
+    bank_check = (
+        reference is not None and (reference / "bank-output-capture.json").is_file()
+    )
+    if bank_check:
+        command.extend(["--diff", "--itrace", "--mtrace"])
     # A first estimate need not be exact: a slice past thirty minutes on
     # Verilator (the limit of one Verilator run) is left out (exit -1), not
     # waited for.
     try:
         result = subprocess.run(
-            [simulator, f"--elf={elf}", f"--log-dir={log}", "--no-wave"],
+            command,
             cwd=log,
             capture_output=True,
             text=True,
@@ -177,25 +270,57 @@ def run(record):
             stream.write(f"\nVerilator timed out after {error.timeout}s\n".encode())
         elf.unlink()
         return record, -1, None
+    finally:
+        record["elapsed_s"] = round(time.monotonic() - begin, 3)
     error = (
         f"Error: Verilator exited with status {result.returncode}\n"
         if result.returncode
         else ""
     )
     (log / "run.log").write_text(error + result.stdout + result.stderr)
-    # The ELF holds the slice's inputs, up to hundreds of MB.
+    if bank_check and not result.returncode:
+        try:
+            bank_output.check(reference, log, frozen_elf=elf)
+        except (ValueError, KeyError, AssertionError) as error:
+            with (log / "run.log").open("a") as stream:
+                stream.write(f"\nError: {error}\n")
+            elf.unlink()
+            return record, 1, None
     elf.unlink()
     if result.returncode:
         return record, result.returncode, None
-    measured.append((time.monotonic() - begin, record["cycles"]))
+    if (
+        mode == "debug"
+        and not bank_check
+        and not re.search(
+            r"^Memory check passed: [1-9]\d* bytes at 0x[0-9a-fA-F]+$",
+            result.stdout + result.stderr,
+            re.MULTILINE,
+        )
+    ):
+        with (log / "run.log").open("a") as stream:
+            stream.write("\nError: No BEMU reference comparison completed on RTL\n")
+        return record, 1, None
     # The slice's own span, trace id INT64_MAX (the readback ends it); the
     # graphs inside the slice trace under ids of their own. It is traced on
     # the controller and thread the slice runs on, which differ by design.
-    (trace,) = log.glob(
-        "trace/controller-*/thread-*/cycle/trace-9223372036854775807.txt"
-    )
-    (cycles,) = re.findall(r"^elapsed (\d+)$", trace.read_text(), re.MULTILINE)
-    return record, 0, int(cycles)
+    cycles = terminal_cycles(log)
+    if cycles is None:
+        with (log / "run.log").open("a") as stream:
+            stream.write("\nError: Expected one positive terminal RTL cycle span\n")
+        return record, 1, None
+    if mode == "debug":
+        # A long model can be interrupted after this slice passed.
+        receipt = log / "debug-receipt.tmp"
+        receipt.write_text(
+            json.dumps({"cycles": cycles, "elapsed_s": record["elapsed_s"]}) + "\n"
+        )
+        receipt.replace(log / "debug-receipt.json")
+    else:
+        (log / "timing.json").write_text(
+            json.dumps({"elapsed_s": record["elapsed_s"]}) + "\n"
+        )
+    return record, 0, cycles
 
 
 # The simulation time: the slices on Verilator, side by side, in the host's
@@ -222,7 +347,18 @@ if mode == "debug":
     checks = {
         "seconds": seconds,
         "slices": [
-            {"instance": record["instance"], "exit": code} for record, code, _ in runs
+            {
+                "instance": record["instance"],
+                "exit": code,
+                "elapsed_s": record["elapsed_s"],
+                **({"reused": record["reused"]} if "reused" in record else {}),
+                **(
+                    {"verified_capture": record["verified_capture"]}
+                    if "verified_capture" in record
+                    else {}
+                ),
+            }
+            for record, code, _ in runs
         ],
         "passed": sum(1 for _, code, _ in runs if code == 0),
         "failed": sum(1 for _, code, _ in runs if code != 0),
@@ -311,6 +447,4 @@ for s in slices[:10]:
         f"  {s['instance']}: {s['repeats']} x {s['cycles']} = {s['total']}"
         f" ({100 * (s['share'] or 0):.1f}%)"
     )
-# The slices that failed or ran out of time are left out of the cycles and
-# listed; the estimate fails only when no slice ran.
-sys.exit(0 if total else 1)
+sys.exit(0 if slices and all(s["exit"] == 0 and s["cycles"] > 0 for s in slices) else 1)

@@ -102,9 +102,11 @@ LogicalResult lowerRowOperators(ModuleOp module,
           cast<AffineDimExpr>(last).getPosition() == type.getRank() - 1;
       scalar.push_back(!vector);
       vectors += vector;
+      // Read only: an operator reading one value twice (the two halves of a
+      // gated product) reads it in place, not a copy.
       inputs.push_back(bufferization::ToBufferOp::create(
-          b, loc, MemRefType::get(inputType.getShape(), b.getF32Type()),
-          input));
+          b, loc, MemRefType::get(inputType.getShape(), b.getF32Type()), input,
+          true));
     }
     int64_t readGroups = std::max<int64_t>(1, vectors);
     Value descriptors = memref::AllocOp::create(

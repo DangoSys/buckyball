@@ -1,0 +1,9 @@
+[parameters]
+base = 33554432
+bytes = 65536
+tickCycles = 4
+hartIds = [0, 2]
+
+[defines]
+MMIO_BASE = "base"
+TICK_CYCLES = "tickCycles"

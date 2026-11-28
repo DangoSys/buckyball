@@ -96,27 +96,36 @@ config = "default"
 
 [[ips]]
 ip = "cbus"
+config = "default"
 
 [[ips]]
 ip = "clint"
+config = "default"
 
 [[ips]]
 ip = "plic"
+config = "default"
 
 [[ips]]
 ip = "scu"
+config = "default"
 
 [[ips]]
 ip = "trace"
+config = "default"
 
 [[ips]]
 ip = "bootrom"
+config = "default"
 
 [[ips]]
 ip = "hart_dma"
+config = "default"
 
 [[ips]]
 ip = "thread_tomem"
+config = "default"
 
 [[ips]]
 ip = "gpdomain"
+config = "default"

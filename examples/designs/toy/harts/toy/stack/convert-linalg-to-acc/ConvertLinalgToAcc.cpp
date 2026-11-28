@@ -57,15 +57,15 @@ std::optional<std::pair<Value, Value>> quantized(OpBuilder &b, Value value) {
   if (!transpose)
     return std::make_pair(codes, step);
   ArrayRef<int64_t> permutation = transpose.getPermutation();
+  // Values of no source graph: named, with no source under the name.
+  Location loc = NameLoc::get(b.getStringAttr("quantized weight"));
   auto moved = [&](Value source) -> Value {
     auto type = cast<RankedTensorType>(source.getType());
     SmallVector<int64_t> shape;
     for (int64_t dim : permutation)
       shape.push_back(type.getDimSize(dim));
-    Value init = tensor::EmptyOp::create(b, transpose.getLoc(), shape,
-                                         type.getElementType());
-    return linalg::TransposeOp::create(b, transpose.getLoc(), source, init,
-                                       permutation)
+    Value init = tensor::EmptyOp::create(b, loc, shape, type.getElementType());
+    return linalg::TransposeOp::create(b, loc, source, init, permutation)
         ->getResult(0);
   };
   return std::make_pair(moved(codes), moved(step));
@@ -131,11 +131,14 @@ void lowerContraction(::buddy::acc::CustomOp op) {
   // The loop dimension values of flat indices along each dimension group.
   auto iterators = [&](ArrayRef<std::pair<Value, ArrayRef<int64_t>>> flats) {
     SmallVector<Value> iv(ranges.size(), idx(0));
-    for (auto [flat, dims] : flats)
-      for (int64_t dim : llvm::reverse(dims)) {
+    // The outermost dimension of a group is what is left of the index.
+    for (auto [flat, dims] : flats) {
+      for (int64_t dim : llvm::reverse(dims.drop_front())) {
         iv[dim] = arith::RemUIOp::create(b, loc, flat, idx(ranges[dim]));
         flat = arith::DivUIOp::create(b, loc, flat, idx(ranges[dim]));
       }
+      iv[dims.front()] = flat;
+    }
     return iv;
   };
   auto element = [&](AffineMap map, ArrayRef<Value> iv) {
@@ -198,12 +201,61 @@ void lowerContraction(::buddy::acc::CustomOp op) {
     memref::StoreOp::create(b, loc, v, aTiles,
                             tileIndex(row, col, kt, col, row));
   });
-  loops(b, loc, k, n, [&](Value row, Value col) {
+  // B one tile at a time, along the dimension the weight keeps in its rows
+  // (a Linear's weight [N, K]: K): the reads run through 16 bytes of a row,
+  // the writes stay in the tile.
+  auto pack = [&](Value row, Value col) {
     SmallVector<Value> iv = iterators({{row, kDims}, {col, nDims}});
     Value v = memref::LoadOp::create(b, loc, filter, element(maps[1], iv));
     memref::StoreOp::create(b, loc, v, bTiles,
                             tileIndex(col, row, kt, row, col));
-  });
+  };
+  bool rows = llvm::is_contained(
+      kDims, cast<AffineDimExpr>(maps[1].getResults().back()).getPosition());
+  // The tiles [first, first + count), `guarded` past the weight's sizes.
+  auto tiles = [&](int64_t first, int64_t count, bool guarded) {
+    loops(b, loc, count, 16, [&](Value at, Value outer) {
+      // The 16 elements along a row, a loop of constant trips.
+      auto along = scf::ForOp::create(b, loc, idx(0), idx(16), idx(1));
+      OpBuilder::InsertionGuard alongGuard(b);
+      b.setInsertionPointToStart(along.getBody());
+      Value inner = along.getInductionVar();
+      Value tile = arith::AddIOp::create(b, loc, at, idx(first));
+      Value sixteen = idx(16);
+      // Lane `outer` of the weight's rows, `inner` along them.
+      Value lane = rows ? outer : inner, depth = rows ? inner : outer;
+      Value col = arith::AddIOp::create(
+          b, loc,
+          arith::MulIOp::create(
+              b, loc, arith::DivUIOp::create(b, loc, tile, idx(kt)), sixteen),
+          lane);
+      Value row = arith::AddIOp::create(
+          b, loc,
+          arith::MulIOp::create(
+              b, loc, arith::RemUIOp::create(b, loc, tile, idx(kt)), sixteen),
+          depth);
+      if (!guarded) {
+        pack(row, col);
+        return;
+      }
+      // The padding of the last tiles keeps its zeros.
+      Value inside = arith::AndIOp::create(
+          b, loc,
+          arith::CmpIOp::create(b, loc, arith::CmpIPredicate::ult, col, idx(n)),
+          arith::CmpIOp::create(b, loc, arith::CmpIPredicate::ult, row,
+                                idx(k)));
+      auto checked = scf::IfOp::create(b, loc, inside, false);
+      OpBuilder::InsertionGuard guard(b);
+      b.setInsertionPointToStart(checked.thenBlock());
+      pack(row, col);
+    });
+  };
+  // The columns of whole tiles, then the last column of a partial one.
+  int64_t whole = k % 16 ? 0 : n / 16;
+  if (whole)
+    tiles(0, whole * kt, false);
+  if (whole < nt)
+    tiles(whole * kt, (nt - whole) * kt, true);
 
   // `count` consecutive tiles from `index`.
   auto tile = [&](Value tiles, int64_t index, int64_t count) -> Value {

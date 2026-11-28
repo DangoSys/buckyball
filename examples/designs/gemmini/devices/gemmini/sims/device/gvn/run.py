@@ -18,9 +18,9 @@ of those operations, compiled with the nv pipeline and run on the GPU.
 
 import argparse
 import concurrent.futures
-import datetime
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -37,9 +37,8 @@ from gvn import build_plugins, repo, run  # noqa: E402
 
 from utils.path import log_dir  # noqa: E402
 
-# The longest slice on BEMU, in cycles: Gemmini's Verilator runs about 25k
-# cycles a second, a slice simulates within twenty minutes.
-budget = 20_000_000
+# AlexNet's 10M-cycle BEMU matmul tiles exceeded 30 minutes on RTL.
+budget = 1_000_000
 # The operations a slice of which is cut into tiles when longer.
 products = ("linalg.matmul", "linalg.batch_matmul", "linalg.batch_matmul_transpose_b")
 
@@ -174,6 +173,19 @@ def main():
         blob = blob[value["bytes"] :]
     shapes = {value["id"]: value for value in exposed}
 
+    def cuts(layout):
+        """The loops a slice's tiles cut, in order, as gvn-slice-op cuts them:
+        each one's dimension of the value, extent (a dynamic one's from the
+        GPU value) and tile size."""
+        shape = shapes[layout["output"]["id"]]["shape"]
+        left, result = layout["tiles"]["parts"], []
+        for loop in layout["tiles"]["loops"]:
+            extent = loop["extent"] if loop["extent"] >= 0 else shape[loop["dim"]]
+            cut = min(left, extent)
+            result.append((loop["dim"], extent, -(-extent // cut)))
+            left = -(-left // cut)
+        return result
+
     # ===--- One ELF per slice ---=== #
     # The operands of each slice, for the recipe's tree to embed: gvn_in
     # holds them, each 64-byte aligned; gvn_table their offsets; gvn_expect
@@ -206,21 +218,22 @@ def main():
         expected = values[output]
         tiles = layout["tiles"]
         if tiles["parts"] > 1:
+            # The first tile: the leading size of each dimension cut.
             shape = shapes[output]["shape"]
-            dim = tiles["dim"]
-            inner = sizes[shapes[output]["element"]]
-            for extent in shape[dim + 1 :]:
-                inner *= extent
-            outer = 1
-            for extent in shape[:dim]:
-                outer *= extent
-            expected = b"".join(
-                expected[
-                    row * shape[dim] * inner : row * shape[dim] * inner
-                    + tiles["size"] * inner
-                ]
-                for row in range(outer)
-            )
+            kept = list(shape)
+            for dim, _, size in cuts(layout):
+                kept[dim] = size
+
+            def first(data, depth):
+                if kept[depth:] == shape[depth:]:
+                    return data
+                stride = len(data) // shape[depth]
+                return b"".join(
+                    first(data[row * stride : (row + 1) * stride], depth + 1)
+                    for row in range(kept[depth])
+                )
+
+            expected = first(expected, 0)
         (directory / "gvn_expect.bin").write_bytes(expected)
 
     for layout in slices:
@@ -233,31 +246,30 @@ def main():
     # a distinct slice are the slices that are it, times the tiles of its
     # operation.
     def distinct():
-        patterns, repeats = {}, {}
+        patterns, repeats, members = {}, {}, {}
         for layout in slices:
             code = hashlib.sha256(
                 (out / f"slice{layout['index']}" / "slice.mlir").read_bytes()
             ).hexdigest()
             patterns.setdefault(code, layout["index"])
+            members.setdefault(patterns[code], []).append(layout["index"])
             tiles = layout["tiles"]
             repeats[patterns[code]] = repeats.get(patterns[code], 0) + (
-                tiles["extent"] / tiles["size"] if tiles["parts"] > 1 else 1
+                math.prod(extent / size for _, extent, size in cuts(layout))
+                if tiles["parts"] > 1
+                else 1
             )
-        return patterns, repeats
+        return patterns, repeats, members
 
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
     logs = Path(
         log_dir(
             repo,
             args.design,
-            "device",
-            stamp,
             "gvn",
             args.model,
             selection=f"device/{args.device}/{stem}",
         )
     )
-    logs.mkdir(parents=True, exist_ok=True)
     bemu = config / "bin/bebop-bemu"
 
     def instance(index):
@@ -304,36 +316,49 @@ def main():
     # A slice longer on BEMU than one Verilator simulation of this design
     # should take is cut into more tiles, until none is.
     begin = time.monotonic()
-    patterns, repeats = distinct()
+    patterns, repeats, members = distinct()
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
         runs = {run_[5]: run_ for run_ in pool.map(instance, patterns.values())}
 
     # Products are cut, convolutions are not: Gemmini takes square images
     # only, a tile of rows is no longer one. A slice of one iteration per
     # tile is cut no further.
+    # The most tiles of a slice: one iteration of each loop cut.
+    def limit(layout):
+        return math.prod(extent for _, extent, _ in cuts(layout))
+
     def cut(index):
         tiles = slices[index]["tiles"]
         return slices[index]["operation"] in products and (
-            tiles["parts"] == 1 or tiles["size"] > 1
+            tiles["parts"] < limit(slices[index])
         )
 
     while long := [run_ for run_ in runs.values() if run_[3] > budget and cut(run_[5])]:
+        changed = set()
         for name, _, _, cycles, _, index in long:
             parts = out / f"slice{index}" / "parts"
             tiles = int(parts.read_text()) * -(-cycles // budget)
             if slices[index]["tiles"]["parts"] > 1:
-                tiles = min(tiles, slices[index]["tiles"]["extent"])
+                tiles = min(tiles, limit(slices[index]))
             print(f"{name}: {cycles} cycles, cut into {tiles} tiles")
-            parts.write_text(f"{tiles}\n")
+            for member in members[index]:
+                (out / f"slice{member}" / "parts").write_text(f"{tiles}\n")
+                changed.add(member)
         build("gvn")
         slices = layouts()
-        for name, _, _, _, _, index in long:
+        for index in changed:
             fixtures(slices[index])
         build("gvn-elf")
-        patterns, repeats = distinct()
+        patterns, repeats, members = distinct()
+        runs = {i: runs[i] for i in patterns.values() if i in runs and i not in changed}
         with concurrent.futures.ThreadPoolExecutor(args.jobs) as pool:
             runs.update(
-                {run_[5]: run_ for run_ in pool.map(instance, [r[5] for r in long])}
+                {
+                    r[5]: r
+                    for r in pool.map(
+                        instance, [i for i in patterns.values() if i not in runs]
+                    )
+                }
             )
     elapsed = time.monotonic() - begin
     runs = [runs[index] for index in patterns.values()]
@@ -358,7 +383,7 @@ def main():
         for name, code, report, cycles, seconds, index in runs
     )
     (logs / "instances.jsonl").write_text(manifest)
-    published = out / f"instances-{stamp}.jsonl.tmp"
+    published = out / f"instances-{logs.name}.jsonl.tmp"
     published.write_text(manifest)
     published.replace(out / "instances.jsonl")
     for name, code, report, cycles, seconds, _ in runs:

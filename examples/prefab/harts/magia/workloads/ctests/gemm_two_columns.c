@@ -15,8 +15,8 @@
 #define N_SIZE 16
 #define K_SIZE 32
 
-void magia_gemm(uint64_t x, uint64_t w, uint64_t z, uint64_t m, uint64_t n,
-                uint64_t k);
+void magia_gemm(uint64_t x, uint64_t w, uint64_t z, uint64_t batch, uint64_t m,
+                uint64_t n, uint64_t k);
 
 static uint16_t x[M_SIZE * N_SIZE];
 static uint16_t w[N_SIZE * K_SIZE];
@@ -50,7 +50,7 @@ int main(void) {
       z[m * K_SIZE + k] = halves[(5 * m + 3 * k) & 7];
   uint64_t start, end;
   __asm__ volatile("rdcycle %0" : "=r"(start));
-  magia_gemm((uint64_t)x, (uint64_t)w, (uint64_t)z, M_SIZE, N_SIZE, K_SIZE);
+  magia_gemm((uint64_t)x, (uint64_t)w, (uint64_t)z, 1, M_SIZE, N_SIZE, K_SIZE);
   __asm__ volatile("rdcycle %0" : "=r"(end));
   // The rows that are wrong in each column, a hexadecimal digit a column.
   char wrong[K_SIZE + 1];

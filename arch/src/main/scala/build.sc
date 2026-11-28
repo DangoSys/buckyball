@@ -1,7 +1,14 @@
 import mill._
 import mill.scalalib._
 import $file.device.{build => device_build}
+import $file.tlp.memory.{build => hart_dma_build}
+import $file.device.peripherals.scu.{build => device_scu_build}
+import $file.device.peripherals.trace.{build => device_trace_build}
+import $file.device.peripherals.plic.{build => device_plic_build}
+import $file.device.peripherals.clint.{build => device_clint_build}
+import $file.device.peripherals.bootrom.{build => device_bootrom_build}
 import $file.hart.{build => hart_build}
+import $file.hart.cbus.{build => hart_cbus_build}
 import $file.thread.{build => thread_build}
 import $file.generic.{build => generic_build}
 import $file.ball.{build => ball_build}
@@ -32,6 +39,7 @@ import $file.custom.gpdomain.src.main.scala.memory.{build => custom_gpdomain_mem
 import $file.thread.acc.gpdomain.src.main.scala.memory.{build => thread_acc_gpdomain_memory_build}
 import $file.custom.memdomain.{build => custom_memdomain_build}
 import $file.thread.acc.memdomain.{build => thread_acc_memdomain_build}
+import $file.thread.acc.memdomain.src.main.scala.tomem.{build => thread_tomem_build}
 import $file.custom.memdomain.src.main.scala.bank_router.{build => custom_memdomain_bank_router_build}
 import $file.thread.acc.memdomain.src.main.scala.bank_router.{build => thread_acc_memdomain_bank_router_build}
 import $file.custom.memdomain.src.main.scala.prm.{build => custom_memdomain_prm_build}
@@ -169,7 +177,28 @@ object emitters extends SbtModule {
 object ball extends ball_build.Emitter {
   override def framework = library
 }
+object device extends Module {
+  object scu extends device_scu_build.Emitter {
+    override def framework = layers.device
+  }
+  object trace extends device_trace_build.Emitter {
+    override def framework = layers.device
+  }
+  object plic extends device_plic_build.Emitter {
+    override def framework = layers.device
+  }
+  object clint extends device_clint_build.Emitter {
+    override def framework = layers.device
+  }
+  object bootrom extends device_bootrom_build.Emitter {
+    override def framework = layers.device
+  }
+}
+
 object hart extends Module {
+  object cbus extends hart_cbus_build.Emitter {
+    override def framework = layers.sims
+  }
   object execution extends Module {
     object fpu extends hart_execution_fpu_build.Emitter {
       override def framework = library
@@ -262,6 +291,9 @@ object custom extends Module {
   }
 }
 object tlp extends Module {
+  object memory extends hart_dma_build.Emitter {
+    override def framework = library
+  }
   object controller extends Module {
     object admission extends tlp_controller_admission_build.Emitter {
       override def framework = library
@@ -352,6 +384,9 @@ object thread extends Module {
       }
     }
     object memdomain extends Module {
+      object tomem extends thread_tomem_build.Emitter {
+        override def framework = library
+      }
       object bank_router extends thread_acc_memdomain_bank_router_build.Emitter {
         override def framework = library
       }

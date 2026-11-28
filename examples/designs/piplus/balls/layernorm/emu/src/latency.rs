@@ -41,6 +41,16 @@ fn sum(values: impl Iterator<Item = f32>) -> f32 {
     (lanes[0] + lanes[1]) + (lanes[2] + lanes[3])
 }
 
+/// The FP32 mean and the square-root input shared by execution and timing.
+pub(super) fn row_stats(w: usize, rms: bool, inverse: f32, eps: f32, read: impl Fn(usize) -> f32) -> (f32, f32) {
+    let mean = if rms { 0.0 } else { sum((0..w).map(&read)) * inverse };
+    let variance = sum((0..w).map(|i| {
+        let d = read(i) - mean;
+        d * d
+    }));
+    (mean, variance * inverse + eps)
+}
+
 /// The exponent of a finite nonzero value, subnormals normalized.
 fn exponent(v: f32) -> i32 {
     let bits = v.to_bits();
@@ -75,20 +85,21 @@ fn reciprocal(b: f32) -> u64 {
 /// One LAYERNORM instruction as the Ball receives it (`iter` rows, rs2) on the
 /// words of its input bank and the eps word of its parameter bank.
 pub fn cycles(iter: u64, rs2: u64, input: &[u32], eps: u32) -> u64 {
+    cycles_with(iter, rs2, |i| f32::from_bits(input[i]), f32::from_bits(eps))
+}
+
+pub(super) fn cycles_with(iter: u64, rs2: u64, read: impl Fn(usize) -> f32, eps: f32) -> u64 {
     let w = (rs2 & 0xffff) as usize;
     let in_base = ((rs2 >> 16) & 0x3fff) as usize;
     let rms = (rs2 >> 58) & 1 == 1;
     let lines = w.div_ceil(4);
     let l = lines as u64;
     let inverse = 1.0 / w as f32;
-    let eps = f32::from_bits(eps);
     let nw: u64 = if w.is_power_of_two() { 25 } else { 26 };
     let mut total = 1 + if rms { nw + 1 } else { nw.saturating_sub(l) };
     for row in 0..iter as usize {
         let at = (in_base + row * lines) * 4;
-        let x: Vec<f32> = input[at..at + w].iter().map(|&b| f32::from_bits(b)).collect();
-        let mean = if rms { 0.0 } else { sum(x.iter().copied()) * inverse };
-        let shifted = sum(x.iter().map(|&v| (v - mean) * (v - mean))) * inverse + eps;
+        let (_, shifted) = row_stats(w, rms, inverse, eps, |i| read(at + i));
         let (ns, nd) = if special(shifted) || shifted < 0.0 {
             (1, 1)
         } else {

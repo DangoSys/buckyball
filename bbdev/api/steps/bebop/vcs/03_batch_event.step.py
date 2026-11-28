@@ -1,6 +1,5 @@
 from pathlib import Path
 import shlex
-from datetime import datetime
 
 from motia import FlowContext, queue
 from utils.event_common import check_result, get_origin_trace_id, require_design
@@ -30,13 +29,8 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     tests = input_data.get("test", "bare-tests")
     manifest = resolve_workload_toml(design, "vcs", tests, repo, selection=selection)
     output = Path(design_output_root(repo, design, selection=selection))
-    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     report = (
-        Path(
-            log_dir(
-                repo, design, "tapeout", stamp, "bebop-vcs", tests, selection=selection
-            )
-        )
+        Path(log_dir(repo, design, "bebop-vcs", tests, selection=selection))
         / origin_tid
     )
     command = [

@@ -44,18 +44,24 @@ config = "default"
 
 [[ips]]
 ip = "cbus"
+config = "default"
 
 [[ips]]
 ip = "clint"
+config = "default"
 
 [[ips]]
 ip = "plic"
+config = "default"
 
 [[ips]]
 ip = "scu"
+config = "default"
 
 [[ips]]
 ip = "trace"
+config = "default"
 
 [[ips]]
 ip = "bootrom"
+config = "default"

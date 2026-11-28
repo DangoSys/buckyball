@@ -1,4 +1,11 @@
 import mill._
+import $file.^.^.^.^.^.settings
+
+val ipRoot: os.Path = millSourcePath
+trait Emitter extends settings.IpModule {
+  override def moduleRoot = ipRoot
+  override def mainClass = Some("framework.hart.cbus.Emit")
+}
 
 // The registry is compiled with its consumers; framework never imports component implementations.
 def registry(sources: Seq[PathRef], destination: os.Path): Seq[PathRef] = {

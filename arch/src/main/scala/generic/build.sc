@@ -7,6 +7,7 @@ import $file.axis.{build => axis_build}
 import $file.bank.{build => bank_build}
 import $file.cache.{build => cache_build}
 import $file.chi.{build => chi_build}
+import $file.clock.{build => clock_build}
 import $file.coherence.{build => coherence_build}
 import $file.contract.{build => contract_build}
 import $file.ddr.{build => ddr_build}
@@ -26,6 +27,7 @@ def sources = T.sources(
   bank_build.sources() ++
   cache_build.sources() ++
   chi_build.sources() ++
+  clock_build.sources() ++
   coherence_build.sources() ++
   contract_build.sources() ++
   ddr_build.sources() ++

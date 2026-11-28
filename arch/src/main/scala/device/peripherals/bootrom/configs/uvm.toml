@@ -1,0 +1,11 @@
+[parameters]
+base = 4096
+bytes = 256
+imageBytes = 96
+addressBits = 44
+
+[defines]
+ROM_BASE = "base"
+ROM_BYTES = "bytes"
+ROM_IMAGE_BYTES = "imageBytes"
+ROM_ADDRESS_BITS = "addressBits"

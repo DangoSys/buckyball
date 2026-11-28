@@ -3,7 +3,6 @@ import shutil
 import sys
 import glob
 import re
-from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -198,8 +197,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         payload["analysis_dir"] = log_dir(
             bbdir,
             design,
-            "tapeout",
-            datetime.now().strftime("%Y-%m-%d-%H-%M"),
             "dc",
             "power",
             selection=input_data["target"],
@@ -208,8 +205,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         payload["analysis_dir"] = log_dir(
             bbdir,
             design,
-            "tapeout",
-            datetime.now().strftime("%Y-%m-%d-%H-%M"),
             "dc",
             "area",
             selection=input_data["target"],

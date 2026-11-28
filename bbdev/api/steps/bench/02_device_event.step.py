@@ -5,6 +5,7 @@ import os
 import re
 import resource
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -51,6 +52,7 @@ config = {
         "bebop.p2e.batch",
         "workload.tohex",
         "gvn.verilator.perform",
+        "gvn.verilator.debug",
         "gvn.bemu.debug",
         "bebop.p2e.runworkload",
         "uvm.run",
@@ -91,11 +93,16 @@ timeline = [
         "needs": ["bemu-workload", "model-build"],
     },
     {
-        "id": "verilator-gvn",
-        "name": "Verilator GVN",
+        "id": "verilator-gvn-perf",
+        "name": "Verilator GVN perf",
         "needs": ["verilator-workload", "model-build"],
     },
     {"id": "dc-area", "name": "DC area", "needs": ["verilator-workload"]},
+    {
+        "id": "verilator-gvn-debug",
+        "name": "Verilator GVN debug",
+        "needs": ["verilator-workload", "model-build"],
+    },
     {"id": "power", "name": "Power", "needs": ["dc-area"]},
     {"id": "uvm", "name": "UVM", "needs": ["verilator-workload"]},
     {"id": "fpga-bitstream", "name": "FPGA bitstream", "needs": ["verilator-workload"]},
@@ -437,7 +444,7 @@ async def bemu_accuracy(ctx, target: dict) -> dict:
     predicting what the reference predicts) and the accuracy of the
     reference (PyTorch) on the same samples; for a model of continuous
     outputs, the mean squared errors of the device's and the reference's
-    outputs against the recorded ones. A design without datasets skips
+    outputs against the recorded ones. A design without target models skips
     this node."""
     repo = get_buckyball_path()
     design, selection = target["design"], target["target"]
@@ -446,13 +453,22 @@ async def bemu_accuracy(ctx, target: dict) -> dict:
     # programs are those built when the run gets the host.
     with open(Path(repo) / "log/bench-accuracy.lock", "w") as lock:
         await asyncio.to_thread(fcntl.flock, lock, fcntl.LOCK_EX)
+        selected = models(target)
+        if not selected:
+            return {"status": "skipped"}
         programs = {
             model: root / "workloads/models" / f"{design}-{model}-dataset"
-            for model in models(target)
+            for model in selected
             if (root / "workloads/models" / f"{design}-{model}-dataset").is_file()
+            and (root / "models" / model / "dataset/labels.data").is_file()
         }
+        missing = sorted(set(selected) - programs.keys())
         if not programs:
-            return {"status": "skipped"}
+            return {
+                "status": "failure",
+                "datasets": [],
+                "error": f"Missing accuracy program or dataset: {', '.join(missing)}",
+            }
         bemu = bebop_bin_path(repo, design, "bemu", selection=selection)
         ddr = load_design_config(repo, design, selection=selection).device.ddr
         results = []
@@ -499,58 +515,96 @@ async def bemu_accuracy(ctx, target: dict) -> dict:
                 log_dir(
                     repo,
                     design,
-                    "device",
-                    datetime.now().strftime("%Y-%m-%d-%H-%M-%S"),
                     "accuracy",
                     model,
                     selection=selection,
                 )
             )
-            logs.mkdir(parents=True)
             # All shards run the same ELF even if a new build replaces the installed program.
             program = Path(shutil.copy2(program, logs / "program"))
+
+            sections = subprocess.check_output(
+                ["riscv64-unknown-elf-objdump", "-h", program], text=True
+            )
+            shard_range = re.search(
+                r"^\s*\d+\s+\.bbbench\.shard\s+0*10\s+\w+\s+\w+\s+([0-9a-fA-F]+)",
+                sections,
+                re.M,
+            )
+
+            async def pack_image(directory, first, taken):
+                resources = directory / "data"
+                resources.mkdir()
+                for name in files:
+                    if taken == samples:
+                        (resources / name).symlink_to((data / name).resolve())
+                    else:
+                        with (data / name).open("rb") as source:
+                            source.seek(first * records[name])
+                            (resources / name).write_bytes(
+                                source.read(taken * records[name])
+                            )
+                for name in whole:
+                    (resources / name).parent.mkdir(parents=True, exist_ok=True)
+                    (resources / name).symlink_to((data / "model" / name).resolve())
+                packed = directory / "model.img"
+                image = directory / "program-ddr.bin"
+                process = await asyncio.create_subprocess_exec(
+                    str(pack), packed, resources, *files, *whole
+                )
+                try:
+                    if await process.wait():
+                        raise RuntimeError(f"Could not pack {model} dataset resources")
+                    if packed.stat().st_size > ddr.model:
+                        raise ValueError(
+                            f"{model} dataset image exceeds its model region"
+                        )
+                    with image.open("wb") as dest, packed.open("rb") as source:
+                        dest.truncate(ddr.bytes)
+                        dest.seek(ddr.bytes - ddr.model)
+                        await asyncio.to_thread(
+                            shutil.copyfileobj, source, dest, 4 * 1024 * 1024
+                        )
+                except BaseException:
+                    if process.returncode is None:
+                        process.kill()
+                        await process.wait()
+                    image.unlink(missing_ok=True)
+                    raise
+                finally:
+                    packed.unlink(missing_ok=True)
+                    shutil.rmtree(resources)
+                return image
+
+            shared_image = None
+            if shard_range:
+                # Multi-GB weights and all passages are immutable. Each guest selects
+                # its sample range from two file-backed words in its private ELF.
+                shared_image = await pack_image(logs, 0, samples)
+                count = -(-samples // 64)
+                range_offset = int(shard_range[1], 16)
 
             async def shard(first: int, taken: int) -> tuple[int, str]:
                 async with slots:
                     log = logs / f"shard{first}"
-                    (log / "data").mkdir(parents=True)
-                    for name in files:
-                        with (data / name).open("rb") as source:
-                            source.seek(first * records[name])
-                            (log / "data" / name).write_bytes(
-                                source.read(taken * records[name])
-                            )
-                    for name in whole:
-                        (log / "data" / name).parent.mkdir(parents=True, exist_ok=True)
-                        (log / "data" / name).symlink_to(
-                            (data / "model" / name).resolve()
-                        )
-                    await (
-                        await asyncio.create_subprocess_exec(
-                            str(pack),
-                            str(log / "model.img"),
-                            str(log / "data"),
-                            *files,
-                            *whole,
-                        )
-                    ).wait()
-                    # The DDR image: the shard's model image in the model region.
-                    with (log / "program-ddr.bin").open("wb") as image:
-                        image.truncate(ddr.bytes)
-                        image.seek(ddr.bytes - ddr.model)
-                        image.write((log / "model.img").read_bytes())
-                    # The image (whole files such as weights take GBs) is in the
-                    # DDR image now.
-                    (log / "model.img").unlink()
+                    log.mkdir()
+                    if shared_image is None:
+                        image = await pack_image(log, first, taken)
+                        elf = program
+                    else:
+                        image = shared_image
+                        elf = Path(shutil.copy2(program, log / "program"))
+                        with elf.open("r+b") as stream:
+                            stream.seek(range_offset)
+                            stream.write(struct.pack("<QQ", first, taken))
                     run = await asyncio.create_subprocess_exec(
                         bemu,
                         "--elf",
-                        str(program),
+                        str(elf),
                         "--ddr-image",
-                        str(log / "program-ddr.bin"),
+                        str(image),
                         "--log-dir",
                         str(log),
-                        cwd=log,
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.STDOUT,
                     )
@@ -559,42 +613,100 @@ async def bemu_accuracy(ctx, target: dict) -> dict:
                             run.communicate(), simulation_limit
                         )
                     except TimeoutError:
-                        # A shard past the limit is a failed shard; its BEMU
-                        # must not keep the host.
                         run.kill()
                         output, _ = await run.communicate()
+                    except asyncio.CancelledError:
+                        if run.returncode is None:
+                            run.kill()
+                            await run.wait()
+                        raise
+                    finally:
+                        if shared_image is None:
+                            image.unlink()
+                        else:
+                            elf.unlink()
                     (log / "run.log").write_bytes(output)
-                    (log / "program-ddr.bin").unlink()
-                    shutil.rmtree(log / "data")
                     return run.returncode, output.decode(errors="replace")
 
-            start = time.monotonic()
-            # Include the timed first sample in the result. Leave room for host
-            # contention when the rest of the shards run concurrently: as many
-            # BEMUs as the host has CPUs for the host threads one of them
-            # keeps busy, at most 64.
-            slots = asyncio.Semaphore(1)
-            used = resource.getrusage(resource.RUSAGE_CHILDREN)
-            first_run = await shard(0, 1)
-            runs = [first_run]
-            if first_run[0] == 0:
-                seconds = time.monotonic() - start
-                now = resource.getrusage(resource.RUSAGE_CHILDREN)
-                threads = (
-                    now.ru_utime + now.ru_stime - used.ru_utime - used.ru_stime
-                ) / seconds
-                slots = asyncio.Semaphore(
-                    min(64, max(1, int(os.cpu_count() / max(1.0, threads))))
-                )
-                count = min(count, max(1, int((simulation_limit / 8) / seconds)))
-                runs.extend(
-                    await asyncio.gather(
-                        *(
-                            shard(first, min(count, samples - first))
-                            for first in range(1, samples, count)
-                        )
+            try:
+                start = time.monotonic()
+                # Include the timed first sample in the result. Leave room for host
+                # contention when the rest of the shards run concurrently: as many
+                # BEMUs as the host has CPUs for the host threads one of them
+                # keeps busy, at most 64.
+                slots = asyncio.Semaphore(1)
+                used = resource.getrusage(resource.RUSAGE_CHILDREN)
+                first_run = await shard(0, 1)
+                runs = [first_run]
+                if first_run[0] == 0:
+                    seconds = time.monotonic() - start
+                    now = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    threads = (
+                        now.ru_utime + now.ru_stime - used.ru_utime - used.ru_stime
+                    ) / seconds
+                    workers = min(
+                        64,
+                        max(1, int(len(os.sched_getaffinity(0)) / max(1.0, threads))),
                     )
-                )
+                    if shared_image is not None:
+                        free_bytes = os.sysconf("SC_AVPHYS_PAGES") * os.sysconf(
+                            "SC_PAGE_SIZE"
+                        )
+                        workers = min(workers, max(1, free_bytes // ddr.bytes))
+                    slots = asyncio.Semaphore(workers)
+                    count = min(count, max(1, int((simulation_limit / 8) / seconds)))
+                    async with asyncio.TaskGroup() as group:
+                        tasks = [
+                            group.create_task(shard(first, min(count, samples - first)))
+                            for first in range(1, samples, count)
+                        ]
+                    runs.extend(task.result() for task in tasks)
+            finally:
+                if shared_image is not None:
+                    shared_image.unlink()
+            if (data.parent / "detection/ground-truth.json").is_file():
+                result = {
+                    "model": model,
+                    "status": "failure",
+                    "samples": samples,
+                    "log": logs.name,
+                }
+                if all(code == 0 for code, _ in runs):
+                    score = await asyncio.create_subprocess_exec(
+                        str(Path(repo) / "stack/result/bin/python3"),
+                        str(Path(repo) / "stack/models/models" / model / "score.py"),
+                        str(data.parent),
+                        str(logs),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                    )
+                    output, _ = await score.communicate()
+                    (logs / "score.log").write_bytes(output)
+                    if score.returncode == 0:
+                        result.update(
+                            json.loads((logs / "detection-metrics.json").read_text())
+                        )
+                        if result["pass_rate"] != 1:
+                            result["error"] = (
+                                "Detector output differs from the integer reference"
+                            )
+                        elif result["reference_map50_95"] - result["map50_95"] > 0.01:
+                            result["error"] = (
+                                "Detector mAP50–95 lost more than one percentage point"
+                            )
+                        else:
+                            result["status"] = "pass"
+                    else:
+                        result["error"] = (
+                            "Incomplete or invalid detection outputs; see score.log"
+                        )
+                else:
+                    result["error"] = (
+                        f"{sum(code != 0 for code, _ in runs)} BEMU shards failed"
+                    )
+                result["elapsed_s"] = round(time.monotonic() - start, 1)
+                results.append(result)
+                continue
             totals = [0, 0, 0, 0]
             # A model of continuous outputs adds the squared errors of the
             # device's and the reference's against the recorded outputs.
@@ -637,17 +749,24 @@ async def bemu_accuracy(ctx, target: dict) -> dict:
             results.append(result)
         return {
             "status": (
-                "pass" if all(r["status"] == "pass" for r in results) else "failure"
+                "pass"
+                if not missing and all(r["status"] == "pass" for r in results)
+                else "failure"
             ),
             "datasets": results,
+            **(
+                {"error": f"Missing accuracy program or dataset: {', '.join(missing)}"}
+                if missing
+                else {}
+            ),
         }
 
 
-async def verilator_gvn(ctx, target: dict) -> dict:
+async def verilator_gvn(ctx, target: dict, node: dict, write) -> dict:
     """A rough end-to-end NPU cycle count of every target model on Verilator
     (`gvn-verilator --perform`): each distinct GVN slice once, times the times it
     runs; per slice, its repeats, its Verilator cycles and its share. A
-    design without models or without a GVN driver skips this node."""
+    design without target models skips this node."""
     driver = (
         Path(get_buckyball_path())
         / "examples/designs"
@@ -656,10 +775,13 @@ async def verilator_gvn(ctx, target: dict) -> dict:
         / target["device"]
         / "sims/device/gvn/run.py"
     )
-    if not models(target) or not driver.is_file():
+    selected = models(target)
+    if not selected:
         return {"status": "skipped"}
-    results = []
-    for model in models(target):
+    if not driver.is_file():
+        return {"status": "failure", "error": f"Missing GVN driver: {driver}"}
+    results = node["estimates"] = []
+    for model in selected:
         state, body = await run(
             ctx, "gvn.verilator.perform", {**target, "model": model}
         )
@@ -685,10 +807,67 @@ async def verilator_gvn(ctx, target: dict) -> dict:
         else:
             result["error"] = body.get("error") or "GVN estimate was not produced"
         results.append(result)
+        write()
     return {
         "status": "pass" if all(r["status"] == "pass" for r in results) else "failure",
         "estimates": results,
     }
+
+
+async def verilator_gvn_debug(ctx, target: dict, node: dict, write) -> dict:
+    selected = models(target)
+    if not selected:
+        return {"status": "skipped"}
+    suites = node["suites"] = {}
+    errors = []
+    for model in selected:
+        state, body = await run(ctx, "gvn.verilator.debug", {**target, "model": model})
+        if not body.get("checks") or not Path(body["checks"]).is_file():
+            errors.append(f"{model}: {body.get('error', 'No RTL debug report')}")
+        else:
+            path = Path(body["checks"])
+            rows = json.loads(path.read_text())["slices"]
+            manifest = (
+                Path(
+                    design_output_root(
+                        get_buckyball_path(),
+                        target["design"],
+                        selection=target["target"],
+                    )
+                )
+                / "gvn"
+                / model
+                / "instances.jsonl"
+            )
+            expected = [
+                json.loads(line)["instance"]
+                for line in manifest.read_text().splitlines()
+            ]
+            workloads = [
+                {
+                    "workload": r["instance"],
+                    "status": "pass" if r["exit"] == 0 else "fail",
+                    "elapsed_s": r["elapsed_s"],
+                }
+                for r in rows
+            ]
+            suites[model] = {
+                "log": path.parent.name,
+                "passed": sum(w["status"] == "pass" for w in workloads),
+                "total": len(rows),
+                "workloads": workloads,
+            }
+            if (
+                state != "success"
+                or not rows
+                or suites[model]["passed"] != len(rows)
+                or sorted(expected) != sorted(r["instance"] for r in rows)
+            ):
+                errors.append(f"{model}: incomplete RTL checks")
+        if errors:
+            node["error"] = "; ".join(errors)
+        write()
+    return {"status": "failure" if errors else "pass"}
 
 
 async def uvm(ctx, target: dict, node: dict, write) -> dict:
@@ -701,7 +880,7 @@ async def uvm(ctx, target: dict, node: dict, write) -> dict:
         for ip in config.verification.ips
     ]
     node["uvm"] = results
-    if not runnable:
+    if not results:
         return {"status": "skipped"}
     for record in results:
         ip = record["ip"]
@@ -719,10 +898,10 @@ async def uvm(ctx, target: dict, node: dict, write) -> dict:
             )
             continue
         record["status"] = "pass"
+    missing = [r["ip"] for r in results if r["status"] == "unavailable"]
     return {
-        "status": (
-            "failure" if any(r["status"] == "failure" for r in results) else "pass"
-        ),
+        "status": "pass" if all(r["status"] == "pass" for r in results) else "failure",
+        **({"error": f"No UVM suite for {', '.join(missing)}"} if missing else {}),
     }
 
 
@@ -838,7 +1017,6 @@ steps = {
     "bemu-model": bemu_model,
     "bemu-bench": bemu_bench,
     "bemu-accuracy": bemu_accuracy,
-    "verilator-gvn": verilator_gvn,
     "dc-area": dc_area,
     "power": dc_power,
     "fpga-bitstream": buildbitstream,
@@ -856,7 +1034,9 @@ def register(save: Path, entry: dict) -> None:
         index_path = save / "index.json"
         index = json.loads(index_path.read_text())
         index["snapshots"].append(entry)
-        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+        temporary = index_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+        temporary.replace(index_path)
 
 
 async def bench(ctx, repo: Path, device: str, step: str, request: dict) -> dict:
@@ -872,9 +1052,7 @@ async def bench(ctx, repo: Path, device: str, step: str, request: dict) -> dict:
     dirty = bool(git(repo, "status", "--porcelain", "--untracked-files=no"))
     taken = datetime.now(timezone.utc)
     # save/<kind>/<subject>/<time>-<commit>[-dirty]; the index id is that path.
-    stamp = taken.strftime("%Y-%m-%d-%H%M%S")
-    if step in ("fpga-gvn", "fpga-model"):
-        stamp += taken.strftime("-%f")
+    stamp = taken.strftime("%Y-%m-%d-%H%M%S-%f")
     snapshot = f"designs/{design}/{stamp}-{commit[:7]}" + ("-dirty" if dirty else "")
     save = repo / "thirdparty/bbbench/save"
     directory = save / snapshot
@@ -939,6 +1117,10 @@ async def bench(ctx, repo: Path, device: str, step: str, request: dict) -> dict:
                     if row["status"] == "running":
                         row.update(status="failure", error=str(error))
                 node.update(status="failure", error=str(error))
+        elif node["id"] == "verilator-gvn-perf":
+            node.update(await verilator_gvn(ctx, target, node, write))
+        elif node["id"] == "verilator-gvn-debug":
+            node.update(await verilator_gvn_debug(ctx, target, node, write))
         elif node["id"] == "uvm":
             node.update(await uvm(ctx, target, node, write))
         elif node["id"] == "fpga-workload":
@@ -954,7 +1136,12 @@ async def bench(ctx, repo: Path, device: str, step: str, request: dict) -> dict:
     (node,) = [n for n in nodes if n["id"] == step]
     node["status"] = "running"
     write()
-    await walk(node)
+    try:
+        await walk(node)
+    except Exception as error:
+        node.update(status="failure", error=str(error))
+        write()
+        raise
     return {"snapshot": snapshot, "status": node["status"]}
 
 

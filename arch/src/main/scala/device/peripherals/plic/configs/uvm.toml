@@ -1,0 +1,9 @@
+[parameters]
+base = 201326592
+bytes = 4194304
+sources = 3
+priorityBits = 3
+hartIds = [0, 1]
+
+[defines]
+MMIO_BASE = "base"

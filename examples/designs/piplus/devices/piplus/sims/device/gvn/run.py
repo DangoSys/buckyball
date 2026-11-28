@@ -24,7 +24,6 @@ and graphs.
 
 import argparse
 import concurrent.futures
-import datetime
 import hashlib
 import itertools
 import json
@@ -273,12 +272,7 @@ def main():
 
     # ===--- One ELF per instance, each on BEMU, in parallel ---=== #
     design = load_design_config(repo, args.design, selection=selection)
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    logs = Path(
-        log_dir(
-            repo, args.design, "device", stamp, "gvn", args.model, selection=selection
-        )
-    )
+    logs = Path(log_dir(repo, args.design, "gvn", args.model, selection=selection))
     bemu = config / "bin/bebop-bemu"
 
     # A public graph is its own entry: its arguments as its wrapper passes
@@ -664,7 +658,8 @@ def main():
         f"{len(records)} instances; longest {longest['instance']}: {longest['simulated_cycles']} cycles "
         f"whole run, {longest['cycles']} slice span; in {elapsed:.0f} s"
     )
-    print(f"summary: {out / 'instances.jsonl'}; logs: {logs}")
+    (logs / "instances.jsonl").write_bytes((out / "instances.jsonl").read_bytes())
+    print(f"summary: {out / 'instances.jsonl'}; logs and ELFs: {logs}")
 
 
 if __name__ == "__main__":

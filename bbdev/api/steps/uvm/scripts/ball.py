@@ -5,7 +5,6 @@ import shlex
 import shutil
 import sys
 import tomllib
-from datetime import datetime
 from pathlib import Path
 from utils.path import design_output_root, load_design_config, log_dir, rtl_dir
 from steps.mill.scripts.mill import elaborate_cmd
@@ -342,10 +341,7 @@ def run_design(bbdir: str, design: str, selection: str, ctx, do_run: bool) -> di
         if not do_run:
             build_ball(bbdir, design, selection, ctx)
             return {"design": design, "ball": ball}
-        stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        run_root = log_dir(
-            bbdir, design, "verilog", stamp, "uvm", ball, selection=selection
-        )
+        run_root = log_dir(bbdir, design, "uvm", ball, selection=selection)
         cov = os.path.join(run_root, "coverage")
         activity = run_ball(bbdir, design, selection, ctx, run_root)
     if not (Path(cov) / "dashboard.txt").is_file():

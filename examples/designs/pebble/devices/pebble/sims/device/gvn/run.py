@@ -21,7 +21,6 @@ compiled with the nv pipeline and run on the GPU.
 import csv
 import argparse
 import concurrent.futures
-import datetime
 import hashlib
 import json
 import os
@@ -36,7 +35,14 @@ from pathlib import Path
 sys.path.insert(
     0, str(Path(__file__).resolve().parents[8] / "bbdev/api/steps/gvn/scripts")
 )
-from gvn import bank_operations, build_plugins, repo, run, table_offset  # noqa: E402
+from gvn import (
+    bank_operations,
+    build_plugins,
+    repo,
+    run,
+    symbol_offset,
+    table_offset,
+)  # noqa: E402
 
 from utils.path import log_dir  # noqa: E402
 
@@ -61,6 +67,7 @@ def main():
     )
     model = config / "models" / args.model
     harness = repo / "examples/models" / args.design / args.model / "gvn"
+    dma_readback = (harness / "verilator.cpp").is_file()
     out = config / "gvn" / args.model
     out.mkdir(parents=True, exist_ok=True)
 
@@ -224,19 +231,15 @@ def main():
     print(
         f"{len(instances)} instances: one of each of {len(patterns)} distinct slices of {len(slices)}"
     )
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
     logs = Path(
         log_dir(
             repo,
             args.design,
-            "device",
-            stamp,
             "gvn",
             args.model,
             selection=f"device/{args.device}/{stem}",
         )
     )
-    logs.mkdir(parents=True, exist_ok=True)
     (logs / "slices.json").write_text(json.dumps(slices, indent=2) + "\n")
     bemu = config / "bin/bebop-bemu"
 
@@ -277,6 +280,26 @@ def main():
             raise RuntimeError(
                 f"{name}: expected one BEMU reference capture, got {report}"
             )
+        if dma_readback and result.returncode == 0:
+            # Both readers link the same compiled slice. BEMU and FPGA stream
+            # through the hart. RTL copies through coherent DMA into a separate
+            # buffer, which must overwrite every poisoned byte to pass.
+            source = log / name
+            size = (out / f"slice{index}/gvn_expect.bin").stat().st_size
+            with source.open("rb") as stream:
+                stream.seek(symbol_offset(source, "gvn_expected"))
+                frozen = stream.read(size)
+            assert len(frozen) == size and f"captured: {size} bytes " in report[0]
+            checked = log / "verilator.elf"
+            shutil.copy2(out / f"slice{index}/verilator.elf", checked)
+            with checked.open("r+b") as stream:
+                stream.seek(symbol_offset(checked, "gvn_expected"))
+                stream.write(frozen)
+                stream.seek(symbol_offset(checked, "gvn_readback"))
+                stream.write(frozen.translate(bytes(range(255, -1, -1))))
+                if layout["iteration_slot"] >= 0:
+                    stream.seek(table_offset(checked) + layout["iteration_slot"] * 8)
+                    stream.write(struct.pack("<q", iteration))
         if result.returncode == 0:
             with (log / "id-0/cpu-instructions.csv").open() as stream:
                 cpu_cycles = sum(
@@ -331,6 +354,11 @@ def main():
                 # iteration and the times it runs in the whole graph.
                 "elf": str(out / f"slice{index}" / "slice.elf"),
                 "reference_elf": str(logs / name / name),
+                **(
+                    {"verilator_reference_elf": str(logs / name / "verilator.elf")}
+                    if dma_readback and code == 0
+                    else {}
+                ),
                 "iteration_slot": layouts[index]["iteration_slot"],
                 "repeats": repeats[index],
             }
@@ -339,7 +367,7 @@ def main():
         for name, code, report, cycles, seconds, index in runs
     )
     (logs / "instances.jsonl").write_text(manifest)
-    published = out / f"instances-{stamp}.jsonl.tmp"
+    published = out / f"instances-{logs.name}.jsonl.tmp"
     published.write_text(manifest)
     published.replace(out / "instances.jsonl")
     for name, code, report, cycles, seconds, _ in runs:

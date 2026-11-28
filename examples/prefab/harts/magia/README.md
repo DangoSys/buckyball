@@ -32,7 +32,7 @@ mesh 是 32 位地址，只能看到 L2（`0xC000_0000` 起）。固件及其数
   按列分摊 W 和 Z：各自用 iDMA 把 X 和自己的列搬进 L1，跑 RedMulE，再把 Z 的列搬回。
   `pitch` 是 W、Z 每行在内存中的列数，任务可以只做更宽矩阵的一段列。每个 tile 至少分到
   两列（只有一列时 RedMulE 不计算），列数少时只用一部分 tile；一个任务至少两列。
-- `runtime/mesh/gemm.c`：Loom 上的 `magia_gemm(x, w, z, m, n, k)`。设置窗口、写任务、启动并
+- `runtime/mesh/gemm.c`：Loom 上的 `magia_gemm(x, w, z, batch, m, n, k)`。设置窗口、写任务、启动并
   等待；一个 tile 放不下时按行、按列拆成多个任务。每次启动前清固件的启动标志
   （`0xCC01_0000`）。
 - `runtime/reference/gemm.c`：软件里的 mesh 乘法（逐项 FP16 融合乘加），模型 recipe 在本机

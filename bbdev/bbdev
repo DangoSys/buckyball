@@ -354,7 +354,7 @@ WORKFLOW_COMMANDS = {
             ' Args: "--device <device> [--model <name>] [--bitstream <path>] [--fpga-location <N.X>]"'
         ),
         "fpga-model": (
-            "Measure whole models on FPGA."
+            "Run each selected model on FPGA under baremetal and Linux."
             ' Args: "--device <device> [--model <name>] [--bitstream <path>] [--fpga-location <N.X>]"'
         ),
         "workload": (
@@ -386,16 +386,20 @@ WORKFLOW_COMMANDS = {
             ' metal and under Linux, as a bbbench snapshot. Args: "--device (all | <device>)"'
         ),
         "bemu-accuracy": (
-            "BEMU accuracy: every target model with a dataset program (<design>-<model>-dataset, built by"
+            "BEMU accuracy: run each target model's dataset program (<design>-<model>-dataset, built by"
             " the model build) on its whole dataset, in parallel BEMU shards: task accuracy, sample"
             " pass rate (the same prediction as the reference) and the reference's accuracy, as a"
             " bbbench snapshot."
             ' Args: "--device (all | <device>)"'
         ),
-        "verilator-gvn": (
-            "Verilator GVN: a rough end-to-end NPU cycle count of every target model of a device"
+        "verilator-gvn-perf": (
+            "Verilator GVN perf: a rough end-to-end NPU cycle count of every target model of a device"
             " (gvn-verilator --perform), per slice its repeats, Verilator cycles and share, as a bbbench"
             ' snapshot. Args: "--device (all | <device>)"'
+        ),
+        "verilator-gvn-debug": (
+            "Check each distinct model slice on Verilator against its BEMU reference."
+            ' Args: "--device (all | <device>)"'
         ),
         "uvm": (
             "Run the IP UVM suites registered by the device's default config and save the results."
@@ -416,9 +420,8 @@ WORKFLOW_COMMANDS = {
     },
     "bench-tool": {
         "bemu": (
-            "BEMU's speed on a device: its frequency (simulated cycles over wall time) on the Linux boot"
-            " and whole models that passed in the device's latest timeline steps; with --all-trace, those"
-            " same simulations run again with every trace, as a bbbench snapshot."
+            "Measure Linux boot, whole models and benchmarks on BEMU, each in simulated cycles per wall second."
+            " Models and benchmarks run on baremetal and Linux. Runs lasting at least one second must exceed 200 MHz."
             ' Args: "--device (all | <device>) [--all-trace]"'
         ),
         "verilator": (

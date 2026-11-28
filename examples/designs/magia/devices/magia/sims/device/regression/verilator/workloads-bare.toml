@@ -9,4 +9,5 @@ tests = [
   "magia-hart0-ctest-gemm_two_columns-baremetal",
   "magia-hart0-ctest-gemm_one_column-baremetal",
   "magia-hart0-ctest-gemm_few_columns-baremetal",
+  "magia-hart0-ctest-gemm_odd_columns-baremetal",
 ]

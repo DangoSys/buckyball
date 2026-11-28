@@ -6,7 +6,6 @@ Runs bebop bemu batch regression:
   2. Run the BEMU regression harness
 """
 
-from datetime import datetime
 from pathlib import Path
 from utils.path import design_output_root, log_dir
 
@@ -125,8 +124,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(
         bbdir,
         design,
-        "verilog",
-        datetime.now().strftime("%Y-%m-%d-%H-%M"),
         "bebop-bemu",
         test_type,
         selection=input_data["target"],

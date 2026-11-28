@@ -6,6 +6,7 @@ import sys
 from motia import FlowContext, queue
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from steps.gvn.scripts.gvn import model_turn
 from utils.event_common import check_result, get_origin_trace_id
 from utils.path import get_buckyball_path, simulation_dir
 from utils.stream_run import stream_run_logger_async
@@ -22,6 +23,7 @@ config = {
 own = {"config", "device", "design", "target", "_trace_id"}
 
 
+@model_turn
 async def handler(input_data: dict, ctx: FlowContext) -> None:
     trace_id = get_origin_trace_id(input_data, ctx)
     repo = get_buckyball_path()

@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,8 @@ if utils_path not in sys.path:
 
 from steps.bebop.p2e.scripts.runtime_case import case_ready, trace_modes
 from utils.event_common import check_result, get_origin_trace_id, require_target
+from utils.run_step import run as run_step
+from utils.workload_manifest import resolve_workload_toml
 from utils.verilator_turn import verilator_turn
 from utils.path import design_output_root, get_buckyball_path
 
@@ -38,91 +41,89 @@ config = {
 
 
 async def bemu(
-    ctx, save: Path, device: str, design: str, data: dict
+    ctx, save: Path, device: str, design: str, data: dict, publish
 ) -> tuple[list[dict], dict]:
-    """BEMU's simulations end to end: the Linux boot and the whole models of
-    the device's timeline. Fastest, nothing is run here: the timeline steps
-    record every simulation's cycles and wall time. A snapshot holds the one
-    step run for it, so each step is read from the newest snapshot in which
-    it ended. With every trace on, the same simulations that passed there are
-    run again."""
-    nodes, ran = {}, {}
-    for entry in json.loads((save / "index.json").read_text())["snapshots"]:
-        if not entry["id"].startswith(f"designs/{design}/"):
-            continue
-        for node in json.loads((save / entry["id"] / "design.json").read_text())[
-            "nodes"
-        ]:
-            if node["id"] in ("bemu-workload", "bemu-model") and node["status"] in (
-                "pass",
-                "failure",
-                "skipped",
-            ):
-                nodes[node["id"]], ran[node["id"]] = node, entry["id"]
-    linux = [
-        w
-        for w in nodes["bemu-workload"]["suites"]["linux-tests"]["workloads"]
-        if w["status"] == "pass"
-    ]
-    model = nodes["bemu-model"]
-    models = (
-        []
-        if model["status"] == "skipped"
-        else [m for m in model["models"] if m["status"] == "pass"]
-    )
-    if not data["all-trace"]:
-        return linux + [
-            {
-                "workload": f"{m['model']}-{m['os']}",
-                "elapsed_s": m["elapsed_s"],
-                "cycles": m["simulated_cycles"],
-            }
-            for m in models
-        ], {"timelines": ran}
+    """Measure each registered end-to-end workload on this device, in isolation."""
     target = {"device": device}
     target["target"] = require_target(target, ("device",))
-    workloads, logs = [], []
-    if linux:
-        body = await run(
-            ctx,
-            "bebop.bemu.batch",
-            {**target, "test": "linux-tests", "jobs": 1, "all-trace": True},
+    (spec,) = (
+        d
+        for d in json.loads((save / "bbmap.json").read_text())["designs"]
+        if d["design"] == design
+    )
+    manifest = Path(
+        resolve_workload_toml(design, "bemu", "linux-tests", selection=target["target"])
+    )
+    cases = [
+        (name, {"test": name})
+        for name in tomllib.loads(manifest.read_text())["workloads"]["tests"]
+    ]
+    for kind, names in (("model", spec["models"]), ("bench", spec["benches"])):
+        for name in names:
+            for os_name in ("baremetal", "linux"):
+                cases.append((f"{name}-{os_name}", {kind: name, "os": os_name}))
+    trace = (
+        {flag: True for flag in ("itrace", "mtrace", "ctrace", "banktrace")}
+        if data["all-trace"]
+        else {}
+    )
+    workloads = []
+    progress = {
+        "target_hz": 200_000_000,
+        "min_elapsed_s": 1,
+        "total": len(cases),
+        "status": "running",
+    }
+    publish(workloads, progress)
+    for name, product in cases:
+        state, body = await run_step(
+            ctx, "bebop.bemu.sim", {**target, **product, **trace}, 1800
         )
-        workloads += passed(Path(body["log_dir"]))
-        logs.append(Path(body["log_dir"]).name)
-    for m in models:
-        body = await run(
-            ctx,
-            "bebop.bemu.sim",
-            {
-                **target,
-                "model": m["model"],
-                "os": m["os"],
-                "itrace": True,
-                "mtrace": True,
-                "ctrace": True,
-                "banktrace": True,
-            },
-        )
-        log = Path(body["log_dir"])
-        logs.append(log.name)
-        if not body["success"]:
-            continue
-        workloads.append(
-            {
-                "workload": f"{m['model']}-{m['os']}",
-                "elapsed_s": float(
-                    re.search(
-                        r"BEMU wall time: ([\d.]+)s", (log / "run.log").read_text()
-                    ).group(1)
-                ),
-                "cycles": max(
-                    int(re.search(r"elapsed_cycles=(\d+)", s.read_text()).group(1))
-                    for s in log.glob("id-*/cpu-state.log")
-                ),
-            }
-        )
-    return workloads, {"timelines": ran, "logs": logs}
+        row = {"workload": name, "status": state}
+        if "log_dir" in body:
+            log = Path(body["log_dir"])
+            row["log"] = log.name
+            output = (log / "run.log").read_text(errors="replace")
+            wall = re.search(r"BEMU wall time: ([\d.]+)s", output)
+            if wall:
+                row["elapsed_s"] = float(wall[1])
+            if state == "success":
+                states = [f.read_text() for f in log.glob("id-*/cpu-state.log")]
+                counts = [re.search(r"elapsed_cycles=(\d+)", line) for line in states]
+                cycles = max((int(m[1]) for m in counts if m), default=0)
+                if cycles > 0 and all(counts) and row.get("elapsed_s", 0) > 0:
+                    row["cycles"] = cycles
+                    row["frequency_hz"] = row["cycles"] / row["elapsed_s"]
+                    if row["elapsed_s"] < progress["min_elapsed_s"]:
+                        row["status"] = "too_short"
+                    else:
+                        row["status"] = (
+                            "pass"
+                            if row["frequency_hz"] > progress["target_hz"]
+                            else "below_target"
+                        )
+            else:
+                error = re.search(
+                    r"^(?:FAIL(?:ED_TESTS)?\b|Error:|.*panicked at).+", output, re.M
+                )
+                if error:
+                    row["error"] = error[0].strip()
+        if row["status"] == "success":
+            row.update(status="failure", error="Incomplete end-to-end timing")
+        elif state != "success" and "error" not in row:
+            row["error"] = body.get("error") or f"{body.get('task', 'BEMU')}: {state}"
+        workloads.append(row)
+        publish(workloads, progress)
+        ctx.logger.info(f"BEMU workload result {device} {json.dumps(row)}")
+    return workloads, {
+        **progress,
+        "status": (
+            "pass"
+            if any(r["status"] == "pass" for r in workloads)
+            and all(r["status"] in ("pass", "too_short") for r in workloads)
+            else "failure"
+        ),
+    }
 
 
 async def run(ctx, topic: str, data: dict) -> dict:
@@ -340,7 +341,9 @@ def register(save: Path, entry: dict) -> None:
         index_path = save / "index.json"
         index = json.loads(index_path.read_text())
         index["snapshots"].append(entry)
-        index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+        temporary = index_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
+        temporary.replace(index_path)
 
 
 async def measure(ctx, data: dict, device: str) -> dict:
@@ -359,10 +362,6 @@ async def measure(ctx, data: dict, device: str) -> dict:
     ]
     design = owner.name
     save = repo / "thirdparty/bbbench/save"
-    workloads, source = await simulations(ctx, save, device, design, data)
-    if not workloads:
-        raise RuntimeError(f"{device}: none of {name}'s simulations passed")
-
     commit = git(repo, "rev-parse", "HEAD")
     dirty = bool(git(repo, "status", "--porcelain", "--untracked-files=no"))
     taken = datetime.now(timezone.utc)
@@ -373,38 +372,61 @@ async def measure(ctx, data: dict, device: str) -> dict:
     )
     directory = save / snapshot
     directory.mkdir(parents=True, exist_ok=False)
-    (directory / "tools.json").write_text(
-        json.dumps(
-            {
-                "commit": commit,
-                "dirty": dirty,
-                "taken": taken.isoformat(),
-                "design": design,
-                "tool": name,
-                **({"flag": flag} if flag else {}),
-                **source,
-                # The tool's frequency on the design: the simulated cycles
-                # of its workloads over their wall time.
-                "cycles": sum(w["cycles"] for w in workloads),
-                "elapsed_s": sum(w["elapsed_s"] for w in workloads),
-                "workloads": workloads,
-            },
-            indent=2,
-            sort_keys=True,
+    report = directory / "tools.json"
+
+    def publish(workloads, source):
+        first = not report.exists()
+        measured = (
+            [w for w in workloads if w["status"] in ("pass", "below_target")]
+            if tool == "bemu"
+            else workloads
         )
-        + "\n"
-    )
-    register(
-        save,
-        {
-            "id": snapshot,
+        value = {
             "commit": commit,
             "dirty": dirty,
             "taken": taken.isoformat(),
-            "files": ["tools.json"],
-        },
-    )
-    return {"snapshot": snapshot}
+            "design": design,
+            "tool": name,
+            **({"flag": flag} if flag else {}),
+            **source,
+            "cycles": sum(w["cycles"] for w in measured if "cycles" in w),
+            "elapsed_s": sum(
+                w["elapsed_s"] for w in measured if "cycles" in w and "elapsed_s" in w
+            ),
+            "workloads": workloads,
+        }
+        temp = report.with_suffix(".tmp")
+        temp.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n")
+        temp.replace(report)
+        if first:
+            register(
+                save,
+                {
+                    "id": snapshot,
+                    "commit": commit,
+                    "dirty": dirty,
+                    "taken": taken.isoformat(),
+                    "files": ["tools.json"],
+                },
+            )
+
+    if tool == "bemu":
+        try:
+            workloads, source = await bemu(ctx, save, device, design, data, publish)
+        except Exception as error:
+            if report.exists():
+                partial = json.loads(report.read_text())
+                publish(
+                    partial.pop("workloads"),
+                    {**partial, "status": "failure", "error": str(error)},
+                )
+            raise
+    else:
+        workloads, source = await simulations(ctx, save, device, design, data)
+    if not workloads:
+        raise RuntimeError(f"{device}: no {name} workloads")
+    publish(workloads, source)
+    return {"snapshot": snapshot, "status": source.get("status", "pass")}
 
 
 async def handler(input_data: dict, ctx: FlowContext) -> None:
@@ -421,7 +443,10 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     snapshots, errors = {}, {}
     for device in devices:
         try:
-            snapshots[device] = (await measure(ctx, input_data, device))["snapshot"]
+            result = await measure(ctx, input_data, device)
+            snapshots[device] = result["snapshot"]
+            if result["status"] != "pass":
+                errors[device] = "End-to-end BEMU speed target not met"
         except (ValueError, RuntimeError, OSError, KeyError) as error:
             errors[device] = str(error)
     await check_result(

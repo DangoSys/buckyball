@@ -13,7 +13,6 @@ import os
 import shlex
 import subprocess
 import sys
-from datetime import datetime
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -170,17 +169,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         )
         return
     ctx.logger.info(f"binary_path: {binary_path}")
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = log_dir(
         bbdir,
         design,
-        "verilog",
-        timestamp,
         "verilator",
         binary_name,
         selection=input_data["target"],
     )
-    os.makedirs(run_log, exist_ok=True)
     wave_arg = (
         " --no-wave"
         if input_data.get("no-wave", False) or input_data.get("no_wave", False)
@@ -256,7 +251,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "binary": binary_path,
             "log_dir": run_log,
             "bank_diff": os.path.join(run_log, "diff.ndjson") if diff else None,
-            "timestamp": timestamp,
+            "timestamp": os.path.basename(run_log)[:19],
         },
         trace_id=origin_tid,
     )

@@ -9,7 +9,7 @@ set link_library [concat [list *] $target_library $RUN_SYNTHETIC_LIBRARY $RUN_LI
 read_verilog [file normalize $RUN_NETLIST]
 current_design $RUN_TOP
 link
-read_sdc [file normalize $RUN_SDC]
+source [file normalize $RUN_SDC]
 # Activity is only annotated with power analysis already on.
 set power_enable_analysis true
 set power_model_preference nlpm

@@ -1,0 +1,20 @@
+[model]
+manifest = ""
+library = ""
+
+[[tests]]
+name = "route"
+top = "cbus_tb"
+test = "protocol_test"
+filelist = "cbus.f"
+timeout_ns = 20000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = ["cbus_pkg::coverage::behavior"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

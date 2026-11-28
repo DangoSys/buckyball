@@ -23,7 +23,6 @@ and graphs.
 
 import argparse
 import concurrent.futures
-import datetime
 import hashlib
 import json
 from itertools import zip_longest
@@ -210,6 +209,18 @@ def main():
     steps = 1 + max(key[0] for key in records)
 
     # ===--- One ELF per instance, each on BEMU, in parallel ---=== #
+    # The iterations of a slice in a launch: a slice over the rows of its
+    # output (iterations -1) has a batch of them each, as many as the GPU
+    # value of that launch has.
+    def iterations(item, step, launch):
+        layout = layouts[item]
+        if layout["iterations"] >= 0:
+            return layout["iterations"]
+        dims = records[
+            step, launch, 1, numbers[layout["graph"], layout["output"]["id"]]
+        ][0]
+        return -(-dims[layout["rows"]] // layout["iteration_batch"])
+
     def instances_of(items):
         instances = [
             (item, step, launch["index"], iteration)
@@ -217,7 +228,7 @@ def main():
             for launch in program["launches"]
             if launch["callee"] == layouts[item]["entry"]
             for step in range(steps)
-            for iteration in range(layouts[item]["iterations"])
+            for iteration in range(iterations(item, step, launch["index"]))
         ]
         # Cover every slice and step before repeating layers and loop iterations.
         groups = {}
@@ -235,13 +246,10 @@ def main():
     design = load_design_config(
         repo, args.design, selection=f"device/{args.device}/{stem}"
     )
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
     logs = Path(
         log_dir(
             repo,
             args.design,
-            "device",
-            stamp,
             "gvn",
             args.model,
             selection=f"device/{args.device}/{stem}",
@@ -545,7 +553,8 @@ def main():
         f"{len(records)} instances; longest {longest['instance']}: {longest['simulated_cycles']} cycles "
         f"whole run, {longest['cycles']} slice span; in {elapsed:.0f} s"
     )
-    print(f"summary: {out / 'instances.jsonl'}; logs: {logs}")
+    (logs / "instances.jsonl").write_bytes((out / "instances.jsonl").read_bytes())
+    print(f"summary: {out / 'instances.jsonl'}; logs and ELFs: {logs}")
 
 
 if __name__ == "__main__":

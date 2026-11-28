@@ -79,6 +79,7 @@ def build(repo, design, profile, logdir, ctx):
         replacements = {
             "{repo}": str(repo),
             "{design}": design,
+            "{design_pb}": profile["design_pb"] if design is not None else None,
             "{config}": str(parameters),
             "{rtl}": str(rtl),
             "{targets}": ",".join(test["name"] for test in profile["tests"]),

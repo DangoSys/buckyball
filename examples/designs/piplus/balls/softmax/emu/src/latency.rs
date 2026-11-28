@@ -50,9 +50,25 @@ fn exp2(u: f32) -> f32 {
     p * f32::from_bits(((n as i32 + 127) as u32) << 23)
 }
 
+/// The four independent FP32 lanes and their reduction order mirror the RTL.
+pub(super) fn exponentials(width: usize, scaled: impl Fn(usize) -> f32, mut emit: impl FnMut(usize, f32)) -> f32 {
+    let maximum = (0..width).map(&scaled).fold(f32::NEG_INFINITY, f32::max);
+    let mut lanes = [0.0f32; 4];
+    for i in 0..width {
+        let e = exp2((scaled(i) - maximum) * LOG2E);
+        emit(i, e);
+        lanes[i % 4] += e;
+    }
+    (lanes[0] + lanes[1]) + (lanes[2] + lanes[3])
+}
+
 /// One SOFTMAX instruction as the Ball receives it (`iter` rows, rs2) on the
 /// words of its input bank.
 pub fn cycles(iter: u64, rs2: u64, input: &[u32]) -> u64 {
+    cycles_with(iter, rs2, |index| f32::from_bits(input[index]))
+}
+
+pub(super) fn cycles_with(iter: u64, rs2: u64, read: impl Fn(usize) -> f32) -> u64 {
     let w = (rs2 & 0xffff) as usize;
     let in_base = ((rs2 >> 16) & 0x3fff) as usize;
     let scale = f32::from_bits(((((rs2 >> 44) & 0xff) as u8 as i8 as i32 + 127) as u32) << 23);
@@ -60,13 +76,7 @@ pub fn cycles(iter: u64, rs2: u64, input: &[u32]) -> u64 {
     let mut total = 1;
     for row in 0..iter as usize {
         let at = (in_base + row * lines) * 4;
-        let x: Vec<f32> = input[at..at + w].iter().map(|&b| f32::from_bits(b) * scale).collect();
-        let m = x.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-        let mut lanes = [0.0f32; 4];
-        for (i, &v) in x.iter().enumerate() {
-            lanes[i % 4] += exp2((v - m) * LOG2E);
-        }
-        let s = (lanes[0] + lanes[1]) + (lanes[2] + lanes[3]);
+        let s = exponentials(w, |i| read(at + i) * scale, |_, _| {});
         let nd = if s.to_bits() & 0x7f_ffff == 0 { 25 } else { 26 };
         total += 4 * lines as u64 + nd + 23;
     }

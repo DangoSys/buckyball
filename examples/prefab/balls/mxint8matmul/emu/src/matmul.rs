@@ -38,14 +38,21 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         k > 0 && k % 32 == 0,
         "mxint8matmul: K must be a positive multiple of 32"
     );
-    assert!(a != c && b != c && a != b, "mxint8matmul: banks must differ");
+    assert!(
+        a != c && b != c && a != b,
+        "mxint8matmul: banks must differ"
+    );
     for bank in [a, b, c] {
         assert!(
             ctx.config(bank).allocated && ctx.config(bank).cols == 1,
             "mxint8matmul: banks must be allocated with one group"
         );
     }
-    assert_eq!(bank_row_bytes(), 16, "mxint8matmul: bank rows must be 128 bits");
+    assert_eq!(
+        bank_row_bytes(),
+        16,
+        "mxint8matmul: bank rows must be 128 bits"
+    );
     let stride = packed_rows(k);
     assert!(
         a_base + m * stride <= bank_lines()
@@ -54,8 +61,8 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         "mxint8matmul: bank window exceeds capacity"
     );
     let (pa, pb, pc) = (pbank(ctx, a), pbank(ctx, b), pbank(ctx, c));
-    let lhs = ctx.banks[pa][a_base * 16..(a_base + m * stride) * 16].to_vec();
-    let rhs = ctx.banks[pb][b_base * 16..(b_base + n * stride) * 16].to_vec();
+    let lhs = &ctx.banks[pa][a_base * 16..(a_base + m * stride) * 16];
+    let rhs = &ctx.banks[pb][b_base * 16..(b_base + n * stride) * 16];
     let window = c_base * 16..(c_base + m * n / 4) * 16;
     let mut result: Vec<f32> = if accumulate {
         ctx.banks[pc][window.clone()]
@@ -69,27 +76,10 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         result.iter().all(|value| value.is_finite()),
         "mxint8matmul: old C must be finite"
     );
-    for (row, lhs) in lhs.chunks_exact(stride * 16).enumerate() {
-        for (col, rhs) in rhs.chunks_exact(stride * 16).enumerate() {
-            let mut sum = result[row * n + col];
-            for block in 0..k / 32 {
-                let product: i32 = (0..32)
-                    .map(|i| lhs[block * 32 + i] as i8 as i32 * rhs[block * 32 + i] as i8 as i32)
-                    .sum();
-                let scale = lhs[k + block] as i32 + rhs[k + block] as i32 - 254;
-                let term = (product as f64 * f64::from_bits(((scale + 1023) as u64) << 52)) as f32;
-                sum += term;
-                assert!(
-                    term.is_finite() && sum.is_finite(),
-                    "mxint8matmul: result overflows FP32; M={m} N={n} K={k} row={row} col={col} block={block} a_exp={} b_exp={} product={product} rs1={xs1:#x} rs2={xs2:#x}",
-                    lhs[k + block], rhs[k + block]
-                );
-            }
-            result[row * n + col] = sum;
-        }
+    bebop_bemu::bank_matrix::mxint8_product(lhs, rhs, stride * 16, k, &mut result, n);
+    for (dst, value) in ctx.banks[pc][window].chunks_exact_mut(4).zip(result) {
+        dst.copy_from_slice(&value.to_le_bytes());
     }
-    let bytes: Vec<u8> = result.iter().flat_map(|value| value.to_le_bytes()).collect();
-    ctx.banks[pc][window].copy_from_slice(&bytes);
     0
 }
 

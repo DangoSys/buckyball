@@ -38,7 +38,7 @@ def profiles(repo, design, selection, ip):
         ]
         if not tests:
             raise ValueError(f"No applicable tests: {entry['ip']}/{entry['profile']}")
-        result.append({**entry, "tests": tests})
+        result.append({**entry, "tests": tests, "design_pb": str(path)})
     return result
 
 
