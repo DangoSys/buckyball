@@ -59,14 +59,12 @@ pub(crate) fn execute(rs1: u64, rs2: u64, ctx: &mut ExecContext) -> u64 {
     );
     let pa = ctx.physical_bank(a, 0);
     let pc = ctx.physical_bank(c, 0);
-    let codes = ctx.banks[pa][a_codes * 16..a_codes * 16 + k].to_vec();
-    let exponents = ctx.banks[pa][a_exponents * 16..a_exponents * 16 + blocks].to_vec();
-    let weights: Vec<Vec<u8>> = (0..4)
-        .map(|group| {
-            let physical = ctx.physical_bank(b, group);
-            ctx.banks[physical][b_base * 16..(b_base + 8 * stride) * 16].to_vec()
-        })
-        .collect();
+    let codes = &ctx.banks[pa][a_codes * 16..a_codes * 16 + k];
+    let exponents = &ctx.banks[pa][a_exponents * 16..a_exponents * 16 + blocks];
+    let weights = [0, 1, 2, 3].map(|group| {
+        let physical = ctx.physical_bank(b, group);
+        &ctx.banks[physical][b_base * 16..(b_base + 8 * stride) * 16]
+    });
     let mut values = [0i64; 32];
     let mut scale = 0i16;
     let mut valid = false;
@@ -109,9 +107,14 @@ pub(crate) fn execute(rs1: u64, rs2: u64, ctx: &mut ExecContext) -> u64 {
             let row = &weights[j / 8][j % 8 * stride * 16..(j % 8 + 1) * stride * 16];
             assert!(row[k + block] != 255, "mxint8gemv: reserved B exponent");
             scales[j] = exponents[block] as i16 + row[k + block] as i16 - 254;
-            products[j] = (0..32)
-                .map(|i| i64::from(codes[block * 32 + i] as i8) * i64::from(row[block * 32 + i] as i8))
+            let x: &[u8; 32] = codes[block * 32..][..32].try_into().unwrap();
+            let w: &[u8; 32] = row[block * 32..][..32].try_into().unwrap();
+            let dot: i32 = x
+                .iter()
+                .zip(w)
+                .map(|(&a, &b)| i32::from(a as i8) * i32::from(b as i8))
                 .sum();
+            products[j] = i64::from(dot);
         }
         if let Some(incoming) = (0..32).filter(|j| products[*j] != 0).map(|j| scales[j]).max() {
             let next = if valid { scale.max(incoming) } else { incoming };

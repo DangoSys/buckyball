@@ -96,7 +96,8 @@ def build_llvm(
         "-DRUNTIMES_CMAKE_ARGS=--fresh;"
         f'-DCMAKE_C_FLAGS=-iquote "{omp_headers}";'
         f'-DCMAKE_CXX_FLAGS=-iquote "{omp_headers}"',
-        "-DLLVM_TARGETS_TO_BUILD=host;RISCV",
+        "-DLLVM_TARGETS_TO_BUILD=host;RISCV;NVPTX",
+        "-DMLIR_ENABLE_CUDA_RUNNER=ON",
         "-DLLVM_ENABLE_ASSERTIONS=ON",
         "-DOPENMP_ENABLE_LIBOMPTARGET=OFF",
         "-DLIBOMP_LIBFLAGS=-lrt",

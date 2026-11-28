@@ -13,8 +13,8 @@ import struct
 from pathlib import Path
 
 
-def read_output(reference, subject):
-    with (reference / "slice.elf").open("rb") as file, mmap.mmap(
+def elf_output(elf):
+    with elf.open("rb") as file, mmap.mmap(
         file.fileno(), 0, access=mmap.ACCESS_READ
     ) as data:
         header = struct.unpack_from("<16sHHIQQQIHHHHHH", data)
@@ -38,6 +38,10 @@ def read_output(reference, subject):
         )
         offset = section[4] + expected - section[3]
         expected_bytes = data[offset : offset + size]
+    return address, expected_bytes, offset
+
+
+def readback_commands(reference, address, size):
     metadata = json.loads((reference / "readback.json").read_text())
     bank = metadata["bank"]
     ranges = metadata["ranges"]
@@ -94,20 +98,47 @@ def read_output(reference, subject):
         ), "Invalid readback padding"
     assert next(remaining, None) is None, "Unexpected readback instructions"
 
-    events = reference_writes if reference == subject else []
+    return bank, commands, reference_writes
+
+
+def read_output(reference, subject, frozen_elf=None):
+    if frozen_elf is None:
+        address, expected_bytes, offset = elf_output(reference / "slice.elf")
+        bank, commands, reference_writes = readback_commands(
+            reference, address, len(expected_bytes)
+        )
+        events = reference_writes if reference == subject else []
+    else:
+        # The BEMU capture retains its readback commands after its traces are removed.
+        captured = json.loads((reference / "bank-output-capture.json").read_text())
+        with frozen_elf.open("rb") as stream:
+            if (
+                hashlib.file_digest(stream, "sha256").hexdigest()
+                != captured["reference_sha256"]
+            ):
+                raise ValueError("The staged ELF does not match the BEMU reference")
+        _, expected_bytes, offset = elf_output(frozen_elf)
+        bank, commands = captured["bank"], captured["commands"]
+        events = []
+    size = len(expected_bytes)
+    wanted = {(command["hart"], command["inst"]) for command in commands}
     if reference != subject:
         for path in subject.rglob("bdb.ndjson"):
             if "golden" in path.relative_to(subject).parts:
                 continue
             for line in path.open():
                 event = json.loads(line)
-                if event["type"] in ("bankmap", "mtrace"):
+                if event["type"] == "bankmap" or (
+                    event["type"] == "mtrace"
+                    and event["event"] == "write"
+                    and (event["hart_id"], event.get("inst_id", event.get("rob_id")))
+                    in wanted
+                ):
                     events.append(event)
     events.sort(
         key=lambda event: event["clk"] if "clk" in event else event["event_index"]
     )
     mapping, writes = {}, {}
-    wanted = {(command["hart"], command["inst"]) for command in commands}
     for event in events:
         hart, version = event["hart_id"], event["vbank_id"]
         if event["type"] == "bankmap":
@@ -147,8 +178,12 @@ def read_output(reference, subject):
     return bytes(actual), expected_bytes, offset, result
 
 
-def check(reference, subject):
-    actual, expected_bytes, _, result = read_output(reference, subject)
+def check(reference, subject, frozen_elf=None):
+    actual, expected_bytes, _, result = read_output(reference, subject, frozen_elf)
+    if not expected_bytes:
+        raise ValueError("Empty GVN readback")
+    if len(actual) != len(expected_bytes):
+        raise ValueError(f"Read {len(actual)} bytes, expected {len(expected_bytes)}")
     if actual != expected_bytes:
         first = next(
             i
@@ -160,6 +195,7 @@ def check(reference, subject):
             f"actual {actual[first]}, expected {expected_bytes[first]}"
         )
     result["passed"] = True
+    result["output_sha256"] = hashlib.sha256(actual).hexdigest()
     (subject / "bank-output-check.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
 

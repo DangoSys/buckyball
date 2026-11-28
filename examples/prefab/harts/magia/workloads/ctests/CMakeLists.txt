@@ -188,6 +188,28 @@ add_custom_command(
 add_custom_target(${NAME}-build DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${NAME}")
 add_dependencies(design-ctests-build ${NAME}-build)
 
+# An odd number of columns.
+set(NAME "${DESIGN_NAME}-${BUCKYBALL_CONTROL_TARGET}-ctest-gemm_odd_columns-baremetal")
+add_custom_command(
+    OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${NAME}"
+    COMMAND ${ELF_CC} ${CTEST_C_FLAGS}
+        $<TARGET_PROPERTY:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal,INTERFACE_LINK_OPTIONS>
+        $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+        $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
+        "${CMAKE_CURRENT_SOURCE_DIR}/gemm_odd_columns.c" "${MAGIA_STACK}/runtime/mesh/gemm.c"
+        "${NATIVE}/mesh.o"
+        -Wl,--section-start=.magia=0xcc000000
+        -lm
+        -o "${CMAKE_CURRENT_BINARY_DIR}/${NAME}"
+    DEPENDS "gemm_odd_columns.c" "${MAGIA_STACK}/runtime/mesh/gemm.c" "${MAGIA_STACK}/runtime/mesh/jobs.h" "${NATIVE}/mesh.o"
+        $<TARGET_OBJECTS:bbsw-crt0-hart${DESIGN_WORKLOAD_CONTROL_HART}-baremetal>
+        $<TARGET_OBJECTS:bbsw-syscalls-baremetal>
+    COMMAND_EXPAND_LISTS
+    VERBATIM
+)
+add_custom_target(${NAME}-build DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/${NAME}")
+add_dependencies(design-ctests-build ${NAME}-build)
+
 # Loom's half-precision conversions: a program of the host alone.
 set(NAME "${DESIGN_NAME}-${BUCKYBALL_CONTROL_TARGET}-ctest-half_convert-baremetal")
 add_custom_command(

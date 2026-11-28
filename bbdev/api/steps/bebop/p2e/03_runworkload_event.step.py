@@ -17,7 +17,6 @@ import re
 import shlex
 import shutil
 import sys
-from datetime import datetime
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -199,17 +198,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     if not multi_fpga and case_uses_multi_fpga(build_dir):
         multi_fpga = True
         ctx.logger.info(f"Detected multi-FPGA P2E case: {build_dir}")
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
     run_log = log_dir(
         bbdir,
         design,
         "p2e",
-        timestamp,
-        "p2e",
         image_name,
         selection=input_data["target"],
     )
-    os.makedirs(run_log, exist_ok=True)
     runtime_lib_dir = os.path.join(build_dir, "vvacDir", "runtimeDir", "lib", "lib_arm")
     rtcfg_path = os.path.join(build_dir, "vvacDir", "runtimeDir", "rtcfg")
     libvctb_path = os.path.join(runtime_lib_dir, "libvCtb.so")
@@ -397,7 +392,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "uart_logs": [str(path) for path in uart_logs],
             "bank_diff": os.path.join(run_log, "diff.ndjson") if diff else None,
             "diff": diff,
-            "timestamp": timestamp,
+            "timestamp": os.path.basename(run_log)[:19],
         },
         trace_id=origin_tid,
     )

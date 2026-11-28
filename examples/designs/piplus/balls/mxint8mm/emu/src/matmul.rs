@@ -52,8 +52,8 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
         "mxint8mm: bank window exceeds capacity"
     );
     let (pa, pb, pc) = (pbank(ctx, a), pbank(ctx, b), pbank(ctx, c));
-    let lhs = ctx.banks[pa][a_base * 16..(a_base + m * stride) * 16].to_vec();
-    let rhs = ctx.banks[pb][..n * stride * 16].to_vec();
+    let lhs = &ctx.banks[pa][a_base * 16..(a_base + m * stride) * 16];
+    let rhs = &ctx.banks[pb][..n * stride * 16];
     // Row r of C: n/4 bank rows from c_base + r * c_pitch.
     let row = |r: usize| (c_base + r * c_pitch) * 16..(c_base + r * c_pitch) * 16 + n * 4;
     let mut result: Vec<f32> = if accumulate {
@@ -78,29 +78,17 @@ pub(crate) fn execute(xs1: u64, xs2: u64, ctx: &mut ExecContext) -> u64 {
             values.iter().all(|value| value.is_finite()),
             "mxint8mm: bias must be finite"
         );
-        for (index, value) in result.iter_mut().enumerate() {
-            *value += values[index % n];
-        }
-    }
-    for (row, lhs) in lhs.chunks_exact(stride * 16).enumerate() {
-        for (col, rhs) in rhs.chunks_exact(stride * 16).enumerate() {
-            let mut sum = result[row * n + col];
-            // The codes of a row, then the exponents of its blocks.
-            let (lhs_codes, lhs_exponents) = lhs.split_at(k);
-            let (rhs_codes, rhs_exponents) = rhs.split_at(k);
-            for (block, (x, y)) in lhs_codes.chunks_exact(32).zip(rhs_codes.chunks_exact(32)).enumerate() {
-                let product: i32 = x.iter().zip(y).map(|(&x, &y)| x as i8 as i32 * y as i8 as i32).sum();
-                let scale = lhs_exponents[block] as i32 + rhs_exponents[block] as i32 - 254;
-                let term = (product as f64 * f64::from_bits(((scale + 1023) as u64) << 52)) as f32;
-                sum += term;
-                assert!(term.is_finite() && sum.is_finite(), "mxint8mm: result overflows FP32");
+        for row in result.chunks_exact_mut(n) {
+            for (value, bias) in row.iter_mut().zip(&values) {
+                *value += bias;
             }
-            result[row * n + col] = sum;
         }
     }
+    bebop_bemu::bank_matrix::mxint8_product(lhs, rhs, stride * 16, k, &mut result, n);
     for (r, values) in result.chunks_exact(n).enumerate() {
-        let bytes: Vec<u8> = values.iter().flat_map(|value| value.to_le_bytes()).collect();
-        ctx.banks[pc][row(r)].copy_from_slice(&bytes);
+        for (dst, value) in ctx.banks[pc][row(r)].chunks_exact_mut(4).zip(values) {
+            dst.copy_from_slice(&value.to_le_bytes());
+        }
     }
     0
 }
@@ -110,11 +98,27 @@ pub(crate) fn latency(xs1: u64, xs2: u64, ctx: &ExecContext) -> u64 {
     let p =
         bebop_bemu::ball::blink::parameters::<super::params::Params>("mxint8mm", ctx.ball_id.expect("Ball instance"));
     let steps = 32 / p.lanes.expect("lanes") as u64;
-    super::latency::cycles(
+    // Only dimensions, accumulate/bias and the PE configuration enter the timing recurrence.
+    // Neighbouring tiles commonly use the same shape at different bank addresses.
+    type TimingInputs = (u64, u64, u64, u64, u64);
+    thread_local! {
+        static PREVIOUS: std::cell::Cell<Option<(TimingInputs, u64)>> = const { std::cell::Cell::new(None) };
+    }
+    let key = (
         rs1_iter(xs1),
-        xs2,
+        xs2 & (0xfffff | (3 << 62)),
         p.rows.expect("rows") as u64,
         p.cols.expect("cols") as u64,
         steps,
-    )
+    );
+    PREVIOUS.with(|previous| {
+        if let Some((shape, cycles)) = previous.get() {
+            if shape == key {
+                return cycles;
+            }
+        }
+        let cycles = super::latency::cycles(key.0, key.1, key.2, key.3, key.4);
+        previous.set(Some((key, cycles)));
+        cycles
+    })
 }

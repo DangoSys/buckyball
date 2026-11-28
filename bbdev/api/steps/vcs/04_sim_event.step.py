@@ -2,7 +2,6 @@ from utils.path import design_output_root
 import os
 import shlex
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from motia import FlowContext, queue
@@ -69,19 +68,15 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         Path(design_output_root(bbdir, design, selection=input_data["target"])) / "vcs"
     )
     simv = artifact_dir / "simv"
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = Path(
         log_dir(
             bbdir,
             design,
-            "tapeout",
-            timestamp,
             "vcs",
             binary_name,
             selection=input_data["target"],
         )
     )
-    run_log.mkdir(parents=True)
     command = [
         bebop_bin_path(bbdir, design, "vcs", selection=input_data["target"]),
         "--simv",

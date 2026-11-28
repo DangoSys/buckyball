@@ -5,7 +5,6 @@ import shlex
 import struct
 import subprocess
 import sys
-from datetime import datetime
 from motia import FlowContext, queue
 
 utils_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -98,7 +97,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         selection=input_data["target"],
     )
     ctx.logger.info(f"Using build directory: {build_dir}")
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     binary_name = require_product(input_data)
     coverage = input_data.get("coverage", False)
     workload_root = str(
@@ -141,14 +139,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(
         bbdir,
         design,
-        "verilog",
-        timestamp,
         "verilator",
         binary_name,
         selection=input_data["target"],
     )
     waveform_dir = os.path.join(run_log, "waveform")
-    os.makedirs(run_log, exist_ok=True)
     no_wave = bool(input_data.get("no-wave", input_data.get("no_wave", False)))
     if not no_wave:
         os.makedirs(waveform_dir, exist_ok=True)
@@ -250,7 +245,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         "binary": binary_path,
         "log_dir": run_log,
         "waveform_dir": None if no_wave else waveform_dir,
-        "timestamp": timestamp,
+        "timestamp": os.path.basename(run_log)[:19],
         "sim_meta": meta_path,
     }
     if coverage:

@@ -1,0 +1,49 @@
+# The last matching rule wins. Keep multiple owners on the same line.
+
+# Default owner
+*                               @shirohasuki
+
+# Hardware architecture
+/arch/                           @shirohasuki @SJM946
+/arch/src/main/scala/ball/       @shirohasuki @SJM946 @Mikemy666
+/arch/src/main/scala/thread/     @shirohasuki @SJM946 @Mikemy666
+/arch/src/main/scala/hart/       @shirohasuki @SJM946 @Mikemy666
+/arch/src/main/scala/device/     @shirohasuki @SJM946 @isaac12380
+/arch/src/main/scala/ilp/        @shirohasuki @isaac12380
+/arch/src/main/scala/tlp/        @shirohasuki @isaac12380
+/arch/src/main/scala/mlp/        @shirohasuki @isaac12380
+/arch/src/main/scala/generic/    @shirohasuki @SJM946 @Mikemy666 @isaac12380
+/arch/src/main/scala/custom/     @shirohasuki @SJM946 @Mikemy666 @isaac12380
+
+# Shared software and tooling
+/stack/                          @shirohasuki @cwrt310
+/bbdev/                          @shirohasuki @daiyongyuan
+/bb-tests/                       @shirohasuki
+/examples/prefab/                @shirohasuki @SJM946
+/verify/                         @shirohasuki
+/docs/                           @shirohasuki
+
+# BEMU abstractions
+/bebop/                          @shirohasuki @daiyongyuan
+/bebop/src/nodes/bemu/ball/      @shirohasuki @SJM946 @Mikemy666
+/bebop/src/nodes/bemu/thread/    @shirohasuki @SJM946 @Mikemy666
+/bebop/src/nodes/bemu/hart/      @shirohasuki @SJM946 @Mikemy666
+/bebop/src/nodes/bemu/device/    @shirohasuki @SJM946 @isaac12380
+/bebop/src/nodes/bemu/ilp/       @shirohasuki @isaac12380
+/bebop/src/nodes/bemu/tlp/       @shirohasuki @isaac12380
+/bebop/src/nodes/bemu/mlp/       @shirohasuki @isaac12380
+/bebop/src/nodes/bemu/generic/   @shirohasuki @SJM946 @Mikemy666 @isaac12380
+/bebop/src/nodes/bemu/custom/    @shirohasuki @SJM946 @Mikemy666 @isaac12380
+
+# Designs
+/examples/designs/gemmini/       @shirohasuki @SJM946
+/examples/designs/goban/         @shirohasuki @SJM946
+/examples/designs/magia/         @shirohasuki @SJM946
+/examples/designs/multi-rocket/  @shirohasuki @SJM946
+/examples/designs/pebble/        @shirohasuki @SJM946
+/examples/designs/piplus/        @shirohasuki @SJM946
+/examples/designs/poly/          @shirohasuki @SJM946
+/examples/designs/toy/           @shirohasuki @SJM946
+
+# Repository automation and ownership rules
+/.github/                        @shirohasuki

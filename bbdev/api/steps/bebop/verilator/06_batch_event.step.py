@@ -4,7 +4,6 @@ bebop verilator batch event handler
 Runs bebop verilator batch regression (requires prior --build).
 """
 
-from datetime import datetime
 from pathlib import Path
 from utils.path import design_output_root, log_dir
 from utils.path import runner_manifest
@@ -99,8 +98,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     run_log = log_dir(
         bbdir,
         design,
-        "verilog",
-        datetime.now().strftime("%Y-%m-%d-%H-%M"),
         "bebop-verilator",
         test_type,
         selection=input_data["target"],
@@ -109,7 +106,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         # A measurement runs the head of the list, not the regression.
         with open(workload_toml, "rb") as source:
             (tests,) = tomllib.load(source)["workloads"].values()
-        os.makedirs(run_log)
         workload_toml = os.path.join(run_log, "workloads.toml")
         with open(workload_toml, "w") as head:
             head.write(

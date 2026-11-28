@@ -81,7 +81,16 @@ name = "bebop-bemu"
 version = "0.1.0"
 dependencies = [
  "bebop-bank-hash",
+ "bebop-bemu-ball",
+ "bebop-bemu-custom",
+ "bebop-bemu-device",
+ "bebop-bemu-generic",
+ "bebop-bemu-hart",
+ "bebop-bemu-ilp",
+ "bebop-bemu-mlp",
  "bebop-bemu-profile",
+ "bebop-bemu-thread",
+ "bebop-bemu-tlp",
  "bebop-cycle-trace",
  "bebop-dasm",
  "bebop-dtb",
@@ -97,7 +106,6 @@ dependencies = [
  "clap",
  "linkme",
  "prost",
- "prost-build",
  "prost-types",
  "rustc_apfloat",
  "serde",
@@ -107,8 +115,104 @@ dependencies = [
 ]
 
 [[package]]
+name = "bebop-bemu-ball"
+version = "0.1.0"
+dependencies = [
+ "bebop-bemu-generic",
+ "linkme",
+]
+
+[[package]]
+name = "bebop-bemu-custom"
+version = "0.1.0"
+dependencies = [
+ "bebop-bank-hash",
+ "bebop-bemu-generic",
+ "bebop-bemu-hart",
+ "bebop-bemu-profile",
+]
+
+[[package]]
+name = "bebop-bemu-device"
+version = "0.1.0"
+dependencies = [
+ "bebop-bemu-generic",
+ "bebop-cycle-trace",
+ "bebop-elf",
+ "bebop-keyboard",
+ "bebop-microphone",
+ "bebop-rtc",
+ "bebop-speaker",
+ "bebop-vga",
+ "prost",
+ "rustix",
+]
+
+[[package]]
+name = "bebop-bemu-generic"
+version = "0.1.0"
+dependencies = [
+ "bebop-bank-hash",
+ "bebop-elf",
+ "bebop-memory",
+ "dynasmrt",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "rustc_apfloat",
+]
+
+[[package]]
+name = "bebop-bemu-hart"
+version = "0.1.0"
+dependencies = [
+ "bebop-bank-hash",
+ "bebop-bemu-generic",
+ "bebop-bemu-profile",
+ "bebop-dasm",
+ "bebop-dtb",
+ "bebop-elf",
+ "bebop-memory",
+ "bebop-syscall",
+ "linkme",
+ "serde",
+ "serde_json",
+ "snafu",
+]
+
+[[package]]
+name = "bebop-bemu-ilp"
+version = "0.1.0"
+dependencies = [
+ "bebop-bemu-generic",
+]
+
+[[package]]
+name = "bebop-bemu-mlp"
+version = "0.1.0"
+dependencies = [
+ "bebop-bemu-generic",
+]
+
+[[package]]
 name = "bebop-bemu-profile"
 version = "0.1.0"
+
+[[package]]
+name = "bebop-bemu-thread"
+version = "0.1.0"
+dependencies = [
+ "bebop-bank-hash",
+ "bebop-bemu-generic",
+ "bebop-bemu-profile",
+]
+
+[[package]]
+name = "bebop-bemu-tlp"
+version = "0.1.0"
+dependencies = [
+ "bebop-bemu-generic",
+]
 
 [[package]]
 name = "bebop-cycle-trace"
@@ -179,6 +283,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "bytes"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -237,6 +347,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
+name = "dynasm"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d36219658beb39702975c707dee7895943ca281ca46eebbc5ea395171b9c182b"
+dependencies = [
+ "bitflags",
+ "byteorder",
+ "lazy_static",
+ "proc-macro-error2",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "dynasmrt"
+version = "4.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bc32ed2a02b82bc43a7631dd624e8c5731a8377e40a468da28e62fc2e028952"
+dependencies = [
+ "byteorder",
+ "dynasm",
+ "fnv",
+ "memmap2",
+]
+
+[[package]]
 name = "either"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -269,6 +406,12 @@ name = "fixedbitset"
 version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5905ec755cc8386d7928353e4d356d2be3e89e81e5ca01fe630a1ca4d08dc175"
+
+[[package]]
+name = "fnv"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
 name = "getrandom"
@@ -325,6 +468,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
+name = "lazy_static"
+version = "1.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -369,6 +518,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "memmap2"
+version = "0.9.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b0ca1155a9ecc25aa12e8313a119f32edf0255fea2f44839c4ac0a12b2ac157"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "multimap"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -403,6 +561,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96de42df36bb9bba5542fe9f1a054b8cc87e172759a1868aa05c1f3acc89dfc5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "proc-macro-error2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11ec05c52be0a07b08061f7dd003e7d7092e0472bc731b4af7bb1ef876109802"
+dependencies = [
+ "proc-macro-error-attr2",
+ "proc-macro2",
+ "quote",
  "syn 2.0.119",
 ]
 

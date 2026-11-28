@@ -169,6 +169,12 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     }
     if result.returncode == 0:
         try:
+            with open(dc_log) as stream:
+                diagnostic = next(
+                    (line.strip() for line in stream if line.startswith("Error:")), None
+                )
+            if diagnostic:
+                raise ValueError(f"DC reported an error in {dc_log}: {diagnostic}")
             extra_fields["report_path"] = area_report(
                 report_context, origin_tid, report_dir, contract
             )

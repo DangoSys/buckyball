@@ -27,6 +27,7 @@ struct magia_job {
   uint32_t x, w, z;
   uint32_t m, n, k;
   uint32_t pitch;
+  uint32_t batch;
 };
 
 // Points window `index` at the page of the DDR address `address` and returns
@@ -62,9 +63,29 @@ static void magia_launch(volatile uint8_t *l2) {
     abort();
 }
 
-// Z = Z + X * W with the matrices at the DDR addresses `x`, `w` and `z`.
+// Z = Z + X * W for each of `batch` products, the matrices of each after
+// those of the one before at the DDR addresses `x`, `w` and `z`. A batch of
+// more than one is one job: each tile takes whole products, which must fit
+// its L1.
 static void magia_jobs(volatile uint8_t *l2, uint64_t x, uint64_t w, uint64_t z,
-                       uint64_t m, uint64_t n, uint64_t k) {
+                       uint64_t batch, uint64_t m, uint64_t n, uint64_t k) {
+  volatile struct magia_job *job =
+      (volatile struct magia_job *)(l2 + MAGIA_JOB);
+  if (batch > 1) {
+    if (k < 2 || m * n * 2 + 8 + n * k * 2 + m * k * 2 > MAGIA_L1_BYTES)
+      abort();
+    job->x = magia_window(1, MAGIA_X, MAGIA_XZ_BYTES, x, batch * m * n * 2);
+    job->w = magia_window(0, MAGIA_W, MAGIA_W_BYTES, w, batch * n * k * 2);
+    job->z = magia_window(2, MAGIA_Z, MAGIA_XZ_BYTES, z, batch * m * k * 2);
+    job->m = (uint32_t)m;
+    job->n = (uint32_t)n;
+    job->k = (uint32_t)k;
+    job->pitch = (uint32_t)k;
+    job->batch = (uint32_t)batch;
+    magia_launch(l2);
+    return;
+  }
+  job->batch = 1;
   // A tile takes at least two columns (firmware/gemm.h).
   if (k < 2)
     abort();
@@ -84,8 +105,6 @@ static void magia_jobs(volatile uint8_t *l2, uint64_t x, uint64_t w, uint64_t z,
       (MAGIA_L1_BYTES - n * columns * 2 - 8) / (n * 2 + columns * 2);
   if (!rows)
     abort();
-  volatile struct magia_job *job =
-      (volatile struct magia_job *)(l2 + MAGIA_JOB);
   uint32_t ws = magia_window(0, MAGIA_W, MAGIA_W_BYTES, w, n * k * 2);
   for (uint64_t top = 0; top < m; top += rows) {
     uint64_t height = m - top < rows ? m - top : rows;

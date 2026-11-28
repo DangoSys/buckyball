@@ -4,7 +4,6 @@ import sys
 import glob
 import re
 import yaml
-from datetime import datetime
 
 from motia import FlowContext, queue
 
@@ -240,8 +239,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
     yosys_log_dir = log_dir(
         bbdir,
         design,
-        "synth",
-        datetime.now().strftime("%Y-%m-%d-%H-%M"),
         "yosys",
         top_module,
         selection=input_data["target"],
@@ -255,7 +252,6 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         if os.path.exists(topname_file):
             os.remove(topname_file)
 
-    os.makedirs(yosys_log_dir, exist_ok=True)
     try:
         source_list_path = prepare_yosys_verilog(build_dir, yosys_log_dir, ctx.logger)
     except Exception as e:

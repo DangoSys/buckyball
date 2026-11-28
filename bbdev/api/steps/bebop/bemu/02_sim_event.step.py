@@ -9,7 +9,6 @@ import shlex
 import shutil
 import sys
 import tempfile
-from datetime import datetime
 from pathlib import Path
 from motia import FlowContext, queue
 
@@ -71,17 +70,13 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         return
     ctx.logger.info(f"binary_path: {binary_path}")
     binary_dir = os.path.dirname(binary_path)
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M")
     run_log = log_dir(
         bbdir,
         design,
-        "verilog",
-        timestamp,
         "bemu",
         binary_name,
         selection=input_data["target"],
     )
-    os.makedirs(run_log, exist_ok=True)
     target = Path(
         bebop_target_dir(bbdir, design, "bemu", selection=input_data["target"])
     )
@@ -196,7 +191,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
                 "binary": binary_path,
                 "design": design,
                 "log_dir": run_log,
-                "timestamp": timestamp,
+                "timestamp": os.path.basename(run_log)[:19],
             },
             trace_id=origin_tid,
         )
@@ -211,7 +206,7 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
             "binary": binary_path,
             "design": design,
             "log_dir": run_log,
-            "timestamp": timestamp,
+            "timestamp": os.path.basename(run_log)[:19],
         },
         trace_id=origin_tid,
     )

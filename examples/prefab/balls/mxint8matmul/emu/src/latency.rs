@@ -38,10 +38,9 @@ pub fn cycles(m: u64, n: u64, k: u64, from_old: bool, rows: u64, cols: u64, lane
             if from_old {
                 total += w + 2;
             }
-            for block in 0..k / 32 {
-                let parts = if block % 16 == 0 { 3 } else { 2 };
-                total += parts * r.max(c) + 2 + 32 / lanes + 2;
-            }
+            let blocks = k / 32;
+            // Two code reads every block, one additional exponent read every 16 blocks.
+            total += (2 * blocks + blocks.div_ceil(16)) * r.max(c) + blocks * (4 + 32 / lanes);
         }
     }
     total

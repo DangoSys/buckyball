@@ -29,7 +29,6 @@ import subprocess
 import sys
 import threading
 import time
-import datetime
 import hashlib
 from pathlib import Path
 
@@ -307,13 +306,7 @@ def main():
     )
 
     # ===--- Each iteration of each slice on BEMU ---=== #
-    stamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    logs = Path(
-        log_dir(
-            repo, args.design, "device", stamp, "gvn", args.model, selection=selection
-        )
-    )
-    logs.mkdir(parents=True, exist_ok=True)
+    logs = Path(log_dir(repo, args.design, "gvn", args.model, selection=selection))
     bemu = config / "bin/bebop-bemu"
     bemu_slots = threading.Semaphore(args.jobs)
 
@@ -332,6 +325,10 @@ def main():
         bank = design.threads[
             hart.thread_indices[layout["thread"]]
         ].frontend.max_private_vbank
+        size = (out / name / "gvn_expect.bin").stat().st_size
+        (log / "readback.json").write_text(
+            json.dumps({"bank": bank, "ranges": [[0, size]]}) + "\n"
+        )
         bemu_slots.acquire()
         begin = time.monotonic()
         result = subprocess.run(
@@ -418,7 +415,8 @@ def main():
         f"{longest['simulated_cycles']} cycles whole run, {longest['cycles']} slice span; "
         f"in {elapsed:.0f} s"
     )
-    print(f"summary: {out / 'instances.jsonl'}; logs: {logs}")
+    (logs / "instances.jsonl").write_bytes((out / "instances.jsonl").read_bytes())
+    print(f"summary: {out / 'instances.jsonl'}; logs and ELFs: {logs}")
 
 
 if __name__ == "__main__":

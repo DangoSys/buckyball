@@ -1,0 +1,9 @@
+[parameters]
+base = 1342177280
+bytes = 512
+stride = 128
+
+[defines]
+MMIO_BASE = "base"
+TRACE_STRIDE = "stride"
+TRACE_BYTES = "bytes"

@@ -1,6 +1,5 @@
 import json
 import subprocess
-from datetime import datetime
 from pathlib import Path
 
 from motia import FlowContext, queue
@@ -26,14 +25,11 @@ async def handler(input_data: dict, ctx: FlowContext) -> None:
         log_dir(
             get_buckyball_path(),
             target["design"],
-            "device",
-            datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f"),
             "gvn-fpga",
             model,
             selection=target["target"],
         )
     )
-    directory.mkdir(parents=True)
     estimate = directory / "fpga.json"
     node = {"id": "fpga-gvn", "status": "running"}
 

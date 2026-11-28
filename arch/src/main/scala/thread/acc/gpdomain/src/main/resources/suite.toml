@@ -1,0 +1,20 @@
+[model]
+manifest = ""
+library = ""
+
+[[tests]]
+name = "image"
+top = "gpdomain_tb"
+test = "protocol_test"
+filelist = "gpdomain.f"
+timeout_ns = 20000
+wall_timeout_s = 120
+kind = "functional"
+rtl_scopes = ["dut"]
+metrics = ["line", "cond", "tgl"]
+functional_groups = ["gpdomain_pkg::coverage::behavior"]
+sink_ready = 1
+sink_stall = 3
+designs = []
+plusargs = []
+assertion = ""

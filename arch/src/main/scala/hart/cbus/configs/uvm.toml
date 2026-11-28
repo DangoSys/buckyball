@@ -1,0 +1,7 @@
+[parameters]
+addressBits = 44
+hartDataBits = 128
+idBits = 4
+beatRows = 2
+
+[defines]

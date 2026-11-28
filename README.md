@@ -34,6 +34,7 @@ We use Nix Flake as our main build system. If you have not installed nix, instal
 
 ```bash
 git clone https://github.com/DangoSys/buckyball.git
+git checkout 0.3.0-alpha
 ```
 
 **2. Initialize Environment**

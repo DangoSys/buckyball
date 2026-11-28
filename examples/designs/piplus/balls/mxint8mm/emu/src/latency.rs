@@ -65,23 +65,23 @@ pub fn cycles(iter: u64, rs2: u64, rows: u64, cols: u64, steps: u64) -> u64 {
                 if last {
                     t = t.max(store_end);
                 }
-                // The last MAC cycle of each row.
-                let mut ends = Vec::new();
-                for r in 0..active_rows as usize {
-                    if first && !last {
-                        t = t.max(stored.get(r).map_or(store_end, |&at| at.min(store_end)));
+                let first_mac = t;
+                if first && !last {
+                    for r in 0..active_rows as usize {
+                        t = t.max(stored.get(r).copied().unwrap_or(store_end).min(store_end)) + steps;
                     }
-                    t += steps;
-                    ends.push(t - 1);
+                } else {
+                    t += active_rows * steps;
                 }
                 mac = t;
                 empty[slot] = t + 1;
                 if last {
+                    // On the last block the MAC rows stream without stalls. All groups
+                    // of one row become ready together, then occupy the port for two cycles each.
                     stored.clear();
-                    for end in &ends {
-                        for _ in 0..groups {
-                            port = port.max(end + 3) + 2;
-                        }
+                    for r in 1..=active_rows {
+                        let ready = first_mac + r * steps + 2;
+                        port = port.max(ready) + 2 * groups;
                         stored.push(port - 1);
                     }
                     store_end = port - 1;

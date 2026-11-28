@@ -48,6 +48,8 @@ pub struct Gemmini {
     pub(crate) spad: Vec<[i8; DIM]>,
     pub(crate) accumulator: Vec<[i32; DIM]>,
     pe_state: [[i32; DIM]; DIM],
+    // A preload sign-extends bytes. Output-stationary accumulation can fill all 32 bits.
+    pe_holds_bytes: bool,
 
     // Execute.
     pub(crate) output_sp_addr: u32,
@@ -186,6 +188,7 @@ impl Gemmini {
             spad: vec![[0; DIM]; BANK_NUM * BANK_ROWS],
             accumulator: vec![[0; DIM]; ACC_ROWS],
             pe_state: [[0; DIM]; DIM],
+            pe_holds_bytes: true,
             output_sp_addr: GARBAGE_ADDR,
             preload_sp_addr: GARBAGE_ADDR,
             preload_cols: 0,
@@ -268,6 +271,22 @@ impl Gemmini {
             } else {
                 guest.read_buffer(dram_addr + row as u64 * stride, &mut buffer);
                 cycles += ((cols * size) as u64).div_ceil(BEAT_BYTES).max(1);
+            }
+            if !accumulator && pixels == 1 && (zeros || scale == 1.0) {
+                for col in (0..cols).step_by(DIM) {
+                    let spad_row = base_row + row + (col / DIM) * block_stride;
+                    let len = DIM.min(cols - col);
+                    let dest = &mut self.spad[spad_row][..len];
+                    if zeros {
+                        dest.fill(0);
+                    } else {
+                        for (byte, &value) in dest.iter_mut().zip(&buffer[col..col + len]) {
+                            *byte = value as i8;
+                        }
+                    }
+                    self.timing.write(false, spad_row);
+                }
+                continue;
             }
             for col in 0..cols {
                 let spad_row = base_row + row + col / DIM * block_stride;
@@ -411,21 +430,31 @@ impl Gemmini {
                 "Gemmini preloads from the accumulator are not supported"
             );
             let transpose = ws && self.b_transpose;
-            for i in 0..DIM {
-                for j in 0..DIM {
-                    let (r, c) = if transpose { (j, i) } else { (i, j) };
-                    self.pe_state[i][j] = if i < self.preload_rows as usize
-                        && j < self.preload_cols as usize
-                        && self.preload_sp_addr != GARBAGE_ADDR
-                    {
-                        i32::from(self.spad[self.preload_sp_addr as usize + r][c])
-                    } else {
-                        0
-                    };
+            self.pe_holds_bytes = true;
+            if self.preload_sp_addr == GARBAGE_ADDR {
+                self.pe_state.fill([0; DIM]);
+            } else if !transpose && self.preload_cols as usize >= DIM && self.preload_rows as usize >= DIM {
+                for (i, row) in self.pe_state.iter_mut().enumerate() {
+                    *row = self.spad[self.preload_sp_addr as usize + i].map(i32::from);
+                }
+            } else {
+                for i in 0..DIM {
+                    for j in 0..DIM {
+                        let (r, c) = if transpose { (j, i) } else { (i, j) };
+                        self.pe_state[i][j] = if i < self.preload_rows as usize && j < self.preload_cols as usize {
+                            i32::from(self.spad[self.preload_sp_addr as usize + r][c])
+                        } else {
+                            0
+                        };
+                    }
                 }
             }
             if self.preload_sp_addr != GARBAGE_ADDR {
-                let rows = if transpose { self.preload_cols } else { self.preload_rows };
+                let rows = if transpose {
+                    self.preload_cols
+                } else {
+                    self.preload_rows
+                };
                 for r in 0..(rows as usize).min(DIM) {
                     self.timing.read(false, self.preload_sp_addr as usize + r);
                 }
@@ -435,7 +464,8 @@ impl Gemmini {
         if bd != GARBAGE_ADDR {
             for i in 0..bd_rows.min(DIM) {
                 for j in 0..bd_cols.min(DIM) {
-                    results[i][j] = i32::from(self.spad[bd as usize + i][j]);
+                    let (row, col) = if !ws && self.b_transpose { (j, i) } else { (i, j) };
+                    results[i][j] = i32::from(self.spad[bd as usize + row][col]);
                 }
                 self.timing.read(false, bd as usize + i);
             }
@@ -447,28 +477,26 @@ impl Gemmini {
                 self.timing.read(false, a as usize + a_stride * r);
             }
         }
-        for i in 0..DIM {
-            for j in 0..DIM {
-                for k in 0..DIM {
-                    let value_a = if a != GARBAGE_ADDR && i < a_rows && k < a_cols {
-                        let r = a_stride * if self.a_transpose { k } else { i };
-                        let c = if self.a_transpose { i } else { k };
-                        i32::from(self.spad[a as usize + r][c])
-                    } else {
-                        0
-                    };
-                    if ws {
-                        results[i][j] = results[i][j].wrapping_add(value_a.wrapping_mul(self.pe_state[k][j]));
-                    } else {
-                        let b = if bd != GARBAGE_ADDR && k < bd_rows && j < bd_cols {
-                            let (r, c) = if self.b_transpose { (j, k) } else { (k, j) };
-                            i32::from(self.spad[bd as usize + r][c])
-                        } else {
-                            0
-                        };
-                        self.pe_state[i][j] = self.pe_state[i][j].wrapping_add(value_a.wrapping_mul(b));
-                    }
-                }
+        if a != GARBAGE_ADDR {
+            // Keep an output row in registers. Each activation contributes to every
+            // column; the reduction order and wrapping i32 arithmetic stay the same.
+            let (rhs, dest) = if ws {
+                (&self.pe_state, &mut results)
+            } else {
+                (&results, &mut self.pe_state)
+            };
+            crate::array::multiply(
+                &self.spad,
+                a as usize,
+                a_stride,
+                self.a_transpose,
+                rhs,
+                &mut dest[..a_rows.min(DIM)],
+                a_cols.min(DIM),
+                !ws || self.pe_holds_bytes,
+            );
+            if !ws {
+                self.pe_holds_bytes = false;
             }
         }
         let output = self.output_sp_addr;
@@ -479,6 +507,18 @@ impl Gemmini {
             let c_stride = self.c_stride as usize;
             for i in 0..self.output_rows as usize {
                 let row = base + c_stride * i;
+                if acc && self.output_cols as usize == DIM {
+                    let output = if ws { results[i] } else { self.pe_state[i] };
+                    if accumulate {
+                        for (cell, value) in self.accumulator[row].iter_mut().zip(output) {
+                            *cell = cell.wrapping_add(value);
+                        }
+                    } else {
+                        self.accumulator[row] = output;
+                    }
+                    self.timing.write(true, row);
+                    continue;
+                }
                 for j in 0..self.output_cols as usize {
                     let value = if ws { results[i][j] } else { self.pe_state[i][j] };
                     if acc {

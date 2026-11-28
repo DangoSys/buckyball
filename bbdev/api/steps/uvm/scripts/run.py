@@ -1,7 +1,6 @@
 import json
 import re
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 from utils.path import log_dir
@@ -174,13 +173,7 @@ def run_verification(repo, design, selection, ip, ctx, do_run):
 
 def run_suite(repo, design, selected, name, ctx, do_run):
     scope = design if design is not None else selected[0]["scope"]
-    stamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S-%f")
-    directory = Path(
-        log_dir(
-            repo, scope, "verilog", stamp, "uvm", name if name is not None else "suite"
-        )
-    )
-    directory.mkdir(parents=True)
+    directory = Path(log_dir(repo, scope, "uvm", name if name is not None else "suite"))
     records = []
     failures = []
     for profile in selected:

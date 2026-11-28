@@ -1,0 +1,4 @@
+[parameters]
+placement = "thread"
+
+[defines]

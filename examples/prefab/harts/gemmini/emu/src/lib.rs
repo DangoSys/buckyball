@@ -1,3 +1,4 @@
+mod array;
 mod gemmini;
 mod loops;
 mod model;
